@@ -280,8 +280,10 @@ impl Validator {
     }
 
     fn refuse_forbidden(canonical: &Path) -> Result<()> {
+        let candidate = comparable_path(canonical);
         for forbidden in FORBIDDEN_PATHS {
-            if canonical.starts_with(Path::new(forbidden)) {
+            let banned = comparable_path(Path::new(forbidden));
+            if candidate.len() >= banned.len() && candidate[..banned.len()] == banned[..] {
                 warn!(
                     "Security Block: Attempted access to forbidden path: {:?}",
                     canonical
@@ -293,9 +295,84 @@ impl Validator {
     }
 }
 
+/// A canonical path reduced to comparable segments, with the Windows verbatim marker removed.
+///
+/// **This is the whole fix.** `canonicalize()` answers `\\?\C:\Windows\…` on Windows, and
+/// `Path::starts_with` compares prefix *kinds* before anything else — `VerbatimDisk ≠ Disk`, so
+/// every entry in [`FORBIDDEN_PATHS`] missed and the control was compiled dead on the platform
+/// whose registry hives it exists for. Segments rather than a joined string, so a prefix match
+/// stays a match on whole components: `...\SAM` must not swallow `...\SAMBA`.
+///
+/// Lowercased on Windows only, because NTFS compares names that way and a caller handing over a
+/// differently-cased path must meet the same wall.
+fn comparable_path(path: &Path) -> Vec<String> {
+    let text = path.as_os_str().to_string_lossy();
+    let text = match text.strip_prefix(r"\\?\UNC\") {
+        Some(unc) => format!(r"\\{unc}"),
+        None => text
+            .strip_prefix(r"\\?\")
+            .map(str::to_string)
+            .unwrap_or_else(|| text.into_owned()),
+    };
+    let lower = cfg!(windows);
+    text.split(['/', '\\'])
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            if lower {
+                s.to_ascii_lowercase()
+            } else {
+                s.to_string()
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **The control was compiled dead on Windows.** `canonicalize()` answers a verbatim
+    /// `\\?\…` path there, `Path::starts_with` compares prefix *kinds* (`VerbatimDisk ≠
+    /// Disk`), and every entry in the list missed — including the registry hives, reachable
+    /// from Rhai's `read_file`. The verbatim spelling here is exactly what the real caller
+    /// hands over; it must meet the wall.
+    #[test]
+    fn a_verbatim_canonical_windows_path_is_refused() {
+        let e = Validator::refuse_forbidden(Path::new(r"\\?\C:\Windows\System32\config\SAM"))
+            .expect_err("the SAM hive is forbidden however the path is spelled");
+        assert!(e.to_string().contains("SAM"), "{e}");
+        assert!(Validator::refuse_forbidden(
+            Path::new(r"\\?\C:\Windows\System32\config\SECURITY",)
+        )
+        .is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_forbidden_paths_match_case_insensitively_and_whole_components_only() {
+        // NTFS compares names without case, so a differently-cased path meets the same wall.
+        assert!(
+            Validator::refuse_forbidden(Path::new(r"\\?\c:\windows\SYSTEM32\config\sam",)).is_err()
+        );
+        // A prefix match is on whole components: nothing under the sun named SAM* is caught
+        // by the SAM entry.
+        assert!(Validator::refuse_forbidden(Path::new(
+            r"\\?\C:\Windows\System32\config\SAMARITAN",
+        ))
+        .is_ok());
+    }
+
+    /// The Unix entries keep working, and an ordinary system file that is not on the list is
+    /// allowed through — the control that keeps this from becoming "refuse everything".
+    #[test]
+    fn unix_entries_are_still_enforced_and_innocent_paths_still_pass() {
+        assert!(Validator::refuse_forbidden(Path::new("/etc/shadow")).is_err());
+        // Prefix matches stay on whole components: a child of a forbidden name is caught,
+        // a sibling merely sharing letters is not.
+        assert!(Validator::refuse_forbidden(Path::new("/etc/shadow/backup")).is_err());
+        assert!(Validator::refuse_forbidden(Path::new("/etc/shadowlocks/old")).is_ok());
+        assert!(Validator::refuse_forbidden(Path::new("/etc/nginx/nginx.conf")).is_ok());
+    }
 
     #[test]
     fn strict_validation_blocks_absolute_paths_for_normal_backends() {
