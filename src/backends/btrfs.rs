@@ -322,6 +322,26 @@ impl BtrfsBackendCore {
         })
     }
 
+    /// The fstab's contents, with "no file yet" distinguished from "cannot read it".
+    ///
+    /// **NotFound is the only error that means empty.** An fstab this process cannot read is
+    /// not an empty one: treating any read failure as `""` made `update_fstab` overwrite every
+    /// existing entry with just the new line, and made `drop_from_fstab` report "nothing to
+    /// drop" and hand the caller a subvolume deletion whose fstab entry survived it — a machine
+    /// that stops in the initramfs at the next boot.
+    fn read_fstab(&self) -> Result<Option<String>> {
+        match fs::read_to_string(&self.fstab_file) {
+            Ok(content) => Ok(Some(content)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(Error::Io(format!(
+                "cannot read {}: {} — refusing to change or drop fstab entries while its \
+                 contents are unreadable",
+                self.fstab_file.display(),
+                e
+            ))),
+        }
+    }
+
     /// The declared entry, written into fstab so the mount survives a reboot.
     fn update_fstab(
         &self,
@@ -332,7 +352,7 @@ impl BtrfsBackendCore {
     ) -> Result<()> {
         // A machine with no fstab yet is one whose fstab is empty, not an error: the declaration
         // is the first entry rather than a reason to refuse the mount.
-        let content = fs::read_to_string(&self.fstab_file).unwrap_or_default();
+        let content = self.read_fstab()?.unwrap_or_default();
         let updated = fstab_with(&content, uuid, subvol, mount_point, options);
         crate::utils::file::persist(&self.fstab_file, &updated)?;
         Ok(())
@@ -351,7 +371,7 @@ impl BtrfsBackendCore {
 
     /// Drops this subvolume's entry, and says where it had been mounted.
     fn drop_from_fstab(&self, subvol: &str) -> Result<Option<String>> {
-        let Ok(content) = fs::read_to_string(&self.fstab_file) else {
+        let Some(content) = self.read_fstab()? else {
             return Ok(None);
         };
         let (updated, point) = fstab_without(&content, subvol);
@@ -493,12 +513,40 @@ impl Installable for BtrfsInstallable {
             // machine that stops in the initramfs at the next boot.
             if let Ok((subvol, _)) = self.core.subvol_for(name) {
                 let core_ref = self.core.clone();
-                let point = tokio::task::spawn_blocking(move || core_ref.drop_from_fstab(&subvol))
+                let owned = subvol.clone();
+                let point = tokio::task::spawn_blocking(move || core_ref.drop_from_fstab(&owned))
                     .await
                     .map_err(|e| Error::Other(e.to_string()))??;
+
+                // Every current mount holds the subvolume open, and btrfs cannot delete a
+                // mounted subvolume. Releasing them all is part of removal, not best-effort
+                // tidying: swallowing a failed umount here used to run `subvolume delete`
+                // straight into EBUSY *after* the fstab entry was already gone — a half-torn
+                // state the failure could have avoided by refusing one step earlier.
+                let mut points = self.core.current_mounts_of(&subvol);
                 if let Some(point) = point {
+                    if !points
+                        .iter()
+                        .any(|p| p.trim_end_matches('/') == point.trim_end_matches('/'))
+                    {
+                        points.push(point);
+                    }
+                }
+                for point in points {
                     info!("BTRFS: unmounting {} before deleting {}", point, name);
-                    let _ = self.core.executor.run("umount", &[&point], sudo).await;
+                    self.core
+                        .executor
+                        .run("umount", &[&point], sudo)
+                        .await
+                        .map_err(|e| {
+                            Error::Other(format!(
+                                "`{}` is still mounted at {} ({}), and btrfs cannot delete a \
+                                 mounted subvolume — the deletion is refused rather than left \
+                                 half-torn. The fstab entry is already dropped; free whatever \
+                                 is using the mount and re-run.",
+                                name, point, e
+                            ))
+                        })?;
                 }
             }
             if Path::new(name).exists() {
@@ -761,8 +809,8 @@ mod tests {
                 (
                     "btrfs qgroup show -r -f --raw /mnt/fs/data",
                     "qgroupid         rfer         excl     max_rfer \n\
-                     --------         ----         ----     -------- \n\
-                     0/256            16384        16384    10737418240\n",
+                      --------         ----         ----     -------- \n\
+                      0/256            16384        16384    10737418240\n",
                 ),
             ],
         );
@@ -1202,5 +1250,99 @@ mod tests {
             .collect();
         names.sort();
         assert_eq!(names, vec!["/mnt/a/data", "/mnt/b/data"]);
+    }
+
+    /// **NotFound is the only read error that means empty.** An fstab that exists but cannot
+    /// be read is not an empty one: the old `unwrap_or_default()` made `update_fstab` write a
+    /// file containing only the new entry — every other entry gone — and made
+    /// `drop_from_fstab` say "nothing to drop" so the caller deleted a subvolume whose fstab
+    /// entry survived it. The fixture points `fstab_file` at a directory, which no platform
+    /// will read as a file.
+    #[test]
+    fn an_unreadable_fstab_is_refused_not_treated_as_empty() {
+        let core = core_with("/dev/sdb1 /mnt/fs btrfs rw,subvol=/ 0 0\n", &[]);
+        let _ = std::fs::remove_file(&core.fstab_file);
+        std::fs::create_dir_all(&core.fstab_file).expect("fixture: a directory as fstab");
+
+        let e = core
+            .update_fstab("abc", "/data", "/srv", "defaults")
+            .expect_err(
+                "writing into an unreadable fstab would destroy entries this process cannot see",
+            );
+        assert!(e.to_string().contains("unreadable"), "{e}");
+
+        let e = core
+            .drop_from_fstab("/data")
+            .expect_err("dropping from an unreadable fstab reports nothing and lies by omission");
+        assert!(e.to_string().contains("unreadable"), "{e}");
+    }
+
+    #[test]
+    fn a_missing_fstab_is_empty_for_writing_and_nothing_to_drop() {
+        // The control that keeps the refusal above honest: genuinely absent means the first
+        // entry may be written, and there is nothing to drop.
+        let core = core_with("/dev/sdb1 /mnt/fs btrfs rw,subvol=/ 0 0\n", &[]);
+        let _ = std::fs::remove_file(&core.fstab_file);
+        core.update_fstab("abc", "/data", "/srv", "defaults")
+            .expect("no fstab yet means the declaration writes its first entry");
+        assert!(core.fstab_file.exists());
+        let dropped = core.drop_from_fstab("/data").expect("readable now");
+        assert_eq!(dropped.as_deref(), Some("/srv"));
+    }
+
+    /// A umount that fails must stop the removal, not step over it: btrfs cannot delete a
+    /// mounted subvolume, so swallowing the failure ran `delete` straight into EBUSY after the
+    /// fstab entry was already dropped — half-torn, discovered late.
+    #[tokio::test]
+    async fn a_subvolume_that_cannot_be_unmounted_is_not_deleted() {
+        // `umount` answers with a failure — the manager's answer when something holds the
+        // mount open.
+        let vfs = Arc::new(DashMap::new());
+        let mock = Arc::new(MockExecutor::new(vfs.clone()));
+        // The mock matches the full command line, not the program name.
+        mock.set_response("umount /srv", Err(Error::Io("target is busy".to_string())));
+        // Not a dry run: a dry-run executor diverts mutations into its VFS and never asks
+        // the mock, so the registered umount failure would be silently swallowed by the
+        // harness instead of reaching the code under test.
+        let exec = CommandExecutor::with_layer(false, false, mock, vfs, Arc::new(DashMap::new()));
+        let stem = format!(
+            "shall-btrfs-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        );
+        let mounts = std::env::temp_dir().join(format!("{stem}-mounts"));
+        std::fs::write(&mounts, "/dev/sdb1 /mnt/fs btrfs rw,subvol=/ 0 0\n")
+            .expect("fixture mount table");
+        let core = BtrfsBackendCore {
+            executor: exec,
+            name: "btrfs".to_string(),
+            mounts_file: mounts,
+            fstab_file: std::env::temp_dir().join(format!("{stem}-fstab")),
+        };
+        let inst = BtrfsInstallable {
+            core: Arc::new(core),
+        };
+        std::fs::write(
+            &inst.core.fstab_file,
+            "UUID=abc /srv btrfs subvol=/data 0 0\n",
+        )
+        .expect("fixture fstab");
+
+        let err = inst
+            .remove(
+                &["/mnt/fs/data".to_string()],
+                false,
+                crate::app::sync::guard::Reaped::for_reason(
+                    crate::app::sync::guard::GuardScope::Sync,
+                    "unit test drives the effector directly",
+                ),
+            )
+            .await
+            .expect_err("a busy subvolume cannot be removed; refusing beats EBUSY later");
+
+        assert!(
+            err.to_string().contains("mounted"),
+            "the refusal says what held the subvolume: {err}"
+        );
     }
 }
