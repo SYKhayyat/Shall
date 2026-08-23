@@ -36,7 +36,7 @@ pub struct DryRunOutput {
 /// and `.expect()` the result — two panics on a path whose whole point is that nothing runs, on
 /// a host stripped enough not to have them. Both platforms expose the raw form; on Unix the raw
 /// value is a wait status, where the exit code sits in the high byte.
-fn fabricate_status(code: i32) -> std::process::ExitStatus {
+pub(crate) fn fabricate_status(code: i32) -> std::process::ExitStatus {
     #[cfg(unix)]
     {
         use std::os::unix::process::ExitStatusExt;

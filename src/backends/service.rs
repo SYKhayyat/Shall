@@ -9,8 +9,8 @@
 
 use crate::core::adapter::{self, AdapterRow, Detected};
 use crate::core::{
-    BackendCore, CommandExecutor, Installable, MetadataProvider, Package, PackageSpec, Queryable,
-    Result,
+    BackendCore, CommandExecutor, Error, Installable, MetadataProvider, Package, PackageSpec,
+    Queryable, Result,
 };
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -330,24 +330,6 @@ impl ServiceBackendCore {
         }
         Ok(())
     }
-
-    /// Best-effort variant used on removal, where a service that is already gone must not abort
-    /// the teardown.
-    async fn apply_lenient(&self, action: ServiceAction, name: &str, sudo: bool) {
-        let Some(init) = self.detect_init() else {
-            return;
-        };
-        for (step, cmd) in init.plan(action, name) {
-            let Some((prog, args)) = cmd.split_first() else {
-                continue;
-            };
-            let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-            let _ = self
-                .executor_for(init, step)
-                .run(prog, &arg_refs, sudo)
-                .await;
-        }
-    }
 }
 
 #[async_trait]
@@ -417,16 +399,37 @@ impl Installable for ServiceInstallable {
         sudo: bool,
         _reaped: crate::app::sync::guard::Reaped,
     ) -> Result<()> {
+        // Stop then disable each named service. **Lenient about state, strict about
+        // failures**: every step runs under its provider's own benign-exits policy — the same
+        // mechanism install uses — so "already stopped" stays success. Everything else is
+        // collected and reported at the end: this path used to swallow *all* errors, which
+        // recorded a masked-broken unit as removed with nothing ever revisiting it. The sweep
+        // still attempts every name, so one broken unit does not strand the rest behind it.
+        let mut failures: Vec<String> = Vec::new();
         for name in names {
-            // Stop then disable; never let a missing service abort the sweep.
-            self.core
-                .apply_lenient(ServiceAction::Stop, name, sudo)
-                .await;
-            self.core
-                .apply_lenient(ServiceAction::Disable, name, sudo)
-                .await;
+            if let Err(e) = self.core.apply(ServiceAction::Stop, name, sudo).await {
+                warn!(
+                    "service {} could not be stopped during removal: {}",
+                    name, e
+                );
+                failures.push(format!("stop {}: {}", name, e));
+            }
+            if let Err(e) = self.core.apply(ServiceAction::Disable, name, sudo).await {
+                warn!(
+                    "service {} could not be disabled during removal: {}",
+                    name, e
+                );
+                failures.push(format!("disable {}: {}", name, e));
+            }
         }
-        Ok(())
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(Error::Other(format!(
+                "service removal incomplete — these services were not fully torn down:\n - {}",
+                failures.join("\n - ")
+            )))
+        }
     }
 }
 
@@ -581,6 +584,107 @@ pub fn register(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::executor::MockExecutor;
+    use dashmap::DashMap;
+    use std::process::Output;
+
+    /// A row the mock can drive end to end: its `detect` command exists because
+    /// `MockExecutor` answers every existence check yes, and its verbs are distinct programs.
+    fn test_row() -> InitProvider {
+        toml::from_str(
+            r#"
+            name = "testinit"
+            detect = "testinit-detect"
+            stop = [["stop-cmd", "{name}"]]
+            disable = [["disable-cmd", "{name}"]]
+            stop_benign_exits = [42]
+            "#,
+        )
+        .expect("fixture provider row")
+    }
+
+    fn exit_of(code: i32) -> Result<Output> {
+        Ok(Output {
+            status: crate::core::executor::fabricate_status(code),
+            stdout: Vec::new(),
+            stderr: b"manager said something".to_vec(),
+        })
+    }
+
+    fn service_layer(responses: &[(&str, Result<Output>)]) -> (Arc<MockExecutor>, CommandExecutor) {
+        let vfs = Arc::new(DashMap::new());
+        let mock = Arc::new(MockExecutor::new(vfs.clone()));
+        for (cmd, res) in responses {
+            mock.set_response(cmd, res.clone());
+        }
+        let exec =
+            CommandExecutor::with_layer(false, false, mock.clone(), vfs, Arc::new(DashMap::new()));
+        (mock, exec)
+    }
+
+    fn core_with(exec: CommandExecutor) -> ServiceInstallable {
+        ServiceInstallable {
+            core: Arc::new(ServiceBackendCore::with_providers(exec, vec![test_row()])),
+        }
+    }
+
+    fn removal_token() -> crate::app::sync::guard::Reaped {
+        crate::app::sync::guard::Reaped::for_reason(
+            crate::app::sync::guard::GuardScope::Sync,
+            "unit test drives the effector directly",
+        )
+    }
+
+    #[tokio::test]
+    async fn removal_forgives_the_declared_already_in_state_code() {
+        // 42 is this row's "already stopped": success for a converger, per benign_exits.
+        let (_mock, exec) = service_layer(&[
+            ("stop-cmd nginx", exit_of(42)),
+            ("disable-cmd nginx", exit_of(0)),
+        ]);
+        core_with(exec)
+            .remove(&["nginx".to_string()], false, removal_token())
+            .await
+            .expect("the declared benign code is convergence");
+    }
+
+    #[tokio::test]
+    async fn a_real_removal_failure_is_reported_not_recorded_removed() {
+        let (_mock, exec) = service_layer(&[
+            ("stop-cmd nginx", exit_of(42)),
+            ("disable-cmd nginx", exit_of(1)),
+        ]);
+        let e = core_with(exec)
+            .remove(&["nginx".to_string()], false, removal_token())
+            .await
+            .expect_err("a masked-broken unit must not read as removed");
+        assert!(e.to_string().contains("nginx"), "{e}");
+    }
+
+    #[tokio::test]
+    async fn one_broken_service_does_not_strand_the_rest_of_the_sweep() {
+        let (mock, exec) = service_layer(&[
+            ("stop-cmd a", exit_of(1)),
+            ("disable-cmd a", exit_of(1)),
+            ("stop-cmd b", exit_of(0)),
+            ("disable-cmd b", exit_of(0)),
+        ]);
+        let e = core_with(exec)
+            .remove(&["a".to_string(), "b".to_string()], false, removal_token())
+            .await
+            .expect_err("`a` failed for real");
+        assert!(
+            e.to_string().contains('a'),
+            "the failure names what broke: {e}"
+        );
+        let calls = mock.get_calls().await;
+        for want in ["stop-cmd a", "disable-cmd a", "stop-cmd b", "disable-cmd b"] {
+            assert!(
+                calls.iter().any(|c| c.contains(want)),
+                "`{want}` was never attempted — the sweep stranded it behind a's failure"
+            );
+        }
+    }
 
     fn shipped(name: &str) -> InitProvider {
         providers(vec![])

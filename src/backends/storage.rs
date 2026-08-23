@@ -21,7 +21,7 @@ use crate::core::{
 };
 use async_trait::async_trait;
 use std::sync::Arc;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 /// What a storage backend reports for an object it read and found no limit on — as against
 /// reporting nothing, which means it could not read (Q19).
@@ -179,6 +179,19 @@ impl Installable for ZfsInstallable {
         _reaped: crate::app::sync::guard::Reaped,
     ) -> Result<()> {
         for name in names {
+            // Already gone is done — the same convergence the filesystem side of this family
+            // has always had. **Asked, not guessed**: the question is the one this backend's
+            // own install asks, and an ask that fails propagates rather than reading as "not
+            // there", or a listing outage would skip destroys in silence.
+            let out = self
+                .core
+                .executor
+                .run_output("zfs", &["list", "-H", "-o", "name", name], false)
+                .await?;
+            if out.trim().is_empty() {
+                debug!("ZFS: {} is already absent.", name);
+                continue;
+            }
             info!("ZFS: destroying dataset {}", name);
             self.core.run(&zfs_destroy(name), sudo).await?;
         }
@@ -476,6 +489,30 @@ impl Installable for LvmInstallable {
     ) -> Result<()> {
         for name in names {
             let (vg, lv) = split_lvm(name)?;
+            // Same ask-first tolerance as the zfs twin above: absent is done, unverifiable
+            // refuses, present removes.
+            let path = format!("{vg}/{lv}");
+            let out = self
+                .core
+                .executor
+                .run_output(
+                    "lvs",
+                    &[
+                        "--noheadings",
+                        "--units",
+                        "b",
+                        "--nosuffix",
+                        "-o",
+                        "vg_name,lv_name",
+                        &path,
+                    ],
+                    false,
+                )
+                .await?;
+            if out.trim().is_empty() {
+                debug!("LVM: {path} is already absent.");
+                continue;
+            }
             info!("LVM: removing logical volume {}/{}", vg, lv);
             let args = lvm_remove(vg, lv);
             let refs: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -556,6 +593,35 @@ pub fn register(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::executor::{DryRunOutput, MockExecutor};
+    use dashmap::DashMap;
+    use std::process::Output;
+
+    fn storage_layer(responses: &[(&str, Result<Output>)]) -> (Arc<MockExecutor>, CommandExecutor) {
+        let vfs = Arc::new(DashMap::new());
+        let mock = Arc::new(MockExecutor::new(vfs.clone()));
+        for (cmd, res) in responses {
+            mock.set_response(cmd, res.clone());
+        }
+        let exec =
+            CommandExecutor::with_layer(false, false, mock.clone(), vfs, Arc::new(DashMap::new()));
+        (mock, exec)
+    }
+
+    fn out(text: &str) -> Result<Output> {
+        Ok(DryRunOutput {
+            stdout: text.as_bytes().to_vec(),
+            stderr: vec![],
+        }
+        .into())
+    }
+
+    fn removal_token() -> crate::app::sync::guard::Reaped {
+        crate::app::sync::guard::Reaped::for_reason(
+            crate::app::sync::guard::GuardScope::Sync,
+            "unit test drives the effector directly",
+        )
+    }
 
     #[test]
     fn zfs_creates_and_destroys_by_name() {
@@ -635,6 +701,98 @@ mod tests {
     #[test]
     fn lvm_remove_confirms_and_names_the_path() {
         assert_eq!(lvm_remove("vg0", "data"), vec!["-y", "vg0/data"]);
+    }
+
+    #[tokio::test]
+    async fn zfs_removal_of_an_absent_dataset_is_done_not_an_error() {
+        let (mock, exec) = storage_layer(&[("zfs list -H -o name tank/data", out(""))]);
+        let z = ZfsInstallable {
+            core: Arc::new(ZfsBackendCore {
+                executor: exec,
+                name: "zfs".to_string(),
+            }),
+        };
+        z.remove(&["tank/data".to_string()], false, removal_token())
+            .await
+            .expect("already absent is convergence, not a failure");
+        assert!(
+            !mock.get_calls().await.iter().any(|c| c.contains("destroy")),
+            "an absent dataset must not be destroyed: {:?}",
+            mock.get_calls().await
+        );
+    }
+
+    #[tokio::test]
+    async fn zfs_destroys_a_dataset_that_is_there() {
+        let (mock, exec) = storage_layer(&[("zfs list -H -o name tank/data", out("tank/data\n"))]);
+        let z = ZfsInstallable {
+            core: Arc::new(ZfsBackendCore {
+                executor: exec,
+                name: "zfs".to_string(),
+            }),
+        };
+        z.remove(&["tank/data".to_string()], false, removal_token())
+            .await
+            .expect("present dataset is removed");
+        assert!(
+            mock.get_calls()
+                .await
+                .iter()
+                .any(|c| c.contains("zfs destroy -r tank/data")),
+            "the present dataset was never destroyed: {:?}",
+            mock.get_calls().await
+        );
+    }
+
+    #[tokio::test]
+    async fn zfs_cannot_verify_is_refused_not_read_as_absent() {
+        // The M5 posture at the effector: an ask that fails is not "nothing there", or a
+        // listing outage would skip the destroy in silence.
+        let (mock, exec) = storage_layer(&[(
+            "zfs list -H -o name tank/data",
+            Err(Error::Io("zfs exited 2".into())),
+        )]);
+        let z = ZfsInstallable {
+            core: Arc::new(ZfsBackendCore {
+                executor: exec,
+                name: "zfs".to_string(),
+            }),
+        };
+        let e = z
+            .remove(&["tank/data".to_string()], false, removal_token())
+            .await
+            .expect_err("cannot verify must refuse, not skip");
+        assert!(!e.to_string().is_empty());
+        assert!(
+            !mock.get_calls().await.iter().any(|c| c.contains("destroy")),
+            "no destroy runs on an unverifiable ask"
+        );
+    }
+
+    #[tokio::test]
+    async fn lvm_removal_of_an_absent_volume_is_done_not_an_error() {
+        let (mock, exec) = storage_layer(&[(
+            "lvs --noheadings --units b --nosuffix -o vg_name,lv_name vg0/data",
+            out(""),
+        )]);
+        let l = LvmInstallable {
+            core: Arc::new(LvmBackendCore {
+                executor: exec,
+                name: "lvm".to_string(),
+            }),
+        };
+        l.remove(&["vg0/data".to_string()], false, removal_token())
+            .await
+            .expect("already absent is convergence");
+        assert!(
+            !mock
+                .get_calls()
+                .await
+                .iter()
+                .any(|c| c.contains("lvremove")),
+            "an absent volume must not be lvremoved: {:?}",
+            mock.get_calls().await
+        );
     }
 
     /// The listing carries each volume's size in bytes, so `sync` can see a `@size=` that no

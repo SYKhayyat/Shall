@@ -68,11 +68,16 @@ impl Snapshot {
     /// The marker lands in different fields per provider: btrfs/zfs put `shall_` in the **id**
     /// (`shall_pre_…`, `…@shall_…`), while Windows System Restore forces the id to a bare
     /// `SequenceNumber` and carries `Shall:` in the **description**. Checking only the id — the
-    /// old bug — meant nothing Shall created on Windows was ever pruned. So check both, and do
-    /// it case-insensitively to catch `Shall:` as well as `shall_`.
+    /// old bug — meant nothing Shall created on Windows was ever pruned.
+    ///
+    /// **Anchored, not substring, and only in the shapes `create()` writes.** A substring test
+    /// claims any snapshot whose name happens to contain the letters — "Marshall weekly" — and
+    /// retention then deletes it.
     pub fn is_shall_owned(&self) -> bool {
-        let has_marker = |s: &str| s.to_lowercase().contains("shall");
-        has_marker(&self.id) || has_marker(&self.description)
+        if self.id.starts_with("shall_pre_") || self.id.contains("@shall_") {
+            return true;
+        }
+        self.description.to_lowercase().starts_with("shall:")
     }
 }
 
@@ -943,6 +948,10 @@ mod tests {
     fn a_user_made_snapshot_is_not_owned_and_is_left_alone() {
         assert!(!snap("12", "Windows Update", "windows_restore").is_shall_owned());
         assert!(!snap("tank/root@weekly", "manual weekly", "zfs").is_shall_owned());
+        // The word appears inside the user's own naming: a substring test claims these and
+        // `prune_with_policy` deletes them.
+        assert!(!snap("tank/home@marshall_weekly", "Marshall weekly", "zfs").is_shall_owned());
+        assert!(!snap("13", "Shallots: planting notes", "windows_restore").is_shall_owned());
     }
 
     #[test]

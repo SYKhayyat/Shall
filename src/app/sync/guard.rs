@@ -2804,10 +2804,6 @@ mod tests {
         registry_with(&[(backend, essential, false)])
     }
 
-    fn registry_failing(backend: &str) -> Arc<BackendRegistry> {
-        registry_with(&[(backend, &[], true)])
-    }
-
     /// One registry, several backends, each saying whether its essential query answers.
     fn registry_with(rows: &[(&str, &[&str], bool)]) -> Arc<BackendRegistry> {
         let mut reg = BackendRegistry::new();
