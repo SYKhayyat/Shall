@@ -93,6 +93,80 @@ pub fn backup_path(target: &Path) -> PathBuf {
     PathBuf::from(format!("{}.shall-backup", target.display()))
 }
 
+/// Copy a whole directory tree to `backup`, preserving its shape, before Shall replaces it.
+///
+/// A symlink inside the tree is recreated as a pointer rather than followed — following it is
+/// how a link out of the tree drags in something huge, and how two links naming each other
+/// recurse forever. The depth bound is the backstop for exactly that cycle on hosts where
+/// recreating pointers is not possible and copying through them is the only remaining way to
+/// keep their data.
+fn backup_directory_tree<'a>(
+    src: &'a Path,
+    dst: &'a Path,
+    depth: usize,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
+    Box::pin(async move {
+        const MAX_DEPTH: usize = 64;
+        if depth > MAX_DEPTH {
+            return Err(Error::Other(format!(
+                "refusing to back up {:?}: deeper than {MAX_DEPTH} levels, which usually means \
+                 a symlink loop inside it",
+                src
+            )));
+        }
+        tokio::fs::create_dir_all(dst).await.map_err(Error::from)?;
+        let mut rd = tokio::fs::read_dir(src).await.map_err(Error::from)?;
+        while let Some(entry) = rd.next_entry().await.map_err(Error::from)? {
+            let from = entry.path();
+            let to = dst.join(entry.file_name());
+            let ft = entry.file_type().await.map_err(Error::from)?;
+            if ft.is_symlink() {
+                let dest = tokio::fs::read_link(&from).await.map_err(Error::from)?;
+                match recreate_link(&dest, &to).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        // No privilege to recreate the pointer: keep the data by copying
+                        // through it, bounded above so two pointers naming each other stop
+                        // instead of spinning.
+                        warn!(
+                            "Link: could not preserve the pointer at {:?} ({e}); copying what \
+                             it points at.",
+                            from
+                        );
+                        backup_directory_tree(&from, &to, depth + 1).await?;
+                    }
+                }
+            } else if ft.is_dir() {
+                backup_directory_tree(&from, &to, depth + 1).await?;
+            } else {
+                tokio::fs::copy(&from, &to).await.map_err(Error::from)?;
+            }
+        }
+        Ok(())
+    })
+}
+
+#[cfg(unix)]
+async fn recreate_link(dest: &Path, to: &Path) -> Result<()> {
+    tokio::fs::symlink(dest, to).await.map_err(Error::from)
+}
+
+#[cfg(windows)]
+async fn recreate_link(dest: &Path, to: &Path) -> Result<()> {
+    // A Windows pointer must be created knowing whether it names a directory; the stored
+    // string does not say, so probe what it resolves to and default to the file form when it
+    // resolves to nothing.
+    let dir = tokio::fs::metadata(dest)
+        .await
+        .map(|m| m.is_dir())
+        .unwrap_or(false);
+    match tokio::fs::symlink_dir(dest, to).await {
+        Ok(()) => Ok(()),
+        Err(_e) if !dir => tokio::fs::symlink_file(dest, to).await.map_err(Error::from),
+        Err(e) => Err(Error::from(e)),
+    }
+}
+
 /// Whether a `link:` line wants its pre-existing target preserved (T6). Backing up is the
 /// default; `@backup=no` opts a single line out, stated where the exception is. A machine-wide
 /// key was deliberately not added — restore-on-removal already kills the pile-up one would have
@@ -359,40 +433,61 @@ impl LinkBackendCore {
         Ok(())
     }
 
-    /// Preserve a pre-existing, unmanaged file before Shall overwrites or replaces it —
-    /// exactly once, as `<target>.shall-backup`. So the user is never silently robbed of
-    /// a config file they already had. Symlinks (mere pointers) and directories are
-    /// skipped, and an existing backup is never clobbered, so the true original survives
-    /// even across repeated syncs. Honors dry-run (previews instead of copying).
+    /// Preserve a pre-existing, unmanaged file or directory before Shall overwrites or replaces
+    /// it — exactly once, as `<target>.shall-backup`. So the user is never silently robbed of
+    /// a config they already had. Symlinks (mere pointers) are skipped, and an existing backup
+    /// is never clobbered, so the true original survives even across repeated syncs. Honors
+    /// dry-run (previews instead of copying).
     async fn backup_once(&self, target: &Path) -> Result<()> {
         // A symlink is just a pointer; the real data lives elsewhere and is untouched.
         if target.is_symlink() {
             return Ok(());
         }
-        if !tokio::fs::try_exists(target).await.unwrap_or(false) {
-            return Ok(()); // nothing there to preserve
-        }
+        let meta = match tokio::fs::symlink_metadata(target).await {
+            Ok(m) => m,
+            Err(_) => return Ok(()), // nothing there to preserve
+        };
         let backup = backup_path(target);
-        if tokio::fs::try_exists(&backup).await.unwrap_or(false) {
-            return Ok(()); // the original was already preserved on an earlier run
+        if let Ok(backup_meta) = tokio::fs::symlink_metadata(&backup).await {
+            // The original was already preserved on an earlier run — but only counts as
+            // preserved if it is the same *kind* of thing. A file backup beside what is now a
+            // directory (or the reverse) does not cover the target, and treating it as covered
+            // would let the replacement below destroy data nothing copied.
+            if backup_meta.is_dir() == meta.is_dir() {
+                return Ok(());
+            }
+            return Err(Error::Other(format!(
+                "{:?} holds a {} while {:?} holds a {} from an earlier run — one of them is \
+                 not what Shall expects. Move one aside yourself; Shall will not overwrite \
+                 either.",
+                target,
+                if meta.is_dir() { "directory" } else { "file" },
+                backup,
+                if backup_meta.is_dir() {
+                    "directory"
+                } else {
+                    "file"
+                },
+            )));
         }
         if self.executor.dry_run {
             crate::would!(
-                "Link: would back up existing {:?} to {:?} before writing the managed version.",
+                "Link: would back up existing {} {:?} to {:?} before writing the managed version.",
+                if meta.is_dir() { "directory" } else { "file" },
                 target,
                 backup
             );
             return Ok(());
         }
-        // Only regular files are byte-copied; a directory at the target is left alone
-        // rather than silently folded into a single backup file.
-        let meta = tokio::fs::symlink_metadata(target)
-            .await
-            .map_err(Error::from)?;
         if meta.is_dir() {
-            warn!(
-                "Link: {:?} is an existing directory; not auto-backing it up before replacement.",
-                target
+            // A directory at the target is the user's own tree, and the most common real
+            // shape (~/.config/nvim). Not backing it up here used to mean the replacement
+            // below deleted it whole — the promise this function exists for stopped exactly
+            // where the data was biggest.
+            backup_directory_tree(target, &backup, 0).await?;
+            info!(
+                "Link: Existing directory {:?} was backed up to {:?} before applying the managed version.",
+                target, backup
             );
             return Ok(());
         }
@@ -574,7 +669,14 @@ impl Installable for LinkInstallable {
                 }
 
                 if self.core.executor.dry_run {
-                    crate::would!("Would remove existing file/link at {:?}", target_path);
+                    let kind = if is_symlink {
+                        "link"
+                    } else if target_path.is_dir() {
+                        "directory"
+                    } else {
+                        "file"
+                    };
+                    crate::would!("Would replace existing {} at {:?}", kind, target_path);
                 } else {
                     crate::utils::file::remove_deployed_path(&target_path)
                         .await
@@ -633,6 +735,26 @@ impl Installable for LinkInstallable {
 
             if !exists && !is_symlink && !has_backup {
                 continue;
+            }
+
+            // Ownership is not proven by the absence of a backup. `link:` places links and
+            // files only, so a real directory sitting at the target with no `.shall-backup`
+            // behind it cannot be something Shall put there — it is the user's own tree, and
+            // deleting it on remove is how uninstalling a dotfile cost someone their config.
+            // Checked before the dry-run preview, so a preview predicts the refusal instead
+            // of promising a removal that will never be allowed.
+            if (exists && !is_symlink && !has_backup)
+                && tokio::fs::symlink_metadata(path)
+                    .await
+                    .map(|m| m.is_dir())
+                    .unwrap_or(false)
+            {
+                return Err(Error::Other(format!(
+                    "`{}` is a directory, and `link:` places links and files — Shall did not \
+                     put it there and has no backup of anything it replaced there, so it is \
+                     not removing it. Move it aside or delete it yourself if it is yours.",
+                    path.display()
+                )));
             }
 
             if self.core.executor.dry_run {
@@ -1164,6 +1286,134 @@ mod tests {
         assert_eq!(
             tokio::fs::read_to_string(&backup).await.unwrap(),
             "PRISTINE ORIGINAL"
+        );
+    }
+
+    /// **The single most common `link:` shape is a directory at the target** —
+    /// `link:cfg@target=~/.config/nvim` where nvim's config is the user's own tree. That tree
+    /// used to be wiped unbacked-up: `backup_once` refused directories and the caller removed
+    /// anyway, so the "never silently robbed" promise held for files and stopped exactly where
+    /// the data was biggest.
+    #[tokio::test]
+    async fn a_directory_at_the_target_is_backed_up_before_the_link_replaces_it() {
+        let dir = tempdir().unwrap();
+        let cfg = Config::sandboxed(dir.path());
+        let src = cfg.config_root().join("dotfiles");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("vimrc"), b"set nocompatible\n").unwrap();
+
+        let target = dir.path().join("home").join(".config").join("nvim");
+        std::fs::create_dir_all(target.join("lua")).unwrap();
+        std::fs::write(target.join("init.lua"), b"-- the user's own config\n").unwrap();
+        std::fs::write(target.join("lua").join("maps.lua"), b"vim.keymap.set\n").unwrap();
+
+        let mut options = crate::config::grammar::Options::default();
+        options.set("target", target.to_string_lossy().to_string());
+        let spec = PackageSpec {
+            name: "./dotfiles/vimrc".into(),
+            backend: "link".into(),
+            options,
+            requires: vec![],
+            present: true,
+        };
+
+        installer_rooted_at(&cfg)
+            .install(std::slice::from_ref(&spec), false)
+            .await
+            .expect("declaring a link over an existing directory must place it");
+
+        let backup = backup_path(&target);
+        assert_eq!(
+            tokio::fs::read_to_string(backup.join("init.lua"))
+                .await
+                .unwrap(),
+            "-- the user's own config\n",
+            "the directory that was there before Shall took the path must survive"
+        );
+        assert_eq!(
+            tokio::fs::read_to_string(backup.join("lua").join("maps.lua"))
+                .await
+                .unwrap(),
+            "vim.keymap.set\n",
+            "the backup is the whole tree, not its top level"
+        );
+    }
+
+    fn removal_token() -> crate::app::sync::guard::Reaped {
+        // A unit test for an effector, per Reaped::for_reason's second justification.
+        crate::app::sync::guard::Reaped::for_reason(
+            crate::app::sync::guard::GuardScope::Sync,
+            "unit test drives the effector directly",
+        )
+    }
+
+    /// **Ownership is not proven by the absence of a backup.** A user who replaced Shall's
+    /// managed link with their own directory left nothing for the teardown to recognise, and
+    /// remove used to delete whatever it found — their tree included. `link:` places links and
+    /// files only, so a real *directory* at that path with no `.shall-backup` behind it cannot
+    /// be something Shall put there.
+    #[tokio::test]
+    async fn teardown_never_deletes_a_directory_shall_did_not_place() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join(".config").join("nvim");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("init.lua"), b"user data\n").unwrap();
+
+        let err = installer()
+            .remove(
+                &[target.to_string_lossy().to_string()],
+                false,
+                removal_token(),
+            )
+            .await
+            .expect_err("a directory with no Shall backup is not provenance to remove it");
+
+        assert!(
+            err.to_string().contains("directory"),
+            "the refusal says what stood in the way: {err}"
+        );
+        assert!(
+            target.join("init.lua").exists(),
+            "the user's tree survives a teardown that cannot prove ownership"
+        );
+    }
+
+    #[tokio::test]
+    async fn teardown_restores_a_backed_up_directory_tree() {
+        let dir = tempdir().unwrap();
+        let target = dir.path().join(".config").join("nvim");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("placed-by-shall"), b"managed\n").unwrap();
+
+        let backup = backup_path(&target);
+        std::fs::create_dir_all(backup.join("lua")).unwrap();
+        std::fs::write(backup.join("init.lua"), b"original\n").unwrap();
+        std::fs::write(backup.join("lua").join("m.lua"), b"maps\n").unwrap();
+
+        installer()
+            .remove(
+                &[target.to_string_lossy().to_string()],
+                false,
+                removal_token(),
+            )
+            .await
+            .expect("a backup proves what was there before; restore it");
+
+        assert_eq!(
+            std::fs::read(target.join("init.lua")).unwrap(),
+            b"original\n"
+        );
+        assert_eq!(
+            std::fs::read(target.join("lua").join("m.lua")).unwrap(),
+            b"maps\n"
+        );
+        assert!(
+            !backup.exists(),
+            "the restore consumes the backup, as it does for files"
+        );
+        assert!(
+            !target.join("placed-by-shall").exists(),
+            "what Shall placed does not outlive its declaration"
         );
     }
 }
