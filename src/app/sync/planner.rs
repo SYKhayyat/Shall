@@ -689,12 +689,14 @@ impl<'a> ChangePlanner<'a> {
             Self::declared_specs(&filtered_desired),
             &mut changes,
         );
+        // Snapshot BEFORE the pin drop. An unmeetable pin refuses this machine's *install* of
+        // the line (`Q53`); a key removed from `declared` must not read to the drift loop below
+        // as "nothing declares this any more", or the refusal would cost the user software Shall
+        // already manages.
+        let desired_keys: HashSet<String> = declared.keys().cloned().collect();
         // After the machine question, not before: "`pacman` cannot pin" is a misleading answer on
         // a host that has no pacman, where the true answer is that the manager is not here.
         let declared = self.drop_pins_this_manager_cannot_meet(declared, &mut changes);
-
-        // Precompute desired keys for O(1) lookup
-        let desired_keys: HashSet<String> = declared.keys().cloned().collect();
 
         // Every manager this plan will consult, asked before anything is asked about a package
         // — see `installed_sets`. Hoisted out of the removal block below because a scoped plan

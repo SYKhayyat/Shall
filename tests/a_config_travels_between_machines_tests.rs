@@ -154,6 +154,49 @@ async fn a_managed_package_whose_manager_is_gone_is_not_reaped() {
 }
 
 #[tokio::test]
+async fn an_unmeetable_pin_skips_the_install_and_never_schedules_the_removal() {
+    // brew cannot install an exact version (`Q53`), so the install of this line is refused by
+    // name. The package below is *already on the machine and managed*: dropping the line from
+    // the desired set before removal planning would read to the drift loop as "nothing declares
+    // this any more", and a manager's inability to pin would cost the user their software.
+    let kernel = kernel_with("brew:tokei@version=1.0.0\n").await;
+    {
+        let mut state = kernel.state.lock().await;
+        state.manage(ManagedPackage {
+            name: "tokei".into(),
+            backend: "brew".into(),
+            version: None,
+            installed_at: 0,
+            expires_at: None,
+            options: Default::default(),
+            source: "sync".into(),
+            is_transient: false,
+            session_id: None,
+        });
+    }
+    let changes = plan_of(&kernel).await;
+
+    assert!(
+        !changes.removal_tracker.iter().any(|k| k.contains("tokei")),
+        "an unmeetable pin must not schedule the removal of software Shall manages: {:?}",
+        changes.removal_tracker
+    );
+    assert_eq!(
+        changes.total_install(),
+        0,
+        "the install half stays refused — the pin cannot be met"
+    );
+    assert!(
+        changes
+            .skipped
+            .iter()
+            .any(|s| s.key.contains("tokei") && s.reason.contains("@version=")),
+        "and the refusal still says why, naming the pin. Got: {:?}",
+        changes.skipped
+    );
+}
+
+#[tokio::test]
 async fn an_absent_declaration_for_a_manager_that_is_gone_is_skipped() {
     let kernel = kernel_with(&format!("absent:{}:jq\n", NOT_HERE)).await;
     let changes = plan_of(&kernel).await;
