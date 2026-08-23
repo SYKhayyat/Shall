@@ -33,10 +33,16 @@ pub enum Unattended<'a> {
 /// The default is **no**. A confirm that defaults to yes is a confirm that fires on a stray
 /// newline, and every one of these guards something the user did not spell out.
 pub fn confirm(yes: bool, prompt: &str, unattended: Unattended<'_>) -> Result<bool> {
+    confirm_in(std::io::stdin().is_terminal(), yes, prompt, unattended)
+}
+
+/// The seam the tests drive, so third-answer coverage does not depend on how the suite was
+/// launched — a plain `cargo test` on a console *has* a terminal on stdin.
+fn confirm_in(attended: bool, yes: bool, prompt: &str, unattended: Unattended<'_>) -> Result<bool> {
     if yes {
         return Ok(true);
     }
-    if !std::io::stdin().is_terminal() {
+    if !attended {
         return match unattended {
             Unattended::Refuse(why) => Err(Error::Refused(why.to_string())),
             Unattended::Decline(say) => {
@@ -71,7 +77,8 @@ mod tests {
     /// The test process has no terminal on stdin, so these exercise the third answer directly.
     #[test]
     fn a_refusing_prompt_with_nobody_there_refuses_by_name() {
-        let e = confirm(
+        let e = confirm_in(
+            false,
             false,
             "Remove these packages?",
             Unattended::Refuse("Refusing to remove without confirmation. Re-run with --yes."),
@@ -88,12 +95,23 @@ mod tests {
     /// would turn "no package manager to install with" into a failed sync.
     #[test]
     fn a_declining_prompt_with_nobody_there_answers_no() {
-        let answered = confirm(
+        let answered = confirm_in(
+            false,
             false,
             "Run that to install brew?",
             Unattended::Decline("Not asking in a non-interactive shell."),
         )
         .expect("declining is not an error");
         assert!(!answered);
+    }
+
+    /// `--yes` answers before anything is consulted, terminal or not.
+    #[test]
+    fn an_attended_confirm_still_lets_yes_answer_first() {
+        assert!(confirm_in(true, true, "?", Unattended::Refuse("never reached")).expect("--yes"));
+        assert!(
+            confirm_in(true, true, "?", Unattended::Decline("never printed")).expect("--yes"),
+            "--yes must win on the attended path too"
+        );
     }
 }
