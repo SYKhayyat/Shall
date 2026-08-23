@@ -18,7 +18,7 @@
 use crate::backends::BackendRegistry;
 use crate::config::Config;
 use crate::core::{Error, Result};
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
 use tracing::{debug, warn};
 
@@ -315,6 +315,14 @@ pub enum Objection {
     Unpinned {
         key: String,
     },
+    /// The backend this removal goes through could not report which packages the OS needs,
+    /// so the removal cannot be checked against OS-essentials. Protection-class: a mass
+    /// flag answers the count and nothing else, so nothing clears this but the manager
+    /// answering.
+    UnverifiedEssentials {
+        key: String,
+        backend: String,
+    },
 }
 
 /// The guard's verdict over a removal set.
@@ -385,6 +393,30 @@ impl GuardReport {
             ));
         }
 
+        // A second listing loop, not a merged one: a protection rule and an unverifiable
+        // manager are different facts with different remedies, and the reader should be able
+        // to count them apart.
+        let unverified: Vec<&Objection> = self
+            .objections
+            .iter()
+            .filter(|o| matches!(o, Objection::UnverifiedEssentials { .. }))
+            .collect();
+        for o in unverified.iter().take(MAX_LISTED) {
+            if let Objection::UnverifiedEssentials { key, backend } = o {
+                out.push_str(&format!(
+                    "  - {} would be removed, but `{}` cannot currently report which \
+                     packages the OS needs\n",
+                    key, backend
+                ));
+            }
+        }
+        if unverified.len() > MAX_LISTED {
+            out.push_str(&format!(
+                "  - …and {} more through managers that could not answer\n",
+                unverified.len() - MAX_LISTED
+            ));
+        }
+
         // The advice has to be executable. `shall unmanage` takes a package line, so offering
         // it for a `link:` teardown names a command that cannot accept the thing it is about;
         // for an extra the equivalent act is putting the declaration back.
@@ -425,14 +457,37 @@ impl GuardReport {
     }
 }
 
+/// What backends answered about OS-essential packages — and which could not.
+pub struct EssentialAnswers {
+    /// `backend:name` pairs the running OS reports as essential, for the backends asked.
+    pub names: HashSet<String>,
+    /// Backends whose essential question has no answer this run. **A failure is an answer
+    /// too**: a removal through one of these cannot be checked against what the OS needs,
+    /// and the guard refuses it rather than reading the silence as "nothing here is
+    /// essential" — that reading is how the safety rail fails open.
+    pub unanswered: BTreeSet<String>,
+}
+
+/// What one backend answered about its OS-essential packages.
+enum EssentialOutcome {
+    /// The manager answered; the vec holds raw names, qualified per backend when folded.
+    Reported(Vec<String>),
+    /// The manager is here and its query failed. Removals through it are refused this run.
+    QueryFailed,
+    /// No queryable manager exists here to ask (II.7c) — nothing installed through it on
+    /// this machine, so there is no subject for the question and nothing to protect from.
+    NothingToAsk,
+}
+
 /// Names the OS itself reports as essential, per backend, for the backends being removed
 /// from. Queried live so it tracks the running system rather than a list we maintain.
-/// A backend that cannot answer contributes nothing and never blocks the guard.
+/// A backend whose query fails lands in [`EssentialAnswers::unanswered`] and blocks the
+/// removals that would have needed it.
 pub async fn essential_names(
     registry: &Arc<BackendRegistry>,
     backends: &HashSet<String>,
     max_parallel: usize,
-) -> HashSet<String> {
+) -> EssentialAnswers {
     // Each `essential()` is a subprocess and they have nothing to say to one another, so they
     // run at once. This is on every removal path.
     use futures::stream::StreamExt;
@@ -440,25 +495,42 @@ pub async fn essential_names(
         .map(|name| {
             let registry = registry.clone();
             async move {
-                let q = registry.get(&name)?.as_queryable()?.clone();
-                match q.essential().await {
+                // **Two kinds of "cannot ask", and only one refuses.** A backend that is not
+                // on this machine has nothing installed through it here (II.7c) — the
+                // essential question has no subject, and the planner already declines those
+                // removals upstream. A backend that IS here and whose query fails is the
+                // dangerous one: silence must not read as "nothing here is essential".
+                let Some(queryable) = registry
+                    .get(&name)
+                    .and_then(|backend| backend.as_queryable().cloned())
+                else {
+                    debug!(
+                        "backend '{}' is not queryable here; no essential set exists to ask for.",
+                        name
+                    );
+                    return (name, EssentialOutcome::NothingToAsk);
+                };
+                match queryable.essential().await {
                     Ok(names) => {
                         debug!(
                             "backend '{}' reports {} essential package(s).",
                             name,
                             names.len()
                         );
-                        Some(
-                            names
-                                .iter()
-                                .map(|n| format!("{}:{}", name, n))
-                                .collect::<Vec<_>>(),
+                        (
+                            name.clone(),
+                            EssentialOutcome::Reported(
+                                names.iter().map(|n| format!("{}:{}", name, n)).collect(),
+                            ),
                         )
                     }
                     Err(e) => {
-                        // Not fatal: the protected list and the count limit still apply.
-                        warn!("backend '{}' essential query failed: {}", name, e);
-                        None
+                        warn!(
+                            "backend '{}' could not report which packages the OS needs ({}); \
+                             removals through it are refused this run.",
+                            name, e
+                        );
+                        (name, EssentialOutcome::QueryFailed)
                     }
                 }
             }
@@ -468,9 +540,22 @@ pub async fn essential_names(
         // not follow it (AU9). It is on every removal path, which is where a user who has
         // turned the parallelism down most wants it honoured.
         .buffer_unordered(max_parallel.max(1))
-        .filter_map(|r| async move { r })
-        .flat_map(futures::stream::iter)
-        .collect()
+        .fold(
+            EssentialAnswers {
+                names: HashSet::new(),
+                unanswered: BTreeSet::new(),
+            },
+            |mut answers, (backend, outcome)| async move {
+                match outcome {
+                    EssentialOutcome::Reported(qualified) => answers.names.extend(qualified),
+                    EssentialOutcome::QueryFailed => {
+                        answers.unanswered.insert(backend);
+                    }
+                    EssentialOutcome::NothingToAsk => {}
+                }
+                answers
+            },
+        )
         .await
 }
 
@@ -782,15 +867,16 @@ pub async fn inspect_removals(
         return report;
     }
 
-    let os_essential = match kind {
+    let (os_essential, unanswered) = match kind {
         RemovalKind::Package => {
             let backends: HashSet<String> = removals.iter().map(|(b, _)| b.clone()).collect();
-            essential_names(registry, &backends, config.max_parallel).await
+            let answers = essential_names(registry, &backends, config.max_parallel).await;
+            (answers.names, answers.unanswered)
         }
         // `service`/`link`/`setting` are not package managers and have no essential list to
         // ask for; querying them would be a round trip that can only return nothing. Neither is
         // a firewall.
-        RemovalKind::Extra | RemovalKind::Port => HashSet::new(),
+        RemovalKind::Extra | RemovalKind::Port => (HashSet::new(), Default::default()),
     };
 
     for (backend, name) in removals {
@@ -808,6 +894,14 @@ pub async fn inspect_removals(
             report.objections.push(Objection::Protected {
                 key: format!("{}:{}", backend, name),
                 reason: p.reason(),
+            });
+            // Already refused by name; a second objection about the same package is noise.
+            continue;
+        }
+        if matches!(kind, RemovalKind::Package) && unanswered.contains(backend) {
+            report.objections.push(Objection::UnverifiedEssentials {
+                key: format!("{}:{}", backend, name),
+                backend: backend.clone(),
             });
         }
     }
@@ -1053,6 +1147,11 @@ pub fn describe_objection(o: &Objection) -> String {
         Objection::TooManyInstalls { count, limit } => {
             format!("installs {} packages, over max_installs ({})", count, limit)
         }
+        Objection::UnverifiedEssentials { key, backend } => format!(
+            "{} — {} cannot currently report which packages the OS needs, so the removal \
+             cannot be checked against OS-essentials",
+            key, backend
+        ),
     }
 }
 
@@ -2655,6 +2754,9 @@ mod tests {
     struct Essentials {
         name: String,
         essential: Vec<String>,
+        /// The audit's case: a manager having a bad day. `true` and the query errors instead
+        /// of answering — the shape a real `apt` produces exactly when its answer matters most.
+        fails: bool,
         listings: crate::core::installed::InstalledListings,
     }
 
@@ -2689,22 +2791,39 @@ mod tests {
             Ok(None)
         }
         async fn fetch_essential(&self) -> crate::core::Result<Vec<String>> {
+            if self.fails {
+                return Err(crate::core::Error::Other(
+                    "apt-get locked by pid 4242 (fixture)".into(),
+                ));
+            }
             Ok(self.essential.clone())
         }
     }
 
     fn registry_reporting(backend: &str, essential: &[&str]) -> Arc<BackendRegistry> {
-        let fake = Arc::new(Essentials {
-            name: backend.to_string(),
-            essential: essential.iter().map(|s| s.to_string()).collect(),
-            listings: Default::default(),
-        });
+        registry_with(&[(backend, essential, false)])
+    }
+
+    fn registry_failing(backend: &str) -> Arc<BackendRegistry> {
+        registry_with(&[(backend, &[], true)])
+    }
+
+    /// One registry, several backends, each saying whether its essential query answers.
+    fn registry_with(rows: &[(&str, &[&str], bool)]) -> Arc<BackendRegistry> {
         let mut reg = BackendRegistry::new();
-        reg.register(Arc::new(
-            crate::core::manager::BackendCapabilities::builder(fake.clone())
-                .with_queryable(fake)
-                .build(),
-        ));
+        for (backend, essential, fails) in rows {
+            let fake = Arc::new(Essentials {
+                name: (*backend).to_string(),
+                essential: essential.iter().map(|s| s.to_string()).collect(),
+                fails: *fails,
+                listings: Default::default(),
+            });
+            reg.register(Arc::new(
+                crate::core::manager::BackendCapabilities::builder(fake.clone())
+                    .with_queryable(fake)
+                    .build(),
+            ));
+        }
         Arc::new(reg)
     }
 
@@ -2717,14 +2836,19 @@ mod tests {
         let registry = registry_reporting("apt", &["tar", "sed", "grep"]);
         let backends: HashSet<String> = ["apt".to_string()].into_iter().collect();
 
-        let names = essential_names(&registry, &backends, 4).await;
+        let answers = essential_names(&registry, &backends, 4).await;
 
+        assert!(
+            answers.unanswered.is_empty(),
+            "a healthy backend is not unanswered: {:?}",
+            answers.unanswered
+        );
         let want: HashSet<String> = ["apt:tar", "apt:sed", "apt:grep"]
             .into_iter()
             .map(String::from)
             .collect();
         assert_eq!(
-            names, want,
+            answers.names, want,
             "the essential set must be exactly what the backend reported, qualified by backend"
         );
     }
@@ -2735,7 +2859,63 @@ mod tests {
     async fn a_backend_with_no_essential_concept_contributes_nothing() {
         let registry = registry_reporting("cargo", &[]);
         let backends: HashSet<String> = ["cargo".to_string()].into_iter().collect();
-        assert!(essential_names(&registry, &backends, 4).await.is_empty());
+        let answers = essential_names(&registry, &backends, 4).await;
+        assert!(answers.names.is_empty());
+        assert!(answers.unanswered.is_empty());
+    }
+
+    /// **The fail-open hole.** A backend whose essential query fails used to contribute
+    /// nothing — which to the guard reads exactly like "nothing here is essential" — so the
+    /// whole run lost its OS-essential protection, `purge-undeclared` included. Now the
+    /// failure is an answer too: removals through *that* backend are refused until it can
+    /// answer, while removals through backends that did answer are judged normally. The
+    /// refusal is protection-class: no mass flag clears it.
+    #[tokio::test]
+    async fn an_essential_query_failure_refuses_removals_through_that_backend_only() {
+        let registry = registry_with(&[("apt", &["tar"], true), ("cargo", &[], false)]);
+        let cfg = Config::default();
+        let reaping = Reaping::new();
+
+        let report = inspect_removals(
+            &cfg,
+            &registry,
+            &[("apt".into(), "curl".into())],
+            RemovalKind::Package,
+            &reaping,
+        )
+        .await;
+        assert!(
+            report.objections.iter().any(|o| matches!(
+                o,
+                Objection::UnverifiedEssentials { key, .. } if key == "apt:curl"
+            )),
+            "a removal through a backend that cannot say what the OS needs must be refused: \
+             {:?}",
+            report.objections
+        );
+
+        // The sibling through a backend that answered: judged on its merits, not tarred by
+        // apt's bad day.
+        let other = inspect_removals(
+            &cfg,
+            &registry,
+            &[("cargo".into(), "ripgrep".into())],
+            RemovalKind::Package,
+            &Reaping::new(),
+        )
+        .await;
+        assert!(
+            other.is_empty(),
+            "a backend that answered must not inherit the refusal: {:?}",
+            other.objections
+        );
+
+        // And the message says why, naming the manager that could not answer.
+        let message = report.message(GuardScope::Sync, RemovalKind::Package);
+        assert!(
+            message.contains("`apt`") && message.contains("the OS needs"),
+            "the refusal names the backend and the missing check:\n{message}"
+        );
     }
 
     /// And the protection those names buy: a removal of one is refused, by the OS-essential

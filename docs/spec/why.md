@@ -7226,3 +7226,28 @@ exit code. A literal would need rewriting every time a probe's own classificatio
 would pass just as well against a build that answered `unknown` in both columns — which two
 earlier drafts of the class test did, and which is why every version of it was run against the
 deliberately broken build before it was trusted.
+
+---
+
+**V.200 — Why a failed essential query refuses the removals it cannot check.** *(`M5`,
+delegated ruling 2026-08-23, from the 2026-08-23 audit. Rule in II.10.)*
+
+`essential_names` turned a failed query into an empty set. To the guard, an empty set and
+"nothing here is essential" are the same answer, so one manager having a bad day silently
+disarmed the OS-essential rail for the whole run — `purge-undeclared` included, which is the
+command that sweeps widest exactly when nobody is reading its list. The rail's own comment said
+so: *"a backend that cannot answer contributes nothing and never blocks the guard."* That is
+fail-open on the one control whose failure mode is unrecoverable.
+
+**The rule now is that silence is an answer too.** A manager that is here and cannot say what
+the OS needs has its removals refused for that run (`Objection::UnverifiedEssentials`,
+protection-class — no mass flag clears it, `--yes` never could), with the refusal naming the
+manager and why. Leases, rebuild narrowing, rollback compensation and `shall protected` all
+answer from the same query, so an inspector cannot report clean over an enforcer that would
+refuse.
+
+**The distinction that keeps this from refusing everything.** A backend not present on this
+machine is a different fact (II.7c): nothing here went through it, there is no essential set to
+ask for, and the planner already declines those removals upstream. Only *here-and-failing*
+blocks. The distinction is drawn inside `essential_names`, where both halves of it are visible,
+rather than at any caller that would have to re-derive it.

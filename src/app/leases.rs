@@ -37,20 +37,33 @@ impl Leases<'_> {
         // lease stays expired, which is the safe direction.
         let backends: std::collections::HashSet<String> =
             expired.iter().map(|(b, _)| b.clone()).collect();
-        let os_essential = crate::app::sync::guard::essential_names(
+        let answers = crate::app::sync::guard::essential_names(
             self.registry,
             &backends,
             self.config.max_parallel,
         )
         .await;
+        // An essential query that failed is not "nothing here is essential": a package whose
+        // manager cannot answer stays put this sweep, exactly as if it were named by a rule.
         let (protected, expired): (Vec<_>, Vec<_>) = expired.into_iter().partition(|(b, n)| {
-            crate::app::sync::guard::protection_of(self.config, Some(b), n, &os_essential).is_some()
+            answers.unanswered.contains(b)
+                || crate::app::sync::guard::protection_of(self.config, Some(b), n, &answers.names)
+                    .is_some()
         });
         for (backend, name) in &protected {
+            let why = if answers.unanswered.contains(backend) {
+                format!(
+                    "`{}` cannot currently report which packages the OS needs, so the \
+                     removal cannot be checked",
+                    backend
+                )
+            } else {
+                "it is protected".to_string()
+            };
             warn!(
-                "lease on {}:{} expired, but it is protected — leaving it installed. \
+                "lease on {}:{} expired, but {} — leaving it installed. \
                  Run `shall protected {}:{}` to see why.",
-                backend, name, backend, name
+                backend, name, why, backend, name
             );
         }
         if expired.is_empty() {

@@ -1417,7 +1417,7 @@ impl Transaction {
                 GraphAction::Remove { .. } => None,
             })
             .collect();
-        let os_essential = crate::app::sync::guard::essential_names(
+        let answers = crate::app::sync::guard::essential_names(
             &self.registry,
             &backends,
             self.config.max_concurrent,
@@ -1477,11 +1477,28 @@ impl Transaction {
                                 );
                                 continue;
                             }
+                            if answers.unanswered.contains(&spec.backend) {
+                                // The manager cannot say what the OS needs right now, so the
+                                // protection question cannot be answered. Rollback reports
+                                // "incomplete" anyway when it cannot finish; leaving software
+                                // installed is its safe direction, never removing blind.
+                                error!(
+                                    "rollback will not remove {}:{} — `{}` cannot currently \
+                                     report which packages the OS needs, so the protection \
+                                     check is unavailable. It stays installed.",
+                                    spec.backend, spec.name, spec.backend
+                                );
+                                failures.push(format!(
+                                    "{}:{} (essential check unavailable, left installed)",
+                                    spec.backend, spec.name
+                                ));
+                                continue;
+                            }
                             if let Some(p) = crate::app::sync::guard::protection_of(
                                 &self.app_config,
                                 Some(&spec.backend),
                                 &spec.name,
-                                &os_essential,
+                                &answers.names,
                             ) {
                                 error!(
                                     "rollback will not remove {}:{} — {}. It stays installed, \

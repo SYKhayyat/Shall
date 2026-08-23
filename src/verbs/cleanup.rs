@@ -718,12 +718,19 @@ pub async fn handle_protected(
             // backend and there is no honest way to answer it from a name alone.
             let os_essential = match &backend {
                 Some(b) => all_essential
+                    .names
                     .iter()
                     .filter(|k| k.split_once(':').is_some_and(|(kb, _)| kb == b))
                     .cloned()
                     .collect(),
                 None => std::collections::HashSet::new(),
             };
+            // An inspector that says "no rule matches" while the OS-essential half of the
+            // question went unanswered is believed exactly when it is wrong. Say the check
+            // could not run.
+            let essentials_unavailable = backend
+                .as_deref()
+                .is_some_and(|b| all_essential.unanswered.contains(b));
             let (protected, reason) = match crate::app::sync::guard::protection_of(
                 cfg,
                 backend.as_deref(),
@@ -731,6 +738,14 @@ pub async fn handle_protected(
                 &os_essential,
             ) {
                 Some(p) => (true, p.reason()),
+                None if essentials_unavailable => (
+                    false,
+                    format!(
+                        "`{}` could not report its OS-essential list just now, so that \
+                         check is unknown (a removal through it would be refused)",
+                        backend.as_deref().unwrap_or_default()
+                    ),
+                ),
                 None => match cfg.unprotect_rule(&name) {
                     Some(rule) => (
                         false,

@@ -531,8 +531,19 @@ pub async fn handle_rebuild(
             all_pairs.iter().map(|(b, _)| b.clone()).collect();
         let essential =
             guard::essential_names(&app.registry, &backends, app.config.max_parallel).await;
+        let unanswered = essential.unanswered;
+        let names = essential.names;
         rebuild::without_protected(&mut plan, &|backend, name| {
-            guard::protection_of(&app.config, Some(backend), name, &essential).map(|p| p.reason())
+            // A manager mid-strike cannot say what the OS needs, and a rebuild *removes*
+            // first. Same posture as the guard's own refusal: narrow the batch rather than
+            // remove unverifiable.
+            if unanswered.contains(backend) {
+                return Some(format!(
+                    "`{}` cannot currently report which packages the OS needs",
+                    backend
+                ));
+            }
+            guard::protection_of(&app.config, Some(backend), name, &names).map(|p| p.reason())
         });
     }
 

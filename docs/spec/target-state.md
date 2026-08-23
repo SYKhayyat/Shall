@@ -1683,7 +1683,7 @@ opinion about the packages that keep the machine running.
 |---|---|
 | `protected_packages` | never remove this |
 | `unprotected_packages` | …unless I say so. **Wins over everything, including OS-essential** |
-| OS-essential | never remove what the OS says is load-bearing |
+| OS-essential | never remove what the OS says is load-bearing — and a manager that cannot answer the question has its removals refused for that run, not waved through (`M5`) |
 | undeclarable | never remove a name no package line can hold — **not even `unprotected_packages` releases this one** |
 | `max_removals` (default **20**) | never remove more than this many packages at once |
 | `max_extra_removals` (default **20**) | the same for resource teardowns — its own budget (`Y20`) |
