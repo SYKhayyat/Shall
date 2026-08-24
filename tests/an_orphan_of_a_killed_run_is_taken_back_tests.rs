@@ -636,3 +636,43 @@ async fn a_preview_takes_nothing_back() {
         "a `--dry-run` wrote an ownership record"
     );
 }
+
+/// Recovery answers the same ceilings a sync does. Its installs used to skip
+/// `enforce_installs` — and with it `max_total_changes` — so a ceiling a user set to make
+/// "never change more than N things in one command" true was ignored by exactly the command
+/// that runs unattended inside every `watch` tick. Two interrupted installs against a total of
+/// one is refused; the same journal under default config heals.
+#[tokio::test]
+async fn recovery_answers_the_total_ceiling_a_sync_answers() {
+    let kernel = TestKernel::new().await;
+    declares(&kernel, "brew:o1\nbrew:o2\n");
+    brew_holds(&kernel, &["o1", "o2"]);
+    {
+        let mut j = kernel.app.journal.lock().await;
+        for name in ["o1", "o2"] {
+            j.record_start(JournalAction::Install(spec(name)))
+                .expect("could not write the WAL");
+        }
+    }
+
+    let tight = kernel.app.reconfigured(|c| c.guard.max_total_changes = 1);
+    let err = tight
+        .sync_engine()
+        .heal(&declared(&kernel).await)
+        .await
+        .expect_err("two recoveries over a total of one must be refused");
+    assert!(
+        err.to_string().contains("max_total_changes"),
+        "the refusal names the ceiling that fired: {err}"
+    );
+
+    // The control, on the same journal: unset ceilings heal both.
+    kernel
+        .app
+        .sync_engine()
+        .heal(&declared(&kernel).await)
+        .await
+        .expect("default ceilings do not refuse recovery");
+    assert!(manages(&kernel, "o1").await, "o1 was recovered");
+    assert!(manages(&kernel, "o2").await, "o2 was recovered");
+}

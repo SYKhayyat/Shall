@@ -1289,6 +1289,22 @@ impl SyncEngine {
         }
 
         if !runnable.is_empty() {
+            // **Recovery answers the ceilings a sync answers.** Its installs pass
+            // `enforce_installs`, which also asks `max_total_changes`; its removals were each
+            // enforced individually above. Both ceilings are unset by default, so this costs
+            // nothing unless the user set one — and then it must mean what it says on the
+            // command that runs unattended inside every `watch` tick, not only on syncs.
+            let installs = runnable
+                .iter()
+                .filter(|(action, _)| matches!(action, GraphAction::Install(_)))
+                .count();
+            guard::enforce_installs(
+                &self.config,
+                installs,
+                &self.reaping,
+                guard::GuardScope::Heal,
+            )
+            .await?;
             // **The recovery runs on the transaction engine, and not on a second copy of it.**
             // This loop used to be `for entry in ... { handler.install(from_ref(spec)).await }`
             // — serial, one package per command, beside a batched parallel DAG. Measured on one
