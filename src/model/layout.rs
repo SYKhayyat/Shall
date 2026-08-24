@@ -231,8 +231,25 @@ impl Layout {
         self.modules_dir().join(format!("{}.txt", name))
     }
 
+    /// The profile file for `name`, with `name` confined to a single path component.
+    ///
+    /// `active` is a file users hand-edit, and an entry like `Work/../../x` passes the
+    /// Capitalized check while joining to somewhere outside `profiles/` — the same escape
+    /// [`ModuleName`] was typed (SEC6) to make unrepresentable for modules. Profiles got the
+    /// string version of the rule only; this is that type's discipline, applied where the
+    /// join happens.
     pub fn profile_file(&self, name: &str) -> PathBuf {
-        self.profiles_dir().join(name)
+        let safe = name
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+            && !name.is_empty();
+        if safe {
+            self.profiles_dir().join(name)
+        } else {
+            // Not a real location: callers that check existence read "absent", which is what
+            // an entry this broken deserves — never a file outside the profiles directory.
+            self.profiles_dir().join("\u{0}invalid-profile")
+        }
     }
 }
 

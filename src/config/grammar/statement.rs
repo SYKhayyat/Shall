@@ -566,7 +566,7 @@ const KEYWORDS: &[Keyword] = &[
     },
     Keyword {
         spelling: "schedule:",
-        means: "schedule:NAME @run=… @every=…",
+        means: "schedule:nightly@cron=@daily,run=sync",
         role: KeywordRole::Prefix,
         build: Some(Statement::Schedule),
     },
@@ -596,7 +596,7 @@ const KEYWORDS: &[Keyword] = &[
     },
     Keyword {
         spelling: "generate:",
-        means: "generate:/path/to/output @from=…",
+        means: "generate:/path/to/output",
         role: KeywordRole::Prefix,
         build: Some(Statement::Generate),
     },
@@ -970,7 +970,29 @@ fn opens_a_package_line(line: &str, backends: &dyn BackendNames) -> bool {
     if rest.is_empty() || !backends.is_backend(backend) {
         return false;
     }
-    !SPACED_OPERATORS.iter().any(|op| line.contains(op))
+    !has_spaced_operator_outside_quotes(line)
+}
+
+/// Whether one of [`SPACED_OPERATORS`] occurs OUTSIDE a quoted span.
+///
+/// An operator stands apart from its operands — and a name never stands apart from its
+/// quotes: `winget:"App Name | Pro"` carries the bytes ` | `, but they belong to the name,
+/// and reading them as set algebra made that line unwritable in any module.
+fn has_spaced_operator_outside_quotes(line: &str) -> bool {
+    let mut in_quotes = false;
+    let mut masked = String::with_capacity(line.len());
+    for c in line.chars() {
+        if c == '"' {
+            in_quotes = !in_quotes;
+            // The quote itself marks a boundary either way.
+            masked.push(' ');
+        } else if in_quotes {
+            masked.push(' ');
+        } else {
+            masked.push(c);
+        }
+    }
+    SPACED_OPERATORS.iter().any(|op| masked.contains(op))
 }
 
 /// The set operators as they are written between operands. Glued forms (`(a|b)&c`) are still
@@ -1577,6 +1599,39 @@ pub const DOTFILES_OPTION_KEYS: &[&str] = &["target"];
 /// options: `firewall:22/tcp` is the whole declaration.
 pub const FIREWALL_OPTION_KEYS: &[&str] = &["value"];
 
+/// The option keys that answer to ONE value, across every kind.
+///
+/// A key given twice is a list (II.2) for the keys that mean it — `@requires=`, `@after=` —
+/// and a silent first-wins demotion for every other. This is the set of the others: a repeat
+/// is refused at [`validate_extra_options`] and in the package path below instead of being
+/// demoted by `one()`'s `.first()`. Deliberately absent: `requires`, `after` (lists by
+/// design), `on` and `notify` (comma-bearing values whose multiplicity lives in the value).
+pub(crate) const SINGLE_VALUE_OPTION_KEYS: &[&str] = &[
+    "source",
+    "enabled",
+    "status",
+    "target",
+    "content",
+    "template",
+    "decrypt",
+    "identity",
+    "backup",
+    "cron",
+    "undo",
+    "value",
+    "scope",
+    "version",
+    "hold",
+    "expires",
+    "until",
+    "sha256",
+    "bin",
+    "channel",
+    "asset",
+    "download_only",
+    "runs",
+];
+
 /// A firewall line names a rule the grammar can read, and a default policy says which one.
 fn validate_firewall(origin: &Origin, name: &str, options: &Options) -> Result<()> {
     validate_extra_options(origin, OptionKind::Firewall, name, options, None)?;
@@ -1689,13 +1744,8 @@ fn validate_setting(origin: &Origin, name: &str, options: &Options) -> Result<()
                 ),
         );
     }
-    if options.all("value").len() > 1 {
-        return Err(GrammarError::new(
-            origin.clone(),
-            format!("`setting:{}` has two values", name),
-        )
-        .with_hint("a key holds one value. Name the one you want."));
-    }
+    // A repeated `@value=` is refused one gate up, in `validate_extra_options`, with every
+    // other single-valued key.
     Ok(())
 }
 
@@ -1716,6 +1766,22 @@ pub(super) fn validate_extra_options(
     let legal = keys_for(kind);
     for key in options.keys() {
         if legal.contains(&key) {
+            // A key that answers to ONE value refuses a second occurrence outright. `one()`
+            // reads the first, so a repeated `@status=running,@status=stopped` kept the first
+            // and did nothing — a hand-edit flip that parsed, exited 0, changed nothing.
+            // Cardinality used to be checked for five keys one `if` at a time; this is the
+            // same refusal for every single-valued key in the grammar, at the one gate every
+            // typed line passes.
+            if SINGLE_VALUE_OPTION_KEYS.contains(&key) && options.all(key).len() > 1 {
+                return Err(GrammarError::new(
+                    origin.clone(),
+                    format!("`@{key}` takes one value, given {}", options.all(key).len()),
+                )
+                .with_hint(
+                    "`one()` of a repeated key reads the FIRST value, so the second was \
+                     silently discarded. Write the one you mean.",
+                ));
+            }
             continue;
         }
         let what = if legal.is_empty() {
@@ -1854,41 +1920,6 @@ pub fn validate_backend_options(origin: &Origin, backend: Option<&str>, o: &Opti
     if let Some(pattern) = o.one("asset") {
         AssetPattern::parse(pattern)
             .map_err(|e| GrammarError::new(origin.clone(), e.to_string()))?;
-    }
-    if o.all("asset").len() > 1 {
-        return Err(
-            GrammarError::new(origin.clone(), "`@asset` takes one pattern").with_hint(
-                "one pattern, which may be a glob: `@asset=*musl*`. For every matching file, \
-             `@asset=all`.",
-            ),
-        );
-    }
-
-    // `Options::one` returns the *first* value, so a repeated hash meant the earlier one
-    // silently won. `@sha256=<old> @sha256=<new>` is the natural shape of a hand-edited hash
-    // bump: it verified against the stale hash and refused the correct file — or, written the
-    // other way round, verified against the one the author meant to replace. The argument for
-    // refusing a second `@channel` is that there is no fallback across two answers, and it
-    // applies with more force to the option that decides whether downloaded bytes become an
-    // executable on PATH.
-    // Same shape, same reason: `@bin` names where the executable lands, and two values means
-    // one of them decided it and neither was said out loud.
-    if o.all("bin").len() > 1 {
-        return Err(
-            GrammarError::new(origin.clone(), "`@bin` takes one name").with_hint(
-                "one name for the file that goes on PATH. Two would put it under one of them \
-                 and quietly discard the other.",
-            ),
-        );
-    }
-    if o.all("sha256").len() > 1 {
-        return Err(
-            GrammarError::new(origin.clone(), "`@sha256` takes one hash").with_hint(
-                "there is no fallback across hashes — one of the two would win silently, and \
-             which one is not a thing to leave to the order they were typed in. Name the hash \
-             of the file you want.",
-            ),
-        );
     }
 
     // `@download_only` (D3b) means "fetch but do not install" — a distinction only a backend
@@ -2092,6 +2123,18 @@ fn validate_options(origin: &Origin, decl: &PackageDecl, absent: bool) -> Result
     // option someone still reads is worse.
     for key in o.keys() {
         if is_package_option_key(key) {
+            // Same single-value refusal the typed lines get, one gate earlier than any
+            // reader's `one()` could demote a repeat silently. (`@requires=` stays a list;
+            // it is not in [`SINGLE_VALUE_OPTION_KEYS`].)
+            if SINGLE_VALUE_OPTION_KEYS.contains(&key) && o.all(key).len() > 1 {
+                return Err(GrammarError::new(
+                    origin.clone(),
+                    format!("`@{key}` takes one value, given {}", o.all(key).len()),
+                )
+                .with_hint(
+                    "a repeated single-value key keeps only its first — write the one you mean.",
+                ));
+            }
             continue;
         }
         let mut err = GrammarError::new(origin.clone(), format!("`@{}` is not an option", key));
@@ -2127,8 +2170,14 @@ fn validate_options(origin: &Origin, decl: &PackageDecl, absent: bool) -> Result
 
     // `@hold` says "never upgrade this"; `@version=` says "this exact version". Together
     // they are a contradiction, not a refinement: hold means whatever is installed, and
-    // version means something specific that may not be it.
-    if o.contains("hold") && o.contains("version") {
+    // version means something specific that may not be it. **Judged by VALUE, not presence**:
+    // every consumer reads what `hold` SAYS, so `@hold=false` — "do not hold" — beside a
+    // version is a line that means one thing, and refusing it with advice about keeping
+    // whatever is installed misread the line to its author.
+    let holds = o.one("hold").map(|v| {
+        !v.is_empty() && !v.eq_ignore_ascii_case("false") && !v.eq_ignore_ascii_case("no")
+    });
+    if holds == Some(true) && o.contains("version") {
         return Err(GrammarError::new(
             origin.clone(),
             "`@hold` and `@version=` contradict each other",
@@ -2879,7 +2928,7 @@ mod tests {
     #[test]
     fn a_setting_takes_one_value_not_two() {
         let err = p("setting:org.gnome.x/k@value=a,value=b").unwrap_err();
-        assert!(err.what.contains("two values"), "{}", err);
+        assert!(err.what.contains("one value"), "{}", err);
     }
 
     #[test]
@@ -3205,14 +3254,11 @@ mod artifact_option_tests {
     fn a_repeated_single_value_option_is_refused_rather_than_resolved_by_order() {
         // `one()` returns `first()`, so a second value used to lose in silence. The hand-edited
         // hash bump is the shape that matters: `@sha256=<old>,sha256=<new>` verified against the
-        // stale hash. `@channel` and `@asset` already refused this; these two did not.
+        // stale hash. Every single-valued key refuses a repeat at the same gate now.
         let err = p("appimage:https://example.com/t.AppImage@sha256=aaa,sha256=bbb").unwrap_err();
-        assert!(
-            err.to_string().contains("`@sha256` takes one hash"),
-            "{err}"
-        );
+        assert!(err.to_string().contains("takes one value"), "{err}");
         let err = p("github:sharkdp/fd@bin=a,bin=b").unwrap_err();
-        assert!(err.to_string().contains("`@bin` takes one name"), "{err}");
+        assert!(err.to_string().contains("takes one value"), "{err}");
         // One is still one.
         assert!(p("appimage:https://example.com/t.AppImage@sha256=aaa").is_ok());
         assert!(p("github:sharkdp/fd@bin=fd,formats=deb").is_ok());

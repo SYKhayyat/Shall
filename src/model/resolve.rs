@@ -351,8 +351,22 @@ impl<'a> Resolver<'a> {
         &self,
         file: &Path,
     ) -> Result<(crate::model::vars::Vars, crate::model::vars::VarOrigins)> {
-        let Ok(body) = std::fs::read_to_string(file) else {
-            return Ok(Default::default());
+        // Absent is the documented no-variables case; UNREADABLE is not. Conflating the two
+        // made a permission slip read as "no variables", which is a fact about the machine
+        // nobody established.
+        let body = match std::fs::read_to_string(file) {
+            Ok(body) => body,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Default::default()),
+            Err(e) => {
+                return Err(GrammarError::new(
+                    crate::config::grammar::Origin::new(file, 0),
+                    format!("the vars file cannot be read: {e}"),
+                )
+                .with_hint(
+                    "Shall does not guess at what an unreadable file would have said. Fix the \
+                     permissions and run again.",
+                ))
+            }
         };
         self.resolve_linefile_body(file, &body)
     }
@@ -435,7 +449,23 @@ impl<'a> Resolver<'a> {
         // the user would have to edit rather than a name for a buffer they cannot open.
         let body = match &self.active_override {
             Some(body) => body.clone(),
-            None => std::fs::read_to_string(&active_file).unwrap_or_default(),
+            // Same conflation, same death: an `active` that cannot be READ is not an empty
+            // configuration, and "empty" downstream is a mass-removal input. Only ABSENT
+            // means empty.
+            None => match std::fs::read_to_string(&active_file) {
+                Ok(body) => body,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+                Err(e) => {
+                    return Err(GrammarError::new(
+                        Origin::new(&active_file, 0),
+                        format!("the active file cannot be read: {e}"),
+                    )
+                    .with_hint(
+                        "Shall does not guess at what an unreadable configuration would have \
+                         activated. Fix the permissions and run again.",
+                    ))
+                }
+            },
         };
         let active: Vec<(String, Gates)> = read_active(&active_file, &body, &self.facts)?
             .into_iter()
@@ -973,10 +1003,6 @@ impl<'a> Resolver<'a> {
             }
             let key = format!("{}:{}", backend, decl.selector.as_str());
 
-            if dating_of(&decl.options, self.now) == super::dated::Dating::Lapsed {
-                out.lapsed.push((key.clone(), origin.clone()));
-            }
-
             let incoming = Declared {
                 options: decl.options.clone(),
                 origin: origin.clone(),
@@ -989,6 +1015,13 @@ impl<'a> Resolver<'a> {
                     // the loser's scope is not thereby untrue, and dropping it would hide
                     // the package from `upgrade --module <the other one>`.
                     e.declared = reconcile(&key, e.declared, incoming, self.now)?;
+                    // **The lapse is the WINNER's fact, not each line's.** Reported per
+                    // incoming statement, a live second declaration still yielded a lapse
+                    // report because its expired sibling arrived first — naming a file the
+                    // machine has already stopped listening to.
+                    if dating_of(&e.declared.options, self.now) == super::dated::Dating::Lapsed {
+                        out.lapsed.push((key.clone(), origin.clone()));
+                    }
                     e.origins.push(origin);
                     // Declared twice, once behind a condition and once not, it is here
                     // unconditionally — so the shortest chain is the true reason, whichever
@@ -999,6 +1032,10 @@ impl<'a> Resolver<'a> {
                     merged.insert(key, e);
                 }
                 None => {
+                    let lapsed = dating_of(&decl.options, self.now) == super::dated::Dating::Lapsed;
+                    if lapsed {
+                        out.lapsed.push((key.clone(), origin.clone()));
+                    }
                     merged.insert(
                         key,
                         Entry {

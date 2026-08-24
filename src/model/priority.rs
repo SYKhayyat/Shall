@@ -72,6 +72,9 @@ impl Priority {
     pub fn parse(file: &Path, body: &str, facts: &HostFacts) -> Result<Self> {
         let mut backends: Vec<String> = Vec::new();
         let mut options: BTreeMap<String, Options> = BTreeMap::new();
+        // Which bodies arrived inside a `when` block — the pair that may not silently
+        // disagree with its sibling arm.
+        let mut gated_bodies: BTreeMap<String, bool> = BTreeMap::new();
         for entry in gated::read(file, body, facts, &Self::vocabulary())? {
             if !entry.on {
                 continue;
@@ -91,7 +94,31 @@ impl Priority {
                     Some(entry.text.as_str()),
                     &entry.options,
                 )?;
-                options.entry(entry.text).or_insert(entry.options);
+                // **Two matching `when` arms with different bodies are a conflict, not an
+                // order.** The first mention still wins against a PLAIN line below it — that
+                // is the documented rule the order uses too — and an exact repeat is
+                // harmless. But two CONDITIONAL blocks that both match this machine, each
+                // configuring the same backend differently, used to be settled by whichever
+                // came first on disk: a coin flip the file never announced.
+                let from_gate = entry.gate.is_some();
+                match (options.get(&entry.text), gated_bodies.get(&entry.text)) {
+                    (Some(existing), Some(true)) if from_gate && *existing != entry.options => {
+                        return Err(GrammarError::new(
+                            Origin::new(file, entry.line),
+                            format!("`{}` is given two different option bodies", entry.text),
+                        )
+                        .with_hint(
+                            "two `when` blocks that both match this machine configure the \
+                             same backend differently, and disk order would decide. Merge \
+                             them into one body.",
+                        ));
+                    }
+                    (Some(_), _) => {}
+                    (None, _) => {
+                        options.insert(entry.text.clone(), entry.options);
+                        gated_bodies.insert(entry.text, from_gate);
+                    }
+                }
             }
         }
         Ok(Self { backends, options })

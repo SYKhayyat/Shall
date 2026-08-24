@@ -33,9 +33,14 @@ impl Groups {
     pub fn parse(text: &str) -> Result<Groups, String> {
         // Raw definitions first: a member may name a group defined later in the file, so every
         // definition has to be read before any can be flattened.
+        //
+        // The line hygiene is `config::without_bom` + `grammar::strip_comment`, the same pair
+        // the modules reader takes. This reader used to split on the FIRST `#` anywhere, so a
+        // group naming `foo#bar` lost its tail — and a BOM'd file failed with a refusal about
+        // the wrong thing entirely, the first line's name carrying an invisible character.
         let mut raw: BTreeMap<String, Vec<String>> = BTreeMap::new();
-        for (i, line_raw) in text.lines().enumerate() {
-            let line = line_raw.split('#').next().unwrap_or("").trim();
+        for (i, line_raw) in crate::config::without_bom(text).lines().enumerate() {
+            let line = crate::config::grammar::strip_comment(line_raw).trim();
             if line.is_empty() {
                 continue;
             }
@@ -144,6 +149,20 @@ fn flatten(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The hygiene the modules reader already had: a byte-order mark at the start of the file
+    /// is invisible, and a `#` only opens a comment where whitespace precedes it — so a member
+    /// whose NAME carries a hash survives intact. A BOM'd groups file used to fail with a
+    /// refusal about the wrong thing, blaming the priority list.
+    #[test]
+    fn a_bom_and_a_hash_inside_a_name_are_not_the_reader_s_business() {
+        let text = "\u{feff}tools = apt, dnf, car#go\n";
+        let g = Groups::parse(text).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!(
+            g.expand("tools"),
+            Some(vec!["apt".to_string(), "dnf".to_string(), "car#go".to_string()].as_slice())
+        );
+    }
 
     #[test]
     fn a_group_expands_to_its_backends_in_order() {

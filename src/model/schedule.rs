@@ -267,9 +267,12 @@ pub fn remove_line(body: &str, name: &str) -> Option<String> {
         .filter(|(i, _)| *i < start || *i > end)
         .map(|(_, l)| l)
         .collect();
-    let mut out = kept.join("\n");
+    // Rejoin with the ending the file already used — a bare `\n` turned every CRLF schedules
+    // file into an LF one in full (see `edit.rs::rejoin` for why that is a whole-file diff).
+    let eol = if body.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut out = kept.join(eol);
     if !out.is_empty() {
-        out.push('\n');
+        out.push_str(eol);
     }
     Some(out)
 }
@@ -280,11 +283,7 @@ fn find_block(body: &str, name: &str) -> Option<(usize, usize)> {
     let lines: Vec<&str> = body.lines().collect();
     let header = format!("schedule:{}", name);
     for (i, raw) in lines.iter().enumerate() {
-        let text = match raw.find('#') {
-            Some(c) => &raw[..c],
-            None => raw,
-        }
-        .trim();
+        let text = crate::config::grammar::strip_comment(raw).trim();
         // `schedule:nightly` must not match `schedule:nightly-tidy`, so the name has to end
         // where the header does or be followed by an option, a brace or space.
         let Some(rest) = text.strip_prefix(&header) else {

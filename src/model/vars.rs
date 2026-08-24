@@ -150,6 +150,10 @@ fn parse_number(t: &str) -> Option<f64> {
 
 /// Split `[a, b, [c, d]]` into its top-level element texts, tracking bracket depth so a nested
 /// list is one element. `None` when the text is not a bracketed list at all.
+///
+/// **And a comma inside quotes is a comma, not a separator.** Depth alone split `[run "a,b",
+/// stop]` at the comma inside the string, producing the elements `run "a` and `b"` — which
+/// then printed back looking innocent while meaning nothing anyone wrote.
 fn parse_list_literal(t: &str) -> Option<Vec<String>> {
     let inner = t.strip_prefix('[')?.strip_suffix(']')?;
     if inner.trim().is_empty() {
@@ -157,13 +161,15 @@ fn parse_list_literal(t: &str) -> Option<Vec<String>> {
     }
     let mut items = Vec::new();
     let mut depth = 0usize;
+    let mut in_quote = false;
     let mut start = 0usize;
     let bytes = inner.as_bytes();
     for (i, &b) in bytes.iter().enumerate() {
         match b {
-            b'[' => depth += 1,
-            b']' => depth = depth.saturating_sub(1),
-            b',' if depth == 0 => {
+            b'"' => in_quote = !in_quote,
+            b'[' if !in_quote => depth += 1,
+            b']' if !in_quote => depth = depth.saturating_sub(1),
+            b',' if depth == 0 && !in_quote => {
                 items.push(inner[start..i].trim().to_string());
                 start = i + 1;
             }

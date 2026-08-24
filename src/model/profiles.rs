@@ -464,9 +464,13 @@ pub fn remove_from_active(
         }
     }
 
-    edit.body = out.join("\n");
+    // Rejoin with the line ending the file already used: `str::lines()` dropped the CR, and a
+    // bare `\n` here turned every CRLF `active` into an LF one in full — the whole-file diff
+    // `edit.rs::rejoin` exists to prevent.
+    let eol = if body.contains("\r\n") { "\r\n" } else { "\n" };
+    edit.body = out.join(eol);
     if !edit.body.is_empty() {
-        edit.body.push('\n');
+        edit.body.push_str(eol);
     }
     Ok(edit)
 }

@@ -1,4 +1,4 @@
-use super::layout::{Layout, ModuleName};
+﻿use super::layout::{Layout, ModuleName};
 use super::modules::ModuleLoader;
 use super::profiles::{parse_active, ProfileLoader};
 use crate::config::grammar::{statement, BackendNames, GrammarError, Origin, Result, Statement};
@@ -78,12 +78,12 @@ impl Landing {
                  # Shall writes here so an imperative command still ends up as a file you own.\n\n"
             }
             Landing::Hooks => {
-                "# Packages that arrived behind Shall's back — `apt install`, caught by the hook.\n\
+                "# Packages that arrived behind Shall's back â€” `apt install`, caught by the hook.\n\
                  #\n\
                  # This is an ordinary module: read it, edit it, delete a line to uninstall.\n\n"
             }
             Landing::Adopted => {
-                "# Packages that arrived via `shall adopt` — what was already on this machine.\n\
+                "# Packages that arrived via `shall adopt` â€” what was already on this machine.\n\
                  #\n\
                  # This is an ordinary module: read it, edit it, delete a line to uninstall.\n\n"
             }
@@ -102,13 +102,13 @@ pub struct Edit {
 }
 
 impl Edit {
-    /// `Added jq to modules/imperative.txt (used by profile Work)` — II.8: every command
+    /// `Added jq to modules/imperative.txt (used by profile Work)` â€” II.8: every command
     /// prints the file it touched.
     pub fn describe(&self, verb: &str) -> String {
         let mut s = format!("{} {} in {}", verb, self.line, self.file.display());
         if let Some(p) = &self.wired_into {
             s.push_str(&format!(
-                "\n  Added `use {}` to profile {} — that module is now part \
+                "\n  Added `use {}` to profile {} â€” that module is now part \
                                  of this machine. It is a normal line you can read and delete.",
                 self.module_name().unwrap_or_default(),
                 p
@@ -132,7 +132,7 @@ impl Edit {
 /// returned either way: a preview that reports nothing is as useless as one that writes.
 ///
 /// **`bundle.rs` had a second one of these**, spelled `ToDisk | Preview`, with the same
-/// `for_run(dry_run)` constructor and the same job — Q15, where `--dry-run bundle` wrote all
+/// `for_run(dry_run)` constructor and the same job â€” Q15, where `--dry-run bundle` wrote all
 /// nine files and reported them in the past tense. Two enums for one question is two answers to
 /// it: the next `--dry-run` verb would have had to pick a side, and a reader comparing them
 /// would have had to work out whether `Preview` and `Planned` meant the same thing. They did.
@@ -158,7 +158,7 @@ impl Writes {
 
     /// The three filesystem effects a preview must not have. They live on the type rather than
     /// beside each caller so that a write added later inherits the check by calling the same
-    /// thing everything else calls — which is the whole argument of the paragraph above.
+    /// thing everything else calls â€” which is the whole argument of the paragraph above.
     pub async fn mkdir(self, p: &std::path::Path) -> crate::core::Result<()> {
         if self.previewing() {
             return Ok(());
@@ -166,13 +166,33 @@ impl Writes {
         crate::utils::file::ensure_dir_async(p).await
     }
 
+    /// A temporary sibling of `path`, unique per process.
+    ///
+    /// Same directory as the target, because the rename that follows is only atomic within
+    /// one filesystem â€” and a config tree may be a mount of its own.
+    pub(crate) fn temp_sibling(path: &std::path::Path) -> std::path::PathBuf {
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "file".to_string());
+        path.with_file_name(format!(".{name}.shall-{}", std::process::id()))
+    }
+
     pub async fn write(self, p: &std::path::Path, contents: &str) -> crate::core::Result<()> {
         if self.previewing() {
             return Ok(());
         }
-        tokio::fs::write(p, contents)
+        // Temp + rename, not a bare write: a crash mid-write used to leave a TRUNCATED module
+        // behind, and every later command parses modules â€” so the machine was wedged at parse
+        // until somebody restored the file by hand. The rename is the commit; everything
+        // before it lands on a file nothing reads.
+        let tmp = Self::temp_sibling(p);
+        tokio::fs::write(&tmp, contents)
             .await
-            .map_err(|e| crate::core::Error::Io(format!("writing {}: {e}", p.display())))
+            .map_err(|e| crate::core::Error::Io(format!("writing {}: {e}", tmp.display())))?;
+        tokio::fs::rename(&tmp, p)
+            .await
+            .map_err(|e| crate::core::Error::Io(format!("committing {}: {e}", p.display())))
     }
 
     pub async fn copy(
@@ -253,7 +273,12 @@ impl<'a> Editor<'a> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| io_error(path, &e))?;
         }
-        std::fs::write(path, body).map_err(|e| io_error(path, &e))
+        // Temp + rename, for the same reason `Writes::write` does it: the rename is the
+        // commit, and a crash mid-write leaves a temp file nobody parses instead of a
+        // truncated module every later command chokes on.
+        let tmp = Writes::temp_sibling(path);
+        std::fs::write(&tmp, body).map_err(|e| io_error(path, &e))?;
+        std::fs::rename(&tmp, path).map_err(|e| io_error(path, &e))
     }
 
     /// Write `line` into `target`, and make sure something reaches it.
@@ -262,7 +287,7 @@ impl<'a> Editor<'a> {
     /// rather than write one: `install` that quietly installs nothing is the disease.
     pub fn add(&self, target: &Target, line: &str) -> Result<Edit> {
         // Before anything is written, and here rather than in each caller. A line the grammar
-        // cannot read wedges every later command — they all parse the model — and the file it
+        // cannot read wedges every later command â€” they all parse the model â€” and the file it
         // wedges is one Shall generated, so nobody sees it until the next command dies. The
         // pm-hook path reaches this with whatever was on a real `choco install` command line
         // (`choco:Google Chrome`), and `adopt` reached it with `winget list`'s
@@ -270,8 +295,8 @@ impl<'a> Editor<'a> {
         let stmt = statement::parse(&Origin::argument(), line, self.backends)?;
         if let Target::Module(_) = target {
             if let Some(what) = super::modules::set_math_in_a_module(&stmt) {
-                // Parsing is not enough: `winget:ARP\Machine\X64\Android Studio` parses — as
-                // a set expression — and only the module-file context refuses it. Sharing
+                // Parsing is not enough: `winget:ARP\Machine\X64\Android Studio` parses â€” as
+                // a set expression â€” and only the module-file context refuses it. Sharing
                 // that rule with the reader is what keeps a written file readable.
                 return Err(GrammarError::new(
                     Origin::argument(),
@@ -318,7 +343,7 @@ impl<'a> Editor<'a> {
     /// Replace a module's whole contents with generated text, and make sure something
     /// reaches it.
     ///
-    /// For a module Shall writes rather than edits — `adopted`, which II.9 says is **one**
+    /// For a module Shall writes rather than edits â€” `adopted`, which II.9 says is **one**
     /// file. A timestamped file per run would make the second `adopt` declare everything
     /// twice, and two declarations of one package is a conflict the resolver then refuses
     /// (II.7 rule 5). Overwriting is also what makes it re-runnable: `adopt` again and the
@@ -394,11 +419,9 @@ impl<'a> Editor<'a> {
     /// `apt:jq` as a name, which is how removing a package called `apt` came to delete every
     /// `apt:*` line (S9).
     fn key_of(&self, line: &str) -> Option<String> {
-        let line = match line.find('#') {
-            Some(i) => &line[..i],
-            None => line,
-        }
-        .trim();
+        // The grammar's own rule, not a bare `find('#')`: a `#` glued inside a value
+        // (`@content=#!/bin/sh`) is DATA, and only one after whitespace opens a comment.
+        let line = crate::config::grammar::strip_comment(line).trim();
         if line.is_empty() {
             return None;
         }
@@ -418,7 +441,7 @@ impl<'a> Editor<'a> {
     /// Which profile must gain `use <module>` for this write to mean anything.
     ///
     /// `None` = already reached, nothing to do. `Some(p)` = add it to `p` and say so
-    /// (II.8: a normal line you can read and delete — never implicit).
+    /// (II.8: a normal line you can read and delete â€” never implicit).
     fn reachable_via(&self, module: &ModuleName) -> Result<Option<String>> {
         let active_file = self.layout.active_file();
         let body = std::fs::read_to_string(&active_file).unwrap_or_default();
@@ -456,7 +479,7 @@ impl<'a> Editor<'a> {
             )
             .with_hint(format!(
                 "say where it goes: `--into {}` puts it in that profile, `--into <module>` \
-                 in a module. Only needed once — after that the `use {}` line is there.",
+                 in a module. Only needed once â€” after that the `use {}` line is there.",
                 many[0], module
             ))),
         }
@@ -547,7 +570,7 @@ impl<'a> Editor<'a> {
 
     /// Move a declared package to another manager (II.8's `teleport`): rewrite each line that
     /// declares `target_pkg` so its backend prefix is `new_backend`, in the module where it
-    /// already lives. Options and trailing comments are kept — only the prefix changes.
+    /// already lives. Options and trailing comments are kept â€” only the prefix changes.
     ///
     /// The sync that follows installs from the new manager and, because the old declaration is
     /// gone, removes the old copy as drift. So this is edit-the-line-then-sync like every other
@@ -608,11 +631,8 @@ impl<'a> Editor<'a> {
     }
 
     pub(crate) fn matches(&self, raw: &str, wanted: &Match) -> bool {
-        let line = match raw.find('#') {
-            Some(i) => &raw[..i],
-            None => raw,
-        }
-        .trim();
+        // Same rule: the grammar decides where a comment starts, not a byte scan.
+        let line = crate::config::grammar::strip_comment(raw).trim();
         if line.is_empty() {
             return false;
         }
@@ -621,7 +641,11 @@ impl<'a> Editor<'a> {
         };
 
         match (wanted, &stmt) {
-            (Match::Package { backend, name }, Statement::Package(d) | Statement::Absent(d)) => {
+            // **An `absent:` line is a KEEP-OFF guard, not a declaration of presence** â€” so a
+            // plain package target never matches one. It used to: `uninstall jq` deleted a
+            // standing `absent:cargo:jq`, silently lifting exactly the protection the user
+            // had written against the package coming back.
+            (Match::Package { backend, name }, Statement::Package(d)) => {
                 if d.selector.as_str() != name {
                     return false;
                 }
@@ -650,11 +674,11 @@ pub(crate) enum Match {
     Other(String),
 }
 
-/// `service:nginx`, `shim:jq` — the identity of a non-package statement, for matching a line
+/// `service:nginx`, `shim:jq` â€” the identity of a non-package statement, for matching a line
 /// `edit` was asked to add or remove.
 ///
 /// The statement's own [`Statement::key`], narrowed: set math is an operation rather than a
-/// thing with a name to look up, and a variable is not something `edit` adds or removes —
+/// thing with a name to look up, and a variable is not something `edit` adds or removes â€”
 /// the `vars` file is hand-written. Packages are matched by [`Match::Package`], which knows
 /// that a bare name means "under whatever backend has it".
 fn other_key(stmt: &Statement) -> Option<String> {
@@ -670,10 +694,11 @@ fn other_key(stmt: &Statement) -> Option<String> {
 /// prefix) gains one; a prefixed or chain line has its head replaced.
 fn rewrite_backend_prefix(raw: &str, new_backend: &str) -> String {
     let indent: String = raw.chars().take_while(|c| c.is_whitespace()).collect();
-    let (content, comment) = match raw.find('#') {
-        Some(i) => (raw[..i].trim_end(), &raw[i..]),
-        None => (raw.trim_end(), ""),
-    };
+    // Where the comment starts is the grammar's ruling, not the first `#` byte: a value may
+    // carry a bare `#` (`@content=#!/bin/sh`), and splitting on it mangled both halves.
+    let stripped = crate::config::grammar::strip_comment(raw);
+    let comment = &raw[stripped.len()..];
+    let content = stripped.trim_end();
     let body = content.trim();
     // The name-and-options tail is everything after the last `:` in the head. A bare name has
     // no `:` before its `@options`, so guard on the `@`: `foo@version=1` keeps `foo@version=1`.
@@ -706,7 +731,7 @@ fn landing_of(module: &ModuleName) -> Option<Landing> {
     }
 }
 
-/// Every module file the active profiles reach — what `uninstall` edits (II.8).
+/// Every module file the active profiles reach â€” what `uninstall` edits (II.8).
 pub fn active_module_files(
     layout: &Layout,
     backends: &dyn BackendNames,
@@ -759,7 +784,7 @@ pub fn active_module_files(
 /// What `uninstall` warns about: *"jq is still declared in module `gaming`, which isn't
 /// active. It will come back if you activate Gaming."* Deleting the line you can see, while
 /// an identical line waits in a module you forgot about, is a package that returns from the
-/// dead the next time you switch profiles — and nothing said so.
+/// dead the next time you switch profiles â€” and nothing said so.
 pub fn inactive_declarations(
     layout: &Layout,
     backends: &dyn BackendNames,
@@ -850,7 +875,7 @@ mod tests {
     #[test]
     fn a_line_the_grammar_cannot_read_is_refused_before_the_file_is_touched() {
         // The root of the adopted.txt:69 wedge. `key_of` parsed and returned `None` on an
-        // error, and the line was then appended anyway — so a write could put a parse error
+        // error, and the line was then appended anyway â€” so a write could put a parse error
         // into a file Shall generated, and every later command died reading it. Both live
         // sources produced real ones: `winget list`'s `ARP\Machine\X64\Android Studio`, and
         // the pm-hook taking its target off a `choco install "Google Chrome"` command line.
@@ -913,7 +938,7 @@ mod tests {
 
     #[test]
     fn installing_with_several_profiles_active_asks_which_one_rather_than_guessing() {
-        // The alternative is picking one of your identities at random, or — worse — writing
+        // The alternative is picking one of your identities at random, or â€” worse â€” writing
         // the line, wiring nothing, and reporting success while installing nothing.
         let f = fx(&[
             ("active", "Work\nHome\n"),
