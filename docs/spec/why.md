@@ -1,4 +1,4 @@
-# Part V — Why
+﻿# Part V â€” Why
 
 *[Shall v7](../SPEC.md) — the map is there; this is one part of it.*
 
@@ -157,7 +157,7 @@ and the lock only ever records what happened here.
 to exactly one package manager — a PPA is apt's, a COPR is dnf's, and `add-apt-repository`
 run against dnf is a system command that fails, or worse, half-succeeds. A bare `repo:SPEC`
 would make Shall guess which backend, and the honest ways to guess are all wrong: a
-prefix→backend table (`ppa:`→apt) is a second copy of a fact each backend already owns and grows
+prefixâ†’backend table (`ppa:`â†’apt) is a second copy of a fact each backend already owns and grows
 with every ecosystem (P4); "the one system backend in `priority`" fails at run time on the
 machine where the guess is wrong, which is the machine you least want a repo command
 misfiring on. So the backend is named, exactly as a package line names one: `repo:apt:ppa:...`.
@@ -188,7 +188,7 @@ machine's ratio is undefined.)*
 **V.20 — Why the ratio catches Monday and a count doesn't.** On Alpine, `adopt` correctly
 took 14 packages and a mis-scoped `prune` scheduled all 14 for removal — **under the count
 limit, none protected, all things you'd cry about**. The count misses it on small machines.
-**Manage 3, delete 576 → you have made a mistake, on every machine, always.**
+**Manage 3, delete 576 â†’ you have made a mistake, on every machine, always.**
 
 *Why the threshold is a setting (`[guard] purge_ratio`) and not a constant, added 2026-08-14
 after it moved on its own.* The denominator is the undeclared crawl, and the crawl was correctly
@@ -217,7 +217,7 @@ both `prune` and `sync`.
 mechanism that can be miscalibrated. A summary that's always there can't be.**
 
 **V.25 — Why the 16 protections became 5.** **Eleven of them were never protections — they
-were declarations wearing a protection costume.** "Don't remove this, it's leased" →
+were declarations wearing a protection costume.** "Don't remove this, it's leased" â†’
 `@expires=`. "…you installed it imperatively" → it's in the `imperative` module like
 everything else. "…it's held" → `@hold`. "Do remove this, it's bloatware" → `absent:`. Each
 existed because there was **no way to say the thing directly**, so someone bolted an
@@ -353,7 +353,7 @@ starts being a preference, that is the signal it does not belong in `[guard]`.*
 working implementation was `compose()` in the old `app/profile.rs`, over flat strings.)*
 
 **The shape does not fit, and pretending otherwise is the bug.** Resolution is
-`profiles → the modules they reach → the packages in those modules`. Set math breaks that
+`profiles â†’ the modules they reach â†’ the packages in those modules`. Set math breaks that
 chain: `(Work | gaming) & security` is **an intersection of package sets**, and there is no
 module whose contents are that intersection. So a profile using set math resolves to packages
 directly rather than naming modules.
@@ -718,7 +718,7 @@ on every run forever. Another asserts that the build artifact is still on disk a
 exact pattern `CLAUDE.md` names.
 
 The larger version of the same fault is an image that claims coverage it does not have.
-`Dockerfile.tools` says the harness runs a real install→list→remove for composer, opam,
+`Dockerfile.tools` says the harness runs a real installâ†’listâ†’remove for composer, opam,
 luarocks, nimble, spack, pixi, helm and krew; none of those names appears in the harness. The
 README describes a coverage audit that hard-fails on an untouched backend; no such code exists.
 `run.sh` maps `tools → apt`, so the image is `ubuntu` with a forty-minute build — which is
@@ -2341,7 +2341,7 @@ question `Q19` had just answered. **Neither was reported. Both were found by loo
 afternoon, in code that had been green through thousands of checks.
 
 That is the shape of a class, not a coincidence, and the mechanism is worth naming precisely:
-**a lifecycle is install → list → remove, and by construction it never edits a declaration.**
+**a lifecycle is install â†’ list â†’ remove, and by construction it never edits a declaration.**
 Every harness this project has, every plan-smoke, and most of the unit tests install once. So an
 option read when the install argv is built and nowhere else is invisible to all of them — not
 under-tested, *untestable* by the shape of the tests. Five features existed in the documentation
@@ -2485,7 +2485,7 @@ II.19.)*
 Measured in a disposable Ubuntu container with each manager binary wrapped by a counting shim:
 six declared packages produced **six separate `apt` processes**, argv captured verbatim, and
 12,465 ms. `apt install` of *eight* packages as one command took **3,161 ms**. Scaling the same
-packages one at a time: 1 → 2,131 ms, 2 → 4,017 ms, 4 → 7,372 ms, 8 → **31,901 ms**. Superlinear,
+packages one at a time: 1 â†’ 2,131 ms, 2 â†’ 4,017 ms, 4 â†’ 7,372 ms, 8 â†’ **31,901 ms**. Superlinear,
 because each invocation re-reads the package cache, re-takes the dpkg lock and re-resolves a
 dependency graph the batch resolves once.
 
@@ -2557,7 +2557,7 @@ packages, five of them missing:
 | of which `pacman -Si` (the dependency query) | **6** | **0** |
 | child time, summed | 3.70 s | 1.20 s |
 | wall clock | 1.58 s | 1.33 s |
-| install commands / widest | 1 × 5 names | 1 × 5 names |
+| install commands / widest | 1 Ã— 5 names | 1 Ã— 5 names |
 
 The wall clock moves least, and that is the honest reading: the six queries ran concurrently
 (`--timings` reported 2.3× overlap), so they cost ~0.47 s of latency rather than 2.67 s — Rust's
@@ -2747,10 +2747,10 @@ II.19.)*
 
 `Y1`–`Y5` removed every question Shall asks twice and overlapped what was left. Measured with
 `--timings` on this Windows box: `shall list` is **19.5 s of manager work inside a 3.2 s wall
-clock, 6.2×**, and the slowest child is `winget list` at 2.35 s. There is nothing left to
+clock, 6.2Ã—**, and the slowest child is `winget list` at 2.35 s. There is nothing left to
 overlap — the floor is a Microsoft binary. The only remaining way to go faster is **not to ask**,
 and the next `shall list` asks all 24 managers the same question about a machine that, in the
-ordinary case, nothing has touched since. With the cache on: **3.99 s → 0.68 s**, 24 child
+ordinary case, nothing has touched since. With the cache on: **3.99 s â†’ 0.68 s**, 24 child
 commands down to one.
 
 **So why is it off?** Because every other rule in II.19 buys speed with concurrency, and this one
@@ -2784,7 +2784,7 @@ honestly, and the honesty did not make the name declarable.
 were never the problem — `2c51968` had already taught the grammar and the validator about them,
 so `winget:ARP\Machine\X64\AndroidStudio` parsed all along. On this machine the undeclarable
 names were **161: six winget names, every one containing a space, and 155 `service:` names that
-are not a package-line question at all.** `docs/archive/GRADE-2026-07-31.md` §5 G-2 describes 185 backslash
+are not a package-line question at all.** `docs/archive/GRADE-2026-07-31.md` Â§5 G-2 describes 185 backslash
 names as unwritable; that defect is closed, and the number was re-cited afterwards without being
 re-run. This is the second time in two rounds that a *count* outlived the bug it counted.
 
@@ -2812,7 +2812,7 @@ grammar now answers three ways instead of two (`Declared::Package` / `Resource` 
 `Y7a`. Rules in II.19.)*
 
 A `service:` line is not a package. It means *this service should be running*, and the two halves
-are `install → enable + start` and `remove → stop + disable`. So a manifest holding 155 service
+are `install â†’ enable + start` and `remove â†’ stop + disable`. So a manifest holding 155 service
 lines holds 155 triggers, and losing one in a bad merge disables a Windows service on the next
 sync. That is the argument that kept them commented out, and it is a real cost.
 
@@ -2871,7 +2871,7 @@ they did. Nothing had asked them yet. Two separate faults, both of the same shap
 are the same sentence — ask each manager once, at the start, for what the run is going to ask it
 anyway — and neither adds a question: the memo already collapsed the duplicates, so what changed
 is *when*, not *how many*. Measured after: every listing starts within 0.26 s of the first, wall
-clock 9.13 s → 3.9 s, overlap 2.7× → 5.4×, and the report is identical line for line.
+clock 9.13 s â†’ 3.9 s, overlap 2.7Ã— â†’ 5.4Ã—, and the report is identical line for line.
 
 **Only for commands that already ask everyone.** `App::warm_installed` is called by name at the
 two call sites that crawl the whole machine, never from `App::new`. A command that consults three
@@ -3007,7 +3007,7 @@ version except a text editor, and nothing could withdraw an approval. **A list o
 means is an assertion about what is absent, and nothing verifies that half** — the same shape as
 the eighth removal path in V.0.
 
-**Why the axis is a positional and not six verbs.** Three ledgers × two directions is six names to
+**Why the axis is a positional and not six verbs.** Three ledgers Ã— two directions is six names to
 invent, remember, and keep from colliding with `hold`/`unhold` — which is a *different* question
 (an exemption from `upgrade`, not a freeze) and which already owns the words a user would guess.
 One grammar with the ledger named in it costs two verbs and reads as what it does. It also makes
@@ -3349,8 +3349,8 @@ command, standing next to a batched parallel DAG and getting none of it. Measure
 one minute:
 
 ```
-sync --dry-run   2.65s wall ·  21 child command(s) summing to 10.35s · 3.9x overlap ·  2 wave(s)
-heal           205.14s wall ·  27 child command(s) summing to 33.31s · 0.2x overlap · 27 wave(s)
+sync --dry-run   2.65s wall Â·  21 child command(s) summing to 10.35s Â· 3.9x overlap Â·  2 wave(s)
+heal           205.14s wall Â·  27 child command(s) summing to 33.31s Â· 0.2x overlap Â· 27 wave(s)
 ```
 
 **27 waves for 27 commands is the definition of serial.** The fix is not a `join_all` over the
@@ -3475,8 +3475,8 @@ Winget loses ~3 of a cold burst of 16 and none of the next 32; it is contention 
 source index. Not our defect — but what Shall did with it was.
 
 `run_output` ignored exit status by design, and the design is right: "no such package" and "no
-results" are ordinary non-zero replies. It ignored the *silent* ones too. So `Ok("")` → a parser
-finding nothing → `list_installed` answering `Ok(vec![])`. **Nothing in the chain believed
+results" are ordinary non-zero replies. It ignored the *silent* ones too. So `Ok("")` â†’ a parser
+finding nothing â†’ `list_installed` answering `Ok(vec![])`. **Nothing in the chain believed
 anything had failed.** Shall did not think winget was unwell; it thought the machine was empty:
 
 ```
@@ -4009,7 +4009,7 @@ would be a feature a user would notice, which is not a detail to settle inside a
 
 **V.143 — Why a plan has to say what it was computed over.** *(Rule in II.7.)*
 
-A removal set is `managed − desired`. That subtraction is only as good as `desired`, and nothing
+A removal set is `managed âˆ’ desired`. That subtraction is only as good as `desired`, and nothing
 in `ChangePlanner::plan`'s old signature could tell a `desired` that was the machine's whole
 declaration set from one that was a shell's four requests.
 
@@ -4185,7 +4185,7 @@ The four bodies are there. The causal claim is wrong, and it is worth writing do
 the reading is a natural one and will be made again.
 
 **The convergence decision is already shared, in exactly two places, and neither is in those
-bodies.** On the package path, `ChangePlanner` computes `desired − present` and then asks
+bodies.** On the package path, `ChangePlanner` computes `desired âˆ’ present` and then asks
 `is_drifted` — one comparison covering `@quota`, `@size`, `@mount`, `@mount_options`, `@channel`
 and `@classic` across zfs, lvm, btrfs and snap, with `limit_drifted`'s three-state reading of a
 value the backend could not read (D13). A converged declaration never reaches `Installable` at
@@ -4686,7 +4686,7 @@ The expensive halves are **omission** — a writer that is not on the list is co
 that one is safe — and **misclassification**, where a writer *is* on the list. Nothing checked
 that, and it was live in both directions at once:
 
-- **`history` was exempt, and reached `handle_rollback` → `handle_sync`.** That is the entire
+- **`history` was exempt, and reached `handle_rollback` â†’ `handle_sync`.** That is the entire
   install/remove path, `state.save()` included, running with no lock held. The *same function*
   reached through `Commands::Rollback` was locked. One function, two doors, two locking regimes,
   and which one you got depended on whether you typed the verb or picked it out of a TUI.
@@ -5580,9 +5580,9 @@ are the same, not for the tables that look the same.
 
 **And the assertions a shared helper cannot make stay at the site.** `os_native_argv`'s check
 that an exemption does not contradict a row three lines below it is the `helm` case — exempt
-on the grounds that a row *“would pass on the remove alone”*, which stopped being true
+on the grounds that a row *â€œwould pass on the remove aloneâ€*, which stopped being true
 the moment rows could carry options, with nothing to say so. The ledger's stale check would catch
-it, and would report it as *“no longer has no row”*, which sends the reader to the
+it, and would report it as *â€œno longer has no rowâ€*, which sends the reader to the
 wrong place. So it runs first, with a line saying why. That ordering is the general form: where a
 site knows more than the helper, the site asserts first and the helper cleans up behind it.
 
@@ -6326,7 +6326,7 @@ anything run through `sudo`, sitting exactly where its own installer put it. `sh
 where `PATH` is not the user's. The three warnings are useful to a person watching. Nothing is
 watching. What the pipeline reads is the 0.
 
-**Why the rule is what it is.** The distinction was already ruled one command over: §Q2 defines
+**Why the rule is what it is.** The distinction was already ruled one command over: Â§Q2 defines
 **critical** as *"it is installed, or `priority` names it, and it cannot work"* — a
 `priority`-named manager that cannot be reached is a broken machine, not a line that does not
 apply here. `check` was told. `sync` was not, and the two therefore described one machine in
@@ -7122,7 +7122,7 @@ are asserting on cannot fail for the reason the marker is wrong.**
 took its list of backends from `builtin_backends.toml` and reported the result as the whole
 board. That file is the *declarative* backends — one table of two — so every backend implemented
 in Rust was invisible to it, including six sitting in the image already built. Coverage went 12
-→ 20 on the first pass and 12 → 25 once the list came from the registry instead, which is where
+â†’ 20 on the first pass and 12 â†’ 25 once the list came from the registry instead, which is where
 `absent_marker_coverage_tests` had been reading it all along. An instrument scoped to a file
 rather than to the thing the file describes measures the file.
 
@@ -7199,8 +7199,8 @@ recorded it. It was discarded one line before the process exited, by the newest 
 **The cost is not theoretical and it is not local.** `shall-failure-class:` exists (`R-3`,
 `II.58`) because a harness that cannot read a verdict tests transience by retrying, and an
 immediate retry is exactly wrong for a rate-limit window. On 2026-08-21 the storage integration
-job did precisely that: `unknown` → retry → the same 526-second window → `defect`, and the
-real-lifecycle ratchet fell 8 → 7 behind it. That is the second time this ratchet has gone red for
+job did precisely that: `unknown` â†’ retry â†’ the same 526-second window â†’ `defect`, and the
+real-lifecycle ratchet fell 8 â†’ 7 behind it. That is the second time this ratchet has gone red for
 this reason; the first is why the class line was added at all.
 
 **Two aggregates and a wrapper had the same defect, and only one had been noticed.** `heal`'s
@@ -7252,7 +7252,7 @@ ask for, and the planner already declines those removals upstream. Only *here-an
 blocks. The distinction is drawn inside `essential_names`, where both halves of it are visible,
 rather than at any caller that would have to re-derive it.
 
-## V.201 — Why the guard's ask and the guard's spend are two different functions. *(R1, R2; 2026-08-23)*
+**V.201 — Why the guard's ask and the guard's spend are two different functions. *(R1, R2; 2026-08-23)***
 
 `remove-orphans` asks the guard before its confirmation prompt so a refusal lands before the user
 wastes consent on it, and the engine asks again over the same pairs before carrying them out.
@@ -7264,7 +7264,7 @@ the same split gave `@undo=` batches — mutations nothing can inspect — their
 `charge_unmodelled`. The reason this is a rule and not a refactor: any future prompt-time ask
 that reaches for `enforce` re-creates the double spend, and the type system will not stop it.
 
-## V.202 — Why a failed run's WAL entries close as Abandoned, and why its summary counts what stayed gone. *(R3; 2026-08-23)*
+**V.202 — Why a failed run's WAL entries close as Abandoned, and why its summary counts what stayed gone. *(R3; 2026-08-23)***
 
 Q33 ruled Failed means *an outcome was reached*; heal reads InProgress+Abandoned as the
 interrupted set. Closing the entries of aborted batches as Failed therefore walked heal past
@@ -7275,7 +7275,7 @@ engine charges those onto its metrics on the failure path, cleanup commands repo
 counters, failed purges exit non-zero, and `journal::record_abandoned` is the only way an
 abandoned-by-us entry closes.
 
-## V.203 — Why a sandboxed child starts from an empty environment, and why shim identity outlives the binary that deployed it. *(2026-08-23)*
+**V.203 — Why a sandboxed child starts from an empty environment, and why shim identity outlives the binary that deployed it. *(2026-08-23)***
 
 Additive env (`--setenv` on top of inherited, `.env()` on top of inherited) meant every cloud
 token Shall itself held crossed into the "confined" process on all three platforms — confinement

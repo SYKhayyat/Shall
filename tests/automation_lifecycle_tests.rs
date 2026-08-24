@@ -1,4 +1,4 @@
-use shall::core::SnapshotManager;
+﻿use shall::core::SnapshotManager;
 
 // Import our exhaustive A+ Test Infrastructure
 use crate::mock_providers::{MockSnapshotProvider, TestKernel};
@@ -15,12 +15,12 @@ async fn test_snapshot_retention_reaps_only_shall_owned_and_keeps_the_newest() {
     let _kernel = TestKernel::new().await;
     let mock_provider = MockSnapshotProvider::new();
 
-    // Shall-owned (the id carries `shall_`): one recent, one ancient.
+    // Shall-owned (the id carries the `shall_pre_` marker): one recent, one ancient.
     mock_provider
-        .add_historical_snapshot("shall_recent", 1)
+        .add_historical_snapshot("shall_pre_recent", 1)
         .await;
     mock_provider
-        .add_historical_snapshot("shall_ancient", 45)
+        .add_historical_snapshot("shall_pre_ancient", 45)
         .await;
     // NOT Shall's — a user or other-tool snapshot. Retention must never touch it.
     mock_provider
@@ -50,11 +50,11 @@ async fn test_snapshot_retention_reaps_only_shall_owned_and_keeps_the_newest() {
 
     // shall_ancient: not the newest, and 45 > 30 days -> reaped.
     assert!(
-        !remaining.contains(&"shall_ancient".to_string()),
+        !remaining.contains(&"shall_pre_ancient".to_string()),
         "the ancient Shall snapshot should have been reaped"
     );
     // shall_recent: the newest -> kept by the floor.
-    assert!(remaining.contains(&"shall_recent".to_string()));
+    assert!(remaining.contains(&"shall_pre_recent".to_string()));
     // weekly_backup: not Shall's -> never touched, even at 90 days.
     assert!(
         remaining.contains(&"weekly_backup".to_string()),
@@ -69,10 +69,10 @@ async fn test_snapshot_retention_respects_dry_run() {
     let mock_provider = MockSnapshotProvider::new();
     // Two owned snapshots so one is past the always-keep-newest floor.
     mock_provider
-        .add_historical_snapshot("shall_newest", 1)
+        .add_historical_snapshot("shall_pre_newest", 1)
         .await;
     mock_provider
-        .add_historical_snapshot("shall_stale", 100)
+        .add_historical_snapshot("shall_pre_stale", 100)
         .await;
     let manager = SnapshotManager::with_provider(Box::new(mock_provider));
 
@@ -87,7 +87,7 @@ async fn test_snapshot_retention_respects_dry_run() {
         .unwrap();
 
     // shall_stale is past the floor and older than 1 day -> identified...
-    assert!(doomed.contains(&"shall_stale".to_string()));
+    assert!(doomed.contains(&"shall_pre_stale".to_string()));
     // ...but dry-run physically deletes nothing.
     assert_eq!(
         manager.list_snapshots().await.unwrap().len(),

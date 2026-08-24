@@ -174,10 +174,7 @@ pub fn ws_name_version(output: &str, backend: &str) -> ParseResult {
 /// with a digit is therefore not a version, and the line it is on is not a package.
 pub fn cabal_list(output: &str, backend: &str) -> ParseResult {
     let clean = sanitize(output);
-    let candidates: Vec<&str> = clean
-        .lines()
-        .filter(|l| !is_noise_line(l) && !is_cabal_self_banner(l))
-        .collect();
+    let candidates: Vec<&str> = clean.lines().filter(|l| !is_noise_line(l)).collect();
     let found = candidates
         .iter()
         .filter_map(|l| {
@@ -192,26 +189,6 @@ pub fn cabal_list(output: &str, backend: &str) -> ParseResult {
         })
         .collect();
     or_unrecognised(backend, found, &candidates)
-}
-
-/// The one line of chatter the digit-version rule cannot catch: cabal announcing itself.
-///
-/// First run with no config, cabal prints its own name and version — `Cabal 3.10.3.0` — in
-/// precisely the `name version` shape of a listing row, and PVP versions are dot-separated
-/// integers, so the shape test that dismisses its other three chatter lines accepts this one
-/// whole. It is the tool naming itself: name matches the program, the remainder is nothing but
-/// the version, and there is no third column — an installed-package row never ends at the
-/// version.
-fn is_cabal_self_banner(line: &str) -> bool {
-    let mut parts = line.split_whitespace();
-    match (parts.next(), parts.next(), parts.next()) {
-        (Some(name), Some(ver), None) => {
-            name.eq_ignore_ascii_case("cabal")
-                && ver.chars().next().is_some_and(|c| c.is_ascii_digit())
-                && ver.chars().all(|c| c.is_ascii_digit() || c == '.')
-        }
-        _ => false,
-    }
 }
 
 /// `uv tool list`, which is one `name vVERSION` line per tool followed by one `- executable`
@@ -644,10 +621,11 @@ mod tests {
     /// Real bytes, and the whole reason `cabal_list` exists: a container's first `cabal list`
     /// writes three lines of configuration chatter to **stdout** ahead of the packages.
     ///
-    /// The fourth chatter line is cabal naming itself — `Cabal 3.10.3.0`, in exactly the
-    /// `name version` shape of a data row. This test once asserted the phantom as package
-    /// #1, which made `adopt` write it and `purge` offer to remove it on every fresh
-    /// container, forever.
+    /// **`Cabal 3.10.3.0` stays.** The 2026-08-23 audit called this line the tool's first-run
+    /// banner and the original expectation a phantom; the builtin row's captured fixture
+    /// (docker haskell:9.6) says otherwise — `cabal list --installed` really does list the
+    /// global `Cabal` library, textually identical to any banner. The repo's own capture wins
+    /// over an audit claim: the chatter lines fail the digit-version rule and Cabal is data.
     #[test]
     fn cabal_reads_past_the_chatter_of_a_first_run() {
         let out = "Config file path source is default config file.\n\
@@ -656,13 +634,9 @@ mod tests {
                    Cabal 3.10.3.0\n\
                    array 0.5.8.0\n";
         let pkgs = cabal_list(out, "cabal").expect("this is what haskell:9.6 printed");
-        assert_eq!(
-            pkgs.len(),
-            1,
-            "the banner is the tool naming itself, not a package"
-        );
-        assert_eq!(pkgs[0].name, "array");
-        assert_eq!(pkgs[0].version.as_deref(), Some("0.5.8.0"));
+        assert_eq!(pkgs.len(), 2);
+        assert_eq!(pkgs[0].name, "Cabal");
+        assert_eq!(pkgs[1].name, "array");
     }
 
     /// The all-caps rule must not eat packages that are literally named in caps: Hackage

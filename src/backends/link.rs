@@ -1,4 +1,4 @@
-use crate::config::Config;
+﻿use crate::config::Config;
 use crate::core::{
     BackendCore, CommandExecutor, Error, Installable, MetadataProvider, PackageSpec, Result,
 };
@@ -108,7 +108,9 @@ fn backup_directory_tree<'a>(
     Box::pin(async move {
         const MAX_DEPTH: usize = 64;
         if depth > MAX_DEPTH {
-            return Err(Error::Other(format!(
+            // Exit 3, not 1: this is a refusal (U21), and the refusal hook exists to hear
+            // about exactly this class of sentence.
+            return Err(Error::Refused(format!(
                 "refusing to back up {:?}: deeper than {MAX_DEPTH} levels, which usually means \
                  a symlink loop inside it",
                 src

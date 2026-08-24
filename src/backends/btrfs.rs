@@ -1,4 +1,4 @@
-use crate::core::{
+﻿use crate::core::{
     BackendCore, CommandExecutor, Error, Installable, MetadataProvider, Package, PackageSpec,
     Queryable, Result,
 };
@@ -333,7 +333,7 @@ impl BtrfsBackendCore {
         match fs::read_to_string(&self.fstab_file) {
             Ok(content) => Ok(Some(content)),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(Error::Io(format!(
+            Err(e) => Err(Error::Refused(format!(
                 "cannot read {}: {} — refusing to change or drop fstab entries while its \
                  contents are unreadable",
                 self.fstab_file.display(),

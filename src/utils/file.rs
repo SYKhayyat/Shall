@@ -116,9 +116,14 @@ fn ends_mid_line(path: &Path) -> bool {
     fs::read(path).is_ok_and(|b| !b.is_empty() && b.last() != Some(&b'\n'))
 }
 
-/// The bytes, atomically, with no policy. **Private on purpose** — [`persist`] is the way in,
-/// so a new writer cannot reach the disk during a preview by picking the shorter name.
-fn atomic_write(path: &Path, content: &str) -> Result<()> {
+/// The bytes, atomically, with no policy.
+///
+/// Private on purpose — [`persist`] is the way in, so a new writer cannot reach the disk
+/// during a preview by picking the shorter name. **One caller exists outside this module by
+/// explicit sanction** (the MAY_RENAME ledger): `model/edit.rs`'s two writers, which carry
+/// their own preview policy (`Writes::Planned`) and were hand-rolling their own rename dance
+/// until the audit caught it. Everything else goes through [`persist`].
+pub(crate) fn atomic_write(path: &Path, content: &str) -> Result<()> {
     durable_write(path, content, |_| Ok(()))
 }
 

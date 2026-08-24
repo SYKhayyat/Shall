@@ -297,20 +297,7 @@ impl Execs<'_> {
         if declared.is_empty() && state.has_execs() {
             return Ok(0);
         }
-        let departed: Vec<_> = runs
-            .departed(&declared)
-            .into_iter()
-            .filter(|(_, record)| {
-                // A script that declared no `@undo=` is simply forgotten: Shall cannot invent
-                // an inverse, and pretending to would be worse than saying nothing. `plan`
-                // says so in those words. It is not a mutation, so it is not charged.
-                record
-                    .undo
-                    .as_deref()
-                    .map(|u| !u.trim().is_empty())
-                    .unwrap_or(false)
-            })
-            .collect();
+        let departed = runs.departed(&declared);
         if departed.is_empty() {
             return Ok(0);
         }
@@ -318,12 +305,24 @@ impl Execs<'_> {
         // An `@undo=` is an arbitrary shell command a human wrote, and nothing can inspect it
         // for what it will remove — which is exactly why the total ceiling is the one gate it
         // answers. Charged as one set, before the first command runs, like every other
-        // removal family; `--allow-mass-removal` is what answers a refusal here.
-        if !self.config.dry_run {
+        // removal family; `--allow-mass-removal` is what answers a refusal here. Only rows
+        // that WILL run are charged: a script that declared no undo is forgotten, not
+        // executed, and forgetting is not a mutation.
+        let runnable = departed
+            .iter()
+            .filter(|(_, record)| {
+                record
+                    .undo
+                    .as_deref()
+                    .map(|u| !u.trim().is_empty())
+                    .unwrap_or(false)
+            })
+            .count();
+        if !self.config.dry_run && runnable > 0 {
             crate::app::sync::guard::charge_unmodelled(
                 self.config,
                 self.reaping,
-                departed.len(),
+                runnable,
                 crate::app::sync::guard::GuardScope::Apply,
             )?;
         }

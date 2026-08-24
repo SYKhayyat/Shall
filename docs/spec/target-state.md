@@ -1,4 +1,4 @@
-# Part II — The target state
+﻿# Part II â€” The target state
 
 *[Shall v7](../SPEC.md) — the map is there; this is one part of it.*
 
@@ -260,8 +260,8 @@ already a legible refusal and stays one.
 
 ```
 apt:jq@version=1.6                    ok
-apt:jq@version=>=1.0,<2.0             ERROR → "commas need the block form"
-apt:curl@2.0                          ERROR → "did you mean @version=2.0?"
+apt:jq@version=>=1.0,<2.0             ERROR â†’ "commas need the block form"
+apt:curl@2.0                          ERROR â†’ "did you mean @version=2.0?"
 ```
 
 **Block form.** Everything after the first `=` to end of line is the value: **verbatim,
@@ -286,15 +286,15 @@ apt:nginx {
 lines. Anything else is a declaration; its body is options.
 
 ```
-module fancy {          keyword → body is lines
+module fancy {          keyword â†’ body is lines
   apt:neovim
 }
 
-when os == linux {      keyword → body is lines
+when os == linux {      keyword â†’ body is lines
   apt:htop
 }
 
-apt:nginx {             declaration → body is options
+apt:nginx {             declaration â†’ body is options
   after_install = ./setup.sh
 }
 ```
@@ -321,7 +321,7 @@ take the else branch — the silent-wrongness this rule closes.
 | key | meaning |
 |---|---|
 | `version` | exact or range |
-| `hold` | never upgrade. **`@hold` + `@version=` is a contradiction → error** |
+| `hold` | never upgrade. **`@hold` + `@version=` is a contradiction â†’ error** |
 | `expires` | **absolute** datetime. Present now, absent after |
 | `until` | **absolute** datetime, on `absent:` only. Absent now, present after |
 | `requires` | `BACKEND:NAME` — install that first. **A bare name is an error** |
@@ -349,7 +349,7 @@ take the else branch — the silent-wrongness this rule closes.
 
 **A confinement that is not in force says so, at `warn!`, before the command runs** (H4, owner
 2026-08-13; V.H4). `@sandbox` on a host with no mechanism does **not** refuse — the escape hatch
-`sandbox.fallback_allowed` stays open and stays the default, because a feature here is built
+`sandbox.fallback_allowed` stays open and stays the default, because a feature here is built (V.203 covers what a mechanism owes the child it runs: an environment that starts empty)
 fully rather than withdrawn for being misusable, and within reason people are smart. What it may
 not do is degrade **silently**: the run is announced, the sentence names why, and
 `sandbox.require_bwrap` (Linux) / `sandbox.windows_require_sandbox` (Windows) refuse outright for
@@ -391,7 +391,7 @@ by-hand path (`@size` shrinking, `@classic` narrowing) — never ignored. **An o
 omits manages nothing**: absence is not a declaration of the default, or every config that never
 mentioned a key acquires refusals it never asked for (V.107, V.108).
 
-**The proof is per option, not per backend.** A lifecycle is install → list → remove and never
+**The proof is per option, not per backend.** A lifecycle is install â†’ list â†’ remove and never
 edits a declaration, which is exactly how five options stayed dead through thousands of green
 checks.
 
@@ -553,7 +553,7 @@ survives a version bump where an exact name does not). When the pattern still ma
 the same tie-break applies. **`@asset=all` installs every match** rather than choosing.
 
 **One artifact is deployed under the repo's name; several each keep their own.** A line that
-resolves to one file puts it on `PATH` as the repo is called (`github:sharkdp/fd` → `fd`), and
+resolves to one file puts it on `PATH` as the repo is called (`github:sharkdp/fd` â†’ `fd`), and
 `@bin=` overrides that as it always has. A line that resolves to several cannot: one name
 cannot hold two files. Each then keeps the name of the program found inside it, and **two that
 would land on the same name is an error naming both files** — never one overwriting the other.
@@ -587,7 +587,7 @@ drift it was meant to catch. **V.151.**
 ## II.3 Modules
 
 - A module is a **list of lines**.
-- **The filename is the module name, lowercased.** `Editors.txt` → module `editors`. A file
+- **The filename is the module name, lowercased.** `Editors.txt` â†’ module `editors`. A file
   with no `module` block is one module named after the file. Anything outside a block
   belongs to the file's own module.
 - **A module can `use` other modules. A module can NEVER reference a profile.** The layering
@@ -756,11 +756,11 @@ write is deleted (II.17), because two stores could disagree about what this mach
 
 | | | state |
 |---|---|---|
-| version | `apt:curl → 7.81.0` | **built** (`locks/versions.json`) |
+| version | `apt:curl â†’ 7.81.0` | **built** (`locks/versions.json`) |
 | **hook script hash** | `fonts:after_install → sha256:a3f1…` | **built** (`locks/hooks.toml`) |
 | **resolved artifact** | `sharkdp/fd → fd-…-linux-gnu.tar.gz`, its URL, format and hash | **built** (`locks/github.toml`) |
-| **resolved backend for an unpinned name** | `ripgrep → cargo` | **built** (`locks/bare.HOST.toml`) |
-| **regex expansion** | `re:^texlive- → [312 names]` | **built** (`locks/regex.toml`) |
+| **resolved backend for an unpinned name** | `ripgrep â†’ cargo` | **built** (`locks/bare.HOST.toml`) |
+| **regex expansion** | `re:^texlive- â†’ [312 names]` | **built** (`locks/regex.toml`) |
 | **`exec:` script content already run here** | `sha256:… → 1` | **built** (`locks/exec.toml`). Keyed by **content**, while `locks/hooks.toml` is keyed by declared path — the two answer different questions (*has this already run?* vs *is this allowed to run?*), so a script edited after approval is both unapproved and un-run, which is the pair you want |
 | **applied extras** | `service:nginx`, `link:<destination>`, `repo:apt:ppa:x/y` | **built** (`locks/extras.toml`). It is what makes *removing* a `service:`/`link:`/`shim:`/`repo:` line undo it — without a record of what was applied, deleting the last extra line is a change with nothing to diff against |
 
@@ -910,7 +910,7 @@ by name.
 
 ### One contract, three providers
 
-**A provider produces `name → value`. That is the whole interface**, which is why this is one
+**A provider produces `name â†’ value`. That is the whole interface**, which is why this is one
 feature and not several:
 
 | provider | filename | what it is |
@@ -1001,12 +1001,12 @@ first pass because a `vars` file names no backend.
 
 ## II.7 Resolution
 
-0. **Detect facts, then resolve `vars` → the variables, exactly once** (II.6b). This is before
+0. **Detect facts, then resolve `vars` â†’ the variables, exactly once** (II.6b). This is before
    everything else because `active` itself may carry `when $role`, and the once-per-invocation
    rule is what keeps `plan` honest when a provider reads the clock or the network. The resolved
    set rides on the facts for the rest of resolution and freezes into a saved plan.
-1. Read `active` → the profile names, unioned.
-2. Resolve profiles → the module set. Profiles may reference profiles; modules may not.
+1. Read `active` â†’ the profile names, unioned.
+2. Resolve profiles â†’ the module set. Profiles may reference profiles; modules may not.
 3. Parse **only** the modules reached. Apply `when`.
 4. Resolve each line. A line that pins one manager is that manager. Anything else asks its
    candidates in order (II.7b), honouring this host's lock when the line still accepts what it
@@ -1042,7 +1042,7 @@ dispatched to nothing is a build failure**, and `repo:` is excluded from "work a
 because it is phase 1, not because anybody remembered to leave it out (V.144).
 
 **A plan states what it was computed over, and that decides what it may remove** *(Y12)*. The
-removal set is `managed − desired`, so it is only as good as `desired`: a caller that hands the
+removal set is `managed âˆ’ desired`, so it is only as good as `desired`: a caller that hands the
 planner something narrower than the machine's whole declaration set gets a removal planned for
 everything outside it. There are exactly three things `desired` can be, and a caller names which:
 
@@ -1201,8 +1201,8 @@ every module and profile in the folders, so a loop nobody activated is still fou
 this host's facts like everything else, so a `when` arm written for another machine is parsed and
 not walked.
 
-**Ordering is the planner's job, never the file layout's.** Repos first → refresh indexes →
-packages (`@requires` edges) → things depending on packages (services, shims, links).
+**Ordering is the planner's job, never the file layout's.** Repos first â†’ refresh indexes â†’
+packages (`@requires` edges) â†’ things depending on packages (services, shims, links).
 
 **Within packages, the only ordering Shall imposes is the one you wrote.** A manager resolves
 and installs its own dependency closure at install time, so Shall does not ask what a package
@@ -1422,7 +1422,7 @@ so**. A normal line you can read and delete. **Never implicit.**
 there's nothing for it to come back to. Did you mean a plain uninstall?"*
 
 **`--backend` is allowed on read-only and upgrade; REFUSED on anything that removes.**
-`plan`, `list`, `upgrade` → yes. `sync`, `purge-undeclared` → error: *"scoping a removal
+`plan`, `list`, `upgrade` â†’ yes. `sync`, `purge-undeclared` â†’ error: *"scoping a removal
 isn't safe; use a profile."*
 
 **`remove-orphans` goes through the guard** — ask the backend what it intends, check the list
@@ -1683,7 +1683,7 @@ opinion about the packages that keep the machine running.
 |---|---|
 | `protected_packages` | never remove this |
 | `unprotected_packages` | …unless I say so. **Wins over everything, including OS-essential** |
-| OS-essential | never remove what the OS says is load-bearing — and a manager that cannot answer the question has its removals refused for that run, not waved through (`M5`) |
+| OS-essential | never remove what the OS says is load-bearing — and a manager that cannot answer the question has its removals refused for that run, not waved through (`M5`, V.200) |
 | undeclarable | never remove a name no package line can hold — **not even `unprotected_packages` releases this one** |
 | `max_removals` (default **20**) | never remove more than this many packages at once |
 | `max_extra_removals` (default **20**) | the same for resource teardowns — its own budget (`Y20`) |
@@ -1736,7 +1736,7 @@ before its confirmation prompt (`remove-orphans`, `purge-undeclared`) while the 
 over the same pairs before carrying them out. The prompt-time ask is **`vet`/`vet_deliberate`**:
 it refuses exactly what `enforce` would refuse and writes **nothing** to the ledger. The engine's
 ask is the one that records. A prompt-time ask that spent measured `N + N` against a ceiling of
-ten and refused a set the user had already confirmed.
+ten and refused a set the user had already confirmed. (V.201)
 
 **Mutations the model cannot name are charged, not exempt** *(audit fix, 2026-08-23 — R2)*. An
 `@undo=` shell command can be inspected for nothing, which made it the one mutation family with no
@@ -1747,7 +1747,7 @@ through `charge_unmodelled`; `--allow-mass-removal` is what clears that refusal.
 transaction dies part-way, its completed removals that stayed removed (the U41 leave-removed rule)
 are counted onto the engine's metrics (`Transaction::executed_removals`), and their WAL entries
 close as **Abandoned**, not Failed (Q33: Failed means an outcome was reached) — so both the
-caller's summary and `heal` see exactly the work that never got an answer.
+caller's summary and `heal` see exactly the work that never got an answer. (V.202)
 
 ```
 Apply  RemoveOrphans  PurgeUnmanaged  Sync  Watch  Upgrade
@@ -1870,7 +1870,7 @@ false**, and a table that quietly stops describing its own function is how the l
 being readable:
 
 ```
-Plan: install 30,207 · remove 0 · upgrade 3
+Plan: install 30,207 Â· remove 0 Â· upgrade 3
   30,102  re:^lib
       98  apt
        7  cargo
@@ -1971,7 +1971,7 @@ alternative is a machine-wide destructive default nobody typed.
 
 ## II.12 Hooks and the supply chain
 
-**The lock is the approval.** `locks/` records each hook script's hash. Hash mismatch →
+**The lock is the approval.** `locks/` records each hook script's hash. Hash mismatch â†’
 **stop**:
 
 ```
@@ -2037,7 +2037,7 @@ nobody while the one beside it opens `#!`; what gates every hook is the approval
 hooks live in the `[hooks]` config block (`before_sync`/`after_sync`, target `*`, run once
 around the entire sync). Per-package hooks are attached to a declaration
 (`apt:nginx { after_install = ./setup.sh }`) and fire inside the engine for that one package,
-keyed per package (`after_install:nginx` ≠ `after_install:redis`). These are **not duplicates**
+keyed per package (`after_install:nginx` â‰  `after_install:redis`). These are **not duplicates**
 — a per-package hook cannot express "before the whole sync", so `[hooks]` stays (owner ruling
 2026-07-17; that is why it is not on II.17's delete list).
 
@@ -2376,7 +2376,7 @@ line:
 and `why` on a matched package says *"matched by `re:^fonts-` at modules/dev.txt:3"* rather than
 sending the reader to a line that does not contain the package.
 
-**(measured)** `apt:re:^python3-.*` → 4,447. `apt:re:^lib` → 30,207.
+**(measured)** `apt:re:^python3-.*` â†’ 4,447. `apt:re:^lib` â†’ 30,207.
 
 **Residual hole, accepted:** `texlive-foo` renamed to `tex-foo` silently drops one package.
 One package, recoverable, snapshot has your back.
@@ -2408,30 +2408,30 @@ real work and must stay.
 
 ## II.17 Deleted
 
-**Commands:** `prune` · `orphans` · `clone` · `migrate` (→ `adopt`) · `remove` (→
-`uninstall`) · `clean` (split in two: `remove-orphans` for what the machine no longer needs,
+**Commands:** `prune` Â· `orphans` Â· `clone` Â· `migrate` (â†’ `adopt`) Â· `remove` (â†’
+`uninstall`) Â· `clean` (split in two: `remove-orphans` for what the machine no longer needs,
 `clean-cache` for the downloads it kept — V.36) · `status` · `doctor` · `unmanaged` · `absent` ·
-`conflicts` · `audit` (all six → `check <section>`, ruled 2026-07-24) · `undo` (→ `snapshot
-restore` for the filesystem, `rollback` for the manifests) · `shim` (→ the line
+`conflicts` Â· `audit` (all six â†’ `check <section>`, ruled 2026-07-24) Â· `undo` (â†’ `snapshot
+restore` for the filesystem, `rollback` for the manifests) Â· `shim` (â†’ the line
 `shim:jq@source=cargo:jq` — II.16, ruled 2026-08-09 under `Y18`; `--source` was discarded by the
 command and `@source=` is read by the line)
 
-**Flags:** `-g` / `--groups-dir` · `--no-global` · `--allow-regex-expansion` ·
+**Flags:** `-g` / `--groups-dir` Â· `--no-global` Â· `--allow-regex-expansion` Â·
 `--backend` on removing commands
 
-**Syntax:** `group:` · `include:` · `host-*.txt` · `_active_profiles.txt` · `local.txt`'s
-special status · `-vim` in modules
+**Syntax:** `group:` Â· `include:` Â· `host-*.txt` Â· `_active_profiles.txt` Â· `local.txt`'s
+special status Â· `-vim` in modules
 
-**Config:** `[groups]` · `[hostname_packages]` · `[managed_files]` ·
-`[schedules]` · `backend_priority` · `enabled_backends` · `hostname_backends` ·
-`default_backend` · `prune_on_sync` · `prune_scope` · `purge_orphans` · `cache_ttl` ·
-`confirm_destructive` · `protect_imperative` · `remove_bloatware` · `timeshift_path` ·
-`config.snapshots` · `github_token` (→ env)
+**Config:** `[groups]` Â· `[hostname_packages]` Â· `[managed_files]` Â·
+`[schedules]` Â· `backend_priority` Â· `enabled_backends` Â· `hostname_backends` Â·
+`default_backend` Â· `prune_on_sync` Â· `prune_scope` Â· `purge_orphans` Â· `cache_ttl` Â·
+`confirm_destructive` Â· `protect_imperative` Â· `remove_bloatware` Â· `timeshift_path` Â·
+`config.snapshots` Â· `github_token` (â†’ env)
 *(`max_parallel` was struck from this delete list by owner ruling 2026-07-17 — it stays as an
 optional concurrency cap. See II.1 and V.41.)*
 
-**Files:** `keep.txt` (→ `forget`) · `policy.toml` (→ `[guard]`) · `bloatware.txt` (→
-`absent:`) · `.shall-lock.key` · `locks.json` (→ `locks/`) · `ghosts.json`
+**Files:** `keep.txt` (â†’ `forget`) Â· `policy.toml` (â†’ `[guard]`) Â· `bloatware.txt` (â†’
+`absent:`) Â· `.shall-lock.key` Â· `locks.json` (â†’ `locks/`) Â· `ghosts.json`
 
 *(`[hooks]` was struck from the config delete list by owner ruling 2026-07-17. It is **not** a
 duplicate of module hooks — the two are different features by *when they run*: `[hooks]` holds
@@ -2439,8 +2439,8 @@ whole-sync lifecycle hooks (`before_sync`/`after_sync`, target `*`), while `befo
 `after_install` are per-package hooks attached to a declaration. Deleting `[hooks]` would remove
 the whole-sync kind, which modules cannot express. See II.12.)*
 
-**Code:** `locksig.rs` · the generation format · `ManifestArchive` · `quick()` ·
-`ScopedFilter::None` as a spare-everything switch · every legacy branch
+**Code:** `locksig.rs` Â· the generation format Â· `ManifestArchive` Â· `quick()` Â·
+`ScopedFilter::None` as a spare-everything switch Â· every legacy branch
 
 ## II.19 What Shall does at once
 
@@ -2630,7 +2630,7 @@ about what someone already has, and the honest promise here is that this is the 
 
 **The install path is a tested path.** `install.sh` and `install.ps1` end by offering to take
 over the machine, and that step must name a command that exists — both called `migrate`, which
-**II.17 lists as deleted** (→ `adopt`), so the documented first run installed the binary and
+**II.17 lists as deleted** (â†’ `adopt`), so the documented first run installed the binary and
 then failed on the only step that makes it useful. A rename sweeps the scripts and the docs in
 the same change as the source, or it is not done.
 

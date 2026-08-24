@@ -319,7 +319,18 @@ fn every_fixture_reads_the_way_its_row_says_it_does() {
     for def in &rows {
         if def.fixture.is_some() {
             checked += 1;
-            wrong.extend(shall::backends::onboarder::fixture_disagreements(def));
+            // A row whose named parser is a typo now refuses at registration; the fixture
+            // check only runs for rows that resolved.
+            let Ok(parser) = shall::backends::onboarder::parser_for(def) else {
+                wrong.push(format!(
+                    "{}: names a parser this build does not know",
+                    def.name
+                ));
+                continue;
+            };
+            wrong.extend(shall::backends::onboarder::fixture_disagreements_with(
+                def, parser,
+            ));
         }
     }
     // Content before the floor, deliberately. A run that found nine fixtures and a real

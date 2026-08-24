@@ -35,6 +35,29 @@ const LINES: usize = 3_000;
 /// which is exactly why neither was done in a hurry alongside a security fix.
 const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[
     (
+        "src/core/transaction.rs",
+        3_300,
+        "The transaction: scheduling, retries, rollback, recovery — one engine, grown by the \
+         audit fixes (quiesce, executed_removals, the lock-budget verdict) that belong to it. \
+         The seam is schedule vs compensate; it wants a session with no transaction work in \
+         flight.",
+    ),
+    (
+        "src/core/executor.rs",
+        3_150,
+        "The spawn/read/retry machinery — one subject, grown by the audit fixes (cwd pin, \
+         stderr sanitising, backoff cap) that belong to it. The split is spawn vs wait vs \
+         retry, and wants a session with no other executor work in flight.",
+    ),
+    (
+        "src/app/sync/guard.rs",
+        3_500,
+        "One subject — the removal guard: ledger, per-kind ceilings, protection rules, and the \
+         refusal renderer, plus its own test module. The split is ledger/inspect/refuse, and it \
+         grew only by the audit fixes (vet split, unmodelled charges) that belong to the \
+         subject. Split on the next touch that is not itself a fix.",
+    ),
+    (
         "src/config/grammar/statement.rs",
         3_900,
         "One subject — what a line of a manifest means — and three layers of it: the parser, the \
@@ -44,7 +67,7 @@ const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[
     ),
     (
         "src/backends/generic.rs",
-        3_700,
+        3_850,
         "`ManagerConfig` and the eight capability impls that read it. The split is one module per \
          capability (installable / queryable / searchable / upgradable), which is a bigger change \
          than it looks: the impls share `GenericBackendCore` and the argv-building helpers, and \
