@@ -411,6 +411,22 @@ pub async fn handle_apply(app: &App, plan_path: &str, yes: bool) -> Result<()> {
         return Ok(());
     }
 
+    // A preview prints, and does nothing else on its way to printing: the drift check below
+    // both prompts and can refuse, so a `--dry-run` used to sit through a confirmation
+    // question — one of three consent rules this command carried, and the only one `--yes`
+    // did not answer. Nothing here can change the machine, so nothing here may ask.
+    if app.config.dry_run {
+        crate::would_print!(
+            "would install {} and remove {} package(s), place {} and undo {} \
+             resource(s).",
+            plan.installs.len(),
+            plan.removals.len(),
+            plan.resources.place.len(),
+            plan.resources.undo.len()
+        );
+        return Ok(());
+    }
+
     // Drift detection, and the `[guard]` gate: `compute_full_changes` runs `enforce_policy`,
     // so an `Err` here is a refusal and must not be swallowed. Applying a captured plan to a
     // machine whose manifests no longer resolve is the case this stops.
@@ -449,26 +465,13 @@ pub async fn handle_apply(app: &App, plan_path: &str, yes: bool) -> Result<()> {
         }
     }
 
-    if app.config.dry_run {
-        crate::would_print!(
-            "would install {} and remove {} package(s), place {} and undo {} \
-             resource(s).",
-            plan.installs.len(),
-            plan.removals.len(),
-            plan.resources.place.len(),
-            plan.resources.undo.len()
-        );
-        return Ok(());
-    }
-
-    // Optional interactive review: the same toggle screen as `sync`/`rollback`, so a captured
-    // plan can still be trimmed at apply time. Skipped with --yes or without a terminal.
+    // Interactive review: the same toggle screen as `sync`/`rollback`, so a captured plan can
+    // still be trimmed at apply time. Skipped with --yes.
     //
-    // The screen returns the plan with the deselected nodes taken out, and that IS the plan
-    // from here on. It used to hand back a set of surviving keys, which the caller then used
-    // to `retain` two flat lists that a second call rebuilt into a graph — a round trip
-    // through a vocabulary with no edges in it, so a deselection was also the only way to
-    // lose an ordering that had survived everything else.
+    // Without a terminal this refuses, exactly as `sync` does: the two most destructive
+    // commands in the program used to take opposite postures on the same conditions — sync
+    // refused to act unconfirmed, apply fell through the review and applied. A plan crossing
+    // machines through CI is precisely the case with nobody at the keyboard.
     let mut changes = saved_plan_to_changes(&plan.installs, &plan.removals);
 
     // II.7c, and this is the command the rule exists for: a plan file is the one `SyncChanges`
@@ -481,17 +484,23 @@ pub async fn handle_apply(app: &App, plan_path: &str, yes: bool) -> Result<()> {
 
     if !yes && !app.config.yes {
         use std::io::IsTerminal;
-        if std::io::stdin().is_terminal() {
-            let mut preview = TuiPreview::new(&changes, HashMap::new());
-            if !crate::core::on_the_terminal(|| preview.run())? {
-                println!("Apply cancelled.");
-                return Ok(());
-            }
-            changes = preview.get_filtered_changes();
-            if changes.is_empty() {
-                println!("All changes deselected — nothing to apply.");
-                return Ok(());
-            }
+        if !std::io::stdin().is_terminal() {
+            return Err(crate::core::Error::Refused(
+                "Refusing to apply a captured plan without confirmation in a non-interactive \
+                 shell. Re-run with --yes to proceed, or --dry-run to preview."
+                    .to_string(),
+            )
+            .into());
+        }
+        let mut preview = TuiPreview::new(&changes, HashMap::new());
+        if !crate::core::on_the_terminal(|| preview.run())? {
+            println!("Apply cancelled.");
+            return Ok(());
+        }
+        changes = preview.get_filtered_changes();
+        if changes.is_empty() {
+            println!("All changes deselected — nothing to apply.");
+            return Ok(());
         }
     }
 

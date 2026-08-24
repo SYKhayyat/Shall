@@ -940,7 +940,12 @@ pub async fn handle_conflicts(
 
     if out.is_json() {
         println!("{}", serde_json::to_string_pretty(&conflicts)?);
-        return Ok(());
+        // U21: found work is exit 2, in JSON as in prose — a script parsing this output
+        // branches on the code and must not read green over real conflicts.
+        return match conflicts.is_empty() {
+            true => Ok(()),
+            false => Err(crate::core::Error::Differences(String::new()).into()),
+        };
     }
 
     if conflicts.is_empty() {
@@ -972,7 +977,9 @@ pub async fn handle_conflicts(
         "\nResolve by removing the duplicate from one backend, or pinning both to the same \
          version. (Shadowing means whichever is first on PATH wins.)"
     );
-    Ok(())
+    // U21: the section looked and found work to do — exit 2, like the rollup and every
+    // sibling section, instead of a green exit over a machine with conflicts on it.
+    Err(crate::core::Error::Differences(String::new()).into())
 }
 
 /// Short label for a health status (human output).
@@ -1175,6 +1182,12 @@ pub async fn check_health(app: &App, out: Output) -> Result<()> {
         ));
     }
 
+    // U21: a read-only command that looked and found sickness exits 2, like every other
+    // `check` section. The detail view used to print the same facts the rollup marks
+    // `attention` and answer exit 0 — CI branching on it got green on a sick machine.
+    let sys_critical = system.iter().any(|(_, s, _)| *s == HealthStatus::Critical);
+    let sick = critical > 0 || degraded > 0 || sys_critical;
+
     // ---- Output ----
     if out.is_json() {
         let backends: Vec<_> = reports
@@ -1193,6 +1206,9 @@ pub async fn check_health(app: &App, out: Output) -> Result<()> {
                 "summary": { "ok": ok, "degraded": degraded, "critical": critical, "absent": absent },
             }))?
         );
+        if sick {
+            return Err(crate::core::Error::Differences(String::new()).into());
+        }
         return Ok(());
     }
 
@@ -1254,15 +1270,15 @@ pub async fn check_health(app: &App, out: Output) -> Result<()> {
         );
     }
 
-    let sys_critical = system.iter().any(|(_, s, _)| *s == HealthStatus::Critical);
     if critical > 0 || sys_critical {
         println!("\nSome checks are CRITICAL. Install the missing tools, or run `shall heal`.");
     } else if degraded > 0 {
         println!("\nAll critical checks pass; some backends are degraded (see WARN above).");
     } else {
         println!("\nAll checks pass. System is healthy.");
+        return Ok(());
     }
-    Ok(())
+    Err(crate::core::Error::Differences(String::new()).into())
 }
 
 #[cfg(test)]

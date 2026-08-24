@@ -276,6 +276,11 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
             }
             let mut preview = TuiPreview::new(&changes, HashMap::new());
             if !crate::core::on_the_terminal(|| preview.run())? {
+                // Named as a decline, not left to read as convergence: the summary below an
+                // `applied: 0` used to be the same "nothing to do" a converged machine gets,
+                // and a user who cancelled could not tell that from a machine that needed
+                // nothing.
+                println!("Declined — nothing applied. The machine was not changed.");
                 return Ok(Reconciled {
                     applied: 0,
                     left_in_place: changes.skipped.len(),
@@ -470,6 +475,16 @@ pub async fn handle_rebuild(
     // refusing. The default is `--all`, but because the failure mode is software missing from a
     // machine, arriving there by pressing enter is announced loudly first — the warning is the
     // safeguard, not a refusal.
+    //
+    // Names beside a scope flag are refused rather than elected: the old match took the first
+    // arm that fit, so `rebuild foo --all` rebuilt everything and `rebuild foo --backend apt`
+    // rebuilt the backend — each silently ignoring the argument the user typed.
+    if !packages.is_empty() && (all || backend.is_some()) {
+        anyhow::bail!(
+            "`rebuild` takes either package names or a scope (`--all` / `--backend <name>`), \
+             not both."
+        );
+    }
     let scope = match (packages.is_empty(), backend, all) {
         (_, Some(b), _) => Scope::Backend(b.to_string()),
         (_, None, true) => Scope::All,

@@ -486,6 +486,7 @@ pub async fn handle_uninstall(
         unmanaged_targets(app.backends().await, &app.registry, &app.state, packages).await?;
 
     let mut never_declared: Vec<&str> = Vec::new();
+    let requested = packages.len();
 
     for pkg in packages {
         // II.8: a `--temp` uninstall of something undeclared has nothing to come back to.
@@ -547,20 +548,30 @@ pub async fn handle_uninstall(
         }
     }
 
-    // And the ordinary pipeline removes it: the package is now drift, and removing drift is
-    // what sync is (V.34).
-    handle_sync(app, SyncMode::default(), out).await?;
-
-    // The sync runs first: the names that *were* declared are still owed their removal.
-    // But a removal that removed nothing is not a removal, and a warning is the one thing
-    // a script driving this cannot see.
-    if !never_declared.is_empty() {
+    // Asked BEFORE the sync, not after: the old order converged the whole machine first and
+    // only then reported that nothing named had been declared — a full sync run to remove
+    // nothing, with an exit code claiming a removal that never happened. When every name is
+    // undeclared there is no work here, and saying so is cheaper than converging.
+    if never_declared.len() == requested {
         anyhow::bail!(
             "nothing was uninstalled: {} not declared in any active file.",
             match never_declared.as_slice() {
                 [one] => format!("`{}` is", one),
                 many => format!("`{}` are", many.join("`, `")),
             }
+        );
+    }
+
+    // And the ordinary pipeline removes it: the package is now drift, and removing drift is
+    // what sync is (V.34).
+    handle_sync(app, SyncMode::default(), out).await?;
+
+    // The sync ran because at least one name WAS declared and owed its removal; the rest are
+    // named here rather than silently absorbed into a success.
+    if !never_declared.is_empty() {
+        warn!(
+            "not declared in any active file (nothing removed for them): {}.",
+            never_declared.join("`, `")
         );
     }
 
@@ -1159,8 +1170,18 @@ pub async fn handle_search(
     if out.is_json() {
         println!("{}", serde_json::to_string_pretty(&results)?);
     } else {
-        if results.is_empty() && installed {
-            println!("No installed package matches '{}'.", query);
+        // An empty answer is said, not left to silence: no match and no sentence read as a
+        // command that had not run at all.
+        if results.is_empty() {
+            println!(
+                "No package matches '{}'{}.",
+                query,
+                if installed {
+                    " among installed packages"
+                } else {
+                    ""
+                }
+            );
         }
         for p in &results {
             print_package_row(p);

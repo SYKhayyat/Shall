@@ -570,9 +570,13 @@ mod tests {
     }
 
     /// The disk layer's tests share one `SHALL_DATA_DIR`, so they run as one test rather than
-    /// racing each other over the same directory.
+    /// racing each other over the same directory. The suite-wide lock is taken too: `datalock`'s
+    /// tests repoint the same process-global, and without it whichever test set the variable
+    /// second sent this one reading and writing some other directory — which surfaced as a
+    /// flake only under full-suite load.
     #[tokio::test]
     async fn a_listing_survives_a_run_only_when_asked_for_and_only_until_it_is_stale() {
+        let _env = crate::core::shall_data_dir_lock();
         let dir = std::env::temp_dir().join(format!("shall-cache-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::env::set_var("SHALL_DATA_DIR", &dir);

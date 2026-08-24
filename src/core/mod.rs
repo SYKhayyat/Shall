@@ -89,3 +89,15 @@ pub use validator::Validator;
 pub use ratelimiter::RateLimiter;
 
 pub use retention::{RetentionConfig, RetentionItem, RetentionPolicy};
+
+/// Serialises tests that repoint `SHALL_DATA_DIR`: the variable is process-global, and two
+/// tests holding it at once race — whichever set it second sends the first reading and
+/// writing some other directory, which surfaced as flakes under full-suite load. One mutex,
+/// named for what it protects.
+#[cfg(test)]
+pub(crate) fn shall_data_dir_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    LOCK.get_or_init(|| std::sync::Mutex::new(()))
+        .lock()
+        .unwrap()
+}

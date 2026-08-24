@@ -3,7 +3,7 @@
 //! Shall is not the only thing that starts Shall: the package-manager hooks it installs
 //! (`DPkg::Post-Invoke` and its siblings) spawn a reconcile on every ordinary `apt install`,
 //! typed by someone who has never heard of this tool. `registry.json`, the journal and the
-//! `locks/` ledgers are written whole, and two whole writes are last-one-wins — the entry
+//! `locks/` ledgers are written whole, and two whole writes are last-one-wins â€” the entry
 //! that loses is a managed package nothing declares, which is drift, and drift is removed.
 //!
 //! The lock covers the directory rather than one file: those files must agree with each
@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 /// How long a waiting run gives the holder before it says so instead.
 ///
 /// 120s: long enough to outlast the longest wait a holder can legitimately make before it
-/// starts doing work — the rate-limit ceiling, 30s by default — with room for the install it
+/// starts doing work â€” the rate-limit ceiling, 30s by default â€” with room for the install it
 /// then performs. It is not meant to outlast a whole sync: past this point the honest answer is
 /// that someone else is writing, not a longer silence (S27).
 pub const WAIT_SECS: u64 = 120;
@@ -26,7 +26,7 @@ pub const WAIT_SECS: u64 = 120;
 /// How many `DataLock`s this process is holding.
 ///
 /// **`flock` is per open file description, not per process**, so a second handle opened in a
-/// process that already holds the lock does not re-enter — it waits for itself, for ever. Every
+/// process that already holds the lock does not re-enter â€” it waits for itself, for ever. Every
 /// door that takes the lock counts here, and every door that might take it asks here first.
 static HELD: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
@@ -45,25 +45,25 @@ const GENERATION_FILE: &str = "shall.gen";
 /// What a reader saw of the writers, at one instant.
 ///
 /// Two observations that compare equal, with no writer holding the lock at either, mean no
-/// writer committed anything in between — which is what makes a multi-file read one moment
+/// writer committed anything in between â€” which is what makes a multi-file read one moment
 /// rather than several. See [`crate::core::stable`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Generation {
     /// Bumped once by every writer that finishes. `None` when the file could not be read or
-    /// did not parse — see [`observe`].
+    /// did not parse â€” see [`observe`].
     count: Option<u64>,
     /// Whether somebody held the lock as this was taken. A reader that saw a writer cannot
     /// conclude anything from two equal counts: the writer may not have released yet.
     writer_active: bool,
 }
 
-/// Read the writer generation. Two small reads of tiny files, and no lock of any kind — a
+/// Read the writer generation. Two small reads of tiny files, and no lock of any kind â€” a
 /// reader must never wait on a writer, which is the whole reason this exists.
 pub fn observe(data_dir: &Path) -> Generation {
     // **An unreadable counter is `None`, not `0`.** `0` is a *lower* number than any real
     // generation, so two observations straddling a crashed writer compared equal and
     // `spans_one_moment` said yes to a read that spanned two. A file that has never been
-    // written is a genuine `0` — nothing has committed yet — and that case is kept apart from
+    // written is a genuine `0` â€” nothing has committed yet â€” and that case is kept apart from
     // the torn one on purpose.
     let count = match std::fs::read_to_string(data_dir.join(GENERATION_FILE)) {
         Ok(s) => s.trim().parse::<u64>().ok(),
@@ -111,7 +111,7 @@ impl DataLock {
     /// manager mid-transaction; if the directory is locked, the run holding it is the run that
     /// is going to record what the manager just did, so waiting two minutes to be told so
     /// costs the transaction two minutes and changes nothing. This returns `None` instead,
-    /// and says nothing — contention is the ordinary case here, not a fault.
+    /// and says nothing â€” contention is the ordinary case here, not a fault.
     pub fn try_acquire(data_dir: &Path, command: &str) -> Result<Option<Self>> {
         let (file, owner_path) = Self::open_lock_file(data_dir)?;
         if file.try_lock_exclusive().is_err() {
@@ -151,7 +151,7 @@ impl DataLock {
 
     /// Take the lock for one write, unless this process is already inside it.
     ///
-    /// **The door for code that cannot know whether its caller holds the lock** — a ledger
+    /// **The door for code that cannot know whether its caller holds the lock** â€” a ledger
     /// save reached from `sync` is covered by the run's own lock, and the same save reached
     /// from `check` is covered by nothing. Asking the caller to pass a token down twenty call
     /// sites answers this at compile time, which is the wrong time: `Deferred` releases the
@@ -174,14 +174,14 @@ impl DataLock {
     /// Take the lock, waiting up to `timeout` for whoever holds it.
     ///
     /// Waiting with no reason given is indistinguishable from hanging, so the wait announces
-    /// the holder — the lock file carries the pid and the command that took it.
+    /// the holder â€” the lock file carries the pid and the command that took it.
     pub fn acquire(data_dir: &Path, command: &str, timeout: Duration) -> Result<Self> {
         let (file, owner_path) = Self::open_lock_file(data_dir)?;
         let path = data_dir.join("shall.lock");
 
         if file.try_lock_exclusive().is_err() {
             eprintln!(
-                "shall: waiting for the data directory — held by {}",
+                "shall: waiting for the data directory â€” held by {}",
                 Self::holder(&owner_path)
             );
             let deadline = Instant::now() + timeout;
@@ -192,7 +192,7 @@ impl DataLock {
                 if Instant::now() >= deadline {
                     // S27: the old text ended "remove shall.lock if nothing is running", and
                     // that advice is never right. The lock is an OS lock on an open handle,
-                    // released when the holding process exits — so a lock that is still
+                    // released when the holding process exits â€” so a lock that is still
                     // contended after the wait proves a live holder, and deleting the file
                     // takes the lock away from it rather than from a corpse.
                     return Err(Error::Other(format!(
@@ -258,14 +258,14 @@ impl Drop for DataLock {
         // itself: this counter says "a writer committed something", and a run that wrote
         // nothing has nothing for a reader to detect. Writing it anyway would also be a
         // preview leaving a file behind, which is the defect the whole dry-run rule exists to
-        // prevent — `a_preview_leaves_the_config_byte_identical` caught exactly that here.
+        // prevent â€” `a_preview_leaves_the_config_byte_identical` caught exactly that here.
         if !crate::core::dry_run::active() {
             // Atomically, through the writer this repo requires everywhere else. The one raw
-            // `fs::write` in the tree was this one, and a crash inside it left a torn file —
+            // `fs::write` in the tree was this one, and a crash inside it left a torn file â€”
             // which is the whole of why the read above has to distinguish torn from absent.
             //
             // From an unreadable counter there is no right number, only a number unlikely to
-            // equal one a reader has already seen — and the whole point of the bump is that the
+            // equal one a reader has already seen â€” and the whole point of the bump is that the
             // value *moves*. `u64::MAX` is that; guessing `1` is a value a young data directory
             // really has.
             let next = observe(&self.data_dir)
@@ -298,7 +298,7 @@ mod tests {
     /// **Serialises every test that takes the lock or asks `held()`.**
     ///
     /// `HELD` is process-wide and this suite runs in parallel, so a test could assert what its
-    /// own lock did and nothing else — "not about the count being zero, which a sibling test
+    /// own lock did and nothing else â€” "not about the count being zero, which a sibling test
     /// holding a lock of its own would make false". That left the *un-held* direction of every
     /// door untested, and the nightly mutation run found the hole: `held() -> true`, `> 0` read
     /// as `>= 0`, and both `try_acquire` and `for_this_write` returning `Ok(None)` always, each
@@ -316,8 +316,16 @@ mod tests {
     /// For the synchronous tests. `blocking_lock` refuses to run inside a runtime, which is the
     /// right refusal: an async test that reached for this instead of `.lock().await` would be
     /// the exact bug the type is here to prevent.
-    fn gate() -> tokio::sync::MutexGuard<'static, ()> {
-        TEST_GATE.blocking_lock()
+    ///
+    /// Also holds the suite-wide `SHALL_DATA_DIR` lock while it runs: several tests here
+    /// repoint that variable, and `installed.rs`'s disk tests race this module for it without
+    /// this module's own gate knowing they exist.
+    fn gate() -> (
+        std::sync::MutexGuard<'static, ()>,
+        tokio::sync::MutexGuard<'static, ()>,
+    ) {
+        let env = crate::core::shall_data_dir_lock();
+        (env, TEST_GATE.blocking_lock())
     }
 
     #[test]
@@ -348,12 +356,12 @@ mod tests {
     /// An owner file with nothing in it names nobody, and must say so.
     ///
     /// Without `holder`'s `!s.trim().is_empty()` guard a blank file becomes the holder's name,
-    /// so the contention message reads `waiting for ` with the sentence ending in air — the one
+    /// so the contention message reads `waiting for ` with the sentence ending in air â€” the one
     /// message this whole owner file exists to print. It is reachable: `acquire` writes the lock
     /// file and the stamp as two steps, so a reader arriving between them, or after a crash
     /// between them, sees exactly this.
     ///
-    /// Every shape that carries no name, not just the empty one — a file holding a newline is
+    /// Every shape that carries no name, not just the empty one â€” a file holding a newline is
     /// what a truncated write leaves behind, and it is the case a `.is_empty()` without the
     /// `trim()` would let through.
     #[test]
@@ -373,7 +381,7 @@ mod tests {
         }
 
         // Absent is the same answer by a different route, and it is the branch the fallback was
-        // written for — so it is asserted here rather than assumed.
+        // written for â€” so it is asserted here rather than assumed.
         std::fs::remove_file(&owner).unwrap();
         assert_eq!(DataLock::holder(&owner), "another shall");
 
@@ -406,14 +414,14 @@ mod tests {
     /// **A wait that is given time spends it, rather than refusing at once.**
     ///
     /// Found by the mutation gate: `acquire` computes its deadline as `now + timeout` and leaves
-    /// the loop when `now >= deadline`, and BOTH of those survived being inverted — to `now -
+    /// the loop when `now >= deadline`, and BOTH of those survived being inverted â€” to `now -
     /// timeout` and to `now < deadline`. Either mutant puts the deadline in the past on the first
     /// iteration, so a contended lock returns the timeout error immediately instead of waiting.
     ///
     /// Nothing noticed, because every test above contends and then asserts on the *refusal*.
     /// Refusing is what `acquire` does at the END of the wait; not one test made it wait. So the
-    /// whole point of the parameter — that a run started by a `DPkg::Post-Invoke` hook stands
-    /// behind an ordinary `apt install` instead of failing under it — was unmeasured.
+    /// whole point of the parameter â€” that a run started by a `DPkg::Post-Invoke` hook stands
+    /// behind an ordinary `apt install` instead of failing under it â€” was unmeasured.
     #[test]
     fn a_contended_lock_is_waited_for_and_then_taken() {
         let _g = gate();
@@ -439,7 +447,7 @@ mod tests {
         // back at once with the error above, and a wait that returns instantly is not a wait.
         assert!(
             waited >= Duration::from_millis(400),
-            "took the lock after {waited:?}, which is sooner than the holder released it — the \
+            "took the lock after {waited:?}, which is sooner than the holder released it â€” the \
              wait did not happen"
         );
     }
@@ -456,12 +464,14 @@ mod tests {
         let _held = DataLock::acquire(&dir, "holder", Duration::from_secs(5)).unwrap();
 
         let started = Instant::now();
-        // Matched rather than `expect_err`, which would want `DataLock: Debug` — a derive on a
+        // Matched rather than `expect_err`, which would want `DataLock: Debug` â€” a derive on a
         // production type to satisfy a test is the test choosing what the type looks like.
         let outcome = DataLock::acquire(&dir, "waiter", Duration::from_millis(700));
         let waited = started.elapsed();
         let Err(err) = outcome else {
-            panic!("the holder never let go, so the wait must fail — it succeeded after {waited:?}")
+            panic!(
+                "the holder never let go, so the wait must fail â€” it succeeded after {waited:?}"
+            )
         };
 
         assert!(
@@ -482,7 +492,7 @@ mod tests {
     /// **A torn generation file is unknown, not zero.**
     ///
     /// It was read with `.ok().unwrap_or(0)`, and `0` is *lower* than any real generation
-    /// rather than an error — so two observations straddling a crashed writer compared equal
+    /// rather than an error â€” so two observations straddling a crashed writer compared equal
     /// and `spans_one_moment` said a multi-file read saw one moment when it had not. A file
     /// that has never been written is still a real `0`: nothing has committed yet.
     #[test]
@@ -563,7 +573,7 @@ mod tests {
 
     /// **`held()` in both directions.** Every other test here asserts it is true inside a lock;
     /// nothing asserted it is false outside one, so `held() -> true` and the same function with
-    /// its `> 0` read as `>= 0` — which is every unsigned count — both survived the suite.
+    /// its `> 0` read as `>= 0` â€” which is every unsigned count â€” both survived the suite.
     #[test]
     fn held_is_false_outside_the_lock_and_true_inside() {
         let _g = gate();
@@ -584,7 +594,7 @@ mod tests {
 
     /// **The door that reports contention has to open when there is none.** `try_acquire`
     /// returning `Ok(None)` unconditionally means a `hook-*` subcommand never records anything
-    /// and never says why — it reads exactly like the ordinary contended case it was built for.
+    /// and never says why â€” it reads exactly like the ordinary contended case it was built for.
     #[test]
     fn a_free_directory_hands_out_the_lock_rather_than_reporting_contention() {
         let _g = gate();
@@ -604,7 +614,7 @@ mod tests {
 
     /// **The reentrancy door, from outside.** Its sibling test proves `for_this_write` declines
     /// when the caller already holds the lock. Nothing proved it *takes* one when the caller
-    /// does not, so `Ok(None)` always — every deferred write racing every other — survived.
+    /// does not, so `Ok(None)` always â€” every deferred write racing every other â€” survived.
     #[test]
     fn a_write_from_outside_the_lock_takes_one() {
         let _g = gate();
@@ -633,8 +643,8 @@ mod tests {
 
     /// **A counter that cannot be read is unknown, and only a *missing* one is zero.** The
     /// sibling test covers a file whose contents do not parse; both of its cases reach `observe`
-    /// through `Ok`, so nothing exercised the `NotFound` guard and reading it as `true` — every
-    /// IO error becoming generation zero — survived. A directory is not readable as a file on
+    /// through `Ok`, so nothing exercised the `NotFound` guard and reading it as `true` â€” every
+    /// IO error becoming generation zero â€” survived. A directory is not readable as a file on
     /// any platform this ships to, and the error it raises is never `NotFound`.
     #[test]
     fn a_generation_file_that_cannot_be_read_is_unknown_not_zero() {
@@ -649,15 +659,15 @@ mod tests {
 
     /// **Which directory the lock landed in**, which `held()` cannot answer. The three doors
     /// below resolve the path themselves, so a door that locked the wrong directory would
-    /// still set the count and still hand back a guard — and a test that asked only `held()`
+    /// still set the count and still hand back a guard â€” and a test that asked only `held()`
     /// would pass while every caller locked somewhere nobody else looks.
     fn lock_file_is_in(dir: &Path) -> bool {
         dir.join("shall.lock").exists()
     }
 
     /// Point `safe_data_dir()` at a directory of this test's own, and put back whatever was
-    /// there. The three doors below resolve the data directory themselves — that is the whole
-    /// point of them — so testing them at all means redirecting it.
+    /// there. The three doors below resolve the data directory themselves â€” that is the whole
+    /// point of them â€” so testing them at all means redirecting it.
     struct DataDir(Option<std::ffi::OsString>);
 
     impl DataDir {
@@ -682,7 +692,7 @@ mod tests {
     /// `try_acquire` with the data directory resolved for the caller, and it is reached only
     /// from `main`'s `acquire_data_lock`: `Ok(None)` there is `LockedRun::StandDown`, so a
     /// mutant returning it always makes every manager hook do nothing and exit zero. The hook
-    /// tests assert that hooks *stand down* under contention and cannot see it — standing down
+    /// tests assert that hooks *stand down* under contention and cannot see it â€” standing down
     /// is what they want. Nothing asserted a hook proceeds when the lock is free.
     #[test]
     fn a_hook_with_nobody_holding_the_lock_proceeds_rather_than_standing_down() {
@@ -707,20 +717,30 @@ mod tests {
     /// The waiting sibling of the door above, and the one `LockScope::Deferred` uses. It differs
     /// from `try_for_one_step` only in what it does when the lock is taken, so what has to be
     /// pinned separately is that the free case still hands one out.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn a_deferred_step_takes_the_lock_when_it_is_free() {
-        let _g = TEST_GATE.lock().await;
+    ///
+    /// A sync test with its own runtime rather than `#[tokio::test]`: it repoints
+    /// `SHALL_DATA_DIR`, and the guards that keep that from racing the rest of the suite must
+    /// be held outside an `await`.
+    #[test]
+    fn a_deferred_step_takes_the_lock_when_it_is_free() {
+        let _g = gate();
         let dir = tmp("for-one-step");
         let _data_dir = DataDir::at(&dir);
 
-        let taken = DataLock::for_one_step("sync").await.unwrap();
-        assert!(held(), "the deferred step's lock was taken and not counted");
-        assert!(
-            lock_file_is_in(&dir),
-            "the deferred step locked a directory other than the one safe_data_dir names, so two runs would each hold a lock nobody else sees"
-        );
-        drop(taken);
-        assert!(!held());
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            let taken = DataLock::for_one_step("sync").await.unwrap();
+            assert!(held(), "the deferred step's lock was taken and not counted");
+            assert!(
+                lock_file_is_in(&dir),
+                "the deferred step locked a directory other than the one safe_data_dir names, so two runs would each hold a lock nobody else sees"
+            );
+            drop(taken);
+            assert!(!held());
+        });
     }
 
     /// The primitive both async doors are built on. It hands the blocking wait to a pool rather
