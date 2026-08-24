@@ -168,13 +168,15 @@ impl EphemeralShell {
         let decided = decided.clone();
 
         tokio::task::spawn_blocking(move || {
-            let mut bwrap =
+            let mut wrapped =
                 Sandbox::wrap(&shell_owned, &[], &sandbox_cfg, &settings_clone, &decided)?;
-            bwrap
+            wrapped
+                .command
                 .env("PATH", internal_path)
                 .env("SHALL_EPHEMERAL_SHELL", "1")
                 .env("SHALL_SESSION_ID", session_owned);
-            let mut handle = bwrap
+            let mut handle = wrapped
+                .command
                 .spawn()
                 .map_err(|e| Error::command_failed(format!("Sandbox error: {}", e)))?;
             let _ = handle

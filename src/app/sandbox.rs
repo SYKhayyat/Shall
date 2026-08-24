@@ -246,7 +246,7 @@ impl Sandbox {
         config: &SandboxConfig,
         settings: &SandboxSettings,
         decided: &Confinement,
-    ) -> Result<Command> {
+    ) -> Result<Wrapped> {
         let _ = (config, settings);
         if let Confinement::None { .. } = decided {
             // Windows keeps its low-integrity launch here rather than in `By`: it does lower the
@@ -254,24 +254,26 @@ impl Sandbox {
             // naming it one would be the claim this type exists to stop.
             #[cfg(target_os = "windows")]
             {
-                return Ok(Self::low_integrity_windows(cmd, args, config));
+                return Ok(Wrapped::bare(Self::low_integrity_windows(
+                    cmd, args, config,
+                )));
             }
             #[allow(unreachable_code)]
             {
                 let mut bare = Command::new(cmd);
                 bare.args(args);
-                return Ok(bare);
+                return Ok(Wrapped::bare(bare));
             }
         }
 
         #[cfg(target_os = "linux")]
         {
-            return Self::wrap_linux(cmd, args, config);
+            return Ok(Self::wrap_linux(cmd, args, config)?);
         }
 
         #[cfg(target_os = "macos")]
         {
-            return Self::wrap_macos(cmd, args, config, settings);
+            return Ok(Self::wrap_macos(cmd, args, config, settings)?);
         }
 
         #[cfg(target_os = "windows")]
@@ -379,7 +381,7 @@ impl Sandbox {
     }
 
     #[cfg(target_os = "windows")]
-    fn wrap_windows(cmd: &str, args: &[String], config: &SandboxConfig) -> Result<Command> {
+    fn wrap_windows(cmd: &str, args: &[String], config: &SandboxConfig) -> Result<Wrapped> {
         // As `wrap_linux`: reached only for a `Confinement::By` verdict.
         if !Path::new(Self::WSB_EXE).exists() {
             return Err(Error::UnsupportedPlatform(
@@ -393,9 +395,14 @@ impl Sandbox {
         tmp_file
             .write_all(wsb_content.as_bytes())
             .map_err(Error::from)?;
+        tmp_file.flush().map_err(Error::from)?;
         let mut command = Command::new(Self::WSB_EXE);
         command.arg(tmp_file.path());
-        Ok(command)
+        // The `.wsb` rides beside the command and is deleted when the [`Wrapped`] is. It used
+        // to be a local here, deleted on return — before the caller had spawned anything, so
+        // Windows Sandbox was handed a path to a file that no longer existed and the
+        // "confined" run ran bare.
+        Ok(Wrapped::with_config_file(command, tmp_file))
     }
 
     /// Windows' unconfined path: a lower integrity level, which is a real reduction and is not
@@ -427,7 +434,80 @@ impl Sandbox {
         settings: &SandboxSettings,
         decided: &Confinement,
     ) -> Result<std::process::ExitStatus> {
-        let mut sandboxed_cmd = Self::wrap(cmd, args, config, settings, decided)?;
-        sandboxed_cmd.status().map_err(Error::from)
+        let mut wrapped = Self::wrap(cmd, args, config, settings, decided)?;
+        wrapped.command.status().map_err(Error::from)
+    }
+}
+
+/// A command under confinement, and whatever has to outlive it.
+///
+/// The command alone was not enough to hand back: Windows Sandbox reads its `.wsb` file at
+/// launch, so the temp file holding it must live until the process has run — it used to be a
+/// local in the wrapper, deleted before anything was spawned, and the confinement silently
+/// did not happen. The keep-alive travels with the command so no caller can hold one without
+/// the other.
+pub struct Wrapped {
+    pub command: Command,
+    /// Deleted on drop — which is the right time only because this struct outlives every
+    /// `status`/`wait` its command is handed to. `None` when nothing extra is held.
+    _keepalive: Option<NamedTempFile>,
+}
+
+impl Wrapped {
+    fn bare(command: Command) -> Self {
+        Self {
+            command,
+            _keepalive: None,
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn with_config_file(command: Command, keepalive: NamedTempFile) -> Self {
+        Self {
+            command,
+            _keepalive: Some(keepalive),
+        }
+    }
+}
+
+#[cfg(test)]
+mod wsb_tests {
+    use super::*;
+    use std::io::Write;
+
+    /// The `.wsb` outlives the wrapper that made it and dies with the [`Wrapped`]. It used
+    /// to be dropped when `wrap_windows` returned — before the caller had spawned anything —
+    /// so Windows Sandbox was pointed at a deleted file and the confined run ran bare.
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn the_wsb_file_outlives_the_wrap_and_dies_with_the_wrapped() {
+        let mut tmp = NamedTempFile::new().unwrap();
+        tmp.write_all(b"<Configuration/>").unwrap();
+        let path = tmp.path().to_path_buf();
+
+        let wrapped = Wrapped::with_config_file(Command::new("cmd"), tmp);
+        assert!(
+            path.exists(),
+            "the config must exist while the command may yet be run"
+        );
+        drop(wrapped);
+        assert!(
+            !path.exists(),
+            "and is cleaned up once nothing can read it any more"
+        );
+    }
+
+    /// The generated sandbox actually names the command it is confining and honours the
+    /// network verdict — the two facts a user reading the `.wsb` would check first.
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn the_wsb_names_the_command_and_honours_the_network_setting() {
+        let cfg = SandboxConfig {
+            allow_network: false,
+            ..Default::default()
+        };
+        let wsb = Sandbox::generate_wsb_config("cargo", &["build".to_string()], &cfg);
+        assert!(wsb.contains("<Command>cargo build</Command>"), "{wsb}");
+        assert!(wsb.contains("<Networking>Disable</Networking>"), "{wsb}");
     }
 }
