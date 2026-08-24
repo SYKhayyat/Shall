@@ -50,6 +50,51 @@ impl MiseBackendCore {
         base.map(|p| p.join("mise"))
             .ok_or_else(|| Error::Other("Could not determine mise data directory".into()))
     }
+
+    /// Whether this installed tool is managed at the *user* level — the set `list_manual`
+    /// exists to name, because it is what adoption offers and what project checkouts must not
+    /// claim.
+    ///
+    /// Three answers, from the tool's own provenance in `mise list --json`:
+    /// - **No source at all**: nothing references it — installed ad hoc, the definition of
+    ///   manual.
+    /// - **Source under the user's global config** (`~/.config/mise`, `$XDG_CONFIG_HOME/mise`,
+    ///   or the mise data dir): managed globally, by hand or by Shall driving mise.
+    /// - **Anything else**: a project file manages it; adopting it here would bind a machine
+    ///   to one checkout's pin.
+    ///
+    /// The type string is deliberately not consulted: both global and project configs are
+    /// spelled `mise.toml`, which is how the old `== "global"` filter matched nothing real
+    /// mise emits and every manual tool went permanently invisible.
+    fn is_user_level(&self, p: &Package) -> bool {
+        self.is_user_level_under(&self.global_config_roots(), p)
+    }
+
+    /// The predicate with its roots injected, so tests do not touch process env.
+    fn is_user_level_under(&self, roots: &[PathBuf], p: &Package) -> bool {
+        let Some(path) = p.properties.get("source_path").cloned() else {
+            return true;
+        };
+        let source = PathBuf::from(path);
+        roots.iter().any(|root| source.starts_with(root))
+    }
+
+    /// Where the user-level mise config lives, on every spelling this platform can produce.
+    fn global_config_roots(&self) -> Vec<PathBuf> {
+        let mut roots = Vec::new();
+        if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
+            if !xdg.is_empty() {
+                roots.push(PathBuf::from(xdg).join("mise"));
+            }
+        }
+        if let Some(home) = dirs::home_dir() {
+            roots.push(home.join(".config").join("mise"));
+        }
+        if let Ok(data) = self.mise_data_dir() {
+            roots.push(data);
+        }
+        roots
+    }
 }
 
 #[async_trait]
@@ -169,13 +214,19 @@ impl Queryable for MiseQueryable {
                             .and_then(|v| v.as_str())
                             .unwrap_or("unknown");
                         let mut p = Package::with_version(name, version, "mise");
-                        if let Some(source) = v_obj
-                            .get("source")
-                            .and_then(|s| s.get("type"))
-                            .and_then(|t| t.as_str())
-                        {
-                            p.properties
-                                .insert("source_type".to_string(), source.to_string());
+                        if let Some(source) = v_obj.get("source").and_then(|s| s.as_object()) {
+                            if let Some(t) = source.get("type").and_then(|t| t.as_str()) {
+                                p.properties
+                                    .insert("source_type".to_string(), t.to_string());
+                            }
+                            // The path decides what `list_manual` asks, not the type: both a
+                            // global config and a project file are spelled `mise.toml`, so the
+                            // old `== "global"` filter matched nothing real mise emits and
+                            // every manually-installed tool was invisible.
+                            if let Some(path) = source.get("path").and_then(|p| p.as_str()) {
+                                p.properties
+                                    .insert("source_path".to_string(), path.to_string());
+                            }
                         }
                         packages.push(p);
                     }
@@ -189,12 +240,7 @@ impl Queryable for MiseQueryable {
         let all = self.list_installed().await?;
         Ok(all
             .into_iter()
-            .filter(|p| {
-                p.properties
-                    .get("source_type")
-                    .map(|s| s == "global")
-                    .unwrap_or(false)
-            })
+            .filter(|p| self.core.is_user_level(p))
             .collect())
     }
 
@@ -412,6 +458,41 @@ mod tests {
             Arc::new(dashmap::DashMap::new()),
         );
         (Arc::new(MiseBackendCore::new(exec)), mock)
+    }
+
+    /// The manual filter decides from the source **path**, not the type string: the captured
+    /// fixture above proves real mise spells both global and project sources `mise.toml`, so
+    /// the old `== "global"` matched nothing and manual tools were invisible for ever.
+    #[test]
+    fn user_level_is_decided_by_where_the_source_lives() {
+        let core = MiseBackendCore::new(CommandExecutor::new(false, false));
+        let roots = [PathBuf::from("/root/.config/mise")];
+        let pkg = |props: &[(&str, &str)]| {
+            let mut p = Package::new("node", "mise");
+            for (k, v) in props {
+                p.properties.insert((*k).to_string(), (*v).to_string());
+            }
+            p
+        };
+
+        // Global config: user level, whatever its file is named.
+        assert!(core.is_user_level_under(
+            &roots,
+            &pkg(&[
+                ("source_type", "mise.toml"),
+                ("source_path", "/root/.config/mise/config.toml")
+            ])
+        ));
+        // A project checkout's pin is not Shall's to offer.
+        assert!(!core.is_user_level_under(
+            &roots,
+            &pkg(&[
+                ("source_type", "mise.toml"),
+                ("source_path", "/srv/app/.mise.toml")
+            ])
+        ));
+        // No source at all: installed ad hoc — manual by definition.
+        assert!(core.is_user_level_under(&roots, &pkg(&[])));
     }
 
     /// mise keeps a tool in `list --json` after `mise uninstall`, flagged `installed: false`,
