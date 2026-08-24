@@ -1611,6 +1611,22 @@ impl CommandExecutor {
         Self::durably(path, content, |_| Ok(())).await
     }
 
+    /// Remove a file Shall placed, recording nothing in a dry run.
+    ///
+    /// A dry run does not delete, and it also does not *pretend* to: inserting a marker into
+    /// the VFS would make later dry-run reads of this path answer from fiction. Already-gone
+    /// is done, which is what makes teardown idempotent.
+    pub async fn remove_file(&self, path: &Path) -> Result<()> {
+        if self.dry_run {
+            return Ok(());
+        }
+        match tokio::fs::remove_file(path).await {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     /// The one place this crate's async writers meet the one durable write.
     ///
     /// `spawn_blocking` because `sync_all` parks a thread on the disk, and parking a runtime

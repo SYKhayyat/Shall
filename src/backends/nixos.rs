@@ -91,7 +91,28 @@ impl Module {
 /// Pure, and takes the *complete* model rather than a delta: the file is a projection, so there
 /// is no state here to get out of step. Sorted throughout, because a generated file that
 /// reorders itself produces a diff on every sync and a rebuild that changes nothing.
-pub fn render(m: &Module) -> String {
+///
+/// **A name this cannot prove safe is refused, not interpolated.** `nixos-rebuild` evaluates
+/// this file as root, so a package or service name carrying Nix syntax would rewrite what the
+/// rebuild evaluates — one adopted line away from editing boot configuration. Every name here
+/// is only ever an identifier or an attribute path of identifiers; anything else is refused by
+/// name rather than escaped and hoped over.
+pub fn render(m: &Module) -> Result<String> {
+    for p in &m.packages {
+        validate_attrpath(p).map_err(|why| {
+            Error::Validation(format!(
+                "`nixos:` cannot render package name `{p}` as Nix: {why}"
+            ))
+        })?;
+    }
+    for name in m.services.keys() {
+        validate_attrpath(name).map_err(|why| {
+            Error::Validation(format!(
+                "`nixos:` cannot render service name `{name}` as Nix: {why}"
+            ))
+        })?;
+    }
+
     let mut out = String::from(BANNER);
     out.push_str("{ config, lib, pkgs, ... }:\n{\n");
 
@@ -125,7 +146,28 @@ pub fn render(m: &Module) -> String {
     }
 
     out.push_str("}\n");
-    out
+    Ok(out)
+}
+
+/// Whether `s` is a Nix attribute path — dot-separated identifiers, which is the only shape a
+/// generated name may take. `Err` carries what was wrong, for the refusal to quote.
+fn validate_attrpath(s: &str) -> std::result::Result<(), String> {
+    if s.is_empty() {
+        return Err("it is empty".to_string());
+    }
+    for component in s.split('.') {
+        let ok = component.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
+            && component
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '\'' | '-'));
+        if !ok {
+            return Err(format!(
+                "`{component}` is not a Nix identifier (letters, digits, `_`, `'`, `-`, \
+                 starting with a letter or `_`)"
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// The model a file this module wrote declares.
@@ -339,31 +381,49 @@ impl NixosBackendCore {
     /// the file nor the reason. `needs_root()` governs the COMMANDS the executor runs; it does
     /// nothing for a direct filesystem call.
     ///
-    /// Staged through a temporary file the caller can certainly write and then moved with the
-    /// executor, so the escalation goes through the one path that knows how to escalate. The
-    /// same shape `pacman`'s repo drop-in uses to write `/etc/pacman.d/`: the privileged step is
-    /// a command, not a syscall.
+    /// Every write goes through the executor, so a dry run records it in its VFS instead of
+    /// editing boot configuration — this path used to write for real whenever the parent was
+    /// writable, which is how a `--dry-run` could touch `/etc/nixos`.
+    ///
+    /// The escalated half stages through a `NamedTempFile`: a random name, created with no
+    /// permissions for anyone else. The pid-derived name this replaced sat in a shared
+    /// directory long enough for a local user to pre-create it and win the root `install`.
     async fn place(&self, dest: &Path, body: &str) -> Result<()> {
         if let Some(parent) = dest.parent() {
             if parent.exists() && is_writable(parent) {
-                return std::fs::write(dest, body).map_err(Error::from);
+                return self.executor.write_atomic(dest, body).await;
             }
         }
-        let staged = std::env::temp_dir().join(format!(
-            "shall-nixos-{}-{}",
-            std::process::id(),
-            dest.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("staged")
-        ));
-        std::fs::write(&staged, body).map_err(Error::from)?;
-        let from = staged.display().to_string();
         let to = dest.display().to_string();
+        if self.executor.dry_run {
+            // No staging, no install: record what would land and stop there. The run's argv
+            // below is diverted by the executor anyway; the VFS entry is what makes later
+            // dry-run reads of this path answer as if it were written.
+            self.executor.write_atomic(dest, body).await?;
+            self.executor
+                .run("install", &["-m", "0644", "(staged)", &to], true)
+                .await?;
+            return Ok(());
+        }
+        let staged = tempfile::Builder::new()
+            .prefix("shall-nixos-")
+            .tempfile()
+            .map_err(|e| {
+                Error::Other(format!(
+                    "could not stage a temporary file for {}: {}",
+                    dest.display(),
+                    e
+                ))
+            })?;
+        std::fs::write(staged.path(), body).map_err(Error::from)?;
+        let from = staged.path().display().to_string();
+        // `staged` stays alive across the install — dropping it deletes the file the root
+        // command is about to read.
         let moved = self
             .executor
             .run("install", &["-m", "0644", &from, &to], true)
             .await;
-        let _ = std::fs::remove_file(&staged);
+        drop(staged);
         moved.map(|_| ()).map_err(|e| {
             Error::Other(format!(
                 "could not write `{}`, which is root-owned on a NixOS machine: {}",
@@ -373,18 +433,17 @@ impl NixosBackendCore {
         })
     }
 
-    /// Remove `dest`, escalating the same way [`place`](Self::place) writes.
+    /// Remove `dest`, escalating the same way [`place`](Self::place) writes — and reporting
+    /// failures instead of swallowing them: an escalated `rm -f` that fails is a file Shall
+    /// meant to remove still sitting there, which is a fact the caller needs.
     async fn unplace(&self, dest: &Path) -> Result<()> {
         if let Some(parent) = dest.parent() {
             if parent.exists() && is_writable(parent) {
-                let _ = std::fs::remove_file(dest);
-                return Ok(());
+                return self.executor.remove_file(dest).await;
             }
         }
-        let _ = self
-            .executor
-            .run("rm", &["-f", &dest.display().to_string()], true)
-            .await;
+        let target = dest.display().to_string();
+        self.executor.run("rm", &["-f", &target], true).await?;
         Ok(())
     }
 
@@ -452,7 +511,7 @@ impl NixosBackendCore {
     pub async fn write_and_switch(&self, module: &Module) -> Result<()> {
         let path = self.generated_path();
         let previous = self.read_generated();
-        let body = render(module);
+        let body = render(module)?;
         // Both files this operation touches are remembered, because both have to be put back.
         let config_before = std::fs::read_to_string(self.configuration_path()).ok();
 
@@ -469,7 +528,10 @@ impl NixosBackendCore {
         }
 
         if let Some(parent) = path.parent() {
-            crate::utils::file::ensure_dir(parent)?;
+            // A dry run does not create directories for real.
+            if !self.executor.dry_run {
+                crate::utils::file::ensure_dir(parent)?;
+            }
         }
         self.place(&path, &body).await?;
         self.ensure_import().await?;
@@ -517,22 +579,41 @@ impl NixosBackendCore {
                 //
                 // Escalating, because `/etc/nixos` is root-owned and a `std::fs` rollback would
                 // silently no-op on the one directory that matters.
+                //
+                // A restore that itself fails is named in the error: the old message asserted
+                // both files "were put back as they were" over steps whose results were thrown
+                // away, which is exactly the sentence a reader must not be able to trust.
+                let mut unrestored: Vec<String> = Vec::new();
                 if previous.is_empty() {
-                    let _ = self.unplace(&path).await;
-                } else {
-                    let _ = self.place(&path, &previous).await;
+                    if let Err(e) = self.unplace(&path).await {
+                        unrestored.push(format!("could not remove {}: {}", path.display(), e));
+                    }
+                } else if let Err(e) = self.place(&path, &previous).await {
+                    unrestored.push(format!("could not restore {}: {}", path.display(), e));
                 }
                 if let Some(before) = config_before {
                     let config = self.configuration_path();
                     if std::fs::read_to_string(&config).ok().as_deref() != Some(before.as_str()) {
-                        let _ = self.place(&config, &before).await;
+                        if let Err(e) = self.place(&config, &before).await {
+                            unrestored.push(format!(
+                                "could not restore {}: {}",
+                                config.display(),
+                                e
+                            ));
+                        }
                     }
                 }
+                let restored = if unrestored.is_empty() {
+                    "Both files this run touched were put back as they were.".to_string()
+                } else {
+                    format!(
+                        "These restores FAILED — fix them by hand before the next rebuild:\n - {}",
+                        unrestored.join("\n - ")
+                    )
+                };
                 Err(Error::Other(format!(
-                    "`nixos-rebuild switch` failed, so {} and {} were put back as they were: {}",
-                    path.display(),
-                    self.configuration_path().display(),
-                    e
+                    "`nixos-rebuild switch` failed: {}\n{}",
+                    e, restored
                 )))
             }
         }
@@ -676,6 +757,130 @@ pub fn register(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::executor::MockExecutor;
+    use dashmap::DashMap;
+    use std::sync::Arc;
+
+    /// A dry-run executor over a mock command layer; the VFS handle comes back so tests can
+    /// read what the dry run *recorded*.
+    fn dry_core() -> (
+        NixosBackendCore,
+        Arc<DashMap<std::path::PathBuf, String>>,
+        Arc<MockExecutor>,
+    ) {
+        let vfs = Arc::new(DashMap::new());
+        let mock = Arc::new(MockExecutor::new(vfs.clone()));
+        let exec = CommandExecutor::with_layer(
+            true,
+            false,
+            mock.clone(),
+            vfs.clone(),
+            Arc::new(DashMap::new()),
+        );
+        let core = NixosBackendCore::new(
+            exec,
+            std::env::temp_dir().join("shall-nixos-test-cfg"),
+            true,
+        );
+        (core, vfs, mock)
+    }
+
+    /// **A dry run edits boot configuration only in its own imagination.** `place` used to
+    /// write with raw `std::fs` whenever the parent was writable — which on a scratch config
+    /// dir is always — so `--dry-run` wrote `/etc/nixos` for real.
+    #[tokio::test]
+    async fn a_dry_run_records_the_generated_file_instead_of_writing_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("shall-packages.nix");
+        let (core, vfs, _mock) = dry_core();
+
+        core.place(&dest, "BODY").await.expect("places");
+
+        assert!(!dest.exists(), "a dry run must not write the file for real");
+        assert_eq!(
+            vfs.get(&dest).map(|v| v.value().clone()).as_deref(),
+            Some("BODY"),
+            "the dry run records what would have landed"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_escalated_half_of_a_dry_run_never_stages_a_real_temp_file() {
+        // Parent does not exist, so place() takes the escalation branch: staging + root
+        // install. Under a dry run neither may touch the machine.
+        let dir = tempfile::tempdir().unwrap();
+        let before: Vec<_> = std::fs::read_dir(std::env::temp_dir())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name())
+            .collect();
+        let dest = dir.path().join("not-here").join("shall-packages.nix");
+        let (core, _vfs, mock) = dry_core();
+
+        core.place(&dest, "BODY")
+            .await
+            .expect("records the escalation");
+        assert!(!dest.exists());
+
+        let after: Vec<_> = std::fs::read_dir(std::env::temp_dir())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name())
+            .collect();
+        let new_files: Vec<_> = after
+            .iter()
+            .filter(|n| !before.contains(n))
+            .filter(|n| n.to_string_lossy().starts_with("shall-"))
+            .collect();
+        assert!(
+            new_files.is_empty(),
+            "a dry run staged real temp files: {new_files:?}"
+        );
+        assert!(
+            mock.get_calls()
+                .await
+                .iter()
+                .any(|c| c.starts_with("install -m 0644")),
+            "the install step is still previewed in the run log"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_dry_run_unplace_removes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("shall-packages.nix");
+        std::fs::write(&dest, "PREVIOUS").unwrap();
+        let (core, _vfs, _mock) = dry_core();
+
+        core.unplace(&dest).await.expect("unplace succeeds");
+        assert_eq!(
+            std::fs::read_to_string(&dest).unwrap(),
+            "PREVIOUS",
+            "a dry run does not delete for real"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_real_unplace_still_removes_and_forgives_already_gone() {
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("shall-packages.nix");
+        std::fs::write(&dest, "MANAGED").unwrap();
+
+        let vfs = Arc::new(DashMap::new());
+        let mock = Arc::new(MockExecutor::new(vfs.clone()));
+        let exec =
+            CommandExecutor::with_layer(false, false, mock, vfs.clone(), Arc::new(DashMap::new()));
+        let core = NixosBackendCore::new(
+            exec,
+            std::env::temp_dir().join("shall-nixos-test-cfg"),
+            true,
+        );
+
+        core.unplace(&dest).await.expect("removes what it placed");
+        assert!(!dest.exists(), "the real path removes for real");
+        // Already gone is done — that is what makes teardown idempotent.
+        core.unplace(&dest).await.expect("second remove is a no-op");
+    }
 
     fn set(items: &[&str]) -> BTreeSet<String> {
         items.iter().map(|s| s.to_string()).collect()
@@ -692,7 +897,7 @@ mod tests {
     /// user opening it, and by [`read`] below.
     #[test]
     fn the_generated_file_is_a_nixos_module_naming_its_packages() {
-        let out = render(&packages(&["ripgrep", "jq"]));
+        let out = render(&packages(&["ripgrep", "jq"])).expect("renders");
         assert!(out.starts_with("# Generated by Shall."), "{out}");
         assert!(out.contains("{ config, lib, pkgs, ... }:"), "{out}");
         assert!(
@@ -704,6 +909,38 @@ mod tests {
         let jq = out.find("\n    jq").expect("jq");
         assert!(jq < rg, "the package list is not sorted:\n{out}");
         assert!(out.trim_end().ends_with('}'), "{out}");
+    }
+
+    /// **A name this cannot prove safe is refused, not interpolated.** The generated file is
+    /// evaluated as root by `nixos-rebuild`; a package or service name carrying Nix syntax
+    /// would rewrite what the rebuild evaluates. Names are only ever identifiers here —
+    /// `render` refuses everything else by name rather than escaping and hoping.
+    #[test]
+    fn a_name_carrying_nix_syntax_is_refused_not_interpolated() {
+        let hostile_packages = packages(&["hello); boot.kernelParams = [ \"x\" ]; #"]);
+        assert!(
+            render(&hostile_packages).is_err(),
+            "a package name with \
+             statement syntax must not reach the generated file"
+        );
+
+        let mut hostile_services = Module::default();
+        hostile_services.services.insert(
+            "nginx.enable = true; security.sudo.wheelNeedsPassword = false; #".to_string(),
+            true,
+        );
+        assert!(render(&hostile_services).is_err());
+
+        // The controls: every legitimate spelling still renders. Dotted attrpaths are how
+        // real package sets are named (`nodePackages.typescript`), hyphens are in almost
+        // every package name, and services can carry sub-options.
+        let legit = packages(&["ripgrep", "nodePackages.typescript", "python311"]);
+        assert!(render(&legit).is_ok());
+        let mut dotted_service = Module::default();
+        dotted_service
+            .services
+            .insert("nginx.virtualHosts.default".to_string(), true);
+        assert!(render(&dotted_service).is_ok());
     }
 
     /// A model with all of `J5` in it. Every one of these is a NixOS attribute a user could
@@ -720,7 +957,8 @@ mod tests {
             tcp_ports: [22u16, 443].into_iter().collect(),
             udp_ports: [53u16].into_iter().collect(),
             firewall: Some(true),
-        });
+        })
+        .expect("renders");
         assert!(out.contains("services.nginx.enable = true;"), "{out}");
         // A stopped service is `false`, not an omission — see `Module::services`.
         assert!(out.contains("services.sshd.enable = false;"), "{out}");
@@ -739,7 +977,7 @@ mod tests {
     /// the user's whole rebuild, and "you removed your last package" must not do that.
     #[test]
     fn an_empty_set_still_renders_a_valid_module() {
-        let out = render(&Module::default());
+        let out = render(&Module::default()).expect("renders");
         assert!(
             out.contains("environment.systemPackages = with pkgs; [\n  ];"),
             "{out}"
@@ -772,7 +1010,12 @@ mod tests {
                 ..Module::default()
             },
         ] {
-            assert_eq!(read(&render(&want)), want, "{}", render(&want));
+            assert_eq!(
+                read(&render(&want).expect("renders")),
+                want,
+                "{}",
+                render(&want).expect("renders")
+            );
         }
     }
 
@@ -786,7 +1029,8 @@ mod tests {
             services: [("nginx".to_string(), true)].into_iter().collect(),
             tcp_ports: [22u16].into_iter().collect(),
             ..Module::default()
-        });
+        })
+        .expect("renders");
         assert_eq!(read(&out).packages, set(&["jq"]));
     }
 
@@ -803,9 +1047,9 @@ mod tests {
             udp_ports: [53u16].into_iter().collect(),
             firewall: Some(true),
         };
-        let mut after = read(&render(&before));
+        let mut after = read(&render(&before).expect("renders"));
         after.packages.insert("ripgrep".to_string());
-        let out = read(&render(&after));
+        let out = read(&render(&after).expect("renders"));
         assert_eq!(out.services, before.services);
         assert_eq!(out.tcp_ports, before.tcp_ports);
         assert_eq!(out.udp_ports, before.udp_ports);
@@ -873,8 +1117,11 @@ mod tests {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/nix-fixtures");
         std::fs::create_dir_all(&dir).expect("fixture dir");
         let cases = [
-            ("empty", render(&Module::default())),
-            ("packages", render(&packages(&["ripgrep", "jq", "curl"]))),
+            ("empty", render(&Module::default()).expect("renders")),
+            (
+                "packages",
+                render(&packages(&["ripgrep", "jq", "curl"])).expect("renders"),
+            ),
             (
                 "everything",
                 render(&Module {
@@ -885,7 +1132,8 @@ mod tests {
                     tcp_ports: [22u16, 80, 443].into_iter().collect(),
                     udp_ports: [53u16, 123].into_iter().collect(),
                     firewall: Some(true),
-                }),
+                })
+                .expect("renders"),
             ),
             // The firewall turned off is a separate shape: it is the only one that writes
             // `networking.firewall.enable = false;`, and a parser gate that never sees it
@@ -895,7 +1143,8 @@ mod tests {
                 render(&Module {
                     firewall: Some(false),
                     ..Module::default()
-                }),
+                })
+                .expect("renders"),
             ),
         ];
         for (name, body) in &cases {

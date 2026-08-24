@@ -796,6 +796,11 @@ mod tests {
         options: &'static [(&'static str, &'static str)],
         install: Expect,
         remove: Expect,
+        /// Answers injected before the *removal* half runs: the ask-first effectors (zfs/lvm)
+        /// need "the object is present", or they converge on absent and run nothing. The
+        /// install half keeps the mock default, which reads as absent — exactly what an
+        /// install's own ask wants. Empty means no stubs.
+        remove_stubs: &'static [(&'static str, &'static str)],
     }
 
     impl ArgvCase {
@@ -813,6 +818,7 @@ mod tests {
                 options: &[],
                 install,
                 remove,
+                remove_stubs: &[],
             }
         }
 
@@ -832,7 +838,14 @@ mod tests {
                 options,
                 install,
                 remove,
+                remove_stubs: &[],
             }
+        }
+
+        /// Attach the existence answers this backend's removal asks for.
+        fn with_remove_stubs(mut self, stubs: &'static [(&'static str, &'static str)]) -> Self {
+            self.remove_stubs = stubs;
+            self
         }
     }
 
@@ -1189,7 +1202,13 @@ mod tests {
                 &[("size", "1G")],
                 Runs("lvcreate -n data -L 1G vg0"),
                 Runs("lvremove -y vg0/data"),
-            ),
+            )
+            .with_remove_stubs(&[(
+                // Removal asks whether the volume is there before it removes (already-absent
+                // is convergence); the stub answers "present".
+                "lvs --noheadings --units b --nosuffix -o vg_name,lv_name vg0/data",
+                "vg0 data\n",
+            )]),
             ArgvCase::shaped(
                 "zfs",
                 &|r, e| crate::backends::storage::register(r, e, &Config::default()),
@@ -1197,7 +1216,8 @@ mod tests {
                 &[],
                 Runs("zfs create tank/data"),
                 Runs("zfs destroy -r tank/data"),
-            ),
+            )
+            .with_remove_stubs(&[("zfs list -H -o name tank/data", "tank/data\n")]),
             ArgvCase::shaped(
                 "btrfs",
                 &|r, e| crate::backends::btrfs::register(r, e, &Config::default()),
@@ -1367,6 +1387,19 @@ mod tests {
 
             let installed = inst.install(&[spec], false).await;
             let after_install = mock.get_calls().await.len();
+            // The removal's existence answers go in here, between the two drives, so an
+            // install's ask and a removal's ask of the same command can each get the phase's
+            // own truth.
+            for (cmd, out) in case.remove_stubs {
+                mock.set_response(
+                    cmd,
+                    Ok(crate::core::executor::DryRunOutput {
+                        stdout: out.as_bytes().to_vec(),
+                        stderr: vec![],
+                    }
+                    .into()),
+                );
+            }
             let removed = inst
                 .remove(
                     &[case.subject.to_string()],
