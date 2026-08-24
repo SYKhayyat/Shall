@@ -322,7 +322,15 @@ impl LinuxSystemdProvisioner {
                 let hour = self.pad2(&self.translate_field(parts[1]));
                 let dom = self.translate_field(parts[2]);
                 let mon = self.translate_field(parts[3]);
-                let dow = self.translate_field(parts[4]);
+                // The weekday field is mapped by TOKEN, not by character: a blind
+                // `.replace('0', "Sun")` turned the range `10-12` into `1Sun-1Tue`. Shapes
+                // that cannot be said are refused in `refuse_unsupported` before anything
+                // is written.
+                let dow = if parts[4] == "*" {
+                    "*".to_string()
+                } else {
+                    map_vixie_dow_to_names(parts[4])
+                };
 
                 let date = format!("*-{}-{}", mon, dom);
                 let time = format!("{}:{}:00", hour, min);
@@ -330,15 +338,7 @@ impl LinuxSystemdProvisioner {
                 if dow == "*" {
                     format!("{} {}", date, time)
                 } else {
-                    let dow_mapped = dow
-                        .replace('0', "Sun")
-                        .replace('1', "Mon")
-                        .replace('2', "Tue")
-                        .replace('3', "Wed")
-                        .replace('4', "Thu")
-                        .replace('5', "Fri")
-                        .replace('6', "Sat");
-                    format!("{} {} {}", dow_mapped, date, time)
+                    format!("{} {} {}", dow, date, time)
                 }
             }
         }
@@ -398,6 +398,37 @@ impl TaskProvisioner for LinuxSystemdProvisioner {
                         thing."
                     .into(),
             );
+        }
+        // Two shapes of silent lie, refused by name rather than translated wrong.
+        if !matches!(
+            config.cron.as_str(),
+            "@hourly" | "@daily" | "@weekly" | "@monthly" | "@yearly" | "@annually"
+        ) {
+            let parts: Vec<&str> = config.cron.split_whitespace().collect();
+            if parts.len() == 5 {
+                let (dom, dow) = (parts[2], parts[4]);
+                // Vixie cron fires when EITHER a restricted dom or a restricted dow
+                // matches; OnCalendar requires BOTH. Translating one into the other
+                // narrowed the schedule without saying so — the exact class the Windows
+                // mapper refuses by name.
+                if dom != "*" && dow != "*" {
+                    return Err(format!(
+                        "`{}` restricts both day-of-month and day-of-week. Vixie cron \
+                         fires on either; systemd's OnCalendar requires both. Split it \
+                         into two `schedule:` lines.",
+                        config.cron
+                    ));
+                }
+                // OnCalendar's weekday field takes day names and ranges of them — a step
+                // (`*/2`, `0/2`) dies at unit start, AFTER sync reported success.
+                if dow.contains('/') {
+                    return Err(format!(
+                        "day-of-week step `{dow}` has no systemd equivalent: \
+                         OnCalendar's weekday field takes day names and ranges, not steps.",
+                        dow = dow
+                    ));
+                }
+            }
         }
         Ok(())
     }
@@ -575,6 +606,40 @@ impl TaskProvisioner for LinuxSystemdProvisioner {
 
 struct MacLaunchdProvisioner;
 
+/// Vixie day-of-week (`1-5`, `0,6`, `*`) to OnCalendar day names (`Mon..Fri`, `Sun,Sat`).
+///
+/// By token: a character-level replace turned `10` into `1Sun` and read ranges as glue.
+/// 7 is Sunday in cron and out of the table's range, hence the mod.
+fn map_vixie_dow_to_names(field: &str) -> String {
+    const NAMES: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    let name = |tok: &str| -> String {
+        match tok.parse::<u32>() {
+            Ok(n) => NAMES[(n % 7) as usize].to_string(),
+            Err(_) => tok.to_string(),
+        }
+    };
+    field
+        .split(',')
+        .map(|atom| match atom.split_once('-') {
+            Some((a, b)) => format!("{}..{}", name(a), name(b)),
+            None => name(atom),
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// Whether every cron field is a single integer or `*` — the whole of what
+/// `StartCalendarInterval` can say.
+fn cron_is_launchd_expressible(cron: &str) -> bool {
+    let parts: Vec<&str> = cron.split_whitespace().collect();
+    if parts.len() != 5 {
+        return false;
+    }
+    parts
+        .iter()
+        .all(|f| *f == "*" || (!f.contains([',', '-', '/', '*']) && f.parse::<u32>().is_ok()))
+}
+
 impl MacLaunchdProvisioner {
     fn label(name: &str) -> String {
         format!("com.shall.{}", name)
@@ -693,6 +758,21 @@ impl TaskProvisioner for MacLaunchdProvisioner {
                         privileged part from the command the schedule invokes."
                     .into(),
             );
+        }
+        // **And expressibility, which was never checked.** `StartCalendarInterval` takes one
+        // integer per field — no lists, no ranges, no steps. The old mapper kept the first
+        // token of any of those and dropped the rest: `*/10 * * * *` parsed its step field
+        // down to nothing, emitted an empty dict, and launchd fired the job EVERY MINUTE
+        // while the read-back compared plist to plist and agreed for ever. A cron shape that
+        // cannot be said in launchd's language is refused here, by name, before anything is
+        // written.
+        if config.cron != "@reboot" && !cron_is_launchd_expressible(&config.cron) {
+            return Err(format!(
+                "`{}` uses a cron list, range or step, and `StartCalendarInterval` takes one \
+                 integer per field — there is no launchd equivalent. Name single values \
+                 (e.g. `0 2 * * 1`) or several `schedule:` lines.",
+                config.cron
+            ));
         }
         Ok(())
     }

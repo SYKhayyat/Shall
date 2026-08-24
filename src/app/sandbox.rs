@@ -249,9 +249,10 @@ impl Sandbox {
     ) -> Result<Wrapped> {
         let _ = (config, settings);
         if let Confinement::None { .. } = decided {
-            // Windows keeps its low-integrity launch here rather than in `By`: it does lower the
-            // token, so deleting it would remove a real reduction, and it is not a sandbox, so
-            // naming it one would be the claim this type exists to stop.
+            // Windows keeps its below-normal-priority launch here rather than in `By`: it is
+            // a real scheduling courtesy, and it is NOT a sandbox — `start /low` sets a
+            // priority class, nothing about the token, so naming it confinement would be
+            // the claim this type exists to stop. The verdict stays `None` with its reason.
             #[cfg(target_os = "windows")]
             {
                 return Ok(Wrapped::bare(Self::low_integrity_windows(
@@ -341,6 +342,12 @@ impl Sandbox {
             }
         }
 
+        // **The environment starts EMPTY.** Without `--clearenv`, bwrap inherits the whole
+        // parent environment additively — `--setenv` on top of it — and every cloud token,
+        // proxy credential and API key Shall itself holds crosses into the "confined"
+        // process untouched.
+        bwrap.arg("--clearenv");
+
         for (key, value) in &config.environment {
             bwrap.arg("--setenv").arg(key).arg(value);
         }
@@ -373,6 +380,10 @@ impl Sandbox {
 
         let mut sandbox_cmd = Command::new("sandbox-exec");
         sandbox_cmd.arg("-p").arg(profile);
+        // **The environment starts EMPTY** (same ruling as the bwrap path): `env` here is
+        // additive onto what Shall itself holds, and a "confined" tool that can read
+        // Shall's cloud tokens is not confined in any sense that matters.
+        sandbox_cmd.env_clear();
         for (key, value) in &config.environment {
             sandbox_cmd.env(key, value);
         }
@@ -405,18 +416,28 @@ impl Sandbox {
         Ok(Wrapped::with_config_file(command, tmp_file))
     }
 
-    /// Windows' unconfined path: a lower integrity level, which is a real reduction and is not
-    /// a sandbox. Reached only for a `Confinement::None` verdict, whose `because` says so.
+    /// Windows' unconfined path: BELOW-NORMAL PRIORITY, which is a scheduling courtesy and
+    /// not an integrity reduction — `start /low` sets the priority class and touches nothing
+    /// about the token. Reached only for a `Confinement::None` verdict, whose `because`
+    /// already says no mechanism is in force; this exists so the run still starts politely,
+    /// and this doc claims exactly that much.
+    ///
+    /// The empty `""` after `start` is its window-title slot: without it, `start` reads the
+    /// first QUOTED argument as the title and runs nothing.
     #[cfg(target_os = "windows")]
     fn low_integrity_windows(cmd: &str, args: &[String], config: &SandboxConfig) -> Command {
         let mut command = Command::new("cmd");
         command
             .arg("/c")
             .arg("start")
+            .arg("")
             .arg("/low")
             .arg("/b")
             .arg(cmd)
             .args(args);
+        // **The environment starts EMPTY** (same ruling as the bwrap path): additive env
+        // onto Shall's own means every token Shall holds rides into the process.
+        command.env_clear();
         for (key, value) in &config.environment {
             command.env(key, value);
         }

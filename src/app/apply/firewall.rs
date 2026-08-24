@@ -123,18 +123,48 @@ impl Firewall<'_> {
             for r in &to_close {
                 crate::would!("would close {} via {}", r, adapter.name);
             }
+            // **The most consequential change in the phase appears in no preview it was
+            // omitted from.** A default-policy flip is what turns a permissive box into a
+            // dark one, and it used to be the one line this preview never printed.
+            for (r, opts) in &declared {
+                if let Rule::Default { direction } = r {
+                    let policy = opts.one("value").unwrap_or("deny");
+                    match adapter.default_command(*direction, policy) {
+                        Some(_) => crate::would!(
+                            "would set default {} policy to {} via {}",
+                            direction,
+                            policy,
+                            adapter.name
+                        ),
+                        None => crate::would!(
+                            "REFUSED: {} cannot set a default {} policy",
+                            adapter.name,
+                            direction
+                        ),
+                    }
+                }
+            }
             return Ok(());
         }
 
-        // Opening a port takes nothing away, so it answers to no ceiling of its own — but it is
-        // a change, and `max_total_changes` counts changes (`N8`).
+        // **Best effort with a named ending, not fail-fast into silence.** These commands go
+        // out one at a time and cannot be made atomic, so a failure in the middle used to
+        // abandon the rest and leave the perimeter half-changed with an error naming only
+        // the first wound. Every command runs; everything that did not apply is reported,
+        // so the summary matches the machine.
+        let mut failed: Vec<String> = Vec::new();
+
+        // Opening a port takes nothing away, so it answers to no ceiling of its own — but it
+        // is a change, and `max_total_changes` counts changes (`N8`).
         crate::app::sync::guard::enforce_additions(self.config, to_open.len(), self.reaping, scope)
             .await?;
         for rule in &to_open {
             if let Rule::Port { port, proto } = rule {
                 let argv = adapter.allow_command(*port, *proto);
-                self.run_firewall(&argv).await?;
-                info!("opened {} ({})", rule, adapter.name);
+                match self.run_firewall(&argv).await {
+                    Ok(()) => info!("opened {} ({})", rule, adapter.name),
+                    Err(e) => failed.push(format!("open {}: {}", rule, e)),
+                }
             }
         }
         // N7: drift is corrected, because it is corrected everywhere else in this model — and
@@ -165,8 +195,12 @@ impl Firewall<'_> {
             for rule in &to_close {
                 if let Rule::Port { port, proto } = rule {
                     let argv = adapter.deny_command(*port, *proto);
-                    self.close_port(&argv, reaped).await?;
-                    info!("closed {} — it was not declared ({})", rule, adapter.name);
+                    match self.close_port(&argv, reaped).await {
+                        Ok(()) => {
+                            info!("closed {} — it was not declared ({})", rule, adapter.name)
+                        }
+                        Err(e) => failed.push(format!("close {}: {}", rule, e)),
+                    }
                 }
             }
         }
@@ -174,13 +208,17 @@ impl Firewall<'_> {
             if let Rule::Default { direction } = rule {
                 let policy = opts.one("value").unwrap_or("deny");
                 match adapter.default_command(*direction, policy) {
-                    Some(argv) => {
-                        self.run_firewall(&argv).await?;
-                        info!(
-                            "default {} policy set to {} ({})",
-                            direction, policy, adapter.name
-                        );
-                    }
+                    Some(argv) => match self.run_firewall(&argv).await {
+                        Ok(()) => {
+                            info!(
+                                "default {} policy set to {} ({})",
+                                direction, policy, adapter.name
+                            );
+                        }
+                        Err(e) => {
+                            failed.push(format!("default {} -> {}: {}", direction, policy, e))
+                        }
+                    },
                     // P7's rule: a refusal beats a pretence. Reporting success for a policy the
                     // firewall cannot express would be the worst outcome here.
                     None => {
@@ -200,7 +238,15 @@ impl Firewall<'_> {
                 }
             }
         }
-        Ok(())
+        if failed.is_empty() {
+            return Ok(());
+        }
+        Err(Error::Validation(format!(
+            "the perimeter is PARTLY changed: {} command(s) did not apply — {}. Everything \
+             else above did. Re-run after fixing the cause; Shall will reconcile the rest.",
+            failed.len(),
+            failed.join("; ")
+        )))
     }
     /// The `[[firewall]]` rows the repo carries, through the same approval every adapter file
     /// goes through (7a/II.12).

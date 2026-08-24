@@ -389,7 +389,11 @@ pub fn held_for(backend: &str, procs: &dyn Processes, read: &dyn Fn(&Path) -> Lo
         // manager's name — `dnf` behind PackageKit is the case, and it is why the pid is read
         // rather than assumed to agree with the process list.
         match body.trim().parse::<u32>() {
-            Ok(pid) if procs.pid_alive(pid) => return Held::Live(format!("pid {pid}")),
+            Ok(pid) if procs.pid_alive(pid) && !pid_recycled_since(pid, file_mtime(path)) => {
+                return Held::Live(format!("pid {pid}"))
+            }
+            // Alive but born after the lock was written: the number was reused, and the
+            // manager that took this lock is gone.
             Ok(_) => return Held::Stale(path.to_path_buf()),
             // Half-written by a process that died between `create` and `write`. That proves
             // nothing, and "proves nothing" must not become "go and delete it" — `find` leaves
@@ -451,6 +455,48 @@ fn running_holder(lock: &ManagerLock, procs: &dyn Processes) -> Option<String> {
         .map(|h| format!("a `{h}`"))
 }
 
+fn file_mtime(p: &Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(p).and_then(|m| m.modified()).ok()
+}
+
+/// Whether `pid` came into existence AFTER the lock file was written.
+///
+/// **The wraparound guard on bare pid-liveness.** Pids are reused; a lock naming 4132 whose
+/// dnf died yesterday reads as held by whatever unrelated process is 4132 today, for as long
+/// as that process happens to run — which can be indefinitely. The process's own start time
+/// (from `/proc/{pid}/stat`) settles it: a holder predates the lock it took. Best-effort in
+/// the SAFE direction — anything unparseable answers "not recycled", which is the old
+/// behaviour.
+#[cfg(target_os = "linux")]
+fn pid_recycled_since(pid: u32, since: Option<std::time::SystemTime>) -> bool {
+    let Some(since) = since else {
+        return false;
+    };
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    // Everything after the comm field — comm may contain spaces and parens of its own.
+    let after_comm = stat.rfind(')').map(|i| &stat[i + 1..])?;
+    let fields: Vec<&str> = after_comm.split_whitespace().collect();
+    // Field 22 overall; two (state, ppid) precede this slice, so starttime is index 19 here.
+    let ticks: u64 = fields.get(19)?.parse().ok()?;
+    const CLK_TCK: f64 = 100.0; // userspace Hz on every Linux this ships to
+    let started_after_boot = std::time::Duration::from_secs_f64(ticks as f64 / CLK_TCK);
+    let uptime: f64 = std::fs::read_to_string("/proc/uptime")
+        .ok()?
+        .split_whitespace()
+        .next()?
+        .parse()
+        .ok()?;
+    let boot =
+        std::time::SystemTime::now().checked_sub(std::time::Duration::from_secs_f64(uptime))?;
+    let started_at = boot.checked_add(started_after_boot)?;
+    started_at > since
+}
+
+#[cfg(not(target_os = "linux"))]
+fn pid_recycled_since(_pid: u32, _since: Option<std::time::SystemTime>) -> bool {
+    false
+}
+
 /// Every manager lock on this machine that exists and is provably not held.
 ///
 /// `read` is how the file's contents are obtained, so the decision can be tested without a
@@ -490,9 +536,14 @@ pub fn find(procs: &dyn Processes, read: &dyn Fn(&Path) -> LockFile) -> Survey {
                 LockFile::Body(body) => body,
             };
             let because = match (lock.carries_pid, body.trim().parse::<u32>()) {
-                // A pid that is still running: the lock is held, and this is the case the whole
-                // module exists to not get wrong.
-                (true, Ok(pid)) if procs.pid_alive(pid) => {
+                // A pid that is still running AND predates the lock: held, and this is the
+                // case the whole module exists to not get wrong. The start-time check is the
+                // wraparound guard — a reused pid answers alive, but it was not born when
+                // this lock was taken.
+                (true, Ok(pid))
+                    if procs.pid_alive(pid)
+                        && !pid_recycled_since(pid, file_mtime(Path::new(path))) =>
+                {
                     out.left.push(LeftAlone {
                         path: path.to_path_buf(),
                         because: format!("pid {pid} is running and holds it"),

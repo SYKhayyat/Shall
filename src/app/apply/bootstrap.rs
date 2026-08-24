@@ -84,19 +84,33 @@ impl Bootstrap<'_> {
                 crate::would_print!("a real run would ask before running that.");
                 continue;
             }
-            // Declines rather than refuses: an unattended run is better off without the
-            // installer than failed over it. Never runs it unasked — an installer that arrives
-            // with a pulled repo and executes because nobody was there to say no is the risk.
-            let unattended = format!(
-                "Not asking in a non-interactive shell — run `shall sync` yourself, or install \
-                 `{manager}` by hand."
-            );
-            let proceed = crate::core::prompt::confirm(
-                self.config.yes,
-                &format!("Run that to install {manager}?"),
-                crate::core::prompt::Unattended::Decline(&unattended),
-            )
-            .unwrap_or(false);
+            // **`--yes` does not answer this question by itself** (owner ruling,
+            // 2026-08-23). Scripts and CI pass `-y` universally; an installer arriving with
+            // a pulled repo must not execute because a flag meant "don't nag me" was on the
+            // command — least of all from a scheduled sync nobody is watching. The consent
+            // that lets it run unasked lives in preferences.toml
+            // (`bootstrap_auto_yes = true`), where a human wrote it, beside the repo it
+            // trusts. Everyone else gets the prompt.
+            let auto = self.config.bootstrap_auto_yes && self.config.yes;
+            let proceed = if auto {
+                warn!(
+                    "bootstrap: running `{}`'s installer unasked — `bootstrap_auto_yes` \
+                     enables this.",
+                    manager
+                );
+                true
+            } else {
+                let unattended = format!(
+                    "Not asking in a non-interactive shell — run `shall sync` yourself, or \
+                     install `{manager}` by hand."
+                );
+                crate::core::prompt::confirm(
+                    false,
+                    &format!("Run that to install {manager}?"),
+                    crate::core::prompt::Unattended::Decline(&unattended),
+                )
+                .unwrap_or(false)
+            };
             if !proceed {
                 if std::io::stdin().is_terminal() {
                     println!("Left `{}` alone.", manager);

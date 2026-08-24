@@ -283,7 +283,15 @@ impl Execs<'_> {
         runs: &mut crate::core::ExecLedger,
         runs_path: &std::path::Path,
     ) -> Result<usize> {
-        let declared = self.declared_exec_paths()?;
+        // **Declared means reached by THIS resolution, from anywhere.** The file scan below
+        // is how a *deleted line* is detected — but a `generate:` command can emit `exec:`
+        // lines too, and those reach the desired state with no file behind them. Scanning
+        // files alone made every generated exec look departed the moment its generator's
+        // output changed shape, firing its undo while it was still declared.
+        let mut declared = self.declared_exec_paths()?;
+        for (script, _, _) in state.execs() {
+            declared.insert(script.to_string());
+        }
         // An unreadable configuration yields an empty set, which must never be read as "every
         // script departed" — that would run every undo on the machine because of a stray brace.
         if declared.is_empty() && state.has_execs() {

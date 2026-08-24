@@ -32,9 +32,19 @@ impl Schedules<'_> {
                 Standing::Matches => continue,
                 Standing::Missing => "it is not registered",
                 Standing::Differs(what) => what,
-                // Named rather than silently re-provisioned as if it were missing: a scheduler
-                // that could not be asked is a schedule nobody can claim is in force.
-                Standing::Unknown => "Shall could not read it back from this scheduler",
+                // **Unreadable is not overwritable.** Provisioning is `/Create /F`, which
+                // clobbers whatever sits in the way — and "whatever" includes a task a hand
+                // edited, on the word of a scheduler that could not even say what it holds.
+                // This arm used to fall through and provision anyway, every sync, while
+                // `scheduler`'s own doctrine for the same situation says the opposite.
+                Standing::Unknown => {
+                    return Err(crate::core::Error::Refused(format!(
+                        "schedule `{}` cannot be read back from this scheduler, so Shall \
+                         will not overwrite it: provisioning would clobber a registration \
+                         nobody has read. Remove or fix the existing task first.",
+                        name
+                    )));
+                }
             };
             if self.config.dry_run {
                 crate::would!(

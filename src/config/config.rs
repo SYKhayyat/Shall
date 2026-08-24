@@ -498,6 +498,17 @@ pub struct Config {
     #[serde(default)]
     pub yes: bool,
 
+    /// Let `--yes` also answer the bootstrap question — the one that executes a vendor's
+    /// installer script (`curl | sh`) on this machine.
+    ///
+    /// **Deliberately a preference, and deliberately off** (owner ruling, 2026-08-23): `-y`
+    /// alone never runs an installer, because scripts and CI pass it universally and an
+    /// installer arriving with a pulled repo is exactly what nobody should execute unasked —
+    /// least of all from a scheduled sync nobody is watching. A machine that wants hands-off
+    /// bootstrapping says so here, in the file a human wrote, where the decision lives.
+    #[serde(default)]
+    pub bootstrap_auto_yes: bool,
+
     /// This run is an unattended `watch` tick, so nobody is present to answer a prompt (T4).
     /// CLI/runtime only (`serde(skip)`): it is a property of *how Shall was invoked*, not a
     /// preference. `watch` sets it; every other command leaves it false. A touch-required
@@ -1073,6 +1084,7 @@ impl Default for Config {
             dry_run: false,
             unattended: false,
             yes: false,
+            bootstrap_auto_yes: false,
             allow_mass_removal: false,
             replace_existing: false,
             config_root: default_config_root(),
