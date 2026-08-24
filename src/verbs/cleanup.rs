@@ -10,7 +10,7 @@ use crate::verbs::prelude::*;
 /// The old `clean` ran `apt autoremove -y` / `pacman -Rs --noconfirm` across every available
 /// backend with no preview and outside the guard.
 pub async fn handle_remove_orphans(app: &App) -> Result<()> {
-    use crate::app::sync::guard::{enforce, GuardScope};
+    use crate::app::sync::guard::{vet, GuardScope};
 
     let mut listed: Vec<(String, Vec<String>)> = Vec::new();
     let mut cannot_say: Vec<String> = Vec::new();
@@ -69,13 +69,15 @@ pub async fn handle_remove_orphans(app: &App) -> Result<()> {
 
     // The guard sees the whole set at once, so the removal count and the protected list are
     // judged against the total rather than per backend.
-    // Asked here so the preview and the refusal happen before the confirmation prompt — the
-    // engine asks the same question again over the same pairs, which is cheap and cannot
-    // disagree with itself.
-    enforce(
+    // Asked here so the preview and the refusal happen before the confirmation prompt. This
+    // ask decides and spends nothing — the engine asks again over the same pairs before
+    // carrying them out, and that second ask is what records against the ceiling; a
+    // prompt-time spend would have it measuring N + N.
+    vet(
         &app.config,
         &app.registry,
         &removals,
+        guard::RemovalKind::Package,
         &app.reaping,
         GuardScope::RemoveOrphans,
     )
@@ -99,15 +101,27 @@ pub async fn handle_remove_orphans(app: &App) -> Result<()> {
     // scrollback. `plan.rs-499` records what that shape cost `apply`, which stopped keeping
     // its own loop for the same reasons; this is the same fix on the next command along.
     //
-    // The guard already ran above, over the whole set at once. The engine asks again — through
-    // `GuardScope::RemoveOrphans`, the same scope, over the same pairs — and asking a settled
-    // question twice with the same inputs is cheap and cannot disagree with itself.
-    execute_removals_through_the_engine(
-        &app.sync_engine(),
-        &removals,
-        guard::GuardScope::RemoveOrphans,
-    )
-    .await?;
+    // The vet above already settled the question; the engine's ask is what spends, so the
+    // ceiling counts this set once.
+    let engine = app.sync_engine();
+    let planned = removals.len();
+    if let Err(e) =
+        execute_removals_through_the_engine(&engine, &removals, guard::GuardScope::RemoveOrphans)
+            .await
+    {
+        // A run that died part-way still removed what completed and stayed gone; the
+        // engine's counters were filled on the way down, and the summary repeats them
+        // rather than pretending all-or-nothing.
+        let (_, gone, _) = engine.metrics.totals();
+        let gone = gone as usize;
+        println!(
+            "\nRemoved {} of {} orphaned package(s); {} remain installed.",
+            gone,
+            planned,
+            planned - gone
+        );
+        return Err(e);
+    }
     for (backend_name, names) in &listed {
         println!("  {}: removed {} package(s)", backend_name, names.len());
     }
@@ -353,14 +367,13 @@ pub async fn handle_purge_undeclared(app: &App, allow_mass_purge: bool) -> Resul
     // and OS-essential still do — nothing overrides those (II.10, II.11).
     //
     // Asked here so a refusal lands before the confirmation prompt, and asked again by the
-    // engine that carries the removal out. Two asks, one rule: `SyncEngine::sync` dispatches
-    // `GuardScope::PurgeUndeclared` to this same `enforce_deliberate`, so the second ask cannot
-    // answer differently from the first.
-    crate::app::sync::guard::enforce_deliberate(
+    // engine that carries the removal out. Two asks, one rule — and one spend: this ask
+    // decides without recording, or the engine's ask would measure N + N against
+    // `max_total_changes` and refuse a set the user already confirmed.
+    crate::app::sync::guard::vet_deliberate(
         &app.config,
         &app.registry,
         &removals,
-        &app.reaping,
         crate::app::sync::guard::GuardScope::PurgeUndeclared,
     )
     .await?;
@@ -437,24 +450,25 @@ pub async fn handle_purge_undeclared(app: &App, allow_mass_purge: bool) -> Resul
     //
     // The guard's scope carries `II.11` with it: `SyncEngine::sync` dispatches
     // `GuardScope::PurgeUndeclared` to `enforce_deliberate`, so the count check stays off for
-    // this command while `protected_packages` and OS-essential stay on. That ruling now lives in
-    // one place instead of being the reason this loop could not use the engine.
+    // this command while `protected_packages` and OS-essential stay on. The vet above settled
+    // the question at prompt time; the engine's ask is what spends.
+    let engine = app.sync_engine();
     let planned = removals.len();
-    let (gone, failed) = match execute_removals_through_the_engine(
-        &app.sync_engine(),
-        &removals,
-        guard::GuardScope::PurgeUndeclared,
-    )
-    .await
-    {
-        Ok(()) => (planned, 0usize),
-        Err(e) => {
-            warn!("purge-undeclared: {}", e);
-            (0usize, planned)
-        }
-    };
+    let outcome =
+        execute_removals_through_the_engine(&engine, &removals, guard::GuardScope::PurgeUndeclared)
+            .await;
 
-    println!("\nRemoved {} package(s); {} failed.", gone, failed);
+    // A transaction killed part-way through 576 removals did not fail 576 of them: what
+    // completed and stayed gone is gone, and this summary owes those numbers to the person
+    // holding the snapshot id below. The engine fills its counters on the failure path too,
+    // precisely so this line can tell the machine's truth instead of all-or-nothing.
+    let (_, gone, _) = engine.metrics.totals();
+    let gone = gone as usize;
+    println!(
+        "\nRemoved {} package(s); {} remain installed.",
+        gone,
+        planned - gone
+    );
     if let Some(id) = &snapshot {
         println!(
             "Snapshot {} was taken before this ran; `shall snapshot restore` opens the gallery \
@@ -462,7 +476,10 @@ pub async fn handle_purge_undeclared(app: &App, allow_mass_purge: bool) -> Resul
             id
         );
     }
-    Ok(())
+    // A failed purge exits non-zero: swallowing the engine's error made the most destructive
+    // command in the program report green with half its work undone, which is the same lie
+    // `--keep-going` was caught telling (B1).
+    outcome.map(|_| ())
 }
 
 /// `shall reset` — Shall forgets it manages anything (X.3, level 3). The packages stay; the

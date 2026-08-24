@@ -772,7 +772,20 @@ impl SyncEngine {
         let pb = self
             .progress
             .spinner("Applying parallel system modifications...");
-        let results = tx.execute_with_telemetry().await?;
+        let results = match tx.execute_with_telemetry().await {
+            Ok(results) => results,
+            Err(e) => {
+                // The run died part-way, but part-way is not all-or-nothing: the removals
+                // that completed before the failure stay completed (rollback leaves them
+                // gone wherever the plan intended it — `U41`), and the summary owes those
+                // numbers to whoever is reading. Recorded onto the same counters the
+                // success path fills at `:850`, so every caller reads totals() the same
+                // way after either outcome.
+                let gone = tx.executed_removals();
+                self.metrics.record_remove(gone.len() as u64);
+                return Err(e);
+            }
+        };
         pb.finish();
 
         let session_active = state.active_session_id.is_some();

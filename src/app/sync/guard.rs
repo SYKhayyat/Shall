@@ -1058,16 +1058,35 @@ async fn enforce_kind(
     reaping: &Reaping,
     scope: GuardScope,
 ) -> Result<Reaped> {
+    vet(config, registry, removals, kind, reaping, scope).await?;
+    // Recorded only once the set is cleared: a refused command stops here, and a removal
+    // that was never allowed must not raise the total anything behind it is measured
+    // against.
+    reaping.record(kind, removals.len());
+    Ok(Reaped { scope })
+}
+
+/// The guard's question, asked without spending: refuse or permit, record nothing.
+///
+/// [`enforce_kind`]'s decision with the ledger write left out. It exists because a command
+/// may ask before its confirmation prompt while the engine asks again over the same pairs
+/// before carrying them out (`remove-orphans`, `purge-undeclared`). Two asks, one rule — and
+/// one spend: the ask that merely decides must not raise `so_far`, or the engine's ask
+/// measures `N + N` against the ceiling and refuses a set the user already confirmed.
+pub async fn vet(
+    config: &Config,
+    registry: &Arc<BackendRegistry>,
+    removals: &[(String, String)],
+    kind: RemovalKind,
+    reaping: &Reaping,
+    scope: GuardScope,
+) -> Result<()> {
     let mut report = inspect_removals(config, registry, removals, kind, reaping).await;
 
     allow_the_count(config, &mut report, scope);
 
     if report.is_empty() {
-        // Recorded only once the set is cleared: a refused command stops here, and a removal
-        // that was never allowed must not raise the total anything behind it is measured
-        // against.
-        reaping.record(kind, removals.len());
-        return Ok(Reaped { scope });
+        return Ok(());
     }
     refuse(report.message(scope, kind))
 }
@@ -1294,16 +1313,29 @@ pub async fn enforce_deliberate(
     reaping: &Reaping,
     scope: GuardScope,
 ) -> Result<Reaped> {
+    vet_deliberate(config, registry, removals, scope).await?;
+    // Still recorded. The count is not the question *for this command*, but a purge is one
+    // phase of a run that goes on to tear extras down, and the budget those answer to has
+    // to know what has already gone.
+    reaping.record(RemovalKind::Package, removals.len());
+    Ok(Reaped { scope })
+}
+
+/// [`enforce_deliberate`]'s decision with the ledger write left out — [`vet`]'s twin for the
+/// deliberate scopes, so `purge-undeclared`'s prompt-time ask does not spend against the total
+/// its engine ask is about to measure.
+pub async fn vet_deliberate(
+    config: &Config,
+    registry: &Arc<BackendRegistry>,
+    removals: &[(String, String)],
+    scope: GuardScope,
+) -> Result<()> {
     let mut report = inspect(config, registry, removals).await;
     report
         .objections
         .retain(|o| !matches!(o, Objection::TooMany { .. }));
     if report.is_empty() {
-        // Still recorded. The count is not the question *for this command*, but a purge is one
-        // phase of a run that goes on to tear extras down, and the budget those answer to has
-        // to know what has already gone.
-        reaping.record(RemovalKind::Package, removals.len());
-        return Ok(Reaped { scope });
+        return Ok(());
     }
     refuse(report.message(scope, RemovalKind::Package))
 }
@@ -1743,6 +1775,102 @@ mod tests {
             .is_err(),
             "protection still applies to a deliberate purge"
         );
+    }
+
+    /// The prompt-time ask must decide without spending. `remove-orphans` and
+    /// `purge-undeclared` vet before their confirmation prompt and the engine enforces over
+    /// the same pairs after it; a vet that recorded would have that second ask measuring
+    /// N + N against the ceiling and refusing a set the user had already confirmed.
+    #[tokio::test]
+    async fn a_vet_decides_without_spending_the_budget() {
+        let reg = Arc::new(BackendRegistry::new());
+        let mut cfg = config_with(0);
+        cfg.guard.max_total_changes = 10;
+        let six = pairs(&["a", "b", "c", "d", "e", "f"]);
+        let ledger = Reaping::new();
+
+        vet(
+            &cfg,
+            &reg,
+            &six,
+            RemovalKind::Package,
+            &ledger,
+            GuardScope::RemoveOrphans,
+        )
+        .await
+        .expect("six orphans pass the prompt-time ask");
+        assert_eq!(ledger.changes_so_far(), 0, "deciding is not spending");
+
+        // The engine's ask over the same pairs, through the same ledger: with the bug this
+        // measured six spent plus six planned against a budget of ten.
+        enforce(&cfg, &reg, &six, &ledger, GuardScope::RemoveOrphans)
+            .await
+            .expect("the confirmed set clears exactly once");
+        assert_eq!(ledger.changes_so_far(), 6);
+
+        // And the spend is real: a second identical phase answers to what the first used,
+        // which is the property the record exists to keep.
+        assert!(
+            enforce(&cfg, &reg, &six, &ledger, GuardScope::RemoveOrphans)
+                .await
+                .is_err(),
+            "twelve changes against a budget of ten must refuse"
+        );
+    }
+
+    /// The deliberate twin: `purge-undeclared`'s prompt-time ask ignores the counts and must
+    /// also write nothing, or its engine ask measures double against `max_total_changes`.
+    #[tokio::test]
+    async fn the_deliberate_vet_spends_nothing_either() {
+        let reg = Arc::new(BackendRegistry::new());
+        let mut cfg = config_with(0);
+        cfg.guard.max_total_changes = 8;
+        let six = pairs(&["a", "b", "c", "d", "e", "f"]);
+        let ledger = Reaping::new();
+
+        vet_deliberate(&cfg, &reg, &six, GuardScope::PurgeUndeclared)
+            .await
+            .expect("protection passes, and the counts are not the question");
+        assert_eq!(
+            ledger.changes_so_far(),
+            0,
+            "the prompt-time ask writes nothing"
+        );
+
+        enforce_deliberate(&cfg, &reg, &six, &ledger, GuardScope::PurgeUndeclared)
+            .await
+            .expect("the engine's ask measures six, not twelve");
+        assert_eq!(
+            ledger.changes_so_far(),
+            6,
+            "the engine's ask is the one that spends"
+        );
+    }
+
+    /// One rule, one sentence: what the prompt-time ask refuses it refuses in the same words
+    /// the engine would use, so a preview never disagrees with the verdict it foretold.
+    #[tokio::test]
+    async fn vet_refuses_what_enforce_refuses_and_says_it_the_same_way() {
+        let reg = Arc::new(BackendRegistry::new());
+        let cfg = config_with(2);
+        let many = pairs(&["jq", "htop", "bat"]);
+
+        let asked = vet(
+            &cfg,
+            &reg,
+            &many,
+            RemovalKind::Package,
+            &Reaping::new(),
+            GuardScope::Sync,
+        )
+        .await
+        .expect_err("three removals over a ceiling of two refuse")
+        .to_string();
+        let enforced = enforce(&cfg, &reg, &many, &Reaping::new(), GuardScope::Sync)
+            .await
+            .expect_err("enforce refuses the same set")
+            .to_string();
+        assert_eq!(asked, enforced);
     }
 
     #[tokio::test]

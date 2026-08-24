@@ -1045,10 +1045,42 @@ pub(crate) fn plan_user_verb(
                 cmd, first
             )));
         }
+        // H7: a global flag on a step was parsed and then dropped — only the first step's
+        // flags reach the run's config, so `sync --dry-run` as step two ran for real. The
+        // posture belongs to the whole verb; refuse the spelling instead of honouring it for
+        // one step and surprising the rest.
+        if let Some(flag) = first_global_flag(&tokens[1..], &global_posture_flags()) {
+            return Some(Err(format!(
+                "the verb `{}` step `{}` carries `{}`, which is a global flag.\n  \
+                 A step's own flags configure that step (`upgrade --all`); the run's posture \
+                 belongs before the verb name, where it applies to every step: \
+                 `shall{} {}`. On a step it was silently dropped.",
+                cmd,
+                tokens.join(" "),
+                flag,
+                if leading.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {}", leading.join(" "))
+                },
+                cmd
+            )));
+        }
         let mut one = Vec::with_capacity(1 + leading.len() + tokens.len());
         one.push(argv[0].clone());
         one.extend(leading.iter().cloned());
-        one.extend(tokens);
+        one.extend(tokens.clone());
+        // The step is parsed again per dispatch inside `run_user_verb`; a spelling clap
+        // refuses used to reach that parse and exit with clap's usage code — the code the
+        // exit table spends on "drift found". Refuse here instead, where the verb's name is
+        // still known.
+        if let Err(e) = Cli::try_parse_from(&one) {
+            return Some(Err(format!(
+                "the verb `{}` step `{}` is not a valid command line: {e}",
+                cmd,
+                tokens.join(" ")
+            )));
+        }
         planned.push(one);
     }
     Some(Ok(planned))
@@ -1069,6 +1101,52 @@ fn apply_process_wide_config(config: &shall::config::Config) {
     shall::core::download::set_max_download_bytes(config.max_download_bytes);
 }
 
+/// The run-posture flag spellings, asked of clap rather than listed by hand.
+///
+/// The last hand-written flag list in this file rotted — it named deleted flags and ate
+/// tokens as values — which is why `global_value_flags` derives instead.
+pub(crate) fn global_posture_flags() -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    for a in <Cli as clap::CommandFactory>::command().get_arguments() {
+        if !a.is_global_set() {
+            continue;
+        }
+        if let Some(l) = a.get_long() {
+            out.insert(format!("--{l}"));
+        }
+        if let Some(c) = a.get_short() {
+            out.insert(format!("-{c}"));
+        }
+    }
+    out
+}
+
+/// The first token of a step that carries a run-posture flag, named as written.
+///
+/// Combined shorts (`-vn`) and an attached value (`-cpath`) name their first letter's flag;
+/// `--config=path` names its head. A step's own subcommand flags (`upgrade --all`) spell
+/// nothing here and pass through.
+fn first_global_flag(
+    tokens: &[String],
+    globals: &std::collections::HashSet<String>,
+) -> Option<String> {
+    for tok in tokens {
+        let bare = if let Some(rest) = tok.strip_prefix("--") {
+            Some(format!("--{}", rest.split('=').next().unwrap_or(rest)))
+        } else if let Some(shorts) = tok.strip_prefix('-').filter(|s| !s.is_empty()) {
+            shorts.chars().next().map(|c| format!("-{c}"))
+        } else {
+            None
+        };
+        if let Some(name) = bare {
+            if globals.contains(&name) {
+                return Some(tok.clone());
+            }
+        }
+    }
+    None
+}
+
 /// Run a user verb: build the config and app once from the shared leading flags, then dispatch
 /// each step against them in order, stopping at the first failure.
 ///
@@ -1078,7 +1156,21 @@ fn apply_process_wide_config(config: &shall::config::Config) {
 /// asked instead. A verb of five readers stops holding the writer lock, and a verb whose third
 /// step syncs takes it before the first step runs rather than partway through.
 pub(crate) async fn run_user_verb(steps: Vec<Vec<String>>) -> Result<()> {
-    let parsed: Vec<Cli> = steps.iter().map(Cli::parse_from).collect();
+    // `plan_user_verb` validates every step before this runs; a caller that arrives without
+    // it must not fall back to clap's own error exit, whose code means something else here.
+    let parsed: Vec<Cli> = steps
+        .iter()
+        .map(|s| match Cli::try_parse_from(s) {
+            Ok(cli) => cli,
+            Err(e) => {
+                eprintln!(
+                    "the verb step `{}` is not a valid command line: {e}",
+                    s[1..].join(" ")
+                );
+                std::process::exit(shall::core::Exit::Failed.code());
+            }
+        })
+        .collect();
     if stands_down_inside_shall(&parsed.iter().map(|c| &c.command).collect::<Vec<_>>()) {
         return Ok(());
     }
@@ -1093,9 +1185,8 @@ pub(crate) async fn run_user_verb(steps: Vec<Vec<String>>) -> Result<()> {
         LockedRun::StandDown => return Ok(()),
     };
     let app = App::new(config).await?;
-    for step in &steps {
-        let cli = Cli::parse_from(step);
-        let outcome = dispatch(&app, &cli).await;
+    for cli in &parsed {
+        let outcome = dispatch(&app, cli).await;
         if outcome.is_err() {
             return finish(&app.config, outcome).await;
         }
@@ -1363,6 +1454,86 @@ mod alias_tests {
             .unwrap()
             .unwrap_err();
         assert!(err.contains("takes no arguments"), "{}", err);
+    }
+
+    // H7: a global flag on a step was parsed and then dropped — only the first step's copy
+    // reached the run's config, so `sync --dry-run` as step two ran for real.
+    #[test]
+    fn a_global_flag_on_a_step_is_refused_and_pointed_at_the_leading_form() {
+        let v = verbs(&[("refresh", &["check", "sync --dry-run"])]);
+        let err = plan_user_verb(&argv(&["shall", "refresh"]), &v, &builtins())
+            .unwrap()
+            .unwrap_err();
+        assert!(err.contains("--dry-run"), "{}", err);
+        assert!(err.contains("global flag"), "{}", err);
+        assert!(err.contains("`shall refresh`"), "{}", err);
+
+        // With leading flags, the suggestion carries them so the fix is copy-pasteable.
+        let err = plan_user_verb(
+            &argv(&["shall", "-c", "/c.toml", "refresh"]),
+            &v,
+            &builtins(),
+        )
+        .unwrap()
+        .unwrap_err();
+        assert!(err.contains("`shall -c /c.toml refresh`"), "{}", err);
+    }
+
+    #[test]
+    fn every_posture_spelling_is_refused_wherever_it_hides_on_a_step() {
+        for step in [
+            "sync --config=/x",
+            "sync -c /x",
+            "sync -vn",
+            "check -y",
+            "sync --keep-going",
+        ] {
+            let v = verbs(&[("r", &[step])]);
+            let err = plan_user_verb(&argv(&["shall", "r"]), &v, &builtins())
+                .unwrap()
+                .unwrap_err();
+            assert!(err.contains("global flag"), "{step}: {err}");
+        }
+    }
+
+    #[test]
+    fn a_subcommands_own_flag_still_works_on_a_step() {
+        // The spec's own example (`refresh = ["sync", "upgrade --all"]`) configures one
+        // command, not the run's posture; refusing it would be the fix eating the feature.
+        let v = verbs(&[("refresh", &["sync", "upgrade --all"])]);
+        let steps = plan_user_verb(&argv(&["shall", "refresh"]), &v, &builtins())
+            .unwrap()
+            .unwrap();
+        assert_eq!(steps[1], argv(&["shall", "upgrade", "--all"]));
+    }
+
+    #[test]
+    fn the_posture_table_covers_every_global_flag_clap_defines() {
+        let globals = global_posture_flags();
+        for a in <Cli as clap::CommandFactory>::command().get_arguments() {
+            if !a.is_global_set() {
+                continue;
+            }
+            if let Some(l) = a.get_long() {
+                assert!(globals.contains(&format!("--{l}")), "--{l} is missing");
+            }
+            if let Some(c) = a.get_short() {
+                assert!(globals.contains(&format!("-{c}")), "-{c} is missing");
+            }
+        }
+        // And nothing that is not global leaked in.
+        assert!(!globals.contains("--all"));
+        assert!(!globals.contains("--locked"));
+    }
+
+    #[test]
+    fn a_malformed_step_is_refused_by_name_instead_of_a_usage_exit() {
+        let v = verbs(&[("broken", &["sync --no-such-flag"])]);
+        let err = plan_user_verb(&argv(&["shall", "broken"]), &v, &builtins())
+            .unwrap()
+            .unwrap_err();
+        assert!(err.contains("not a valid command line"), "{}", err);
+        assert!(err.contains("--no-such-flag"), "{}", err);
     }
 
     #[test]
