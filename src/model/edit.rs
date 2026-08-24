@@ -263,7 +263,7 @@ impl<'a> Editor<'a> {
         // dry-run gate is a second lock on a door this method has already answered.
         crate::utils::file::persist(path, body)
             .map(|_| ())
-            .map_err(|e| io_error(path, &std::io::Error::new(std::io::ErrorKind::Other, e)))
+            .map_err(|e| io_error(path, &e))
     }
 
     /// Write `line` into `target`, and make sure something reaches it.
@@ -700,7 +700,7 @@ fn rewrite_backend_prefix(raw: &str, new_backend: &str) -> String {
     line
 }
 
-fn io_error(path: &std::path::Path, e: &std::io::Error) -> GrammarError {
+fn io_error(path: &std::path::Path, e: impl std::fmt::Display) -> GrammarError {
     GrammarError::new(
         Origin::new(path, 0),
         format!("could not write this file: {}", e),

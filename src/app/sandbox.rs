@@ -269,7 +269,8 @@ impl Sandbox {
 
         #[cfg(target_os = "linux")]
         {
-            return Ok(Self::wrap_linux(cmd, args, config)?);
+            let bare = Self::wrap_linux(cmd, args, config)?;
+            return Ok(Wrapped::bare(bare));
         }
 
         #[cfg(target_os = "macos")]

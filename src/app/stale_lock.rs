@@ -469,9 +469,14 @@ fn file_mtime(p: &Path) -> Option<std::time::SystemTime> {
 /// behaviour.
 #[cfg(target_os = "linux")]
 fn pid_recycled_since(pid: u32, since: Option<std::time::SystemTime>) -> bool {
-    let Some(since) = since else {
-        return false;
-    };
+    recycled_since_opt(pid, since).unwrap_or(false)
+}
+
+/// `None` is every unanswerable case — unreadable `/proc`, a comm field with no closing
+/// paren, a tick count that does not parse — and the caller reads it as "not recycled".
+#[cfg(target_os = "linux")]
+fn recycled_since_opt(pid: u32, since: Option<std::time::SystemTime>) -> Option<bool> {
+    let since = since?;
     let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
     // Everything after the comm field — comm may contain spaces and parens of its own.
     let after_comm = stat.rfind(')').map(|i| &stat[i + 1..])?;
@@ -489,7 +494,7 @@ fn pid_recycled_since(pid: u32, since: Option<std::time::SystemTime>) -> bool {
     let boot =
         std::time::SystemTime::now().checked_sub(std::time::Duration::from_secs_f64(uptime))?;
     let started_at = boot.checked_add(started_after_boot)?;
-    started_at > since
+    Some(started_at > since)
 }
 
 #[cfg(not(target_os = "linux"))]

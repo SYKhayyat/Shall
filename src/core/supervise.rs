@@ -86,8 +86,8 @@ impl Stopping {
                 // of this type leads (they are spawned with `process_group(0)`); the direct-pid
                 // fallback covers one spawned before that was in force.
                 let pgid = -(pid as libc::pid_t);
-                unsafe { libc::kill(pgid, libc::SIGTERM) == 0 }
-                || unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) == 0 }
+                let group = unsafe { libc::kill(pgid, libc::SIGTERM) == 0 };
+                group || unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) == 0 }
             }
             None => false,
         }
@@ -100,8 +100,8 @@ impl Stopping {
 /// cannot yet have been reused.
 #[cfg(unix)]
 fn signal_tree(pid: libc::pid_t, sig: i32) -> bool {
-    unsafe { libc::kill(-pid, sig) == 0 }
-    || unsafe { libc::kill(pid, sig) == 0 }
+    let group = unsafe { libc::kill(-pid, sig) == 0 };
+    group || unsafe { libc::kill(pid, sig) == 0 }
 }
 
 /// Is this pid still something on the machine? Best-effort liveness for a watcher that does not
