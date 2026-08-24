@@ -231,6 +231,17 @@ impl Installable for WebInstallable {
 
             info!("Web: Downloading resource: {}", spec.name);
             let response = client.get(&spec.name).send().await.map_err(Error::from)?;
+            // **The status is part of the download.** A 404 body is bytes like any other:
+            // written, hashed, and (under `@unverified`) deployed — poisoning the ledger so
+            // the day the real file returns reads as "same URL, different bytes". The
+            // appimage half of this family has checked first since it was written.
+            if !response.status().is_success() {
+                return Err(Error::Other(format!(
+                    "Download failed for {}: {}",
+                    spec.name,
+                    response.status()
+                )));
+            }
 
             let tmp_dir = tempfile::tempdir().map_err(Error::from)?;
             let dl_path = tmp_dir.path().join("downloaded_file");

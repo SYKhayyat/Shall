@@ -953,6 +953,14 @@ impl Drop for MockExecutor {
     }
 }
 
+/// What one read-and-retry pass produced. `Answerless` carries the classified error rather
+/// than having been returned, so the caller — and only the caller — decides whether "ran,
+/// failed, said nothing" is a failure or a declared silence.
+enum ReadOutcome {
+    Output(String),
+    Answerless(Error),
+}
+
 /// **Cloning shares the run, it does not fork it.** Every field below is an `Arc`, so a clone
 /// is another handle on one invocation's execution layer, dry-run filesystem, per-manager lock
 /// map and installed-listing memo — which is what lets ~48 backends each hold one and still
@@ -1223,6 +1231,38 @@ impl CommandExecutor {
     /// measured case is a cold-start collision that a warm winget does not reproduce, so the
     /// second attempt is usually the entire fix.
     pub async fn run_output(&self, cmd: &str, args: &[&str], sudo: bool) -> Result<String> {
+        match self.read_with_retry(cmd, args, sudo).await? {
+            ReadOutcome::Output(s) => Ok(s),
+            ReadOutcome::Answerless(e) => Err(e),
+        }
+    }
+
+    /// [`Self::run_output`] with "the manager ran, failed, and said nothing" delivered as
+    /// `Ok(None)` instead of an error — for the probes whose row declares that silence *is*
+    /// the answer (`silence_is_none`).
+    ///
+    /// **The boundary is typed by construction, not matched out of prose.** The idle-timeout
+    /// kill errors inside `read_with_retry` exactly as it does for `run_output`, so a wedged
+    /// query killed at its bound arrives here as `Err` and propagates — it used to be
+    /// indistinguishable from the answerless case because both said "no output", and a probe
+    /// that timed out read as "zero updates", exit 0.
+    pub async fn run_output_maybe_silent(
+        &self,
+        cmd: &str,
+        args: &[&str],
+        sudo: bool,
+    ) -> Result<Option<String>> {
+        match self.read_with_retry(cmd, args, sudo).await? {
+            ReadOutcome::Output(s) => Ok(Some(s)),
+            ReadOutcome::Answerless(_) => Ok(None),
+        }
+    }
+
+    /// The one read-and-retry loop both output primitives share. An answerless read — non-zero
+    /// exit, both streams empty — retries while transient and then becomes
+    /// [`ReadOutcome::Answerless`], carrying the classified error for whoever decides whether
+    /// that means failure or silence.
+    async fn read_with_retry(&self, cmd: &str, args: &[&str], sudo: bool) -> Result<ReadOutcome> {
         let attempts = read_retry_attempts();
         let mut backoff = std::time::Duration::from_millis(200);
         for attempt in 1..=attempts {
@@ -1242,11 +1282,11 @@ impl CommandExecutor {
             let said_nothing = stdout.trim().is_empty()
                 && String::from_utf8_lossy(&output.stderr).trim().is_empty();
             if benign || !said_nothing {
-                return Ok(stdout);
+                return Ok(ReadOutcome::Output(stdout));
             }
             let err = self.answerless_read(cmd, args, &output);
             if attempt == attempts || err.retryability() != Retryability::Transient {
-                return Err(err);
+                return Ok(ReadOutcome::Answerless(err));
             }
             debug!(
                 "`{cmd}` produced no answer and the failure is transient; \

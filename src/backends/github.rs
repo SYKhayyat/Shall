@@ -74,7 +74,9 @@ pub struct GithubBackendCore {
     /// theirs inside the function that downloads, and this was the one that did not (AU3's
     /// family). A backend's `new` runs for every subcommand; a TLS-configured HTTP client is
     /// 380µs of work for a run that asks GitHub nothing.
-    client: std::sync::OnceLock<reqwest::Client>,
+    /// Built once, and the failure is remembered as the answer: a policy-less fallback client
+    /// would quietly undo SEC2 on every later request.
+    client: std::sync::OnceLock<crate::core::Result<reqwest::Client>>,
     pub install_dir: PathBuf,
     /// Where the executable is deployed — `[bin_dir]`, the one Shall's shims use and the one a
     /// sandboxed config moves. Built here from `dirs::home_dir()` until 2026-07-29, which put a
@@ -232,17 +234,42 @@ impl GithubBackendCore {
 
     /// No downgrade across redirects (SEC2). GitHub asset URLs redirect to a CDN, and the hop is
     /// where a promised HTTPS download can stop being one.
-    fn client(&self) -> &reqwest::Client {
-        self.client.get_or_init(|| {
-            crate::core::download::client(false, "shall-manager")
-                .unwrap_or_else(|_| reqwest::Client::new())
-        })
+    ///
+    /// **A client that cannot be built with that policy is an error, not a fallback.** This
+    /// used to answer failure with `reqwest::Client::new()` — the one constructor whose
+    /// redirects follow anywhere — so SEC2's whole protection silently vanished whenever
+    /// client construction failed, on every request after it.
+    fn client(&self) -> Result<&reqwest::Client> {
+        self.client
+            .get_or_init(|| crate::core::download::client(false, "shall-manager"))
+            .as_ref()
+            .map_err(|e| Error::Other(format!("could not build the HTTPS download client: {e}")))
+    }
+
+    /// Whether this URL names a host GitHub itself serves — the only place the token may go.
+    ///
+    /// **Asset URLs arrive verbatim from release JSON.** Attaching the bearer to whatever
+    /// host they name made one hostile repo's release a credential collector: the request was
+    /// first-party from Shall's process, so reqwest's cross-host stripping never applied.
+    fn token_belongs_here(url: &str) -> bool {
+        matches!(
+            reqwest::Url::parse(url)
+                .ok()
+                .and_then(|u| u.host_str().map(|h| h.to_ascii_lowercase())),
+            Some(ref h) if h == "api.github.com" || h == "github.com" || h == "www.github.com"
+        )
     }
 
     async fn send(&self, url: &str) -> Result<reqwest::Response> {
-        let mut request_builder = self.client().get(url).header("User-Agent", "shall-manager");
+        let mut request_builder = self
+            .client()?
+            .get(url)
+            .header("User-Agent", "shall-manager");
         if let Some(token) = &self.github_token {
-            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+            if Self::token_belongs_here(url) {
+                request_builder =
+                    request_builder.header("Authorization", format!("Bearer {}", token));
+            }
         }
         request_builder.send().await.map_err(Error::from)
     }
@@ -729,6 +756,16 @@ impl Installable for GithubInstallable {
             let mut downloaded: Vec<(&artifact::Pick, PathBuf, String)> = Vec::new();
             for pick in &selection.picks {
                 let response = self.core.github_get(&pick.asset.url).await?;
+                // Status before bytes, same as `web:`: a 404 body hashed under the asset's
+                // name poisons this ledger against the real release for ever.
+                if !response.status().is_success() {
+                    return Err(Error::Other(format!(
+                        "Download failed for {} asset {}: {}",
+                        spec.name,
+                        pick.asset.name,
+                        response.status()
+                    )));
+                }
                 let dl_path = tmp_dir.path().join(&pick.asset.name);
                 crate::core::download::write_capped(response, &dl_path, &pick.asset.name).await?;
 
@@ -1185,6 +1222,35 @@ pub fn register(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // H5: the token rides only on hosts GitHub itself serves. Asset URLs come verbatim from
+    // release JSON, so the allowlist is what stands between a hostile release and a machine's
+    // credential — a request Shall itself makes is first-party, and reqwest's cross-host
+    // header stripping never applies to it.
+    #[test]
+    fn the_token_goes_only_to_hosts_github_serves() {
+        for good in [
+            "https://api.github.com/repos/x/y/releases/latest",
+            "https://github.com/owner/repo/releases/download/v1/a.zip",
+            "https://www.github.com/owner/repo/releases/download/v1/a.zip",
+        ] {
+            assert!(
+                GithubBackendCore::token_belongs_here(good),
+                "GitHub's own host must still be tokened: {good}"
+            );
+        }
+        for bad in [
+            "https://objects.githubusercontent.com/secrets",
+            "https://evil.example.com/payload",
+            "https://api.github.com.evil.example.com/repos/x/y",
+            "not a url at all",
+        ] {
+            assert!(
+                !GithubBackendCore::token_belongs_here(bad),
+                "the bearer must not ride to {bad}"
+            );
+        }
+    }
 
     // S26. The old handler slept until the reset — up to an hour, holding the data lock —
     // and then returned the same 403 it had slept on, so the wait bought nothing.

