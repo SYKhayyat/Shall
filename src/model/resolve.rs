@@ -835,8 +835,7 @@ impl<'a> Resolver<'a> {
                 return Err(GrammarError::new(
                     origin.clone(),
                     cycle::describe("profiles' set math refers to itself", &hops, atom),
-                )
-                .into());
+                ));
             }
             expr_seen.push((atom.to_string(), origin.clone()));
             let outcome = profiles
