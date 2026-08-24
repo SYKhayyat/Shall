@@ -121,22 +121,33 @@ fn command_output_within(
         // Drained on their own threads. A child that fills its output pipe stops writing, and a
         // waiter that is not reading would then be waiting on a child that is waiting on it —
         // a deadlock the timeout would report as a hang the script did not cause.
+        //
+        // Each thread hands its buffer to a channel when its `read_to_end` ends — which is at
+        // pipe EOF, and EOF needs EVERY write-end closed, including any a leaked grandchild
+        // holds. That is why the joins below are bounded: the tokio door measured this exact
+        // shape ("a 20 s bound, a 64 s wall") and fixed it; this door hung forever past its own
+        // deadline on one background child.
+        let (tx, rx_out) = std::sync::mpsc::channel::<Vec<u8>>();
+        let (tx_err, rx_err) = std::sync::mpsc::channel::<Vec<u8>>();
         let mut out = child.stdout.take();
         let mut err = child.stderr.take();
-        let out_thread = std::thread::spawn(move || {
+        std::thread::spawn(move || {
             let mut buf = Vec::new();
             if let Some(pipe) = out.as_mut() {
                 let _ = pipe.read_to_end(&mut buf);
             }
-            buf
+            let _ = tx.send(buf);
         });
-        let err_thread = std::thread::spawn(move || {
+        std::thread::spawn(move || {
             let mut buf = Vec::new();
             if let Some(pipe) = err.as_mut() {
                 let _ = pipe.read_to_end(&mut buf);
             }
-            buf
+            let _ = tx_err.send(buf);
         });
+
+        use std::sync::mpsc::RecvTimeoutError;
+        const DRAIN_GRACE: std::time::Duration = std::time::Duration::from_secs(5);
 
         let deadline = std::time::Instant::now() + limit;
         let status = loop {
@@ -163,10 +174,31 @@ fn command_output_within(
                 None => std::thread::sleep(std::time::Duration::from_millis(25)),
             }
         };
+        // The child is done; the READERS may not be. Wait a short grace for the buffers, and
+        // answer honestly if the pipes never close — the output is incomplete and pretending
+        // otherwise would feed half an answer to whoever parses it.
+        let drain =
+            |rx: &std::sync::mpsc::Receiver<Vec<u8>>, stream: &str| -> std::io::Result<Vec<u8>> {
+                match rx.recv_timeout(DRAIN_GRACE) {
+                    Ok(buf) => Ok(buf),
+                    Err(RecvTimeoutError::Timeout) => Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        format!(
+                            "{what} exited, but its {stream} pipe never closed within {}s — a \
+                         background process is holding it. Its output cannot be trusted and \
+                         is discarded.",
+                            DRAIN_GRACE.as_secs()
+                        ),
+                    )),
+                    Err(RecvTimeoutError::Disconnected) => Ok(Vec::new()),
+                }
+            };
+        let stdout = drain(&rx_out, "stdout")?;
+        let stderr = drain(&rx_err, "stderr")?;
         Ok(std::process::Output {
             status,
-            stdout: out_thread.join().unwrap_or_default(),
-            stderr: err_thread.join().unwrap_or_default(),
+            stdout,
+            stderr,
         })
     })
 }

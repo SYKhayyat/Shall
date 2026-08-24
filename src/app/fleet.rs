@@ -258,7 +258,7 @@ pub async fn fleet(config: &Config, hosts: &[String], do_sync: bool, do_apply: b
                 .await;
 
         let mut ok = 0usize;
-        let mut failed = 0usize;
+        let mut failed_hosts: Vec<String> = Vec::new();
         for (host, outcome) in outcomes {
             match outcome {
                 Ok(()) => {
@@ -267,11 +267,25 @@ pub async fn fleet(config: &Config, hosts: &[String], do_sync: bool, do_apply: b
                 }
                 Err(e) => {
                     warn!("sync failed on {}: {}", host, e);
-                    failed += 1;
+                    failed_hosts.push(host);
                 }
             }
         }
-        println!("\nApplied to {} host(s), {} failed.", ok, failed);
+        println!(
+            "\nApplied to {} host(s), {} failed.",
+            ok,
+            failed_hosts.len()
+        );
+        // **The exit code is the interface here.** A fleet rollout's wrapper reads nothing
+        // but the code, and `--apply` reporting "3 failed" at exit 0 was green over a fleet
+        // where every host failed — the same lie `--keep-going` was caught telling (B1).
+        if !failed_hosts.is_empty() {
+            return Err(crate::core::Error::Other(format!(
+                "{} host(s) failed to sync: {}",
+                failed_hosts.len(),
+                failed_hosts.join(", ")
+            )));
+        }
     }
     Ok(())
 }

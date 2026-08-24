@@ -3,6 +3,27 @@ use std::path::{Path, PathBuf};
 use tokio::fs;
 use tracing::{debug, info};
 
+/// Bytes present in every Shall binary, past and future, precisely so a deployed copy can be
+/// recognised as Shall's whatever version it is.
+///
+/// Referenced through `std::hint::black_box` in [`bytes_contain_marker`] — the reference is
+/// what keeps the constant in the binary's read-only data across builds and optimizations.
+pub const SHIM_MARKER: &[u8] = b"SHALL::DEPLOYED-SHIM::9f2c41e7::v1";
+
+/// Whether the file at `path` carries [`SHIM_MARKER`].
+async fn bytes_contain_marker(path: &Path) -> bool {
+    // The black box is load-bearing for future binaries; today's binary also contains the
+    // marker because this very function names it.
+    std::hint::black_box(SHIM_MARKER);
+    match fs::read(path).await {
+        Ok(bytes) => {
+            bytes.len() >= SHIM_MARKER.len()
+                && bytes.windows(SHIM_MARKER.len()).any(|w| w == SHIM_MARKER)
+        }
+        Err(_) => false,
+    }
+}
+
 /// A shim is the shall binary itself, deployed under the target's name: on startup shall
 /// reads `current_exe()`'s filename and re-dispatches when it is not its own
 /// (`attempt_shim_hijack`). The shim's NAME is therefore the entire mechanism.
@@ -23,9 +44,14 @@ impl ShimManager {
         Ok(Self { bin_dir })
     }
 
-    /// Whether `path` is a shim Shall deployed, i.e. the shall binary under another name:
-    /// the same file as the running binary (the hard-link path) or a byte-identical copy
-    /// of it (the cross-filesystem fallback).
+    /// Whether `path` is a shim Shall deployed, i.e. the shall binary under another name.
+    ///
+    /// **Identified by a marker baked into the binary, not by byte-equality with the running
+    /// exe.** Byte-equality answered "is this THE CURRENT shall?" — so after any self-upgrade,
+    /// every existing shim stopped matching, `real_program` resolved names TO the stale shim,
+    /// skipped it, fell back to the bare name, and the OS resolved that back to the shim: an
+    /// unbounded shall-spawning chain whenever the bin dir was on PATH. The marker is stable
+    /// across versions, which is the property "was this deployed by Shall?" needs.
     ///
     /// `bin_dir` is `~/.local/bin`, which Shall shares with the user and with every other
     /// tool that installs there. Without this test, removal deletes by NAME alone, so a
@@ -34,6 +60,9 @@ impl ShimManager {
     /// `pub(crate)` for one caller beyond this file: the runner has to know a shim when it sees
     /// one on `PATH`, because running a shim is how a shim re-enters Shall for ever.
     pub(crate) async fn is_deployed_shim(path: &Path) -> bool {
+        if bytes_contain_marker(path).await {
+            return true;
+        }
         let Ok(current_exe) = std::env::current_exe() else {
             return false;
         };

@@ -4,7 +4,7 @@
 // the argv come straight from TOML, and the parser is a declarative `ParserSpec` (JSON /
 // columns / regex / lines) interpreted at runtime by `ConfiguredParser`.
 //
-// Definitions live in `adapters/backends.toml` in the CONFIG REPO (7a/U1, U10) — never in the
+// Definitions live in `adapters/backends.toml` in the CONFIG REPO (7a/U1, U10) â€” never in the
 // machine-local settings directory. A definition that cannot travel is a repo that fails on
 // every machine but the one where somebody once hand-wrote the file, which contradicts the
 // model's central claim. Its siblings in that folder are `settings.toml` (how to drive a
@@ -30,7 +30,7 @@
 //     [backend.machine_list_parser]       # REQUIRED with machine_list_args
 //     format = "json"
 //
-// Custom backends are registered LAST, and a name already in use is skipped with a warning —
+// Custom backends are registered LAST, and a name already in use is skipped with a warning â€”
 // so a stray config cannot hijack `apt` or `brew` by being named `apt` or `brew`.
 //
 // A definition may take the name anyway, by saying so: `overrides = true` (Q6). That exists
@@ -39,7 +39,7 @@
 // one lucky name: the sentence in the definition, and the II.12 approval of the file it is in.
 //
 // **The file is argv a shared repo can execute, so it is II.12's supply-chain surface and
-// goes through the hook ledger** — the same approval a hook needs, not a second mechanism.
+// goes through the hook ledger** â€” the same approval a hook needs, not a second mechanism.
 // An unapproved or changed file registers nothing and says so; `shall lock` approves it.
 
 use crate::backends::generic::{
@@ -87,7 +87,7 @@ pub enum ParserSpec {
         skip_prefixes: Vec<String>,
         /// A double-quoted run is one column, however much whitespace is inside it.
         ///
-        /// Windows managers put spaces in versions — `Microsoft.PowerShell "7.3.4 (x64)"` — and
+        /// Windows managers put spaces in versions â€” `Microsoft.PowerShell "7.3.4 (x64)"` â€” and
         /// splitting that on whitespace tears one column into three, so `version_col` lands on
         /// `7.3.4` and the architecture becomes a column of its own. Ignored when `delimiter`
         /// is set, which already says where the boundaries are.
@@ -126,7 +126,7 @@ impl ParserSpec {
     /// Fallible for the same reason the built-in parsers are, and with more at stake: a custom
     /// backend's spec is written by someone who has never seen this code, against a manager
     /// nobody here has run. **Every one of the four arms had a way of answering *"I could not
-    /// read this"* with *"the machine is empty"*** — a `serde_json` call ending in
+    /// read this"* with *"the machine is empty"*** â€” a `serde_json` call ending in
     /// `unwrap_or_default()`, an `array_path` that navigated to nothing, a JSON node that was
     /// neither array nor object, and a regex that would not compile. The last one is the sharpest:
     /// a typo in a user's pattern logged a warning nobody reads and reported a bare machine,
@@ -230,7 +230,20 @@ impl ParserSpec {
                         output,
                     )
                 } else if let Some(obj) = node.as_object() {
-                    // Object shape: keys are the package names.
+                    // Object shape: keys are the package names. **But an object whose values
+                    // are not objects is a manager answering something else** â€”
+                    // `{"error":"unauthorized"}` parses here as a package named `error`, and
+                    // `{}` as an empty machine, which turned "unreadable" into "install
+                    // everything declared". A package entry carries at least one field; the
+                    // error/notice shapes carry strings.
+                    let plausible = obj.values().any(|v| v.is_object() || v.is_array());
+                    if !plausible {
+                        return unreadable(
+                            "JSON object whose values are not package entries (an error or \
+                             notice, perhaps?)"
+                                .into(),
+                        );
+                    }
                     Ok(obj.keys().map(|k| Package::new(k, backend)).collect())
                 } else {
                     unreadable("JSON that is neither an array nor an object".into())
@@ -326,7 +339,7 @@ impl OutputParser for ConfiguredParser {
     fn parse_installed(&self, output: &str) -> crate::parsers::ParseResult {
         self.installed.parse(output, &self.backend)
     }
-    /// A search that reads nothing is a search with no results — a fact the user asked for and
+    /// A search that reads nothing is a search with no results â€” a fact the user asked for and
     /// can see. Only the installed listing above is one the planner acts on unseen.
     fn parse_search(&self, output: &str) -> Vec<Package> {
         self.search.parse(output, &self.backend).unwrap_or_default()
@@ -338,7 +351,7 @@ impl OutputParser for ConfiguredParser {
 ///
 /// The three placements the runtime has, all three reachable from a definition. `after` was
 /// called `flag` and was the only one of the two that existed, which left a custom backend
-/// unable to say either of the things `cargo` and `asdf` say — a version *before* the name,
+/// unable to say either of the things `cargo` and `asdf` say â€” a version *before* the name,
 /// and a manager that refuses to install without one.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
@@ -372,13 +385,13 @@ impl From<VersionPinDef> for VersionPin {
 /// One `[[backend]]` entry in `adapters/backends.toml`.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct CustomBackendDef {
-    /// The prefix a line is written with — `firewall:22/tcp`.
+    /// The prefix a line is written with â€” `firewall:22/tcp`.
     pub name: String,
     /// The program actually run. Absent means the name is the command, which is what every
     /// definition said before XIII.12 split the two.
     pub binary: Option<String>,
     /// The program that removes, when it is a separate binary from `binary` (OpenBSD installs
-    /// with `pkg_add` and removes with `pkg_delete`). Absent ⇒ removal uses `binary`.
+    /// with `pkg_add` and removes with `pkg_delete`). Absent â‡’ removal uses `binary`.
     pub remove_binary: Option<String>,
     #[serde(default)]
     pub install_args: Vec<String>,
@@ -420,7 +433,7 @@ pub struct CustomBackendDef {
     pub outdated_reads: Option<String>,
     /// A reader for `machine_list_args`.
     pub machine_list_reads: Option<String>,
-    /// A reader for `essential_args` — a listing of bare names the removal guard must never
+    /// A reader for `essential_args` â€” a listing of bare names the removal guard must never
     /// touch.
     pub essential_reads: Option<String>,
     /// A reader for `depends_args`. Absent falls back to the labelled-report reader every
@@ -438,7 +451,7 @@ pub struct CustomBackendDef {
     /// Derived from `upgrade_args` being non-empty, and overridable because the derivation is
     /// wrong twice: `pip install --upgrade` takes package names and fails without them, and
     /// `bun upgrade` upgrades the bun runtime rather than the packages bun installed. Both
-    /// have an `upgrade_args` and neither has an upgrade-all — `S58` is the entry recording
+    /// have an `upgrade_args` and neither has an upgrade-all â€” `S58` is the entry recording
     /// what registering them anyway would have done.
     pub upgrades_all: Option<bool>,
 
@@ -451,14 +464,14 @@ pub struct CustomBackendDef {
     pub repo_list_shape: Option<RepoListShapeDef>,
     /// Where `search` gets its answers: the manager's own command, or a registry over HTTP.
     pub search_source: Option<SearchSourceDef>,
-    /// This manager's own names carry a qualifier the user need not type — Portage's
+    /// This manager's own names carry a qualifier the user need not type â€” Portage's
     /// `app-misc/jq` against a declaration reading `jq` (`J8`). Absent means `false`, which is
     /// the exact-name rule every other manager wants.
     pub qualified_names: Option<bool>,
     /// Programs that must ALSO be on `PATH` before this backend counts as available.
     ///
     /// For a manager that is a plugin of another: `kubectl` alone is not krew, and a host with
-    /// kubectl and no krew reported READY and then failed every command — including
+    /// kubectl and no krew reported READY and then failed every command â€” including
     /// `shall update`, which refreshes every backend at once.
     pub extra_probes: Option<Vec<String>>,
     /// Paths `shall info` reports, each read out of the manager rather than guessed.
@@ -468,7 +481,7 @@ pub struct CustomBackendDef {
     /// Bytes this manager actually printed, and what the row's reader must make of them.
     pub fixture: Option<FixtureDef>,
 
-    /// Take the name even if something already holds it — a built-in included (Q6).
+    /// Take the name even if something already holds it â€” a built-in included (Q6).
     ///
     /// Default `false`, and that default is the security property: a definition cannot take
     /// over `apt` by being named `apt`. Overriding is a sentence someone had to write, and
@@ -478,17 +491,17 @@ pub struct CustomBackendDef {
     pub overrides: bool,
 
     // --- U2: the fields that make a custom backend a first-class peer of a built-in. ---
-    // Every one is optional, and absent means *this backend cannot answer that* — never *the
+    // Every one is optional, and absent means *this backend cannot answer that* â€” never *the
     // answer is none*. A backend that cannot list its catalogue is not one whose catalogue is
     // empty; a `re:` against it is refused, not expanded to nothing. That distinction is the
     // whole point: "not configured" and "none" are different answers, and conflating them is
     // how a custom backend silently under-reports.
-    /// Config-destroying removal (Debian's `purge`). Absent ⇒ `--purge` on this backend is
+    /// Config-destroying removal (Debian's `purge`). Absent â‡’ `--purge` on this backend is
     /// refused rather than quietly doing an ordinary removal.
     pub purge_args: Option<Vec<String>>,
     /// Args that report the packages the OS treats as essential, for the removal guard.
     pub essential_args: Option<Vec<String>>,
-    /// Args that print every installable name, one per line — what `re:` expands against.
+    /// Args that print every installable name, one per line â€” what `re:` expands against.
     pub enumerate_args: Option<Vec<String>>,
     /// Binary for `enumerate_args`, when the catalogue lives in a separate program.
     pub enumerate_binary: Option<String>,
@@ -511,23 +524,23 @@ pub struct CustomBackendDef {
     /// Querying a package's dependencies (reverse-dependency reports, `why`). `{name}` is the
     /// package, and it must be an argument of its own so the terminator can precede it.
     pub depends_args: Option<Vec<String>>,
-    /// Emptying this manager's download cache, for `shall clean-cache`. Absent ⇒ it has none,
+    /// Emptying this manager's download cache, for `shall clean-cache`. Absent â‡’ it has none,
     /// which is what the verb reports rather than pretending it cleaned something.
     pub clean_cache_args: Option<Vec<String>>,
     /// Binary for `clean_cache_args`, when the cache is emptied by a different program than
     /// the one that installs (Void's is `xbps-remove`).
     pub clean_cache_binary: Option<String>,
     /// A dry run of the manager's own orphan verb, so `sync` can remove what it *would*
-    /// remove. Absent ⇒ this backend cannot say, and a removal it cannot enumerate it does
+    /// remove. Absent â‡’ this backend cannot say, and a removal it cannot enumerate it does
     /// not make.
     pub orphan_dry_run: Option<OrphanDryRunDef>,
     /// How this backend reports the *manually* installed set, so `adopt` takes what the user
-    /// chose and not the dependency graph. Absent ⇒ adoption skips this backend (the safe
+    /// chose and not the dependency graph. Absent â‡’ adoption skips this backend (the safe
     /// default that every custom backend had before U2).
     pub manual: Option<ManualListingDef>,
 
-    /// The one command that names everything with an update available (`Q44`). Absent ⇒ this
-    /// backend cannot say, and `list --outdated` asks it about each package separately — which
+    /// The one command that names everything with an update available (`Q44`). Absent â‡’ this
+    /// backend cannot say, and `list --outdated` asks it about each package separately â€” which
     /// is the slow answer, not a wrong one.
     ///
     /// **Not "nothing is outdated".** Same distinction as every field above it: a manager that
@@ -544,7 +557,7 @@ pub struct CustomBackendDef {
 
     /// A machine-readable listing to prefer over `list_args`, where this manager has one and
     /// might be too old to (`Q43`). It is *asked for*, and a manager that refuses is read from
-    /// `list_args` instead — so naming a flag a user's version lacks costs one failed call, not
+    /// `list_args` instead â€” so naming a flag a user's version lacks costs one failed call, not
     /// an empty machine.
     pub machine_list_args: Option<Vec<String>>,
     /// How to read `machine_list_args` output. Required alongside it: the whole point of the
@@ -567,8 +580,8 @@ impl crate::core::adapter::AdapterRow for CustomBackendDef {
     }
 
     // `why_unusable` is deliberately the default. What makes a definition unusable is already
-    // decided by `register_custom_backends` — an invalid name, a binary that is not a command,
-    // a collision without `overrides` — and each of those refusals names the field it is
+    // decided by `register_custom_backends` â€” an invalid name, a binary that is not a command,
+    // a collision without `overrides` â€” and each of those refusals names the field it is
     // about. A second copy here would be the two-of-everything this table exists to end.
 }
 
@@ -576,8 +589,8 @@ impl crate::core::adapter::AdapterRow for CustomBackendDef {
 ///
 /// **A reader shared by eight managers was tested against one manager's output.**
 /// `ws_name_version` serves cabal, spack, pub, krew, helm, guix, luarocks and uv, and the only
-/// input it had ever been run on in this tree was seven words typed by hand — `NAME VERSION` /
-/// `foo 1.2.3` / `bar 0.1.0 some-desc` — labelled `helm`. Seven of the eight were reading their
+/// input it had ever been run on in this tree was seven words typed by hand â€” `NAME VERSION` /
+/// `foo 1.2.3` / `bar 0.1.0 some-desc` â€” labelled `helm`. Seven of the eight were reading their
 /// machine through a parser nobody had shown their machine to.
 ///
 /// A shape is a claim about a tool, and the only thing that settles it is the tool's own bytes.
@@ -587,20 +600,20 @@ impl crate::core::adapter::AdapterRow for CustomBackendDef {
 /// proves nothing, so each says where it came from and the gate counts the ones that admit to
 /// being unverified. That count is a ratchet: it may fall, never rise.
 /// **Unknown keys are refused here and nowhere else in this file.** `[backend.fixture]` is a
-/// table header, so every key written after it belongs to the fixture — and a `searches` or a
+/// table header, so every key written after it belongs to the fixture â€” and a `searches` or a
 /// `version_pin` that followed the block was silently accepted as a fixture field and silently
 /// lost from the row. That is a backend quietly losing a capability because of where a blank
 /// line fell.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FixtureDef {
-    /// Where the bytes came from — the image and command that produced them, or `UNVERIFIED:`
+    /// Where the bytes came from â€” the image and command that produced them, or `UNVERIFIED:`
     /// and what they were written from instead.
     pub source: String,
     /// Stdout of `binary list_args`, verbatim.
     pub list: Option<String>,
     /// What the row's installed reader must produce from `list`: `name` or `name@version`, in
-    /// order. An empty list means the fixture is an *empty listing* — a legitimate answer, and
+    /// order. An empty list means the fixture is an *empty listing* â€” a legitimate answer, and
     /// one the reader must not report as unreadable.
     #[serde(default)]
     pub expect: Vec<String>,
@@ -673,7 +686,7 @@ impl From<RepoListShapeDef> for RepoListing {
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum SearchSourceDef {
-    /// PyPI's JSON API — exact-name resolution, because `pip search` was withdrawn upstream.
+    /// PyPI's JSON API â€” exact-name resolution, because `pip search` was withdrawn upstream.
     ///
     /// Spelled out, because `rename_all = "snake_case"` would make this `py_pi`, which is not
     /// what anybody would type.
@@ -703,7 +716,7 @@ pub struct OrphanDryRunDef {
     #[serde(default)]
     pub args: Vec<String>,
     /// The line prefix that marks a would-be-removed package in the dry-run output
-    /// (`apt-get autoremove --dry-run` prints `Remv libfoo …`).
+    /// (`apt-get autoremove --dry-run` prints `Remv libfoo â€¦`).
     pub removes_line_prefix: String,
 }
 
@@ -775,8 +788,8 @@ struct CustomBackendsFile {
 /// `$PATH`, or a path to an executable.
 ///
 /// **A path is allowed (U16, ruled 2026-07-24).** A prefix that runs `/opt/vendor/thing` is
-/// more useful than one confined to `$PATH`, and the cost — a definition that only works on the
-/// machine with that path — is caught where it lands: `check health` reports a custom backend
+/// more useful than one confined to `$PATH`, and the cost â€” a definition that only works on the
+/// machine with that path â€” is caught where it lands: `check health` reports a custom backend
 /// whose binary is missing as a named diagnosis, not an unknown-backend error three layers
 /// away. Whitespace and emptiness are still refused, because those are a malformed value rather
 /// than a path.
@@ -786,7 +799,7 @@ fn is_valid_binary(binary: &str) -> bool {
 
 /// Expand a leading `~` in a `binary` path to the user's home directory.
 ///
-/// `which::which` — the availability check — does not expand `~`, so a `binary = "~/bin/tool"`
+/// `which::which` â€” the availability check â€” does not expand `~`, so a `binary = "~/bin/tool"`
 /// would read as a literal `~` directory and never be found. Expanded here, once, at the seam
 /// where the definition becomes a runnable command. A `~` anywhere but the start is left alone:
 /// only a leading one is the home-directory shorthand.
@@ -816,7 +829,7 @@ fn is_valid_backend_name(name: &str) -> bool {
 
 /// Loads and registers the config repo's custom backends. Never fails the program: a missing
 /// file is normal, and a malformed or unapproved one is reported and skipped so the built-in
-/// backends still come up — including `shall lock`, which is how an unapproved file is fixed.
+/// backends still come up â€” including `shall lock`, which is how an unapproved file is fixed.
 pub fn load_default_custom_backends(
     reg: &mut BackendRegistry,
     exec: &CommandExecutor,
@@ -865,8 +878,8 @@ pub fn load_custom_backends_from(
 
 /// An `adapters/` file's contents, or `None` when there is none or it is not approved.
 ///
-/// Every reader of every adapter file goes through here — backends, `setting:` stores (K17),
-/// bootstrap (7c) — so there is one approval, one refusal message, and no way to add a fourth
+/// Every reader of every adapter file goes through here â€” backends, `setting:` stores (K17),
+/// bootstrap (7c) â€” so there is one approval, one refusal message, and no way to add a fourth
 /// kind of definition that quietly skips the check.
 pub fn read_approved_definitions(path: &Path, locks_dir: &Path) -> Option<String> {
     let content = match std::fs::read_to_string(path) {
@@ -893,7 +906,7 @@ fn unapproved(path: &Path, content: &str, locks_dir: &Path) -> Option<String> {
 
 /// The backends Shall ships with, as rows in the table a user adds a row to.
 ///
-/// **An adapter mechanism the built-ins bypass is one nobody has tested** — `setting_stores.toml`
+/// **An adapter mechanism the built-ins bypass is one nobody has tested** â€” `setting_stores.toml`
 /// states that in its own header, and the one table with sixty rows was the one bypassing it.
 /// These rows go through the same deserialiser, the same [`build_capabilities`], the same
 /// capability derivation and the same named readers as anything in a user's
@@ -912,7 +925,7 @@ pub fn builtin_rows() -> Vec<CustomBackendDef> {
 /// Registers every shipped row this OS runs.
 ///
 /// The OS gate is the row's own `os =`, read through [`AdapterRow`] like every other table's,
-/// rather than `cfg!(target_os = …)` around the call — so a Windows row is *visible* to a Linux
+/// rather than `cfg!(target_os = â€¦)` around the call â€” so a Windows row is *visible* to a Linux
 /// build and can be asserted there. Four copies of this filter read `std::env::consts::OS`
 /// directly, which is why the trait takes the OS as a parameter.
 pub fn register_builtin_backends(reg: &mut BackendRegistry, exec: &CommandExecutor) -> usize {
@@ -963,7 +976,7 @@ pub fn register_custom_backends(
             if !def.overrides {
                 warn!(
                     "Skipping custom backend '{}': a backend with that name already exists. \
-                     Add `overrides = true` to that definition if you meant to replace it — \
+                     Add `overrides = true` to that definition if you meant to replace it â€” \
                      taking a name has to be said, not achieved by picking it.",
                     def.name
                 );
@@ -974,7 +987,7 @@ pub fn register_custom_backends(
             // something goes wrong with it.
             warn!(
                 "Custom backend '{}' replaces the backend already registered under that name \
-                 (`overrides = true`). Everything written `{}:…` now runs `{}`.",
+                 (`overrides = true`). Everything written `{}:â€¦` now runs `{}`.",
                 def.name,
                 def.name,
                 def.binary.as_deref().unwrap_or(&def.name)
@@ -984,14 +997,26 @@ pub fn register_custom_backends(
         // disagrees with its own recorded output is a backend about to under-report the
         // machine, and the author is the only one who can tell which of the two is wrong.
         // Registered either way — refusing a backend over a fixture would make writing one
-        // riskier than writing none, which is the opposite of what the field is for.
-        for line in fixture_disagreements(&def) {
+        // riskier than writing none, which is the opposite of what the field is for. A row
+        // whose PARSER names are typos, though, refuses whole: that is not a disagreement
+        // about output, it is a definition this build cannot read.
+        let parser = match parser_for(&def) {
+            Ok(p) => p,
+            // A typo'd `reads=`/`searches=` used to silently downgrade to the default
+            // lines-parser, reporting the typo as machine state. Skipped, loudly — the same
+            // posture every other unusable row above gets.
+            Err(e) => {
+                error!("Skipping custom backend: {}", e);
+                continue;
+            }
+        };
+        for line in fixture_disagreements_with(&def, parser.clone()) {
             warn!(
                 "Custom backend fixture disagrees with its own parser — {}",
                 line
             );
         }
-        reg.register(Arc::new(build_capabilities(def, exec)));
+        reg.register(Arc::new(build_capabilities_with(def, exec, parser)));
         count += 1;
     }
     count
@@ -999,18 +1024,50 @@ pub fn register_custom_backends(
 
 /// The reader a row's backend will actually parse with.
 ///
-/// A named reader wins over a described one. Both is not an error — it is a row that said the
-/// same thing twice — and the named one is the one with bytes behind it.
+/// A named reader wins over a described one. Both is not an error â€” it is a row that said the
+/// same thing twice â€” and the named one is the one with bytes behind it.
 ///
 /// **One function, called by both `build_capabilities` and the fixture check.** A fixture run
 /// against a second resolution of the same fields would prove the second resolution works.
-pub(crate) fn parser_for(def: &CustomBackendDef) -> Arc<dyn OutputParser> {
+pub(crate) fn parser_for(def: &CustomBackendDef) -> Result<Arc<dyn OutputParser>, String> {
+    // **A name that names nothing is a typo, said out loud.** Silently downgrading to the
+    // default lines-parser reported the typo as machine state; these three checks turn it
+    // into a refusal naming the row, the field and the value.
+    fn check(
+        def: &CustomBackendDef,
+        field: &str,
+        value: Option<&str>,
+        known: fn(&str) -> bool,
+    ) -> Result<(), String> {
+        if let Some(v) = value {
+            if !known(v) {
+                return Err(format!(
+                    "backend `{}`: `{field} = {v}` names no known parser",
+                    def.name
+                ));
+            }
+        }
+        Ok(())
+    }
+    check(def, "reads", def.reads.as_deref(), |v| {
+        crate::parsers::named::installed(v).is_some()
+    })?;
+    check(def, "searches", def.searches.as_deref(), |v| {
+        crate::parsers::named::search(v).is_some()
+    })?;
+    check(
+        def,
+        "essential_reads",
+        def.essential_reads.as_deref(),
+        |v| crate::parsers::named::names(v).is_some(),
+    )?;
+
     match def
         .reads
         .as_deref()
         .and_then(crate::parsers::named::installed)
     {
-        Some(reads) => Arc::new(crate::parsers::named::NamedParser::new(
+        Some(reads) => Ok(Arc::new(crate::parsers::named::NamedParser::new(
             &def.name,
             reads,
             def.searches
@@ -1019,8 +1076,8 @@ pub(crate) fn parser_for(def: &CustomBackendDef) -> Arc<dyn OutputParser> {
             def.essential_reads
                 .as_deref()
                 .and_then(crate::parsers::named::names),
-        )),
-        None => Arc::new(ConfiguredParser {
+        ))),
+        None => Ok(Arc::new(ConfiguredParser {
             backend: def.name.clone(),
             installed: def.parser.clone().unwrap_or_default(),
             search: def
@@ -1028,7 +1085,7 @@ pub(crate) fn parser_for(def: &CustomBackendDef) -> Arc<dyn OutputParser> {
                 .clone()
                 .or_else(|| def.parser.clone())
                 .unwrap_or_default(),
-        }),
+        })),
     }
 }
 
@@ -1045,11 +1102,13 @@ fn as_expectation(p: &Package) -> String {
 /// Nothing here is a warning about style. Each disagreement is a manager whose real output this
 /// build reads differently from how the row says it does, which on the installed side is the
 /// difference between a converged machine and `sync` installing everything.
-pub fn fixture_disagreements(def: &CustomBackendDef) -> Vec<String> {
+pub fn fixture_disagreements_with(
+    def: &CustomBackendDef,
+    parser: Arc<dyn OutputParser>,
+) -> Vec<String> {
     let Some(fixture) = &def.fixture else {
         return Vec::new();
     };
-    let parser = parser_for(def);
     let mut out = Vec::new();
 
     if let Some(bytes) = &fixture.list {
@@ -1064,7 +1123,7 @@ pub fn fixture_disagreements(def: &CustomBackendDef) -> Vec<String> {
                 }
             }
             Err(e) => out.push(format!(
-                "{}: `list` fixture is refused as unreadable ({} data lines, first `{}`) — \
+                "{}: `list` fixture is refused as unreadable ({} data lines, first `{}`) â€” \
                  that is what this backend would report about a real machine",
                 def.name, e.data_lines, e.sample
             )),
@@ -1090,10 +1149,11 @@ pub fn fixture_disagreements(def: &CustomBackendDef) -> Vec<String> {
 
 /// Turns one definition into a fully-wired [`BackendCapabilities`] over the generic
 /// backend machinery. Capabilities are attached only for the operations the definition
-/// actually specifies (e.g. no `search_args` ⇒ not searchable).
-pub(crate) fn build_capabilities(
+/// actually specifies (e.g. no `search_args` â‡’ not searchable).
+pub(crate) fn build_capabilities_with(
     def: CustomBackendDef,
     exec: &CommandExecutor,
+    parser: Arc<dyn OutputParser>,
 ) -> BackendCapabilities {
     let has_install = !def.install_args.is_empty();
     let has_list = !def.list_args.is_empty();
@@ -1127,7 +1187,7 @@ pub(crate) fn build_capabilities(
             binary: def.outdated_binary.as_deref().map(expand_binary),
             args,
             // An outdated listing that reads as empty means nothing needs upgrading, which is
-            // the common answer and a safe one — unlike an *installed* listing, whose emptiness
+            // the common answer and a safe one â€” unlike an *installed* listing, whose emptiness
             // the planner answers by installing everything. `MachineListing` above keeps the
             // failure; this drops it on purpose.
             parse: match named {
@@ -1171,7 +1231,7 @@ pub(crate) fn build_capabilities(
         }
         (Some(_), None) => {
             warn!(
-                "backend `{}`: `machine_list_args` needs `machine_list_parser` beside it — a \
+                "backend `{}`: `machine_list_args` needs `machine_list_parser` beside it â€” a \
                  machine-readable listing is a different shape from the text one, and reading \
                  it with the text parser reports an empty machine. Using `list_args`.",
                 def.name
@@ -1181,8 +1241,6 @@ pub(crate) fn build_capabilities(
         _ => None,
     };
 
-    let parser = parser_for(&def);
-
     let config = ManagerConfig {
         name: def.name.clone(),
         binary: def.binary.as_deref().map(expand_binary),
@@ -1191,7 +1249,7 @@ pub(crate) fn build_capabilities(
         remove_args: def.remove_args,
         list_args: def.list_args,
         // U2: a definition may now say how it reports its manual set. Absent stays
-        // `Unsupported` — the safe default — so `adopt` skips a backend that has not opted in,
+        // `Unsupported` â€” the safe default â€” so `adopt` skips a backend that has not opted in,
         // rather than risk adopting its dependency graph.
         manual: def
             .manual
@@ -1199,10 +1257,10 @@ pub(crate) fn build_capabilities(
             .unwrap_or(ManualListing::Unsupported),
         essential_args: def.essential_args,
         search_args: def.search_args,
-        search_binary: def.search_binary,
+        search_binary: def.search_binary.as_deref().map(expand_binary),
         enumerate_args: def.enumerate_args,
-        enumerate_binary: def.enumerate_binary,
-        list_binary: def.list_binary,
+        enumerate_binary: def.enumerate_binary.as_deref().map(expand_binary),
+        list_binary: def.list_binary.as_deref().map(expand_binary),
         upgrade_args: def.upgrade_args,
         update_args: def.update_args,
         purge_args: def.purge_args,
@@ -1210,15 +1268,15 @@ pub(crate) fn build_capabilities(
         // Deliberately not a field an onboarded row can set. The distinction only means
         // something where two backends share one installed database, and that relation is a
         // compiled table (`READS_THE_DATABASE_OF`) rather than something a definition file can
-        // claim about itself — a row that named a foreign query with nothing reading it would
+        // claim about itself â€” a row that named a foreign query with nothing reading it would
         // be a setting that does nothing.
         foreign_args: None,
         repo_add_args: def.repo_add_args,
         repo_remove_args: def.repo_remove_args,
         repo_list_args: def.repo_list_args,
-        repo_binary: def.repo_binary,
-        repo_list_binary: def.repo_list_binary,
-        repo_remove_binary: def.repo_remove_binary,
+        repo_binary: def.repo_binary.as_deref().map(expand_binary),
+        repo_list_binary: def.repo_list_binary.as_deref().map(expand_binary),
+        repo_remove_binary: def.repo_remove_binary.as_deref().map(expand_binary),
         repo_list_shape: def
             .repo_list_shape
             .map(Into::into)
@@ -1242,7 +1300,7 @@ pub(crate) fn build_capabilities(
             }
         }),
         clean_cache: def.clean_cache_args.map(|args| CacheClean {
-            binary: def.clean_cache_binary,
+            binary: def.clean_cache_binary.as_deref().map(expand_binary),
             args,
         }),
         version_pin: def.version_pin.map(Into::into),
@@ -1264,7 +1322,7 @@ pub(crate) fn build_capabilities(
     let core = Arc::new(GenericBackendCore {
         name: def.name.clone(),
         // The manager's exit policy, which is keyed on the name and defaults for a name it
-        // does not know — so a row for `apt` gets apt's, and a row for something new gets the
+        // does not know â€” so a row for `apt` gets apt's, and a row for something new gets the
         // default rather than nothing.
         executor: exec
             .clone()
@@ -1283,7 +1341,7 @@ pub(crate) fn build_capabilities(
     }
     // Searchable carries three things: `search`, the manager's own "what has an update" verb
     // (`Q44`), and a catalogue reached over HTTP instead of through the binary. A definition
-    // may declare any of the three without the others — a corporate manager that lists updates
+    // may declare any of the three without the others â€” a corporate manager that lists updates
     // but has no catalogue to search is an ordinary shape, and the three Node managers search
     // the npm registry with no `search_args` at all, npm's own CLI search being slow and
     // output-unstable. Gating on `search_args` alone silenced both. `search` itself still
@@ -1300,7 +1358,7 @@ pub(crate) fn build_capabilities(
     }
     // U2: the capabilities a built-in gets, now reachable from a definition. A backend is a
     // repo manager only if it said how to add a repo, and enumerable only if it said how to
-    // list its catalogue — so `repo:` and `re:` against a backend that did not opt in are
+    // list its catalogue â€” so `repo:` and `re:` against a backend that did not opt in are
     // still refused, not silently no-ops.
     if core.config.repo_add_args.is_some() {
         builder = builder.with_repo_manager(Arc::new(GenericRepoManager { core: core.clone() }));
@@ -1399,7 +1457,7 @@ mod tests {
     }
 
     /// `delimiter` already says where a column ends, so `quoted` beside it is a row that asked
-    /// for two answers to one question — and the explicit one wins.
+    /// for two answers to one question â€” and the explicit one wins.
     #[test]
     fn a_delimiter_beats_the_quote_rule() {
         let spec = ParserSpec::Columns {
@@ -1503,7 +1561,7 @@ mod tests {
         let caps = reg.get("paru").expect("paru registered");
         assert!(caps.is_installable());
         assert!(caps.is_queryable());
-        // no search_args ⇒ not searchable; no upgrade_args ⇒ not upgradable
+        // no search_args â‡’ not searchable; no upgrade_args â‡’ not upgradable
         assert!(!caps.is_searchable());
         assert!(!caps.is_upgradable());
         assert!(caps.is_metadata_provider());
@@ -1534,7 +1592,7 @@ mod tests {
         assert_eq!(
             register_custom_backends(&mut reg, &exec, vec![first, second]),
             2,
-            "both definitions were accepted — the second replacing the first"
+            "both definitions were accepted â€” the second replacing the first"
         );
 
         reg.get("paru")
@@ -1595,7 +1653,7 @@ mod tests {
     }
 
     /// U2: a custom backend gains a capability only when its definition provides the fields
-    /// for it — and gains it when it does. Absent stays absent (the safe default), present
+    /// for it â€” and gains it when it does. Absent stays absent (the safe default), present
     /// makes it a first-class peer.
     #[test]
     fn a_custom_backend_is_a_first_class_peer_when_it_says_so() {
@@ -1667,7 +1725,7 @@ mod tests {
     }
 
     /// XIII.12: the prefix a line is written with and the program that runs are two facts.
-    /// `firewall:22/tcp` runs `ufw`, and every verb has to agree about that — an install that
+    /// `firewall:22/tcp` runs `ufw`, and every verb has to agree about that â€” an install that
     /// ran `ufw` while the removal ran `firewall` would leave a rule nothing can take back.
     #[tokio::test]
     async fn a_name_that_differs_from_its_binary_runs_the_binary_on_every_verb() {
@@ -1725,7 +1783,7 @@ mod tests {
         assert_eq!(caps.name(), "firewall");
     }
 
-    /// U16 (ruled 2026-07-24): a `binary` naming a path is ALLOWED — `/opt/vendor/thing` is a
+    /// U16 (ruled 2026-07-24): a `binary` naming a path is ALLOWED â€” `/opt/vendor/thing` is a
     /// more useful prefix than one confined to `$PATH`, and a missing one is caught by
     /// `check health`, not refused at load.
     #[test]
@@ -1801,7 +1859,7 @@ list_args = ["-Qm"]
 "#;
 
     /// 7a: the definition travels with the repo. A machine that has never seen this file
-    /// registers the backend from it — after `shall lock`, because the file is argv the repo
+    /// registers the backend from it â€” after `shall lock`, because the file is argv the repo
     /// can run and that is II.12's question, not a new one.
     #[test]
     fn a_repo_definition_registers_once_it_is_approved() {
@@ -1946,7 +2004,7 @@ mod adapter_folder_tests {
     /// U2 + `Q44`: **a definition works with the batch verb and without it.**
     ///
     /// With `outdated_args`, the manager is asked once. Without, the caller falls back to
-    /// asking per package — slower, but an answer. What must never happen is the third case:
+    /// asking per package â€” slower, but an answer. What must never happen is the third case:
     /// a definition that declared an outdated verb and got no `Searchable` at all, because the
     /// capability was gated on `search_args`. Its updates were then silently never reported,
     /// which looks exactly like a machine with nothing out of date.
@@ -1988,9 +2046,10 @@ gadget 3.1
             vfs,
             std::sync::Arc::new(dashmap::DashMap::new()),
         );
-        let caps = build_capabilities(def, &exec);
+        let parser = parser_for(&def).unwrap();
+        let caps = build_capabilities_with(def, &exec, parser);
 
-        // It declared no `search_args`, and it is searchable anyway — because the outdated
+        // It declared no `search_args`, and it is searchable anyway â€” because the outdated
         // verb lives on that capability.
         let s = caps
             .as_searchable()
@@ -2011,7 +2070,7 @@ gadget 3.1
     }
 
     /// Without the verb: `None`, which is the caller's signal to ask per package. It must not
-    /// be `Some(vec![])` — that would say "asked, nothing stale" and mark the whole backend
+    /// be `Some(vec![])` â€” that would say "asked, nothing stale" and mark the whole backend
     /// current.
     #[tokio::test]
     async fn a_definition_without_an_outdated_verb_says_it_cannot_be_asked() {
@@ -2037,7 +2096,8 @@ version_col = 1
             vfs,
             std::sync::Arc::new(dashmap::DashMap::new()),
         );
-        let caps = build_capabilities(def, &exec);
+        let parser = parser_for(&def).unwrap();
+        let caps = build_capabilities_with(def, &exec, parser);
         let s = caps.as_searchable().expect("it declared search_args");
         assert!(
             s.outdated_all().await.unwrap().is_none(),
@@ -2046,7 +2106,7 @@ version_col = 1
     }
 
     /// A machine-readable listing without a parser for it is refused by name rather than read
-    /// with the *text* parser — which would hand JSON to a column reader, find nothing, and
+    /// with the *text* parser â€” which would hand JSON to a column reader, find nothing, and
     /// report an empty machine (`Q40`'s class, arriving through a config file).
     #[test]
     fn a_machine_listing_without_its_own_parser_is_refused_not_guessed() {
@@ -2078,6 +2138,7 @@ version_col = 1
             std::sync::Arc::new(dashmap::DashMap::new()),
         );
         // Builds without panicking, and falls back to `list_args`; the warning names the file.
-        let _ = build_capabilities(def, &exec);
+        let parser = parser_for(&def).unwrap();
+        let _ = build_capabilities_with(def, &exec, parser);
     }
 }

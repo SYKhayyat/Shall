@@ -99,12 +99,10 @@ pub async fn bisect(
         snapshots.len(),
         test
     );
-    println!("First, confirming the problem reproduces on the CURRENT system...");
-    if run_test(test).await {
-        println!("Test passes right now — nothing to bisect (the system is currently good).");
-        return Ok(());
-    }
-
+    // **The consent gates come before anything runs — including the "does it reproduce"
+    // probe.** The user's test command is arbitrary and may mutate; it used to execute for
+    // real under `--dry-run` and before the confirmation, because the probe sat above both
+    // gates. Nothing here runs until the run is neither a preview nor unconfirmed.
     if config.dry_run {
         crate::would_print!(
             "Would binary-search snapshots (restoring + testing each) to find the culprit."
@@ -113,6 +111,12 @@ pub async fn bisect(
     }
     if !assume_yes {
         warn!("Bisect will RESTORE snapshots on this machine. Re-run with --yes to proceed.");
+        return Ok(());
+    }
+
+    println!("First, confirming the problem reproduces on the CURRENT system...");
+    if run_test(test).await {
+        println!("Test passes right now — nothing to bisect (the system is currently good).");
         return Ok(());
     }
 
@@ -149,7 +153,24 @@ pub async fn bisect(
 
     // Adaptive binary search, through `first_bad` — the tested function, not a copy of it.
     // The oracle is the async one: restore the snapshot, run the test.
-    let search = search_for_culprit(snapshots_of, test, &snapshots).await;
+    //
+    // **Raced against Ctrl-C.** The restore below used to run only when the search RETURNED —
+    // and a ^C during a hung oracle never let it return, leaving the machine permanently
+    // inside a historical snapshot with no handler anywhere in the tree. An interrupt now
+    // drops the search future (which cancels the in-flight oracle) and flows into the same
+    // restore the error paths use.
+    let interrupted;
+    let search = tokio::select! {
+        r = search_for_culprit(snapshots_of, test, &snapshots) => {
+            interrupted = false;
+            r
+        }
+        _ = tokio::signal::ctrl_c() => {
+            interrupted = true;
+            println!("\nBisect interrupted — restoring your machine before exiting.");
+            Ok(None)
+        }
+    };
 
     if let Some(s) = &home {
         info!("Bisect: restoring {} — the state you started in.", s.id);
@@ -164,6 +185,9 @@ pub async fn bisect(
         }
     }
 
+    if interrupted {
+        return Err(crate::core::Error::Cancelled);
+    }
     match search? {
         Some(i) => {
             let s = &snapshots[i];
