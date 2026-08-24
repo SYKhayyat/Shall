@@ -107,6 +107,43 @@ what blocks the next one.
     start the workflow at all — the release job's `if:` was gated on a ref the workflow could
     never be running under. Two `CHANGELOG` entries had named a release and neither was
     published, and the second one opens by describing the first one's failure. `tags: [ 'v*' ]`
+
+0f. **Kill the 30 survivors in the `the sync engine` mutation shard** (added 2026-08-24; the
+    nightly has been red on this row since at least dispatch 32616561555 of 2026-08-23). Run
+    32688340542, job 97317397213: **73 mutants, 30 MISSED**, every one in
+    `src/app/sync/mod.rs` against origin/main at `400dd8d`. There is no exemption mechanism on
+    this gate by design (`cargo mutants --file … --shard … -- --no-fail-fast`, no config), so
+    each survivor leaves only two ways: a test that dies without it, or code that makes the
+    mutant unrepresentable. Triage from the run log, by cluster:
+
+    - `narration_for` Rebuild arm (:67), `events()` → Default (:158), `what_to_do_about` →
+      empty/xyzzy (:1639): message-building functions with no assertion reading them. Kill by
+      asserting the rendered text where the existing UI tests live.
+    - `PurgeUndeclared` match arm deleted in `SyncEngine::sync` (:252) and
+      `execute_transaction` `+=`→`*=` (:826): budget/counter semantics — the same family as the
+      ledger tests under `tests/grader_*`. A purge whose count is wrong must fail somewhere.
+    - `rebuild_kernel_modules` ×4 (:442–461): the `cfg!(linux)`/dry-run gate and the whole-body
+      → `Ok(())`. On the ubuntu runner `cfg!(linux)` is true, so the dry-run arm and the dkms
+      path are both reachable from an integration test through `SyncEngine::sync` with a
+      kernel-named install and a mock executor (dkms answers via mock; assert a dry run runs no
+      `dkms autoinstall`, and a real one does).
+    - `declared_health_checks` → vec![] (:514), `require_health_commands_approved` → Ok(()) /
+      delete ! (:562, :583), `probe_ok` → true (:671): the U31 health-check approval chain.
+      Tests belong beside whichever file already asserts ledger gating for hooks
+      (`hook_reentrancy_tests` / `a_silenced_advisory_says_why_tests` pattern).
+    - `prune_snapshots_after_sync` ×4 (:693–702): prune skipped when report empty vs not, and
+      its Err arm swallowed. Needs a sync-with-snapshot-provider fixture asserting prune ran
+      once for non-empty reports and that a failed prune is visible.
+    - heal's `TransactionConfig` field deletions ×3 (:1371–1373) and the heal-region `!`/`||`
+      mutants ×10 (:1531–1589): these assert recovery's posture — no rollback, continue past
+      failure, concurrency cap, and the interrupted-entry filters. The harness already exists:
+      `tests/an_orphan_of_a_killed_run_is_taken_back_tests.rs` drives `heal` end to end. One
+      test per posture, seeded from that file's journal helpers.
+
+    The sibling row added the same day — `the batch narrowing` — failed twice with NO step logs
+    (job 97317397287: steps never executed), which is infrastructure-shaped, not code. A
+    `--failed` rerun was requested 2026-08-24; if it goes green, nothing to do; if it repeats,
+    suspect the runner and re-dispatch before touching code.
     is now on the trigger; the tag itself is still the owner's to push, and `readme.md` says so
     at the install command until it happens.
 0f. **macOS has never been exercised**, only compiled and unit-tested. **Scheduled 2026-07-26,
