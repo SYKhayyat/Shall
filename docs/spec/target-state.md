@@ -1870,7 +1870,7 @@ false**, and a table that quietly stops describing its own function is how the l
 being readable:
 
 ```
-Plan: install 30,207 Â· remove 0 Â· upgrade 3
+Plan: install 30,207 · remove 0 · upgrade 3
   30,102  re:^lib
       98  apt
        7  cargo
@@ -2408,30 +2408,30 @@ real work and must stay.
 
 ## II.17 Deleted
 
-**Commands:** `prune` Â· `orphans` Â· `clone` Â· `migrate` (â†’ `adopt`) Â· `remove` (â†’
-`uninstall`) Â· `clean` (split in two: `remove-orphans` for what the machine no longer needs,
+**Commands:** `prune` · `orphans` · `clone` · `migrate` (→ `adopt`) · `remove` (→
+`uninstall`) · `clean` (split in two: `remove-orphans` for what the machine no longer needs,
 `clean-cache` for the downloads it kept — V.36) · `status` · `doctor` · `unmanaged` · `absent` ·
-`conflicts` Â· `audit` (all six â†’ `check <section>`, ruled 2026-07-24) Â· `undo` (â†’ `snapshot
-restore` for the filesystem, `rollback` for the manifests) Â· `shim` (â†’ the line
+`conflicts` · `audit` (all six → `check <section>`, ruled 2026-07-24) · `undo` (→ `snapshot
+restore` for the filesystem, `rollback` for the manifests) · `shim` (→ the line
 `shim:jq@source=cargo:jq` — II.16, ruled 2026-08-09 under `Y18`; `--source` was discarded by the
 command and `@source=` is read by the line)
 
-**Flags:** `-g` / `--groups-dir` Â· `--no-global` Â· `--allow-regex-expansion` Â·
+**Flags:** `-g` / `--groups-dir` · `--no-global` · `--allow-regex-expansion` ·
 `--backend` on removing commands
 
-**Syntax:** `group:` Â· `include:` Â· `host-*.txt` Â· `_active_profiles.txt` Â· `local.txt`'s
-special status Â· `-vim` in modules
+**Syntax:** `group:` · `include:` · `host-*.txt` · `_active_profiles.txt` · `local.txt`'s
+special status · `-vim` in modules
 
-**Config:** `[groups]` Â· `[hostname_packages]` Â· `[managed_files]` Â·
-`[schedules]` Â· `backend_priority` Â· `enabled_backends` Â· `hostname_backends` Â·
-`default_backend` Â· `prune_on_sync` Â· `prune_scope` Â· `purge_orphans` Â· `cache_ttl` Â·
-`confirm_destructive` Â· `protect_imperative` Â· `remove_bloatware` Â· `timeshift_path` Â·
-`config.snapshots` Â· `github_token` (â†’ env)
+**Config:** `[groups]` · `[hostname_packages]` · `[managed_files]` ·
+`[schedules]` · `backend_priority` · `enabled_backends` · `hostname_backends` ·
+`default_backend` · `prune_on_sync` · `prune_scope` · `purge_orphans` · `cache_ttl` ·
+`confirm_destructive` · `protect_imperative` · `remove_bloatware` · `timeshift_path` ·
+`config.snapshots` · `github_token` (→ env)
 *(`max_parallel` was struck from this delete list by owner ruling 2026-07-17 — it stays as an
 optional concurrency cap. See II.1 and V.41.)*
 
-**Files:** `keep.txt` (â†’ `forget`) Â· `policy.toml` (â†’ `[guard]`) Â· `bloatware.txt` (â†’
-`absent:`) Â· `.shall-lock.key` Â· `locks.json` (â†’ `locks/`) Â· `ghosts.json`
+**Files:** `keep.txt` (→ `forget`) · `policy.toml` (→ `[guard]`) · `bloatware.txt` (→
+`absent:`) · `.shall-lock.key` · `locks.json` (→ `locks/`) · `ghosts.json`
 
 *(`[hooks]` was struck from the config delete list by owner ruling 2026-07-17. It is **not** a
 duplicate of module hooks — the two are different features by *when they run*: `[hooks]` holds
@@ -2439,8 +2439,8 @@ whole-sync lifecycle hooks (`before_sync`/`after_sync`, target `*`), while `befo
 `after_install` are per-package hooks attached to a declaration. Deleting `[hooks]` would remove
 the whole-sync kind, which modules cannot express. See II.12.)*
 
-**Code:** `locksig.rs` Â· the generation format Â· `ManifestArchive` Â· `quick()` Â·
-`ScopedFilter::None` as a spare-everything switch Â· every legacy branch
+**Code:** `locksig.rs` · the generation format · `ManifestArchive` · `quick()` ·
+`ScopedFilter::None` as a spare-everything switch · every legacy branch
 
 ## II.19 What Shall does at once
 
@@ -3780,3 +3780,19 @@ it could not recover, and it goes through the same function. And **anything that
 preserves its variant, not merely its text** — appending the pin advice used to rebuild a
 classified failure as `Transaction`, which is `Unknown`, so explaining an impossible version pin
 was what erased the `Permanent` verdict of the failures it fired on.
+
+## II.61 A script's permissions are read before its content is (`R6`, V.204)
+
+**An `exec:` script the config carries is judged by its mode word under `[exec] trust` before
+its bytes are hashed or run.** Three levels, spelled in `preferences.toml` beside the repo
+that names the script:
+
+- `trust = "owner-only"` - group or world write is a refusal.
+- `trust = "not-world-writable"` - **the default.** World write is a refusal; group write is
+  tolerated, because it is the umask most real checkouts have.
+- `trust = "warn"` - nothing is refused; wide writes are reported and the run goes on.
+
+The gate lives in the one resolution the preview and the run share, so a plan cannot bless a
+script the sync would refuse. It refuses as `Error::Refused` - exit 3, never retried. On
+platforms with no mode word (Windows ACLs are not reachable through std) the same enforcement
+point runs and accepts: the gate's *shape* is universal even where its data is not.

@@ -438,6 +438,33 @@ impl Default for JournalSettings {
     }
 }
 
+/// How suspicious Shall is of a script's file permissions before its content is hashed and
+/// run (R6).
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecSettings {
+    /// Which write bits disqualify a script.
+    #[serde(default)]
+    pub trust: ExecTrust,
+}
+
+/// How much of the mode word may hold write before an `exec:` script is refused.
+///
+/// - `owner-only` — group or world write is a refusal. For repos checked out where others
+///   have no business writing.
+/// - `not-world-writable` (the default) — group write is tolerated; world write is refused.
+///   Closes the file-drop hole while accepting the umask most machines actually have.
+/// - `warn` — nothing is refused; wide writes are reported and the run goes on. The escape
+///   hatch for a deliberately shared checkout, written where the decision lives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExecTrust {
+    OwnerOnly,
+    #[default]
+    NotWorldWritable,
+    Warn,
+}
+
 /// Feature 5: Configuration for background scheduled tasks.
 ///
 /// Everything past `command` is `Option`, and that is load-bearing rather than tidy: an option
@@ -508,6 +535,11 @@ pub struct Config {
     /// bootstrapping says so here, in the file a human wrote, where the decision lives.
     #[serde(default)]
     pub bootstrap_auto_yes: bool,
+
+    /// The `[exec]` table: the permission gate on scripts the config carries (R6). Default is
+    /// `trust = "not-world-writable"` — see [`ExecTrust`].
+    #[serde(default)]
+    pub exec: ExecSettings,
 
     /// This run is an unattended `watch` tick, so nobody is present to answer a prompt (T4).
     /// CLI/runtime only (`serde(skip)`): it is a property of *how Shall was invoked*, not a
@@ -1085,6 +1117,7 @@ impl Default for Config {
             unattended: false,
             yes: false,
             bootstrap_auto_yes: false,
+            exec: ExecSettings::default(),
             allow_mass_removal: false,
             replace_existing: false,
             config_root: default_config_root(),

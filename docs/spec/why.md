@@ -2784,7 +2784,7 @@ honestly, and the honesty did not make the name declarable.
 were never the problem — `2c51968` had already taught the grammar and the validator about them,
 so `winget:ARP\Machine\X64\AndroidStudio` parsed all along. On this machine the undeclarable
 names were **161: six winget names, every one containing a space, and 155 `service:` names that
-are not a package-line question at all.** `docs/archive/GRADE-2026-07-31.md` Â§5 G-2 describes 185 backslash
+are not a package-line question at all.** `docs/archive/GRADE-2026-07-31.md` §5 G-2 describes 185 backslash
 names as unwritable; that defect is closed, and the number was re-cited afterwards without being
 re-run. This is the second time in two rounds that a *count* outlived the bug it counted.
 
@@ -3349,8 +3349,8 @@ command, standing next to a batched parallel DAG and getting none of it. Measure
 one minute:
 
 ```
-sync --dry-run   2.65s wall Â·  21 child command(s) summing to 10.35s Â· 3.9x overlap Â·  2 wave(s)
-heal           205.14s wall Â·  27 child command(s) summing to 33.31s Â· 0.2x overlap Â· 27 wave(s)
+sync --dry-run   2.65s wall ·  21 child command(s) summing to 10.35s · 3.9x overlap ·  2 wave(s)
+heal           205.14s wall ·  27 child command(s) summing to 33.31s · 0.2x overlap · 27 wave(s)
 ```
 
 **27 waves for 27 commands is the definition of serial.** The fix is not a `join_all` over the
@@ -6326,7 +6326,7 @@ anything run through `sudo`, sitting exactly where its own installer put it. `sh
 where `PATH` is not the user's. The three warnings are useful to a person watching. Nothing is
 watching. What the pipeline reads is the 0.
 
-**Why the rule is what it is.** The distinction was already ruled one command over: Â§Q2 defines
+**Why the rule is what it is.** The distinction was already ruled one command over: §Q2 defines
 **critical** as *"it is installed, or `priority` names it, and it cannot work"* — a
 `priority`-named manager that cannot be reached is a broken machine, not a line that does not
 apply here. `check` was told. `sync` was not, and the two therefore described one machine in
@@ -7286,3 +7286,15 @@ after a self-upgrade every existing shim failed the test, `real_program` skipped
 name, and the OS resolved the bare name back to the shim: an unbounded spawn chain. The stable
 in-binary marker (`SHIM_MARKER`) is the identity that survives upgrades; byte-equality remains
 only as a belt for binaries older than the marker.
+
+**V.204 — Why a script's permissions are read before its content is. *(R6; 2026-08-24)***
+
+The hook ledger pins `exec:` content by hash, so an *edit* re-asks the human - but the hash
+answers "has this exact text been approved", never "who can put new text here". A
+world-writable script in a shared directory is root code execution by file-drop on any run
+that elevates, in a tool that otherwise hashes every approval: the attacker needs no Shall
+bug at all, only write access to a path your config names. The gate reads the mode word
+before the content is even opened, in the one resolution both the preview and the run share,
+and `[exec] trust` selects which write bits disqualify: `owner-only`, the default
+`not-world-writable`, or `warn`. It refuses as `Error::Refused` (exit 3), because a script
+whose permissions are wrong is not a transient failure and no retry policy should retry it.

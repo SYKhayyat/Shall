@@ -8,48 +8,48 @@ already settled in code could be re-opened by anyone reading the register instea
 **A recommendation is not a ruling.** Where an entry carries one, it is the author's reading and
 nothing more; the owner decides. When a decision is ruled, rewrite its entry as the rule, put the
 rule in [Part II](target-state.md) and its reason in [Part V](why.md), **and update this file's
-index in the same commit** â€” the index went 59 entries out of date because that last clause was
+index in the same commit** — the index went 59 entries out of date because that last clause was
 not in this paragraph.
 
 ## The seven statuses
 
 **Every status has a row, including the ones holding nothing.** The table is a breakdown of the
 whole register, so a status missing from it makes the remaining cells add up to less than the
-total while every individual cell stays correct â€” which is exactly what happened: DEFERRED and
+total while every individual cell stays correct — which is exactly what happened: DEFERRED and
 HALF RULED had no rows, the five that remained summed to 206 against 210, and
 `decision-count.sh` reported `ok` because a row that is absent states no wrong number anywhere.
 
 | status | means | what it needs | count |
 |---|---|---|---|
-| **OPEN â€” blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
+| **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
-| **BUILT, NEVER RULED** | Nobody ruled â€” but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
+| **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
 | **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **228** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
-| **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **2** |
-| **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
+| **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
+| **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **3** |
 
 **Three of these seven statuses now describe nothing, and they stay.** The categories are not
-decoration: *OPEN* emptied on 2026-08-17 with `J8` â€” raised the moment a nightly leg
-stopped being answered by the wrong package manager, ruled the same day â€” and refilled the next
+decoration: *OPEN* emptied on 2026-08-17 with `J8` — raised the moment a nightly leg
+stopped being answered by the wrong package manager, ruled the same day — and refilled the next
 day with the four entries of the `L` round, which is the third time it has done so. *BUILT, NEVER
-RULED* has refilled three times â€” once with twelve entries at once, and again on 2026-08-14 with
-`J3`, which was ruled on 2026-08-16 and emptied it â€” the moment somebody implemented a work
+RULED* has refilled three times — once with twelve entries at once, and again on 2026-08-14 with
+`J3`, which was ruled on 2026-08-16 and emptied it — the moment somebody implemented a work
 order, or a defect fix with a visible choice inside it, before it was put to the owner. Deleting
 an empty category is how the next one goes unnoticed.
 
 **The twelve were confirmed on 2026-08-14, by delegation rather than by review of each.** The
 owner was given the round's findings and the three entries that nominate themselves as the ones
-to reverse â€” `G2`, `G5`, `G10` â€” and answered *"i trust you"*. Confirming is the zero-change
+to reverse — `G2`, `G5`, `G10` — and answered *"i trust you"*. Confirming is the zero-change
 option: every one of the twelve is already built and running, so a reversal is what costs a
 change now and more later. Two carry a cost their own entries name, and those costs are hereby
 **knowingly accepted rather than mitigated**:
 
-* `G2` â€” a machine carrying `setting:` or `@decrypt`ed `link:` declarations reports `check` as
+* `G2` — a machine carrying `setting:` or `@decrypt`ed `link:` declarations reports `check` as
   needing attention permanently, and no command clears it. Accepted as honesty. If it proves to
   be noise once real users exist, the mitigation is a way to silence a row that is unreadable *by
-  construction* rather than by failure â€” and that is a new entry, not a reversal of this one.
-* `G10` â€” on a machine carrying managers `priority` does not name, `list`, `search`, `info`,
+  construction* rather than by failure — and that is a new entry, not a reversal of this one.
+* `G10` — on a machine carrying managers `priority` does not name, `list`, `search`, `info`,
   `check drift`, `adopt` and `update` report on fewer of them. Accepted, because it is what the
   file has always claimed to mean and because the alternative measured 12.4 s where the wanted
   query took 0.02 s. If a user's model turns out to be "priority orders, it does not hide", the
@@ -63,13 +63,13 @@ the schedule is whatever it says it waits on.
 **So the condition is now checked, not just written.** A parked entry's `Status:` line must carry
 `waits on <what>`, and `scripts/decision-count.sh --check` fails if that clause is missing, or if
 it names a decision that has since been ANSWERED. A condition naming an event out in the world
-(D16 waits on someone hitting the case) is allowed and left alone â€” no script can see that
+(D16 waits on someone hitting the case) is allowed and left alone — no script can see that
 arrive, and saying so is better than a clause that reads as checkable and is not. **The totals
 were checked for a week while the register was wrong; a checker that verifies the arithmetic and
 not the claims is half a checker.**
 
 **A status is a claim about the tree, and the "In the tree today:" line in each entry is dated at
-the moment it was written.** Several of them are now stale in the direction that matters least â€”
+the moment it was written.** Several of them are now stale in the direction that matters least —
 they say *nothing exists* for work that has since shipped. Where an entry's build state matters,
 `plan.md`'s ordered list is the checked answer; this file's job ends at the ruling.
 
@@ -78,55 +78,55 @@ they say *nothing exists* for work that has since shipped. Where an entry's buil
 The six registers each opened with a note on *when* their questions get expensive. Grouping by
 status loses that, so it is kept here:
 
-- **D1â€“D17, artifacts.** D1â€“D6 block the backend outright. **D7â€“D10 are grammar shape: cheap
-  now, expensive after the first real `formats` line exists in somebody's repo.** D11â€“D14 are
-  behaviour over time. D15â€“D17 are parked on purpose.
-- **W1â€“W14, `vars`.** W1â€“W5 blocked implementation and are all closed. W6â€“W10 are scope and
-  grammar; W11â€“W14 behaviour and tooling.
-- **K1â€“K16, N1â€“N7, T1â€“T5, U1â€“U39.** *Blocking* means one thing in all four: **this cannot be
-  built without an answer, because two reasonable implementations differ.** **U27â€“U38 are the
-  extension-surface round (XIII.23â€“XIII.36): opening the snapshot/rollback layer, macOS/BSD
+- **D1–D17, artifacts.** D1–D6 block the backend outright. **D7–D10 are grammar shape: cheap
+  now, expensive after the first real `formats` line exists in somebody's repo.** D11–D14 are
+  behaviour over time. D15–D17 are parked on purpose.
+- **W1–W14, `vars`.** W1–W5 blocked implementation and are all closed. W6–W10 are scope and
+  grammar; W11–W14 behaviour and tooling.
+- **K1–K16, N1–N7, T1–T5, U1–U39.** *Blocking* means one thing in all four: **this cannot be
+  built without an answer, because two reasonable implementations differ.** **U27–U38 are the
+  extension-surface round (XIII.23–XIII.36): opening the snapshot/rollback layer, macOS/BSD
   filesystems, declared storage objects, custom health checks, the "as open as Lisp" set
   (parameterized modules U32, generated declarations U33, a REPL U34, user verbs U35), and the
-  three more closed provider-lists the code review found â€” init systems (U36), notification
+  three more closed provider-lists the code review found — init systems (U36), notification
   channels (U37), and secret decryption (U38). None blocks. They share one mechanism (XIII.33: a
   declared provider, argv from a file, capability-by-declaration) and one line (XIII.32: open a
   surface only where the added thing is data Shall cannot hear, never behaviour it cannot see).
   **Direction (owner, 2026-07-25), then rulings (owner, 2026-07-26):** the direction settled the
-  *whether* for the provider-list surfaces â€” U27, U30, U31, U36, U37, U38 â€” and left the *how*
+  *whether* for the provider-list surfaces — U27, U30, U31, U36, U37, U38 — and left the *how*
   and the *safety order* open. **Those were all ruled the next day, and so were the four the
   direction had excluded.** U33 in particular went the other way from XIII.32's refusal: the
   owner ruled that generated declarations **are** built, behind their own config key, off by
-  default â€” which amends U3 and U4. Nothing in the U-series is open.
+  default — which amends U3 and U4. Nothing in the U-series is open.
 
 ---
 
 ## Index
 
 **Two halves of two questions are what is left, and five entries in total want something.**
-`Q53` â€” what a version pin means on a manager that cannot express one â€” was raised, measured and
+`Q53` — what a version pin means on a manager that cannot express one — was raised, measured and
 ruled on 2026-08-10. `J4` is the other side of the same coin and is ruled only in part: what a
 version pin means when *Shall* recorded it and the archive has since dropped it is settled, and
 whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computation half is the
-other one. The `G` round ran the opposite way round â€” `docs/GRADE-2026-08-12.md`'s work order was
+other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
-ruling â€” and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
+ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
 is waiting now. All 234 are accounted
-for: **228 ANSWERED, 2 PARKED, 2 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** â€” and this line
+for: **228 ANSWERED, 2 PARKED, 1 DEFERRED, 3 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
 contradicted all three.
 
 > **This index was the worst-drifted thing in the spec, and it drifted in the file whose whole
-> job is to stop drift.** Until 2026-07-26 it carried three tables â€” *Open and blocking â€” 13*,
-> *Open, not blocking â€” 46*, *Answered â€” 43* â€” that nobody updated as the rulings landed between
+> job is to stop drift.** Until 2026-07-26 it carried three tables — *Open and blocking — 13*,
+> *Open, not blocking — 46*, *Answered — 43* — that nobody updated as the rulings landed between
 > 2026-07-23 and 2026-07-26. So it advertised **59 open questions over 59 entries that each said
 > ANSWERED four lines further down.** Anyone who read the index instead of the entries would
 > have re-opened a settled question, which is the precise failure this file was created to end.
 > **An index is a claim about the file underneath it, and this one was checked against nothing.**
 
-**This index says whether a question is decided. It does not say whether the ruling is built** â€”
+**This index says whether a question is decided. It does not say whether the ruling is built** —
 that is the ordered list at the top of [`plan.md`](plan.md), and it is deliberately the only
 place that answers it. Two lists of build state is the two-of-everything disease applied to our
 own documentation.
@@ -135,103 +135,103 @@ own documentation.
 the entry body otherwise (the oldest entries were answered by being built and record the date
 there). It is when the question stopped being open, not when the code landed.
 
-### D â€” artifact selection and channels (Part VIII) â€” 18
+### D — artifact selection and channels (Part VIII) — 18
 
 | | question | answered |
 |---|---|---|
-| **D1** | What is "the release"? â€” built as latest non-draft, non-prerelease; `v` prefix tolerated. | 2026-07-23 |
-| **D2** | How is a format recognised from a filename? â€” built as extension match plus `binary`. | 2026-07-23 |
-| **D3** | Two assets, same format â€” RULED 2026-07-20: shortest name, `@asset=` glob, `@asset=all`. | 2026-07-20 |
+| **D1** | What is "the release"? — built as latest non-draft, non-prerelease; `v` prefix tolerated. | 2026-07-23 |
+| **D2** | How is a format recognised from a filename? — built as extension match plus `binary`. | 2026-07-23 |
+| **D3** | Two assets, same format — RULED 2026-07-20: shortest name, `@asset=` glob, `@asset=all`. | 2026-07-20 |
 | **D3b** | Download-only artifacts: what is the option called, and does `check` count one as software? | 2026-07-24 |
-| **D4** | What installing a tarball does â€” RULED 2026-07-20: extract, find, shim, `@bin=`. | 2026-07-20 |
-| **D5** | A `.deb` installed by `github:` â€” does apt own it or does Shall? | 2026-07-24 |
-| **D6** | `@sha256` per machine â€” RULED 2026-07-20: checksums live in `locks/`, generated. | 2026-07-20 |
-| **D7** | Does a `formats` block enable the backend â€” ADOPTED and built: yes. | 2026-07-20 |
+| **D4** | What installing a tarball does — RULED 2026-07-20: extract, find, shim, `@bin=`. | 2026-07-20 |
+| **D5** | A `.deb` installed by `github:` — does apt own it or does Shall? | 2026-07-24 |
+| **D6** | `@sha256` per machine — RULED 2026-07-20: checksums live in `locks/`, generated. | 2026-07-20 |
+| **D7** | Does a `formats` block enable the backend — ADOPTED and built: yes. | 2026-07-20 |
 | **D8** | May a `when` block appear inside an options body? | 2026-07-24 |
-| **D9** | A line's `formats` replaces the backend's â€” ADOPTED and built: replace, both seams. | 2026-07-20 |
-| **D10** | Where the closed vocabulary lives â€” built as one table in `artifact/format.rs`. | 2026-07-23 |
+| **D9** | A line's `formats` replaces the backend's — ADOPTED and built: replace, both seams. | 2026-07-20 |
+| **D10** | Where the closed vocabulary lives — built as one table in `artifact/format.rs`. | 2026-07-23 |
 | **D11** | The default format order is detected, so a Shall upgrade can silently change it. | 2026-07-24 |
 | **D12** | Network, GitHub rate limits, and whether `sync` works on a plane. | 2026-07-24 |
-| **D13** | Changing a `channel` â€” refresh, or remove and reinstall? | 2026-07-24 |
+| **D13** | Changing a `channel` — refresh, or remove and reinstall? | 2026-07-24 |
 | **D14** | Does `why` explain which of the three levels chose the artifact? | 2026-07-24 |
-| **D15** | `.flatpak`/`.snap` assets in a release. D5 answered the ownership half; **re-PARKED on a measurement** â€” what snapd actually does to a sideloaded snap, which decides it outright. | PARKED |
-| **D16** | libc variants (`gnu` vs `musl`) â€” CLOSED by D3's ruling. | PARKED |
-| **D17** | What does `github:re:â€¦@formats=` mean across repos with different assets? | 2026-07-24 |
+| **D15** | `.flatpak`/`.snap` assets in a release. D5 answered the ownership half; **re-PARKED on a measurement** — what snapd actually does to a sideloaded snap, which decides it outright. | PARKED |
+| **D16** | libc variants (`gnu` vs `musl`) — CLOSED by D3's ruling. | PARKED |
+| **D17** | What does `github:re:…@formats=` mean across repos with different assets? | 2026-07-24 |
 
-### W â€” user-defined `when` variables (Part IX) â€” 14
+### W — user-defined `when` variables (Part IX) — 14
 
 | | question | answered |
 |---|---|---|
-| **W1** | The sigil â€” built as `$role`, never bare. | 2026-07-23 |
-| **W2** | Are values typed â€” RULED 2026-07-20: full JSON types, no coercion. Built. | 2026-07-20 |
-| **W3** | Is a bare `$flag` a condition â€” ADOPTED and built: no, it is a parse error. | 2026-07-20 |
-| **W4** | Where `vars` loads in resolution â€” built: once, before any `when`. | 2026-07-20 |
-| **W5** | What `check` does with an unused variable â€” built: a note, from a static scan. | 2026-07-20 |
-| **W6** | One `vars` file or a directory â€” built as one file; `vars.d/` ignored. | 2026-07-23 |
-| **W7** | The undetectable variable â€” ANSWERED by the provider model: `env()` is the hatch. | 2026-07-20 |
-| **W8** | Do variables work in `active` â€” built, including every path that edits your files. | 2026-07-20 |
-| **W9** | Interpolation outside `when` â€” stay banned? | 2026-07-24 |
+| **W1** | The sigil — built as `$role`, never bare. | 2026-07-23 |
+| **W2** | Are values typed — RULED 2026-07-20: full JSON types, no coercion. Built. | 2026-07-20 |
+| **W3** | Is a bare `$flag` a condition — ADOPTED and built: no, it is a parse error. | 2026-07-20 |
+| **W4** | Where `vars` loads in resolution — built: once, before any `when`. | 2026-07-20 |
+| **W5** | What `check` does with an unused variable — built: a note, from a static scan. | 2026-07-20 |
+| **W6** | One `vars` file or a directory — built as one file; `vars.d/` ignored. | 2026-07-23 |
+| **W7** | The undetectable variable — ANSWERED by the provider model: `env()` is the hatch. | 2026-07-20 |
+| **W8** | Do variables work in `active` — built, including every path that edits your files. | 2026-07-20 |
+| **W9** | Interpolation outside `when` — stay banned? | 2026-07-24 |
 | **W10** | May a variable reference another variable? | 2026-07-24 |
-| **W11** | Does `why` explain a variable â€” built as a gate chain. | 2026-07-20 |
-| **W12** | A command to print resolved variables â€” built: `shall vars`. | 2026-07-20 |
-| **W13** | Does changing a variable hit the guard â€” RULED 2026-07-20: yes, plus a run-level note. | 2026-07-20 |
-| **W14** | Does `vars` belong in `diff` â€” built: yes, the line file and every provider file. | 2026-07-20 |
+| **W11** | Does `why` explain a variable — built as a gate chain. | 2026-07-20 |
+| **W12** | A command to print resolved variables — built: `shall vars`. | 2026-07-20 |
+| **W13** | Does changing a variable hit the guard — RULED 2026-07-20: yes, plus a run-level note. | 2026-07-20 |
+| **W14** | Does `vars` belong in `diff` — built: yes, the line file and every provider file. | 2026-07-20 |
 
-### K â€” rebuild, caches, desktops, backup (Part X) â€” 20
+### K — rebuild, caches, desktops, backup (Part X) — 20
 
 | | question | answered |
 |---|---|---|
-| **K1** | `rebuild`'s granularity â€” RULED 2026-07-20: batch per backend, foundation first. | 2026-07-20 |
+| **K1** | `rebuild`'s granularity — RULED 2026-07-20: batch per backend, foundation first. | 2026-07-20 |
 | **K2** | What is `rebuild`'s default scope? Is a bare `shall rebuild` an error? | 2026-07-24 |
-| **K3** | A failed reinstall after a good removal â€” RULED 2026-07-20: snapshot and revert. | 2026-07-20 |
+| **K3** | A failed reinstall after a good removal — RULED 2026-07-20: snapshot and revert. | 2026-07-20 |
 | **K4** | Is `clean_cache_on_remove` every backend, or only the ones whose file Shall knows? | 2026-07-24 |
-| **K5** | A level-3 reset with a config repo â€” built as refuse unless `--force`. | 2026-07-23 |
+| **K5** | A level-3 reset with a config repo — built as refuse unless `--force`. | 2026-07-23 |
 | **K6** | Does Shall learn per-backend group syntax (`pacman -S plasma`)? | 2026-07-24 |
-| **K7** | Which desktops `setting:` adapts to â€” built as GNOME only, KDE refused by name. | 2026-07-23 |
-| **K7b** | The `setting:` key syntax â€” built as the statement form, not a backend prefix. | 2026-07-23 |
-| **K8** | How a git-less Shall announces it â€” built on the affected commands plus `doctor`. | 2026-07-23 |
-| **K9** | Is the backup command `bundle` â€” RULED 2026-07-22: yes, plus `restore DIR`. Built. | 2026-07-22 |
-| **K10** | `shall edit` and `shall path` â€” built as two commands. | 2026-07-23 |
-| **K11** | May the settings file hold more than the repo path â€” built as no, parser-enforced. | 2026-07-23 |
-| **K11b** | Where that file lives â€” built in the platform config dir. | 2026-07-23 |
+| **K7** | Which desktops `setting:` adapts to — built as GNOME only, KDE refused by name. | 2026-07-23 |
+| **K7b** | The `setting:` key syntax — built as the statement form, not a backend prefix. | 2026-07-23 |
+| **K8** | How a git-less Shall announces it — built on the affected commands plus `doctor`. | 2026-07-23 |
+| **K9** | Is the backup command `bundle` — RULED 2026-07-22: yes, plus `restore DIR`. Built. | 2026-07-22 |
+| **K10** | `shall edit` and `shall path` — built as two commands. | 2026-07-23 |
+| **K11** | May the settings file hold more than the repo path — built as no, parser-enforced. | 2026-07-23 |
+| **K11b** | Where that file lives — built in the platform config dir. | 2026-07-23 |
 | **K12** | Is a symlink at the default config path still supported? | 2026-07-24 |
-| **K13** | Does `rebuild` appear in `schedules` â€” built as refused by name. | 2026-07-23 |
-| **K14** | Does `rebuild` produce a git commit â€” built as no, and asserted by no test. | 2026-07-23 |
-| **K15** | Does `plan` distinguish a rebuild's removals â€” built: `Reinstalled`, never `Removals`. | 2026-07-21 |
-| **K16** | Does `clean-cache --all` need the guard â€” built as no; `reset` does. | 2026-07-23 |
+| **K13** | Does `rebuild` appear in `schedules` — built as refused by name. | 2026-07-23 |
+| **K14** | Does `rebuild` produce a git commit — built as no, and asserted by no test. | 2026-07-23 |
+| **K15** | Does `plan` distinguish a rebuild's removals — built: `Reinstalled`, never `Removals`. | 2026-07-21 |
+| **K16** | Does `clean-cache --all` need the guard — built as no; `reset` does. | 2026-07-23 |
 | **K17** | How does `setting:` reach a store nobody wrote an adapter for? | 2026-07-23 |
 | **K18** | Should Shall use a backend's own atomic swap where one exists (nix, rpm-ostree)? | 2026-07-24 |
 
-### N â€” `firewall:` (Part XI) â€” 8
+### N — `firewall:` (Part XI) — 8
 
 | | question | answered |
 |---|---|---|
 | **N1** | Is a declared perimeter exclusive (undeclared rules are drift) or additive? | 2026-07-23 |
 | **N2** | What happens when the change would close the SSH session running it? | 2026-07-23 |
-| **N3** | Which adapters ship â€” and is one adapter enough to justify the backend at all? | 2026-07-23 |
+| **N3** | Which adapters ship — and is one adapter enough to justify the backend at all? | 2026-07-23 |
 | **N4** | Is `default/incoming` a statement or a preference key? | 2026-07-24 |
 | **N5** | What does removing a firewall rule restore? | 2026-07-24 |
 | **N6** | What if a config declares both `firewall:` lines and a `link:` to the ruleset? | 2026-07-24 |
 | **N7** | Does `watch` revert firewall drift unattended, or only report it? | 2026-07-24 |
 | **N8** | Is closing an undeclared port a removal, and does it count against `max_removals`? | 2026-08-10 |
 
-### T â€” secrets (Part XII) â€” 7
+### T — secrets (Part XII) — 7
 
 | | question | answered |
 |---|---|---|
 | **T1** | `backup_once` leaves a plaintext copy of the previous secret forever. | 2026-07-23 |
 | **T2** | Nothing stops `@target=` writing a plaintext secret back inside the git repo. | 2026-07-23 |
-| **T3** | What does a missing hardware token look like â€” prompt, hang, or error? | 2026-07-24 |
+| **T3** | What does a missing hardware token look like — prompt, hang, or error? | 2026-07-24 |
 | **T4** | May an unattended `watch` tick decrypt with a touch-required key? | 2026-07-24 |
 | **T5** | Is the plaintext 0600 at creation, or chmod'd after? And on Windows? | 2026-07-23 |
 | **T6** | Must there be a way to opt out of `backup_once`, or bound how many pile up? | 2026-07-23 |
-| **T7** | Runtime injection of secrets into process memory â€” reopened. | 2026-07-24 |
+| **T7** | Runtime injection of secrets into process memory — reopened. | 2026-07-24 |
 
-### U â€” the next round (Part XIII) â€” 43
+### U — the next round (Part XIII) — 43
 
 | | question | answered |
 |---|---|---|
-| **U1** | Where does a custom backend definition live â€” the repo, or machine-local? | 2026-07-23 |
+| **U1** | Where does a custom backend definition live — the repo, or machine-local? | 2026-07-23 |
 | **U2** | Is a custom backend a full peer of a built-in (repos, orphans, dependencies)? | 2026-07-24 |
 | **U3** | What does removing an `exec:` line mean when a script has no inverse? | 2026-07-24 |
 | **U4** | Is `exec:` a licence to put a shell script where a backend belongs? | 2026-07-24 |
@@ -240,7 +240,7 @@ there). It is when the question stopped being open, not when the code landed.
 | **U7** | Is a health check per-package or per-sync? | 2026-07-24 |
 | **U8** | Is the removal preview a flag or a new verb? | 2026-07-24 |
 | **U9** | Do the ten status commands collapse into one `shall check`? | 2026-07-24 |
-| **U10** | Where does a backend's bootstrap live â€” `priority` or the definition file? | 2026-07-24 |
+| **U10** | Where does a backend's bootstrap live — `priority` or the definition file? | 2026-07-24 |
 | **U11** | Does `watch` imply `--locked`? | 2026-07-24 |
 | **U12** | Does `try` reuse the Phase 6 images, or build from a base the config names? | 2026-07-24 |
 | **U13** | Does `@runs=always` exist? | 2026-07-24 |
@@ -260,10 +260,10 @@ there). It is when the question stopped being open, not when the code landed.
 | **U27** | Is the snapshot/rollback layer opened to a registry + config-driven providers? | 2026-07-26 |
 | **U28** | One snapshot provider or several, chosen by capability not list order? | 2026-07-26 |
 | **U29** | Is APFS the macOS safety net, and is its restore `Live` or not? | 2026-07-26 |
-| **U30** | Declare storage objects (zfs/lvm/btrfs) as a family â€” and does the guard cover destroying one? | 2026-07-26 |
-| **U31** | Should health checks be an open vocabulary â€” a user-declared check command? | 2026-07-26 |
+| **U30** | Declare storage objects (zfs/lvm/btrfs) as a family — and does the guard cover destroying one? | 2026-07-26 |
+| **U31** | Should health checks be an open vocabulary — a user-declared check command? | 2026-07-26 |
 | **U32** | Do modules take parameters (the macro), and are parameter types checked? | 2026-07-26 |
-| **U33** | Are generated declarations â€” a config that runs a program to produce state â€” wanted at all? | 2026-07-26 |
+| **U33** | Are generated declarations — a config that runs a program to produce state — wanted at all? | 2026-07-26 |
 | **U34** | Is `shall repl` worth a second entry point, or is `eval \| jq` enough? | 2026-07-26 |
 | **U35** | May a user name a new verb, strictly as a composition of built-ins? | 2026-07-26 |
 | **U36** | Are init systems a declared-provider kind (s6/dinit/runit/Shepherd), or stays a closed enum? | 2026-07-26 |
@@ -275,71 +275,71 @@ there). It is when the question stopped being open, not when the code landed.
 | **U42** | Do the overlapping command clusters get consolidated? | 2026-07-27 |
 | **U43** | How much does an ordinary run say about itself? | 2026-07-27 |
 
-### Q â€” the production-readiness round and the grading rounds after it â€” 55
+### Q — the production-readiness round and the grading rounds after it — 55
 
-*Not a proposal part. These are the questions the readiness assessment forced â€” behaviour a
-user notices, or a published contract â€” raised because `CLAUDE.md` requires a ruling for them
+*Not a proposal part. These are the questions the readiness assessment forced — behaviour a
+user notices, or a published contract — raised because `CLAUDE.md` requires a ruling for them
 and the answers were in no file. `Q` was picked by checking every other prefix first: the
-review document had reused `U1`â€“`U3`, which are real register IDs belonging to other questions,
+review document had reused `U1`–`U3`, which are real register IDs belonging to other questions,
 and that collision is exactly what this namespace exists to avoid.*
 
 | | question | answered |
 |---|---|---|
-| **Q1** | Does a failed install leave its line in the file? â€” RULED: withdraw it when it can never succeed. | 2026-07-27 |
-| **Q2** | Is a package manager you never installed "critical"? â€” RULED: no, absent is its own state. | 2026-07-27 |
-| **Q3** | What does a mistyped command exit with? â€” RULED: 1, and the table stays at four codes. | 2026-07-27 |
-| **Q4** | Are unverified backends labelled "experimental"? â€” RULED: **no.** They are tested, and nothing ships until they are. | 2026-07-27 |
-| **Q5** | Does `@unverified` reach past the backends that download? â€” RULED: **yes** â€” a manager that verifies a signature itself (`helm`) takes it too. | 2026-07-28 |
-| **Q6** | May a definition in `adapters/backends.toml` take a built-in's name? â€” RULED: **yes, and only by saying so** â€” `overrides = true`. | 2026-07-28 |
-| **Q7** | Does the removal guard cover the resources a declaration puts in place, or only packages? â€” RULED: **the same rules**. | 2026-07-28 |
-| **Q8** | Should the security refusals return the documented refusal code? â€” RULED: **yes, all of them exit 3**. | 2026-07-28 |
-| **Q9** | Should a verb taking a backend name refuse one that does not exist? â€” RULED: **yes**, `install`'s message everywhere. | 2026-07-28 |
-| **Q10** | Should `mix` install Hex before installing an archive from it? â€” RULED. | 2026-07-29 |
-| **Q11** | What should `opam:` do on a machine with no opam switch? â€” RULED. | 2026-07-29 |
-| **Q12** | Should the sweep fail when its real coverage collapses, and against what? â€” RULED: **a ratchet**, threshold to the builder. | 2026-07-28 |
-| **Q13** | Should `asdf:` add the plugin a declared tool needs? â€” RULED: **yes**, off the argv. | 2026-07-29 |
-| **Q14** | What should `@unverified` do on a tool version with no flag to turn verification off? â€” RULED: **accept in silence**; the tool does not verify at all. | 2026-07-30 |
-| **Q15** | Should a command whose product is a file at a path the user named honour `--dry-run`? â€” RULED: **yes, except `plan`**. | 2026-07-30 |
-| **Q16** | Is a bare grammar keyword (`link`, `when`, `absent`) a package name? â€” RULED: **no, it is a parse error**; `list:NAME` still means the package. | 2026-07-30 |
-| **Q17** | How does a backend that mutates the real machine get its first real lifecycle? â€” RULED: **install and uninstall it, on the developer's own box**; and privileged containers are allowed for the storage backends. | 2026-07-30 |
-| **Q18** | The storage backends read options II.2's table does not permit, so `lvm:` cannot be written at all â€” which half of Part II is wrong? â€” RULED: **the table.** The keys are added, scoped to the backends that read them. | 2026-07-31 |
-| **Q19** | A changed `@quota` or `@size` did nothing on the next sync â€” RULED 2026-07-31: it resizes, and shrinking needs `@allow_shrink` on the line. | 2026-07-31 |
-| **Q20** | A changed `@classic` did nothing either â€” RULED 2026-07-31: same answer. Relaxing confinement converges; narrowing it is refused, because only remove-and-reinstall can. | 2026-07-31 |
-| **Q21** | Is converging-on-change a property of *every* option, or of the five that happen to have it â€” RULED 2026-07-31: every option, proved per option. | 2026-07-31 |
-| **Q22** | A config file saved by a Windows editor starts with a byte-order mark, which became part of the first name â€” refuse it, or read the file? â€” RULED 2026-07-31: **read it.** The mark is stripped where text enters a parser. | 2026-07-31 |
-| **Q23** | A package name that begins with `@` â€” every scoped npm package â€” was read as an option list and could not be written at all. â€” RULED 2026-07-31: **the leading `@` is part of the name.** | 2026-07-31 |
-| **Q24** | An uninstall sat 76 minutes on a child that had finished its work and never returned; nothing outside the DAG bounded a command at all. Built 2026-08-02: a bound on **silence**, `command_idle_timeout_secs = 900`. â€” RULED: **the user sets it; 900 stays.** Killing a legitimately silent install breaks a machine and waiting on a hang costs minutes, so the ceiling sits on the side that costs minutes. The sharp numbers live where they can be measured â€” reads at 120s (`Q32`), and the sudo prompt at 120s (`S88`). | 2026-08-10 |
-| **Q25** | May ownership be derived from the config repo's git history, demoting `registry.json` to a cache? â€” RULED: **no**, in both the git-required and the corroborating-source form. | 2026-08-03 |
-| **Q26** | Is the plan a public versioned artifact with a hard refusal on schema mismatch? â€” **DEFERRED.** The *internal* plan object is ruled **build it**; publishing the format is not. | 2026-08-03 |
-| **Q27** | Does Part II gain a tier-1 / tier-2 distinction, printed per row by `plan`? â€” RULED: **no.** | 2026-08-03 |
-| **Q28** | Is a command that reports success while leaving the user with a false picture of their machine a *defect class*, with rules of its own? â€” RULED: **yes.** | 2026-08-03 |
-| **Q30** | Should the `--` terminator be decided by which `VersionPin` variant a backend picked, and should the terminator table be keyed per verb? â€” RULED: **read it off the tokens; one key per binary.** Per-verb rejected on measurement. | 2026-08-04 |
-| **Q29** | Is the statement set closed, with all future computation routed through `generate:`? â€” **HALF RULED.** The *resource-kind* set is ruled **open â€” more prefixes may be added**; a ratchet holds Part II to `KEYWORDS` instead. The *computation* half is still open. | 2026-08-04 |
-| **Q31** | `unmanaged` names two different numbers on two screens, and a command is named after the meaning the register did *not* choose. Which word goes where? â€” RULED: **two meanings, two words.** `unmanaged` keeps E6's meaning; the wider set is `undeclared`, on `check drift`, in the readme, and in the verb â€” `purge-unmanaged` is now **`purge-undeclared`**, with no alias. | 2026-08-05 |
-| **Q32** | Q24's bound watched a child's **exit** and not the read of its output, so a manager that detaches left Shall on a pipe no clock covered â€” 64s against a 20s bound, **reported as SUCCESS**. â€” RULED: **the same silence bound runs over the readers**, and a command Shall stopped waiting on fails by name instead of reporting success. | 2026-08-05 |
-| **Q33** | `heal` acted on `Failed` entries as well as interrupted ones, and every failed attempt wrote a *new* operation â€” 22 for one package, all 22 reinstalled, serially. â€” RULED: **recovery finishes interrupted work only** (`InProgress`/`Abandoned`), one recovery per operation, and it runs on the transaction engine rather than a serial loop beside it. `Failed` becomes terminal and ages out. | 2026-08-05 |
-| **Q34** | `install X` converges the whole manifest, so one unresolvable declaration fails every later install, and the error named the innocent package. â€” RULED: **the model stays; the message changes.** A failure names the declaration and its file and line, and `install` says outright when what failed is not what you asked for â€” and never advises taking back the line that was. | 2026-08-05 |
-| **Q35** | U40 lets a mutation share stdin because `sudo` asks on the terminal; `sudo` is never inserted on Windows, where the sharing cost a 900s silence â€” 48ms vs 21.9s measured. â€” RULED: **no, the reason does not reach Windows.** Windows mutations get a closed stdin; Unix keeps U40 exactly as ruled. | 2026-08-05 |
-| **Q36** | `adopt` wrote 186 winget declarations naming identifiers `winget install` refuses â€” every `ARP\`/`MSIX\` row, not only the version-bearing ones. **Ruled: adoption declares only what the manager can put back**; winget adopts from `winget export` (78, not 280). | 2026-08-05 |
-| **Q37** | `github:` downloaded the whole release artifact and *then* refused to deploy because the destination is not Shall's â€” a refusal that needs zero downloaded bytes. Measured 61s and 119s, silent. â€” RULED: **ask the destination before spending the network**, in `github:`, `web:` and `appimage:` alike. | 2026-08-05 |
-| **Q38** | `watch --once` printed `watch: reconcile failed` and **exited 0**. â€” RULED: **a failed reconcile is a non-zero exit**, on `watch --once` as everywhere. The looping form still warns and carries on. | 2026-08-05 |
-| **Q39** | `adopt` wrote 150 `service:X@status=running` lines and converging one ran `sc start` on an already-running service. â€” RULED, both halves: already being in the declared state is success (150 placements to 2), **and** a bare `adopt` does not take a backend where being on the machine is not evidence of a choice. `shall adopt service` takes them; `--enabled-only` narrows to what starts at boot. | 2026-08-05 |
+| **Q1** | Does a failed install leave its line in the file? — RULED: withdraw it when it can never succeed. | 2026-07-27 |
+| **Q2** | Is a package manager you never installed "critical"? — RULED: no, absent is its own state. | 2026-07-27 |
+| **Q3** | What does a mistyped command exit with? — RULED: 1, and the table stays at four codes. | 2026-07-27 |
+| **Q4** | Are unverified backends labelled "experimental"? — RULED: **no.** They are tested, and nothing ships until they are. | 2026-07-27 |
+| **Q5** | Does `@unverified` reach past the backends that download? — RULED: **yes** — a manager that verifies a signature itself (`helm`) takes it too. | 2026-07-28 |
+| **Q6** | May a definition in `adapters/backends.toml` take a built-in's name? — RULED: **yes, and only by saying so** — `overrides = true`. | 2026-07-28 |
+| **Q7** | Does the removal guard cover the resources a declaration puts in place, or only packages? — RULED: **the same rules**. | 2026-07-28 |
+| **Q8** | Should the security refusals return the documented refusal code? — RULED: **yes, all of them exit 3**. | 2026-07-28 |
+| **Q9** | Should a verb taking a backend name refuse one that does not exist? — RULED: **yes**, `install`'s message everywhere. | 2026-07-28 |
+| **Q10** | Should `mix` install Hex before installing an archive from it? — RULED. | 2026-07-29 |
+| **Q11** | What should `opam:` do on a machine with no opam switch? — RULED. | 2026-07-29 |
+| **Q12** | Should the sweep fail when its real coverage collapses, and against what? — RULED: **a ratchet**, threshold to the builder. | 2026-07-28 |
+| **Q13** | Should `asdf:` add the plugin a declared tool needs? — RULED: **yes**, off the argv. | 2026-07-29 |
+| **Q14** | What should `@unverified` do on a tool version with no flag to turn verification off? — RULED: **accept in silence**; the tool does not verify at all. | 2026-07-30 |
+| **Q15** | Should a command whose product is a file at a path the user named honour `--dry-run`? — RULED: **yes, except `plan`**. | 2026-07-30 |
+| **Q16** | Is a bare grammar keyword (`link`, `when`, `absent`) a package name? — RULED: **no, it is a parse error**; `list:NAME` still means the package. | 2026-07-30 |
+| **Q17** | How does a backend that mutates the real machine get its first real lifecycle? — RULED: **install and uninstall it, on the developer's own box**; and privileged containers are allowed for the storage backends. | 2026-07-30 |
+| **Q18** | The storage backends read options II.2's table does not permit, so `lvm:` cannot be written at all — which half of Part II is wrong? — RULED: **the table.** The keys are added, scoped to the backends that read them. | 2026-07-31 |
+| **Q19** | A changed `@quota` or `@size` did nothing on the next sync — RULED 2026-07-31: it resizes, and shrinking needs `@allow_shrink` on the line. | 2026-07-31 |
+| **Q20** | A changed `@classic` did nothing either — RULED 2026-07-31: same answer. Relaxing confinement converges; narrowing it is refused, because only remove-and-reinstall can. | 2026-07-31 |
+| **Q21** | Is converging-on-change a property of *every* option, or of the five that happen to have it — RULED 2026-07-31: every option, proved per option. | 2026-07-31 |
+| **Q22** | A config file saved by a Windows editor starts with a byte-order mark, which became part of the first name — refuse it, or read the file? — RULED 2026-07-31: **read it.** The mark is stripped where text enters a parser. | 2026-07-31 |
+| **Q23** | A package name that begins with `@` — every scoped npm package — was read as an option list and could not be written at all. — RULED 2026-07-31: **the leading `@` is part of the name.** | 2026-07-31 |
+| **Q24** | An uninstall sat 76 minutes on a child that had finished its work and never returned; nothing outside the DAG bounded a command at all. Built 2026-08-02: a bound on **silence**, `command_idle_timeout_secs = 900`. — RULED: **the user sets it; 900 stays.** Killing a legitimately silent install breaks a machine and waiting on a hang costs minutes, so the ceiling sits on the side that costs minutes. The sharp numbers live where they can be measured — reads at 120s (`Q32`), and the sudo prompt at 120s (`S88`). | 2026-08-10 |
+| **Q25** | May ownership be derived from the config repo's git history, demoting `registry.json` to a cache? — RULED: **no**, in both the git-required and the corroborating-source form. | 2026-08-03 |
+| **Q26** | Is the plan a public versioned artifact with a hard refusal on schema mismatch? — **DEFERRED.** The *internal* plan object is ruled **build it**; publishing the format is not. | 2026-08-03 |
+| **Q27** | Does Part II gain a tier-1 / tier-2 distinction, printed per row by `plan`? — RULED: **no.** | 2026-08-03 |
+| **Q28** | Is a command that reports success while leaving the user with a false picture of their machine a *defect class*, with rules of its own? — RULED: **yes.** | 2026-08-03 |
+| **Q30** | Should the `--` terminator be decided by which `VersionPin` variant a backend picked, and should the terminator table be keyed per verb? — RULED: **read it off the tokens; one key per binary.** Per-verb rejected on measurement. | 2026-08-04 |
+| **Q29** | Is the statement set closed, with all future computation routed through `generate:`? — **HALF RULED.** The *resource-kind* set is ruled **open — more prefixes may be added**; a ratchet holds Part II to `KEYWORDS` instead. The *computation* half is still open. | 2026-08-04 |
+| **Q31** | `unmanaged` names two different numbers on two screens, and a command is named after the meaning the register did *not* choose. Which word goes where? — RULED: **two meanings, two words.** `unmanaged` keeps E6's meaning; the wider set is `undeclared`, on `check drift`, in the readme, and in the verb — `purge-unmanaged` is now **`purge-undeclared`**, with no alias. | 2026-08-05 |
+| **Q32** | Q24's bound watched a child's **exit** and not the read of its output, so a manager that detaches left Shall on a pipe no clock covered — 64s against a 20s bound, **reported as SUCCESS**. — RULED: **the same silence bound runs over the readers**, and a command Shall stopped waiting on fails by name instead of reporting success. | 2026-08-05 |
+| **Q33** | `heal` acted on `Failed` entries as well as interrupted ones, and every failed attempt wrote a *new* operation — 22 for one package, all 22 reinstalled, serially. — RULED: **recovery finishes interrupted work only** (`InProgress`/`Abandoned`), one recovery per operation, and it runs on the transaction engine rather than a serial loop beside it. `Failed` becomes terminal and ages out. | 2026-08-05 |
+| **Q34** | `install X` converges the whole manifest, so one unresolvable declaration fails every later install, and the error named the innocent package. — RULED: **the model stays; the message changes.** A failure names the declaration and its file and line, and `install` says outright when what failed is not what you asked for — and never advises taking back the line that was. | 2026-08-05 |
+| **Q35** | U40 lets a mutation share stdin because `sudo` asks on the terminal; `sudo` is never inserted on Windows, where the sharing cost a 900s silence — 48ms vs 21.9s measured. — RULED: **no, the reason does not reach Windows.** Windows mutations get a closed stdin; Unix keeps U40 exactly as ruled. | 2026-08-05 |
+| **Q36** | `adopt` wrote 186 winget declarations naming identifiers `winget install` refuses — every `ARP\`/`MSIX\` row, not only the version-bearing ones. **Ruled: adoption declares only what the manager can put back**; winget adopts from `winget export` (78, not 280). | 2026-08-05 |
+| **Q37** | `github:` downloaded the whole release artifact and *then* refused to deploy because the destination is not Shall's — a refusal that needs zero downloaded bytes. Measured 61s and 119s, silent. — RULED: **ask the destination before spending the network**, in `github:`, `web:` and `appimage:` alike. | 2026-08-05 |
+| **Q38** | `watch --once` printed `watch: reconcile failed` and **exited 0**. — RULED: **a failed reconcile is a non-zero exit**, on `watch --once` as everywhere. The looping form still warns and carries on. | 2026-08-05 |
+| **Q39** | `adopt` wrote 150 `service:X@status=running` lines and converging one ran `sc start` on an already-running service. — RULED, both halves: already being in the declared state is success (150 placements to 2), **and** a bare `adopt` does not take a backend where being on the machine is not evidence of a choice. `shall adopt service` takes them; `--enabled-only` narrows to what starts at boot. | 2026-08-05 |
 
-| **Q40** | A read that failed **silently** became an empty answer: `run_output` ignored exit status, so `winget list` exiting `0x8A150001` with zero bytes returned `Ok("")` and `list_installed` reported `Ok(vec![])`. Measured â€” `shall list --backend winget` printed nothing and **exited 0** on a machine with 280 packages. â€” RULED: **a non-zero read that said nothing on either stream is a failure, not an empty result.** | 2026-08-05 |
-| **Q41** | Retryability was classified only from output *text*, and the one failure that matters here has no text at all â€” so an empty haystack fell to `Unknown` while the exit code, the only signal present, was read by nothing but `is_benign`. â€” RULED: **classify by exit code too**, and retry a transient *read* (idempotent; a mutation is not). | 2026-08-05 |
-| **Q42** | `command_idle_timeout_secs` (900) was chosen for `Checkpoint-Computer`, a mutation that legitimately runs silent for minutes, and every **read** inherited it â€” so a wedged 1.5s listing cost fifteen minutes. â€” RULED: **reads get their own bound**, `query_idle_timeout_secs`, default 120, `0` disables. | 2026-08-05 |
+| **Q40** | A read that failed **silently** became an empty answer: `run_output` ignored exit status, so `winget list` exiting `0x8A150001` with zero bytes returned `Ok("")` and `list_installed` reported `Ok(vec![])`. Measured — `shall list --backend winget` printed nothing and **exited 0** on a machine with 280 packages. — RULED: **a non-zero read that said nothing on either stream is a failure, not an empty result.** | 2026-08-05 |
+| **Q41** | Retryability was classified only from output *text*, and the one failure that matters here has no text at all — so an empty haystack fell to `Unknown` while the exit code, the only signal present, was read by nothing but `is_benign`. — RULED: **classify by exit code too**, and retry a transient *read* (idempotent; a mutation is not). | 2026-08-05 |
+| **Q42** | `command_idle_timeout_secs` (900) was chosen for `Checkpoint-Computer`, a mutation that legitimately runs silent for minutes, and every **read** inherited it — so a wedged 1.5s listing cost fifteen minutes. — RULED: **reads get their own bound**, `query_idle_timeout_secs`, default 120, `0` disables. | 2026-08-05 |
 
-| **Q43** | Three backends parse a human table where the tool offers a machine format â€” pixi (`--json`), dotnet (`--format json`), scoop (`export`). All three are **version-dependent flags** and Shall had no capability probe, so shipping them blind would reproduce `Q40` (a silently empty listing) on older tooling. â€” RULED: **negotiate once per backend per run**, falling back to the text listing when the manager refuses. | 2026-08-05 |
+| **Q43** | Three backends parse a human table where the tool offers a machine format — pixi (`--json`), dotnet (`--format json`), scoop (`export`). All three are **version-dependent flags** and Shall had no capability probe, so shipping them blind would reproduce `Q40` (a silently empty listing) on older tooling. — RULED: **negotiate once per backend per run**, falling back to the text listing when the manager refuses. | 2026-08-05 |
 
-| **Q44** | `shall list --outdated` asked every manager for one package's latest version at a time, serially â€” and `Searchable::lookup` defaults to a whole `search`, so it was one registry search per installed package. **Measured: 771.4s against 2.9s for a plain `list`.** â€” RULED: **ask the manager once**, where it has such a verb; fall back to per-package but concurrent where it does not. **Measured after: 25.6s.** | 2026-08-05 |
-| **Q45** | Five backends installed and/or removed **one package per command** where the manager takes a list â€” `brew`, `nix`, `mise`, `vscode`, `snap`. â€” RULED: **one command for the batch**, built for all five. Three verified against the real tool in containers (nix, mise, brew); vscode and snap are argv-tested only and the entry says so. The first sweep named thirteen backends including dnf and pacman and **was wrong**. | 2026-08-05 |
-| **Q46** | `upgrade` on a manager with no upgrade-all verb re-installed **one package per command** â€” npm, pnpm, yarn, cargo, pubdart. Forty global npm packages meant forty resolutions. In `generic`, so it was never a hand-written-backend problem. â€” RULED: **batch, and fall back to the per-package loop only when the batch fails**, which keeps the failure isolation the loop existed for. | 2026-08-05 |
-| **Q47** | `adopt` wrote OS-essential packages into a **commented-out** section, defending against a deletion `guard::protection_of` already refuses â€” and the price was that the 33 packages the machine cannot boot without were the only ones outside the model, with no drift detection and nothing to heal. â€” RULED: **adoption is the claim that Shall keeps it; the guard is what refuses to remove it.** Essentials are live lines, the header names the exception, the guard is untouched. | 2026-08-05 |
+| **Q44** | `shall list --outdated` asked every manager for one package's latest version at a time, serially — and `Searchable::lookup` defaults to a whole `search`, so it was one registry search per installed package. **Measured: 771.4s against 2.9s for a plain `list`.** — RULED: **ask the manager once**, where it has such a verb; fall back to per-package but concurrent where it does not. **Measured after: 25.6s.** | 2026-08-05 |
+| **Q45** | Five backends installed and/or removed **one package per command** where the manager takes a list — `brew`, `nix`, `mise`, `vscode`, `snap`. — RULED: **one command for the batch**, built for all five. Three verified against the real tool in containers (nix, mise, brew); vscode and snap are argv-tested only and the entry says so. The first sweep named thirteen backends including dnf and pacman and **was wrong**. | 2026-08-05 |
+| **Q46** | `upgrade` on a manager with no upgrade-all verb re-installed **one package per command** — npm, pnpm, yarn, cargo, pubdart. Forty global npm packages meant forty resolutions. In `generic`, so it was never a hand-written-backend problem. — RULED: **batch, and fall back to the per-package loop only when the batch fails**, which keeps the failure isolation the loop existed for. | 2026-08-05 |
+| **Q47** | `adopt` wrote OS-essential packages into a **commented-out** section, defending against a deletion `guard::protection_of` already refuses — and the price was that the 33 packages the machine cannot boot without were the only ones outside the model, with no drift detection and nothing to heal. — RULED: **adoption is the claim that Shall keeps it; the guard is what refuses to remove it.** Essentials are live lines, the header names the exception, the guard is untouched. | 2026-08-05 |
 
-*Q7â€“Q13 were absent from this table while their entries below said ANSWERED â€” the index drift
+*Q7–Q13 were absent from this table while their entries below said ANSWERED — the index drift
 this file exists to prevent, found on 2026-07-30 by adding a row to it.*
 
-### Z â€” the readiness audit â€” 2
+### Z — the readiness audit — 2
 
 *`docs/archive/GRADE-2026-08-03.md` drove a real binary against the five questions the audit was
 commissioned to answer and found twelve defects. Ten were internal correctness and were built
@@ -347,57 +347,57 @@ without asking. Two are not mine: one is a legal choice and one changes a publis
 
 | | question | answered |
 |---|---|---|
-| **Z1** | There is no `LICENSE` file and no `license` key in `Cargo.toml`, for a tool with an install script and a `self-upgrade` verb. Which licence? | **ANSWERED** â€” ruled 2026-08-09 |
-| **Z2** | `lock` and `unlock` touch unrelated files and are not inverses; `unlock` can cause package churn. Rename it, or give `lock` a real inverse? | **ANSWERED** â€” both verbs name their axis (`versions`/`backends`/`scripts`/`all`), and every path that moves a version re-records it |
+| **Z1** | There is no `LICENSE` file and no `license` key in `Cargo.toml`, for a tool with an install script and a `self-upgrade` verb. Which licence? | **ANSWERED** — ruled 2026-08-09 |
+| **Z2** | `lock` and `unlock` touch unrelated files and are not inverses; `unlock` can cause package churn. Rename it, or give `lock` a real inverse? | **ANSWERED** — both verbs name their axis (`versions`/`backends`/`scripts`/`all`), and every path that moves a version re-records it |
 
-### Y â€” the efficiency pass â€” 24
+### Y — the efficiency pass — 24
 
 *Not a proposal part. `docs/INEFFICIENCIES.md` audited every place in the tree slower than it has
 to be and marked the findings a user would notice as needing a ruling; the owner ruled the lot on
-2026-08-02 â€” "as parallel as possible, as efficient as possible, as fast as possible, restructure
+2026-08-02 — "as parallel as possible, as efficient as possible, as fast as possible, restructure
 if it takes that". These four are the parts of that with visible behaviour. The rules are in
-II.19 and the reasons in V.115â€“V.118.*
+II.19 and the reasons in V.115–V.118.*
 
 | | question | answered |
 |---|---|---|
-| **Y1** | One `apt install` per package, measured at 12,465 ms against 3,161 ms for one command â€” does Shall batch? â€” RULED: **yes**, per manager, per wave, bounded, with rollback still per package. | 2026-08-02 |
-| **Y2** | `max_parallel` bounded sockets by core count â€” one knob or two? â€” RULED: **two.** `network_parallel` (16), and `upgrade` fans out across the managers that contend with nothing. | 2026-08-02 |
-| **Y3** | `search` had no per-backend deadline, so one slow registry set the whole runtime â€” may a read give up? â€” RULED: **yes, and it says which backend.** | 2026-08-02 |
-| **Y4** | A ~51-second Windows restore point ran as a silent barrier before every mutation â€” RULED: it **starts first, is joined last, and announces itself.** | 2026-08-02 |
-| **Y5** | Nothing said *which* manager a run waited on, so "why was that slow" could only be answered by timing the managers by hand outside Shall â€” RULED: **`--timings`**, off by default, on stderr, reporting wall clock against summed child time. | 2026-08-03 |
-| **Y6** | Every run re-asked every manager the same question about a machine nothing had touched â€” may an answer outlive its run? â€” RULED: **yes, opt-in.** `installed_cache_secs`, 0 by default, dropped on every mutation and by `clean-cache`, bypassed by `--no-cache`. | 2026-08-03 |
-| **Y7** | `winget list` reports names with spaces in them and "a package name is one word" refused them, so a name Shall printed was a name Shall could not be given â€” RULED: **quote it.** `winget:"ARP\Machine\X64\Mozilla Firefox"`. | 2026-08-03 |
-| **Y7a** | Should `adopt` take Windows services at all, or leave them to a human? â€” RULED: **adopt them as live lines**, uncommented, next to the packages. Owner: *"services too get put in with no comment, just like packages."* Deleting one stops and disables the service, and the manifest header says so in those words. | 2026-08-03 |
-| **Y8** | Nine managers started 5.4 s into a 9.1 s `check drift` and the run was idle before they did â€” why did it not overlap? â€” RULED: **ask every manager the run will ask, at once.** Not slower children: unasked ones. 9.1 s â†’ 3.9 s, 2.7Ã— â†’ 5.4Ã—, same report. | 2026-08-03 |
-| **Y9** | The planner asked seven backends what each declared package depends on and installed the answers â€” which took ownership of packages nobody declared, and split the one command line it had a reason to keep. RULED: **no.** Shall installs what you declared, and `@requires` keeps splitting the wave. | 2026-08-06 |
-| **Y10** | The write-ahead log had two variants and all nine `apply/` modules referenced it zero times, while a `dotfiles:` tree destroyed the user's file with no backup, no ledger row and therefore no teardown â€” four documents said otherwise. RULED: **the log covers what cannot be recomputed**, and **a tree is the `link:` lines it stands for.** | 2026-08-06 |
+| **Y1** | One `apt install` per package, measured at 12,465 ms against 3,161 ms for one command — does Shall batch? — RULED: **yes**, per manager, per wave, bounded, with rollback still per package. | 2026-08-02 |
+| **Y2** | `max_parallel` bounded sockets by core count — one knob or two? — RULED: **two.** `network_parallel` (16), and `upgrade` fans out across the managers that contend with nothing. | 2026-08-02 |
+| **Y3** | `search` had no per-backend deadline, so one slow registry set the whole runtime — may a read give up? — RULED: **yes, and it says which backend.** | 2026-08-02 |
+| **Y4** | A ~51-second Windows restore point ran as a silent barrier before every mutation — RULED: it **starts first, is joined last, and announces itself.** | 2026-08-02 |
+| **Y5** | Nothing said *which* manager a run waited on, so "why was that slow" could only be answered by timing the managers by hand outside Shall — RULED: **`--timings`**, off by default, on stderr, reporting wall clock against summed child time. | 2026-08-03 |
+| **Y6** | Every run re-asked every manager the same question about a machine nothing had touched — may an answer outlive its run? — RULED: **yes, opt-in.** `installed_cache_secs`, 0 by default, dropped on every mutation and by `clean-cache`, bypassed by `--no-cache`. | 2026-08-03 |
+| **Y7** | `winget list` reports names with spaces in them and "a package name is one word" refused them, so a name Shall printed was a name Shall could not be given — RULED: **quote it.** `winget:"ARP\Machine\X64\Mozilla Firefox"`. | 2026-08-03 |
+| **Y7a** | Should `adopt` take Windows services at all, or leave them to a human? — RULED: **adopt them as live lines**, uncommented, next to the packages. Owner: *"services too get put in with no comment, just like packages."* Deleting one stops and disables the service, and the manifest header says so in those words. | 2026-08-03 |
+| **Y8** | Nine managers started 5.4 s into a 9.1 s `check drift` and the run was idle before they did — why did it not overlap? — RULED: **ask every manager the run will ask, at once.** Not slower children: unasked ones. 9.1 s → 3.9 s, 2.7× → 5.4×, same report. | 2026-08-03 |
+| **Y9** | The planner asked seven backends what each declared package depends on and installed the answers — which took ownership of packages nobody declared, and split the one command line it had a reason to keep. RULED: **no.** Shall installs what you declared, and `@requires` keeps splitting the wave. | 2026-08-06 |
+| **Y10** | The write-ahead log had two variants and all nine `apply/` modules referenced it zero times, while a `dotfiles:` tree destroyed the user's file with no backup, no ledger row and therefore no teardown — four documents said otherwise. RULED: **the log covers what cannot be recomputed**, and **a tree is the `link:` lines it stands for.** | 2026-08-06 |
 | **Q49** | `pip:` cannot install on a PEP 668 distro, and Shall has no answer for it. | 2026-08-10 |
 | **Q50** | A killed run leaves the package manager's own lock behind, and every later run fails. | 2026-08-10 |
 | **Q51** | Another package manager holding its own lock made Shall fail in 3.5 seconds, with a sentence that was false in exactly that case. RULED: **wait for it.** | 2026-08-10 |
-| **Q52** | Shall started processes it did not own â€” SIGKILL for a package manager mid-transaction, and seventeen sites that detached a child or parked a runtime worker. RULED: **every child has an owner, through one of three doors.** | 2026-08-10 |
-| **Q53** | What does `@version=` mean on a manager that cannot express one? `brew` builds a formula name that does not exist and the sync dies; ten other backends drop the pin and report success. â€” RULED: **record everywhere, replay only where it can be replayed.** A recorded version is never fed back as an install argument to a manager that cannot take one, so drift detection keeps working everywhere; a pin somebody *typed* that cannot be honoured is refused at plan time by name, and is fatal under `--locked`. `brew` stops inventing `name@version`. (II.53, V.183) | 2026-08-10 |
-| **Q54** | A removal that removed nothing reported success. `uninstall` deletes the declaration and lets the sync take the package away as drift â€” and drift removal only removes what Shall manages, so a package on the machine that Shall has no ownership record for plans no change, prints `already up to date` and exits 0 with the binary still on PATH (`S87`). â€” RULED (owner, 2026-08-11): **it should say it did not remove it and does not own it.** The command now fails, names the package, says Shall has no record of installing it, and names `adopt` as the way to take ownership. Checked only for names the registry did not carry when the command started, so an ordinary uninstall pays for nothing. (II.56, V.186) | 2026-08-11 |
-| **Q55** | Should the `S87` ownership repair read the **manifest** rather than replay the write-ahead log â€” is a package this machine declares and already has Shall's, whoever installed it? â€” RULED: **yes â€” declaring a package you already had makes it Shall's.** | 2026-08-11 |
-| **Q48** | Every `link:` on Windows took the cross-drive COPY fallback, same drive or not: `is_same_drive` compared a verbatim prefix against a plain one â€” and the limitation it guarded does not exist, since a Windows symlink spans volumes. RULED: **a `link:` links; only a missing privilege gets a copy, and it says so.** | 2026-08-06 |
+| **Q52** | Shall started processes it did not own — SIGKILL for a package manager mid-transaction, and seventeen sites that detached a child or parked a runtime worker. RULED: **every child has an owner, through one of three doors.** | 2026-08-10 |
+| **Q53** | What does `@version=` mean on a manager that cannot express one? `brew` builds a formula name that does not exist and the sync dies; ten other backends drop the pin and report success. — RULED: **record everywhere, replay only where it can be replayed.** A recorded version is never fed back as an install argument to a manager that cannot take one, so drift detection keeps working everywhere; a pin somebody *typed* that cannot be honoured is refused at plan time by name, and is fatal under `--locked`. `brew` stops inventing `name@version`. (II.53, V.183) | 2026-08-10 |
+| **Q54** | A removal that removed nothing reported success. `uninstall` deletes the declaration and lets the sync take the package away as drift — and drift removal only removes what Shall manages, so a package on the machine that Shall has no ownership record for plans no change, prints `already up to date` and exits 0 with the binary still on PATH (`S87`). — RULED (owner, 2026-08-11): **it should say it did not remove it and does not own it.** The command now fails, names the package, says Shall has no record of installing it, and names `adopt` as the way to take ownership. Checked only for names the registry did not carry when the command started, so an ordinary uninstall pays for nothing. (II.56, V.186) | 2026-08-11 |
+| **Q55** | Should the `S87` ownership repair read the **manifest** rather than replay the write-ahead log — is a package this machine declares and already has Shall's, whoever installed it? — RULED: **yes — declaring a package you already had makes it Shall's.** | 2026-08-11 |
+| **Q48** | Every `link:` on Windows took the cross-drive COPY fallback, same drive or not: `is_same_drive` compared a verbatim prefix against a plain one — and the limitation it guarded does not exist, since a Windows symlink spans volumes. RULED: **a `link:` links; only a missing privilege gets a copy, and it says so.** | 2026-08-06 |
 | **Y11** | Two backends built install and remove argv by hand and lost the `--` terminator; forty backends could not clear a cache because no row could say how; one manager took two locks over one database. The argv table recorded all of it and checked none of it. RULED: **one path per backend, and a capability the machinery lacks is a field.** | 2026-08-06 |
-| **Y12** | `ChangePlanner::plan` took `Option<Scope>`, where `None` meant both "do not filter the desired set" and "reap every backend on the box"; five of eight callers passed it and four wanted only the first â€” the transient shell, whose desired set is its own requests, planned a removal for every other package on the machine. RULED: **a plan says what it is computed over, and the case that reaps cannot be written without the list that bounds it.** | 2026-08-06 |
-| **Y13** | Which phase of a sync a statement belongs to was written down in four lists nothing compared, and each new kind was missed by one of them â€” four times, by the code's own count. K17's adapter table was ruled once and implemented seven times, and four of the five shared questions had already been answered differently, including one table with no `os` field at all. RULED: **a statement declares its phase and the order is a type; K17 has one mechanism, and writing it again is a build failure.** The `Installable` â†’ `Converge` rename it was raised with is **refused** â€” the convergence decision is already shared, in two places, and neither is in the bodies the review read. | 2026-08-06 |
-| **Y14** | `apply` executed a frozen plan in two serial loops of its own â€” no write-ahead log, so `heal` could not recover the one command named after review and deliberation; no transaction, no snapshot, no health check; one manager invocation per package; and a failure was a warning under a summary reading `Applied plan`. Eight more commands reached a package manager with no record at all. BUILT, NEVER RULED: **the record belongs to the mutation, not to the verb**, and a frozen plan is executed by the engine that executes every other plan. | 2026-08-06 |
-| **Y15** | A line pinned to a manager this machine does not have failed the whole run: `spec_is_missing` raised `BackendNotFound` from inside the planner's fan-out, so one `apt:` line dropped the twenty `winget:` lines beside it and `sync` planned nothing. RULED: **that is a portable config, not a broken one** â€” skipped, reported in `skipped`, and the command succeeds; a package that genuinely fails still fails, with `--keep-going` as the per-run opt-in. Reverses `Y14` item 2. | 2026-08-06 |
-| **Y16** | An audit proposed deleting `shall repl`, the two ratatui screens, and the Lua hook arm â€” the last on the grounds that `mlua` vendors 28,687 lines of C rebuilt ten times per CI push to serve one branch of one `if`. RULED: **keep all three and make them work** â€” *"it not working is not cause for deletion but fixing"*. The `#rhai` arm had never executed anything (the marker line reached the engine, and `#` is reserved in Rhai), and the one shipped example called an `exec()` nothing registers. The marker is now stripped, all three dialects get the same four facts, and `#rhai` gets the standard library `vars.shall` has. | 2026-08-07 |
-| **Y17** | The dialect `Y16` kept was dead on Windows: `CreateProcess` answers *"not a valid application for this OS platform"* for any script file, because Windows has no shebang mechanism â€” so a `#!` hook that worked on the author's Linux box failed on a teammate's machine with a message blaming the script. Refuse there, or make it work? â€” RULED: **read the shebang ourselves**, on every platform. `python3` finds a Windows `python` (then `py`); an absolute interpreter that exists is used as written, so Unix launches what the kernel would have; a missing one is named. `exec:` and event hooks read it too â€” they had been ignoring it on *both* platforms. | 2026-08-07 |
-| **Y18** | `named_commands_exist_tests` was built around the property rather than the artifact, and then its roots were drawn around `src/`-and-friends â€” so 2.5 MB of specification went unscanned, and a **CLOSED** owner ruling (`bugs.md` F4) rested its whole justification on `shall doctor`, a command `S38` folded into `check <section>`. Pointed at `docs/` under the weaker property a record can satisfy â€” *a dead command named here is one II.17 says is dead* â€” 62 raw hits reduce to three, and all three are Part II: the sync nudge says `shall clean` where the verb is `remove-orphans`; the `adopt` header says `shall forget` where the code already writes `shall unmanage`; and II.17's register never recorded `shim`, which leaves a **verified open bug against a command that does not exist**. **RULED 2026-08-09** â€” the first three corrected in Part II on the 8th; the fourth ruled *make `@source=` work*, and built: the shim reads the provider off its own line, and the `PATH` lookup that would have found the shim again is closed. | 2026-08-09 |
-| **Y23** | `@channel` on a `flatpak:` line reaches the machine and is never read back â€” the listing asked for `application,version`, so D13's drift check had nothing to compare and a channel edit did nothing for ever. Ruled *make it visible and make the repair real*: flatpak has no channel switch, so the declared ref is installed and `make-current` points the app at it, the old branch is left alone, and an app on two branches reports no channel rather than a guess. | 2026-08-09 |
-| **Y19** | `parse_installed` could not say *"I read four hundred bytes and recognised nothing"* â€” a manager whose output format changed reported an empty machine, which reads as clean. Should an unreadable read fail instead? â€” RULED: **yes, keep it.** A manager that fails is safe; one that succeeds with a changed format reports the whole machine as drifted and adopts nothing. The louder answer is the correct one. | 2026-08-10 |
-| **Y20** | Closing an undeclared port is a path that removes â€” should it count against `max_removals`? â€” RULED: **yes, it is a removal and yes, it counts â€” against its own ceiling.** `max_port_closures`, answering to `--allow-mass-removal` like every other removal count. | 2026-08-09 |
-| **Y21** | 2.5 MB of specification was written under documentation economics and is read under context economics. Does the corpus get cut, and where? â€” RULED: **cut it.** The record is distilled into a short list of lessons; `docs/archive/` and `docs/spec/proposals/` go, recoverable from git by SHA. | 2026-08-08 |
-| **Y22** | `flatpak`'s scope is a boolean where the data path needs a value â€” rename the key? â€” RULED: **yes, and there are no legacy users to migrate.** `scope = "user" \| "system"`, defaulting to `system`; the old key is **refused by name** rather than honoured, which is a rejection and not a shim. | 2026-08-08 |
+| **Y12** | `ChangePlanner::plan` took `Option<Scope>`, where `None` meant both "do not filter the desired set" and "reap every backend on the box"; five of eight callers passed it and four wanted only the first — the transient shell, whose desired set is its own requests, planned a removal for every other package on the machine. RULED: **a plan says what it is computed over, and the case that reaps cannot be written without the list that bounds it.** | 2026-08-06 |
+| **Y13** | Which phase of a sync a statement belongs to was written down in four lists nothing compared, and each new kind was missed by one of them — four times, by the code's own count. K17's adapter table was ruled once and implemented seven times, and four of the five shared questions had already been answered differently, including one table with no `os` field at all. RULED: **a statement declares its phase and the order is a type; K17 has one mechanism, and writing it again is a build failure.** The `Installable` → `Converge` rename it was raised with is **refused** — the convergence decision is already shared, in two places, and neither is in the bodies the review read. | 2026-08-06 |
+| **Y14** | `apply` executed a frozen plan in two serial loops of its own — no write-ahead log, so `heal` could not recover the one command named after review and deliberation; no transaction, no snapshot, no health check; one manager invocation per package; and a failure was a warning under a summary reading `Applied plan`. Eight more commands reached a package manager with no record at all. BUILT, NEVER RULED: **the record belongs to the mutation, not to the verb**, and a frozen plan is executed by the engine that executes every other plan. | 2026-08-06 |
+| **Y15** | A line pinned to a manager this machine does not have failed the whole run: `spec_is_missing` raised `BackendNotFound` from inside the planner's fan-out, so one `apt:` line dropped the twenty `winget:` lines beside it and `sync` planned nothing. RULED: **that is a portable config, not a broken one** — skipped, reported in `skipped`, and the command succeeds; a package that genuinely fails still fails, with `--keep-going` as the per-run opt-in. Reverses `Y14` item 2. | 2026-08-06 |
+| **Y16** | An audit proposed deleting `shall repl`, the two ratatui screens, and the Lua hook arm — the last on the grounds that `mlua` vendors 28,687 lines of C rebuilt ten times per CI push to serve one branch of one `if`. RULED: **keep all three and make them work** — *"it not working is not cause for deletion but fixing"*. The `#rhai` arm had never executed anything (the marker line reached the engine, and `#` is reserved in Rhai), and the one shipped example called an `exec()` nothing registers. The marker is now stripped, all three dialects get the same four facts, and `#rhai` gets the standard library `vars.shall` has. | 2026-08-07 |
+| **Y17** | The dialect `Y16` kept was dead on Windows: `CreateProcess` answers *"not a valid application for this OS platform"* for any script file, because Windows has no shebang mechanism — so a `#!` hook that worked on the author's Linux box failed on a teammate's machine with a message blaming the script. Refuse there, or make it work? — RULED: **read the shebang ourselves**, on every platform. `python3` finds a Windows `python` (then `py`); an absolute interpreter that exists is used as written, so Unix launches what the kernel would have; a missing one is named. `exec:` and event hooks read it too — they had been ignoring it on *both* platforms. | 2026-08-07 |
+| **Y18** | `named_commands_exist_tests` was built around the property rather than the artifact, and then its roots were drawn around `src/`-and-friends — so 2.5 MB of specification went unscanned, and a **CLOSED** owner ruling (`bugs.md` F4) rested its whole justification on `shall doctor`, a command `S38` folded into `check <section>`. Pointed at `docs/` under the weaker property a record can satisfy — *a dead command named here is one II.17 says is dead* — 62 raw hits reduce to three, and all three are Part II: the sync nudge says `shall clean` where the verb is `remove-orphans`; the `adopt` header says `shall forget` where the code already writes `shall unmanage`; and II.17's register never recorded `shim`, which leaves a **verified open bug against a command that does not exist**. **RULED 2026-08-09** — the first three corrected in Part II on the 8th; the fourth ruled *make `@source=` work*, and built: the shim reads the provider off its own line, and the `PATH` lookup that would have found the shim again is closed. | 2026-08-09 |
+| **Y23** | `@channel` on a `flatpak:` line reaches the machine and is never read back — the listing asked for `application,version`, so D13's drift check had nothing to compare and a channel edit did nothing for ever. Ruled *make it visible and make the repair real*: flatpak has no channel switch, so the declared ref is installed and `make-current` points the app at it, the old branch is left alone, and an app on two branches reports no channel rather than a guess. | 2026-08-09 |
+| **Y19** | `parse_installed` could not say *"I read four hundred bytes and recognised nothing"* — a manager whose output format changed reported an empty machine, which reads as clean. Should an unreadable read fail instead? — RULED: **yes, keep it.** A manager that fails is safe; one that succeeds with a changed format reports the whole machine as drifted and adopts nothing. The louder answer is the correct one. | 2026-08-10 |
+| **Y20** | Closing an undeclared port is a path that removes — should it count against `max_removals`? — RULED: **yes, it is a removal and yes, it counts — against its own ceiling.** `max_port_closures`, answering to `--allow-mass-removal` like every other removal count. | 2026-08-09 |
+| **Y21** | 2.5 MB of specification was written under documentation economics and is read under context economics. Does the corpus get cut, and where? — RULED: **cut it.** The record is distilled into a short list of lessons; `docs/archive/` and `docs/spec/proposals/` go, recoverable from git by SHA. | 2026-08-08 |
+| **Y22** | `flatpak`'s scope is a boolean where the data path needs a value — rename the key? — RULED: **yes, and there are no legacy users to migrate.** `scope = "user" \| "system"`, defaulting to `system`; the old key is **refused by name** rather than honoured, which is a rejection and not a shim. | 2026-08-08 |
 
-### G â€” the release-adversarial round (GRADE-2026-08-12) â€” 11
+### G — the release-adversarial round (GRADE-2026-08-12) — 11
 
 *Not a proposal part. `docs/GRADE-2026-08-12.md` measured this tree for release and produced
 twelve findings; the work order attached to them was implemented in one pass. Ten of those
-changes alter behaviour a user would notice, so they are entries rather than fixes â€” **the owner
+changes alter behaviour a user would notice, so they are entries rather than fixes — **the owner
 has not ruled on any of them.** Each names the finding it came from and, where there was a road
 not taken, says what it was. G2, G5 and G10 are the three most likely to be reversed, and G10 is
 the widest.*
@@ -408,24 +408,24 @@ wrong is corrected here rather than quietly in the code.*
 
 | | question | built |
 |---|---|---|
-| **G1** | `sync --keep-going` exited **0** with `Status: SUCCESS` over a run in which every package failed â€” and its batching took installable packages down with the bad name. BUILT: **continuing is not succeeding.** Non-zero after the summary; one package per command under the flag; `Metrics.errors` deleted in favour of the per-operation record that already existed. | 2026-08-12 |
-| **G2** | *"Shall cannot read back"* was an `ok` row, and `ok` decides the exit code â€” so an unopenable dotfile printed green at exit 0. BUILT: **not `ok`.** Cost: a `setting:` line makes `check` permanently non-clean, with no command that clears it. | 2026-08-12 |
-| **G3** | A `link:` whose source is not on disk got a symlink written to it â€” which exists, passes `-L`, and opens for nobody. BUILT: **refused**, at plan time and at install time, as `dotfiles:` has always refused its missing tree. A relative source is read from the config repo, which is what `dotfiles:` always did. | 2026-08-12 |
+| **G1** | `sync --keep-going` exited **0** with `Status: SUCCESS` over a run in which every package failed — and its batching took installable packages down with the bad name. BUILT: **continuing is not succeeding.** Non-zero after the summary; one package per command under the flag; `Metrics.errors` deleted in favour of the per-operation record that already existed. | 2026-08-12 |
+| **G2** | *"Shall cannot read back"* was an `ok` row, and `ok` decides the exit code — so an unopenable dotfile printed green at exit 0. BUILT: **not `ok`.** Cost: a `setting:` line makes `check` permanently non-clean, with no command that clears it. | 2026-08-12 |
+| **G3** | A `link:` whose source is not on disk got a symlink written to it — which exists, passes `-L`, and opens for nobody. BUILT: **refused**, at plan time and at install time, as `dotfiles:` has always refused its missing tree. A relative source is read from the config repo, which is what `dotfiles:` always did. | 2026-08-12 |
 | **G4** | An empty `priority` file was accepted silently, and an empty backend set was read as *every* backend. BUILT: **refused**, in the same words as the missing file. | 2026-08-12 |
 | **G5** | `hold` did not survive a bulk `upgrade` while `--help` claimed `apt-mark` / `versionlock` parity. BUILT: **the native whole-system upgrade is refused while anything is held**; `--ignore-holds` opts in; the parity claim is gone. Roads not taken: defaulting to per-package (narrows the verb), and pushing holds into the manager (real parity, needs an adapter per backend). | 2026-08-12 |
-| **G6** | A package name could begin with `-`, so `composer:--version` reached composer's argv as a flag. BUILT: **refused everywhere.** The terminator table stays as the mechanism. The composer row that shipped with this entry has since been **reversed on measurement â€” composer honours `--`** (see `G6a`). | 2026-08-12 |
-| **G6a** | `G6` flipped composer's terminator row to *non*-terminating on three nightlies that agreed with themselves. They could not have decided it: a bogus operand makes composer answer "could not find a matching version" whether it read `--` or dropped it, and on two of the three hosts it never resolved the operand at all. BUILT: **the row is `true` again**, on a container run with a *flag-shaped* operand â€” `composer global search --format=json -- --version` searches packagist for the string and finds `sebastian/version`, while the same line without `--` prints the version banner and searches nothing; `require` and `remove` flip the same way. The probe that produced the wrong evidence now reports **inconclusive** instead of counting a vacuous agreement as a pass, and note the direction of what it used to do: a vacuous pass can only move a row *into* the terminating set, which is the unsafe half of the table's default. | 2026-08-14 |
+| **G6** | A package name could begin with `-`, so `composer:--version` reached composer's argv as a flag. BUILT: **refused everywhere.** The terminator table stays as the mechanism. The composer row that shipped with this entry has since been **reversed on measurement — composer honours `--`** (see `G6a`). | 2026-08-12 |
+| **G6a** | `G6` flipped composer's terminator row to *non*-terminating on three nightlies that agreed with themselves. They could not have decided it: a bogus operand makes composer answer "could not find a matching version" whether it read `--` or dropped it, and on two of the three hosts it never resolved the operand at all. BUILT: **the row is `true` again**, on a container run with a *flag-shaped* operand — `composer global search --format=json -- --version` searches packagist for the string and finds `sebastian/version`, while the same line without `--` prints the version banner and searches nothing; `require` and `remove` flip the same way. The probe that produced the wrong evidence now reports **inconclusive** instead of counting a vacuous agreement as a pass, and note the direction of what it used to do: a vacuous pass can only move a row *into* the terminating set, which is the unsafe half of the table's default. | 2026-08-14 |
 | **G7** | `pkg@version=1.6 @hold` was one option, not two: the space put the second inside the first one's value, silently, in all ten grammars. BUILT: **refused in the lexer.** An `@` inside a value stays legal; whitespace immediately before one does not. | 2026-08-12 |
 | **G8** | `shall hold` and `check drift` printed clean bills built from questions that failed, and the JSON had `resources_unverifiable` with no packages equivalent. BUILT: **neither prints a clean bill it cannot support**, and `packages_unverifiable` exists. `upgrade` keeps its tolerance: acting on the holds it can see is a different question from reporting on them. | 2026-08-12 |
-| **G9** | Three `--json` flags said "(requires --dry-run)" and none enforced it. BUILT: **enforced in `dispatch`** for `sync`/`install`/`uninstall` â€” clap's `requires` cannot see a global flag and breaks the working combination when asked to. `upgrade` keeps its flag and loses the sentence. | 2026-08-12 |
+| **G9** | Three `--json` flags said "(requires --dry-run)" and none enforced it. BUILT: **enforced in `dispatch`** for `sync`/`install`/`uninstall` — clap's `requires` cannot see a global flag and breaks the working combination when asked to. `upgrade` keeps its flag and loses the sentence. | 2026-08-12 |
 | **G10** | `priority` gated resolution and nothing else: detection walked PATH for all 52 backends before knowing what was asked (`list -b apt` = 3,156 failed `statx` against `list`'s 3,338), and every fan-out went to whatever was installed. BUILT: **the file's own sentence is true of detection and querying too.** `BackendRegistry::available()` was deleted rather than filtered, so the compiler visited all twenty call sites and none could compile without choosing; the choices are a table in `priority_gates_every_fan_out_tests`. Two exceptions, both argued: `init` (writes the file from what it detects) and `check health` (reports on absent managers). | 2026-08-12 |
 
-### H â€” the grading round of 2026-08-13 (GRADE-2026-08-13) â€” 8
+### H — the grading round of 2026-08-13 (GRADE-2026-08-13) — 8
 
 *`docs/GRADE-2026-08-13.md` graded Bugs at Dâˆ’, Verification at D+, and refused the release. It
 raised three questions it deliberately did not answer in code (Q-A, Q-B, Q-C), and the work on
 F10 raised a fourth. **The owner ruled all four on 2026-08-13, by delegation**: asked to choose,
-he declined to adjudicate them one by one and gave the principle instead â€” that a feature in this
+he declined to adjudicate them one by one and gave the principle instead — that a feature in this
 codebase is **built fully, and not deferred because it is hard or potentially insecure**, because
 within reason people are smart. H4 is the one that turns on that sentence, and it is ruled the
 opposite way to the recommendation that was put to him.*
@@ -434,32 +434,32 @@ opposite way to the recommendation that was put to him.*
 |---|---|---|
 | **H1** | Is a declaration Shall was told to act on and could not a **failure of the run**, or a line that does not apply to this host? RULED: **a failure.** `sync` exits 1 and no longer returns `Converged` over it. | 2026-08-13 |
 | **H2** | Should a read-only command that finds work exit 2, beyond `check`? RULED: **yes for `plan`, no for `list --outdated`.** | 2026-08-13 |
-| **H3** | `outdated` â€” remove the dead name from the latency class table, or promote `list --outdated` to a subcommand? RULED: **remove the name; the flag stays a flag.** | 2026-08-13 |
-| **H4** | Should `sandbox.fallback_allowed` default to `false`, so an unavailable sandbox refuses instead of running unconfined? RULED: **no â€” it stays `true`, and the run is made loud and honest instead.** | 2026-08-13 |
-| **H5** | Is `StateResolver` (38 methods, 1,483 production lines) to be split, and are the three `Skipped` structs to be collapsed? RULED: **neither** â€” measured, argued, and the seam named for whenever something needs it. | 2026-08-13 |
-| **H6** | Should `upgrade` run `exec:` steps, which only `sync` had ever run? RULED: **yes, and opted into per step** â€” `@on=sync\|upgrade\|both`, through the same approval gate, ledger and journal. A blanket widening would have handed every already-approved script to a verb nobody consented to. | 2026-08-13 |
-| **H7** | Should `check` report managed-file *content* drift, given that `sync` heals it? RULED: **the premise was false â€” it already does.** Measured with a tampered destination rather than reasoned; reading `ChangePlanner` alone says otherwise because a `link:` is an extra and never reaches the planner. | 2026-08-13 |
-| **H8** | Should a catalogue of known upgrade steps ship with the binary? RULED: **build it, as rows compiled in** â€” `exec:step/NAME` on a reserved prefix, no approval, argv rather than shipped scripts. Owner: *"aliases come defined in a text file and shipped. so yes."* | 2026-08-13 |
+| **H3** | `outdated` — remove the dead name from the latency class table, or promote `list --outdated` to a subcommand? RULED: **remove the name; the flag stays a flag.** | 2026-08-13 |
+| **H4** | Should `sandbox.fallback_allowed` default to `false`, so an unavailable sandbox refuses instead of running unconfined? RULED: **no — it stays `true`, and the run is made loud and honest instead.** | 2026-08-13 |
+| **H5** | Is `StateResolver` (38 methods, 1,483 production lines) to be split, and are the three `Skipped` structs to be collapsed? RULED: **neither** — measured, argued, and the seam named for whenever something needs it. | 2026-08-13 |
+| **H6** | Should `upgrade` run `exec:` steps, which only `sync` had ever run? RULED: **yes, and opted into per step** — `@on=sync\|upgrade\|both`, through the same approval gate, ledger and journal. A blanket widening would have handed every already-approved script to a verb nobody consented to. | 2026-08-13 |
+| **H7** | Should `check` report managed-file *content* drift, given that `sync` heals it? RULED: **the premise was false — it already does.** Measured with a tampered destination rather than reasoned; reading `ChangePlanner` alone says otherwise because a `link:` is an extra and never reaches the planner. | 2026-08-13 |
+| **H8** | Should a catalogue of known upgrade steps ship with the binary? RULED: **build it, as rows compiled in** — `exec:step/NAME` on a reserved prefix, no approval, argv rather than shipped scripts. Owner: *"aliases come defined in a text file and shipped. so yes."* | 2026-08-13 |
 
-### J â€” the nightly and release round of 2026-08-14 to 2026-08-17 â€” 9
+### J — the nightly and release round of 2026-08-14 to 2026-08-17 — 9
 
 *Not a proposal part and not one grading document: these came out of the nightly integration legs
 and the first published release. Each was raised by a leg that went red, or by a measurement taken
-on a real machine, rather than by a review reading the tree â€” which is why several of them
+on a real machine, rather than by a review reading the tree — which is why several of them
 overturn something the code was confident about. `J4` is the one entry here that is not finished:
 the owner ruled its substance and one question under it is still his.*
 
 | | question | ruled |
 |---|---|---|
 | **J1** | What guards `purge-undeclared` on a machine where the ratio is the only thing guarding it? The macOS nightly swept 276 packages unrefused: the ratio's denominator had quietly shrunk, and outside Linux the protected list named the OS's vocabulary, which no manager has ever reported. RULED: **favour power users, and make the unsafe part configurable.** | 2026-08-14 |
-| **J2** | A `setting:` is never read back, so a sync that changed one reported that it changed nothing â€” and `plan` contradicted itself in two consecutive lines. RULED: **a bug.** Owner: *"yes, of course. this is a bug."* | 2026-08-16 |
-| **J3** | `pacman`, `yay` and `paru` are three clients of one database, so every Arch machine counted each package three times and became unconvergeable. RULED: **the owner for a repository package, the helper for a foreign one** â€” no longer one answer. Owner: *"make it intuitive, easy, flexible and powerful."* | 2026-08-16 |
+| **J2** | A `setting:` is never read back, so a sync that changed one reported that it changed nothing — and `plan` contradicted itself in two consecutive lines. RULED: **a bug.** Owner: *"yes, of course. this is a bug."* | 2026-08-16 |
+| **J3** | `pacman`, `yay` and `paru` are three clients of one database, so every Arch machine counted each package three times and became unconvergeable. RULED: **the owner for a repository package, the helper for a foreign one** — no longer one answer. Owner: *"make it intuitive, easy, flexible and powerful."* | 2026-08-16 |
 | **J4** | A plain `sync` honours a lockfile `shall lock` wrote as a side effect, so a machine stops syncing the day its archive drops a recorded version. **HALF RULED:** selective pinning, a switch per part, an error that explains itself and selective upgrade are ruled; **does a bare `shall lock` still freeze all three axes?** is not. | 2026-08-16 |
-| **J5** | On NixOS, `nix profile install` is a side door the OS does not know about â€” two sources of truth for one machine, which is the condition this tool exists to remove. RULED: **Shall writes the system configuration and lets NixOS execute it**, four answers in one sitting. The published binary could not start on NixOS or Alpine at all until the static `musl` build. | 2026-08-16 |
-| **J6** | `schedule:` reported nothing to do about a schedule it was about to rewrite â€” `J2`'s sibling, and `J2`'s fix does not transfer, because a schedule's name **is** its identity at the OS scheduler. RULED: **the durable fix.** Owner: *"feature rich and configurable, for power users."* | 2026-08-16 |
-| **J7** | Three release questions: the version, whether `nixos:` ships in it, and whether there is a `shall doctor`. RULED: **`0.8.0`; yes; and no â€” there will not be one.** The handoff item that raised the third assumed a command that never shipped. | 2026-08-16 |
+| **J5** | On NixOS, `nix profile install` is a side door the OS does not know about — two sources of truth for one machine, which is the condition this tool exists to remove. RULED: **Shall writes the system configuration and lets NixOS execute it**, four answers in one sitting. The published binary could not start on NixOS or Alpine at all until the static `musl` build. | 2026-08-16 |
+| **J6** | `schedule:` reported nothing to do about a schedule it was about to rewrite — `J2`'s sibling, and `J2`'s fix does not transfer, because a schedule's name **is** its identity at the OS scheduler. RULED: **the durable fix.** Owner: *"feature rich and configurable, for power users."* | 2026-08-16 |
+| **J7** | Three release questions: the version, whether `nixos:` ships in it, and whether there is a `shall doctor`. RULED: **`0.8.0`; yes; and no — there will not be one.** The handoff item that raised the third assumed a command that never shipped. | 2026-08-16 |
 | **J8** | How does a bare package name reach a manager whose own names carry a category? RULED: **one matching atom resolves and the plan names it; more than one is refused, listing them.** `emerge` could not resolve one at all, and the leg that would have shown it was answering from crates.io. | 2026-08-17 |
-| **J9** | Two guard messages named `--allow-mass-removal` whatever the caller passed, though `max_total_changes` answers to either flag â€” so a run of `--allow-mass-install` was told a removal count had been allowed by a flag it never typed, and a blocked one was told to authorize mass deletion to get its installs through. RULED: **name the flag the run passed; the total's refusal offers both.** | 2026-08-17 |
+| **J9** | Two guard messages named `--allow-mass-removal` whatever the caller passed, though `max_total_changes` answers to either flag — so a run of `--allow-mass-install` was told a removal count had been allowed by a flag it never typed, and a blocked one was told to authorize mass deletion to get its installs through. RULED: **name the flag the run passed; the total's refusal offers both.** | 2026-08-17 |
 
 ---
 
@@ -479,64 +479,64 @@ deliberately no longer has.*
 | **L3** | Do reader commands accept a torn cross-file view? **ANSWERED 2026-08-18: fix it, and the obvious fix is the wrong one.** A reader never waits on a writer; it detects one. `core::stable` reads the writer generation either side of a multi-file read and reads again if a writer committed in between. | Built the same day. |
 | **L4** | Should Part II's II.8 gain the three-scope lock model - `Writer`, `Deferred`, `Reader`? **ANSWERED 2026-08-18: the docs match the code.** II.8 and II.24 rewritten, V.194 added, and V.61's claim that the lock covers the `locks/` ledgers corrected - it never did. | Built the same day. |
 
-### M â€” the ecosystem-drift round of 2026-08-21, plus the audit's fail-open rail (M5) â€” 5
+### M — the ecosystem-drift round of 2026-08-21, plus the audit's fail-open rail (M5) — 5
 
 | | question | answered |
 |---|---|---|
-| **M1** | An upstream ecosystem broke and the nightly called it a Shall defect. Whose problem is drift, and what absorbs it? â€” RULED 2026-08-21: Shall's, and an excuse that has to be written down. | 2026-08-21 |
-| **M2** | The same drift, on a user's machine: one `cabal:` line whose registry rotated a key stopped `sync` converging the two hundred declarations beside it. â€” RULED 2026-08-21: carry on past a failure Shall classed as passing, `[sync] continue_past_transient`, on by default. | 2026-08-21 |
-| **M3** | `M2` documented a cost instead of fixing it: a batch fails as a unit, so one bad member still took the twenty-nine beside it down for that run. â€” RULED 2026-08-21: narrow the failed batch, `[sync] batch_recovery`, bisecting by default. | 2026-08-21 |
-| **M4** | `--keep-going` raises a summary over what it carried past, and a summary was a `CommandFailed` â€” so the same refused declaration exited **3** without the flag and **1** with it, and a script that retries exit 1 retries a refusal. Found while fixing `VI.11`. â€” RULED 2026-08-21 (delegated): a run whose every member was refused is a refusal, and keeps exit 3. | 2026-08-21 |
-| **M5** | The 2026-08-23 audit found the OS-essential rail failing open: `essential_names` turned a failed query into an empty set, which reads exactly like "nothing here is essential", so one manager having a bad day disarmed the protection for the whole run â€” `purge-undeclared` included. â€” RULED 2026-08-23 (delegated, audit shapes approved by the owner): **a failed essential query refuses removals through that backend for the run**, as `Objection::UnverifiedEssentials` â€” protection-class, no flag clears it. A backend not on this machine stays out of scope (II.7c). Leases, rebuild narrowing, rollback compensation and `shall protected` answer from the same query. (II.10, V.200) | 2026-08-23 |
+| **M1** | An upstream ecosystem broke and the nightly called it a Shall defect. Whose problem is drift, and what absorbs it? — RULED 2026-08-21: Shall's, and an excuse that has to be written down. | 2026-08-21 |
+| **M2** | The same drift, on a user's machine: one `cabal:` line whose registry rotated a key stopped `sync` converging the two hundred declarations beside it. — RULED 2026-08-21: carry on past a failure Shall classed as passing, `[sync] continue_past_transient`, on by default. | 2026-08-21 |
+| **M3** | `M2` documented a cost instead of fixing it: a batch fails as a unit, so one bad member still took the twenty-nine beside it down for that run. — RULED 2026-08-21: narrow the failed batch, `[sync] batch_recovery`, bisecting by default. | 2026-08-21 |
+| **M4** | `--keep-going` raises a summary over what it carried past, and a summary was a `CommandFailed` — so the same refused declaration exited **3** without the flag and **1** with it, and a script that retries exit 1 retries a refusal. Found while fixing `VI.11`. — RULED 2026-08-21 (delegated): a run whose every member was refused is a refusal, and keeps exit 3. | 2026-08-21 |
+| **M5** | The 2026-08-23 audit found the OS-essential rail failing open: `essential_names` turned a failed query into an empty set, which reads exactly like "nothing here is essential", so one manager having a bad day disarmed the protection for the whole run — `purge-undeclared` included. — RULED 2026-08-23 (delegated, audit shapes approved by the owner): **a failed essential query refuses removals through that backend for the run**, as `Objection::UnverifiedEssentials` — protection-class, no flag clears it. A backend not on this machine stays out of scope (II.7c). Leases, rebuild narrowing, rollback compensation and `shall protected` answer from the same query. (II.10, V.200) | 2026-08-23 |
 
-### R â€” the audit-fix round of 2026-08-23/24 â€” 6
+### R — the audit-fix round of 2026-08-23/24 — 6
 
 | | question | answered |
 |---|---|---|
-| **R1** | The guard asks before the confirmation prompt (`remove-orphans`, `purge-undeclared`) and again in the engine over the same pairs, through one shared ledger â€” so eleven orphans passed the prompt and refused 22/20 after it. Who spends? â€” RESOLVED 2026-08-23 (delegated): **two asks, one rule, one spend** â€” `vet`/`vet_deliberate` decide without writing; the engine's ask records. (II.10, V.201) | 2026-08-23 |
-| **R2** | An `@undo=` is an arbitrary shell command nothing can inspect â€” the one mutation family with no ceiling at all. Does it stay outside invariant 2? â€” RESOLVED 2026-08-23 (delegated): **charged, not exempt** â€” its batch answers `max_total_changes` as one charge (`charge_unmodelled`) before the first command runs; `--allow-mass-removal` clears it. Protected-name consultation does not apply: an opaque command has no name to match. (II.10, V.201) | 2026-08-23 |
-| **R3** | A transaction killed part-way through 576 removals reported "Removed 0; 576 failed", and its WAL entries closed as Failed, which Q33 says heal walks past. What does a partial run owe the truth? â€” RESOLVED 2026-08-23 (delegated): completed removals that stayed removed are counted onto the engine's metrics and their entries close as **Abandoned**; both cleanup commands report real numbers and failed purges exit non-zero. (V.202) | 2026-08-23 |
-| **R4** | `-y` auto-executed a vendor's installer script under a header promising "**Ask, then do**", and scheduled syncs inherited the posture. Where does unattended bootstrap consent live? â€” RULED 2026-08-23: **`--yes` never answers the bootstrap prompt by itself.** The consent is a preference â€” `[config] bootstrap_auto_yes = true`, default off â€” written by a human beside the repo it trusts. BUILT 2026-08-24. | 2026-08-23 |
-| **R5** | Non-interactive `apply` with neither `--yes` nor a TTY applied, while identical conditions made `sync` refuse â€” opposite postures in the two most destructive commands. Which posture wins? â€” RULED 2026-08-23: **apply refuses like sync**; same sentence shape, `--yes` answers it, exit 3. BUILT 2026-08-24. | 2026-08-23 |
-| **R6** | Configuration that supplies executable content has no permission/ownership gate, and pins end at install. Both were ruled in principle ("fix everything actionable"; exec-content gate config-selectable between owner-writable-only / world-writable-only / warn-only; pins honored everywhere with only explicit unpin commands escaping). â€” **RULED 2026-08-23; BUILD PENDING** (each is a feature-sized change, recorded here rather than rushed half-done at the end of the fix round). | â€” |
+| **R1** | The guard asks before the confirmation prompt (`remove-orphans`, `purge-undeclared`) and again in the engine over the same pairs, through one shared ledger — so eleven orphans passed the prompt and refused 22/20 after it. Who spends? — RESOLVED 2026-08-23 (delegated): **two asks, one rule, one spend** — `vet`/`vet_deliberate` decide without writing; the engine's ask records. (II.10, V.201) | 2026-08-23 |
+| **R2** | An `@undo=` is an arbitrary shell command nothing can inspect — the one mutation family with no ceiling at all. Does it stay outside invariant 2? — RESOLVED 2026-08-23 (delegated): **charged, not exempt** — its batch answers `max_total_changes` as one charge (`charge_unmodelled`) before the first command runs; `--allow-mass-removal` clears it. Protected-name consultation does not apply: an opaque command has no name to match. (II.10, V.201) | 2026-08-23 |
+| **R3** | A transaction killed part-way through 576 removals reported "Removed 0; 576 failed", and its WAL entries closed as Failed, which Q33 says heal walks past. What does a partial run owe the truth? — RESOLVED 2026-08-23 (delegated): completed removals that stayed removed are counted onto the engine's metrics and their entries close as **Abandoned**; both cleanup commands report real numbers and failed purges exit non-zero. (V.202) | 2026-08-23 |
+| **R4** | `-y` auto-executed a vendor's installer script under a header promising "**Ask, then do**", and scheduled syncs inherited the posture. Where does unattended bootstrap consent live? — RULED 2026-08-23: **`--yes` never answers the bootstrap prompt by itself.** The consent is a preference — `[config] bootstrap_auto_yes = true`, default off — written by a human beside the repo it trusts. BUILT 2026-08-24. | 2026-08-23 |
+| **R5** | Non-interactive `apply` with neither `--yes` nor a TTY applied, while identical conditions made `sync` refuse — opposite postures in the two most destructive commands. Which posture wins? — RULED 2026-08-23: **apply refuses like sync**; same sentence shape, `--yes` answers it, exit 3. BUILT 2026-08-24. | 2026-08-23 |
+| **R6** | Configuration that supplies executable content has no permission/ownership gate, and pins end at install. Both were ruled in principle ("fix everything actionable"; exec-content gate config-selectable between owner-writable-only / world-writable-only / warn-only; pins honored everywhere with only explicit unpin commands escaping). — **HALF RULED 2026-08-24:** the gate is BUILT as `[exec] trust` (`II.61`, `V.204`); pins honored everywhere remains build pending. | 2026-08-23 |
 
 ---
 
-# The blocking round â€” thirteen questions, all ruled
+# The blocking round — thirteen questions, all ruled
 
 *These could not be built around: two reasonable implementations differed. Ruled 2026-07-23/24.*
 
 ## D3b
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
 **In the tree today:** Nothing. No mode enum in `backends/artifact/`; `core/artifact_lock.rs:321` mentions download-only artifacts in a comment only.
 
-**D3b â€” download-only artifacts (owner, 2026-07-20, raised with D3).** A `github:`/`web:` line may
-ask Shall to **fetch an artifact without installing or managing it** â€” the `web:`-shaped case.
+**D3b — download-only artifacts (owner, 2026-07-20, raised with D3).** A `github:`/`web:` line may
+ask Shall to **fetch an artifact without installing or managing it** — the `web:`-shaped case.
 The two modes are different declarations and must not be one key wearing two meanings:
 
-- **managed (default)** â€” Shall installs it, owns it, and **removes it when the line leaves the
+- **managed (default)** — Shall installs it, owns it, and **removes it when the line leaves the
   modules and profiles**, through the ordinary plan and guard.
-- **download-only** â€” Shall fetches it to a known place and stops. It is still declared, so it is
+- **download-only** — Shall fetches it to a known place and stops. It is still declared, so it is
   still removed when the declaration goes; what it is *not* is installed, shimmed, or on `PATH`.
 
 *Owed:* the option's spelling, and whether a download-only artifact appears in `check` as
 software (it is not software, so probably not). Recorded as **D3b, open**, not assumed.
 
 
-**RULED (owner, 2026-07-24): yes, a distinct download-only declaration â€” and it is the DEFAULT when a thing cannot be installed.** `web:`/`github:` may fetch an artifact without shimming it or putting it on PATH; it is still removed when the line goes. When Shall has no way to install the fetched thing (no shim target, no archive binary), download-only is what it does by default rather than failing. A separate meaning, not one key wearing two.
+**RULED (owner, 2026-07-24): yes, a distinct download-only declaration — and it is the DEFAULT when a thing cannot be installed.** `web:`/`github:` may fetch an artifact without shimming it or putting it on PATH; it is still removed when the line goes. When Shall has no way to install the fetched thing (no shim target, no archive binary), download-only is what it does by default rather than failing. A separate meaning, not one key wearing two.
 
-**RULED, NOT YET BUILT (2026-07-24).** A distinct download-only declaration, and the default when a fetched thing cannot be installed. Queued: it changes how `web:`/`github:` behave (a new mode in the install path), which is a semantic change to a core backend rather than an additive one. The ruling â€” a separate meaning, still removed when the line goes, download-only by default when uninstallable â€” is settled for when it is built.
+**RULED, NOT YET BUILT (2026-07-24).** A distinct download-only declaration, and the default when a fetched thing cannot be installed. Queued: it changes how `web:`/`github:` behave (a new mode in the install path), which is a semantic change to a core backend rather than an additive one. The ruling — a separate meaning, still removed when the line goes, download-only by default when uninstallable — is settled for when it is built.
 ---
 
 ## D5
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**In the tree today: BUILT (2026-07-26).** `github:`/`web:` hand a `.deb` to `dpkg -i` and an `.rpm` to `rpm -U` (`backends/artifact/system_pkg.rs` is the one place that argv is built); the lock records `installed_by`/`system_package` (`ArtifactLock`), removal routes back through the recorded manager (`dpkg -r`/`rpm -e`), and `installed_but_unmanaged` + `adopt`'s discovery subtract those names so `check` does not double-count and `purge-unmanaged` defers. `installable_here` now accepts a `.deb` only where `dpkg` exists and an `.rpm` only where `rpm` does â€” otherwise the line falls through to download-only. Unit-tested (argv, lock round-trip, dedup accessor, installer gating); only the live `dpkg -i`/`rpm -U` round-trip is deferred to a real apt/rpm box.
+**In the tree today: BUILT (2026-07-26).** `github:`/`web:` hand a `.deb` to `dpkg -i` and an `.rpm` to `rpm -U` (`backends/artifact/system_pkg.rs` is the one place that argv is built); the lock records `installed_by`/`system_package` (`ArtifactLock`), removal routes back through the recorded manager (`dpkg -r`/`rpm -e`), and `installed_but_unmanaged` + `adopt`'s discovery subtract those names so `check` does not double-count and `purge-unmanaged` defers. `installable_here` now accepts a `.deb` only where `dpkg` exists and an `.rpm` only where `rpm` does — otherwise the line falls through to download-only. Unit-tested (argv, lock round-trip, dedup accessor, installer gating); only the live `dpkg -i`/`rpm -U` round-trip is deferred to a real apt/rpm box.
 
-**D5 â€” A `deb` installed by `github` â€” who owns it?** `dpkg -i` puts it in apt's database. Now
+**D5 — A `deb` installed by `github` — who owns it?** `dpkg -i` puts it in apt's database. Now
 `apt` can upgrade it out from under Shall, `shall check` may see it twice (once as a github
 declaration, once as an apt-visible package), and the removal path has to know which tool to
 call. **This is the "two of everything" failure at the package level**, and `purge-unmanaged`
@@ -545,55 +545,55 @@ that backend owns removal; `check` must not double-count. Needs a real test agai
 box, not a mock.
 
 
-**RULED (owner, 2026-07-24): the installing backend owns it.** When `github:`/`web:` installs a file (a `.deb` handed to `dpkg`, etc.), the lock records which backend installed it, and that backend owns removal, upgrade and dedup â€” `check` does not report it twice, and `purge-unmanaged` defers to the recorded installer. This is the existing per-backend ownership (every managed package carries its backend); the `github:`-installs-a-`.deb` capability itself is separate and unbuilt, but the ownership rule is settled for when it lands.
+**RULED (owner, 2026-07-24): the installing backend owns it.** When `github:`/`web:` installs a file (a `.deb` handed to `dpkg`, etc.), the lock records which backend installed it, and that backend owns removal, upgrade and dedup — `check` does not report it twice, and `purge-unmanaged` defers to the recorded installer. This is the existing per-backend ownership (every managed package carries its backend); the `github:`-installs-a-`.deb` capability itself is separate and unbuilt, but the ownership rule is settled for when it lands.
 
-**BUILD DIRECTIVE (owner, 2026-07-26): build it now, test the live install later.** No longer held back for an apt box. The capability â€” `github:`/`web:` handing a `.deb` to `dpkg -i` / an `.rpm` to `rpm -i`, the lock recording the installing backend, `check`'s dedup, and `purge-unmanaged`'s deference â€” is built now and unit-tested (argv construction, lock round-trip, dedup logic, purge deference). Only the live `dpkg -i` / `rpm -i` round-trip is deferred to a real apt/rpm box; it is exercised there, not claimed here.
+**BUILD DIRECTIVE (owner, 2026-07-26): build it now, test the live install later.** No longer held back for an apt box. The capability — `github:`/`web:` handing a `.deb` to `dpkg -i` / an `.rpm` to `rpm -i`, the lock recording the installing backend, `check`'s dedup, and `purge-unmanaged`'s deference — is built now and unit-tested (argv construction, lock round-trip, dedup logic, purge deference). Only the live `dpkg -i` / `rpm -i` round-trip is deferred to a real apt/rpm box; it is exercised there, not claimed here.
 ---
 
 ## K2
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
 **In the tree today:** Nothing in `app/rebuild.rs` requires a scope.
 
-**K2 â€” What is `rebuild`'s default scope?** `--all` on a bare `shall rebuild` is a very large
+**K2 — What is `rebuild`'s default scope?** `--all` on a bare `shall rebuild` is a very large
 default for a command whose failure mode is an unbootable machine. *Recommendation:* require a
 scope; a bare `rebuild` errors and lists the forms.
 
 
-**RULED (owner, 2026-07-24): warns, then rebuilds all.** A bare `shall rebuild` does NOT refuse â€” it rebuilds every declared package, but WARNS loudly first, because the failure mode is software missing from a machine and `--all` is a large thing to reach by pressing enter. The warning is the safeguard the built-to-recommendation used a refusal for; the owner chose warn-and-proceed. The old `bail` is replaced.
+**RULED (owner, 2026-07-24): warns, then rebuilds all.** A bare `shall rebuild` does NOT refuse — it rebuilds every declared package, but WARNS loudly first, because the failure mode is software missing from a machine and `--all` is a large thing to reach by pressing enter. The warning is the safeguard the built-to-recommendation used a refusal for; the owner chose warn-and-proceed. The old `bail` is replaced.
 ---
 
 ## K4
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
 **In the tree today:** No `clean_cache_on_remove` key exists anywhere in `src/`.
 
-**K4 â€” Is `clean_cache_on_remove` per-package on every backend, or only where Shall knows the
+**K4 — Is `clean_cache_on_remove` per-package on every backend, or only where Shall knows the
 artifact?** Shall knows the file for `github:`/`web:`/`appimage:` (it is in `locks/`). For apt
 or pacman it needs a new per-backend capability. *Recommendation:* download-backends only,
-documented as such in the key's own description â€” a preference that silently does nothing on
+documented as such in the key's own description — a preference that silently does nothing on
 most backends is worse than a narrower one that is honest.
 
 
 **RULED (owner, 2026-07-24): download-backends only, plus a user cache pointer and common-location search.** `clean_cache_on_remove` acts only where Shall knows the file (download backends: `github:`/`web:`/`appimage:`), documented as such in the key. ADDITIONALLY (owner): the user may point Shall at a cache directory, and Shall searches the common cache locations (`~/.cache`, `/var/cache`, XDG, each manager's own) so it can find and clean an artifact it did not download itself.
 
-**RULED, NOT YET BUILT (2026-07-24).** `clean_cache_on_remove` (download backends only) + a user cache pointer + search of common cache locations. Queued: `clean_cache_on_remove` does not exist yet, so this is a new option plus a cache-search capability, not an additive tweak. The ruling â€” download-backends only, honest about doing nothing elsewhere; user may point at a cache; Shall searches `~/.cache`/`/var/cache`/XDG â€” is settled for when it is built.
+**RULED, NOT YET BUILT (2026-07-24).** `clean_cache_on_remove` (download backends only) + a user cache pointer + search of common cache locations. Queued: `clean_cache_on_remove` does not exist yet, so this is a new option plus a cache-search capability, not an additive tweak. The ruling — download-backends only, honest about doing nothing elsewhere; user may point at a cache; Shall searches `~/.cache`/`/var/cache`/XDG — is settled for when it is built.
 ---
 
 ## U1
 
-**Status: ANSWERED â€” by 7a's approval, and BUILT 2026-07-23.**
+**Status: ANSWERED — by 7a's approval, and BUILT 2026-07-23.**
 
-**In the tree today:** `Layout::custom_backends_file()` â€” the config repo, and the only path any
+**In the tree today:** `Layout::custom_backends_file()` — the config repo, and the only path any
 loader reads.
 
-**U1 â€” Where does a custom backend definition live?** Today `~/.config/shall/custom_backends.
-toml`, machine-local, never in git â€” so a repo that uses `paru:` breaks on every machine but
+**U1 — Where does a custom backend definition live?** Today `~/.config/shall/custom_backends.
+toml`, machine-local, never in git — so a repo that uses `paru:` breaks on every machine but
 the one where somebody hand-wrote the file. *Recommendation:* the config repo, as a
 first-class file beside `priority` and `schedules`, with the machine-local path kept **only**
-if there is a case for a definition that must not travel â€” and if there is not, deleted in the
+if there is a case for a definition that must not travel — and if there is not, deleted in the
 same change rather than left as a second place to look. **The consequence that makes this a
 decision and not an obvious fix:** a definition in the repo is argv that a shared repo can
 execute, which is II.12's supply-chain surface. It must inherit the hook trust model, not a
@@ -605,23 +605,23 @@ as a fallback, so `grep -rn "custom_backends" src/` finds one loader. **And it i
 model rather than getting one of its own**: the file's sha256 lives in `locks/hooks.toml` under
 `backends:custom_backends.toml`, `shall lock` approves it, and an unapproved or edited file
 registers **nothing** and says why. The check is at load rather than at the sync gate on purpose
-â€” a registered backend is reachable from `search` and `list`, which no sync guards.
+— a registered backend is reachable from `search` and `list`, which no sync guards.
 
 **One identity for the whole file, not one per definition.** A per-backend identity would let an
 edit that *adds* a `[[backend]]` pass unnoticed, and adding one is the whole attack.
 
 **Not decided here:** U2 (is a custom backend a full peer) and U16 (may `binary` be a path). U16
-became reachable the moment `binary` existed, so it is refused for now â€” a definition naming
+became reachable the moment `binary` existed, so it is refused for now — a definition naming
 `/opt/vendor/thing` works on one machine, which is the property this entry moved the file to
-fix â€” and the refusal says so rather than resolving the path.
+fix — and the refusal says so rather than resolving the path.
 
 ---
 
 ## U3
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U3 â€” What does removing an `exec:` line mean?** Every other statement's removal undoes
+**U3 — What does removing an `exec:` line mean?** Every other statement's removal undoes
 something. A script has no inverse. *Recommendation:* an optional `@undo=` command; without it,
 removing the line removes only the record, and `plan` says so in those words rather than
 implying a revert that will not happen.
@@ -632,7 +632,7 @@ rather than implying a revert that will not happen. A script has no inverse, and
 would be Shall claiming to undo something it cannot.
 
 **AMENDED by U33 (owner, 2026-07-26): this ruling stands.** U33 lets `exec:` install software, but
-does not give it an inverse â€” so an `exec:` that installs still leaves the software behind when the
+does not give it an inverse — so an `exec:` that installs still leaves the software behind when the
 line goes unless `@undo=` is written, and `plan` still says so. The removal contract here is
 unchanged; only the *content* an `exec:` may carry widened.
 
@@ -640,13 +640,13 @@ unchanged; only the *content* an `exec:` may carry widened.
 
 ## U9
 
-**Status: ANSWERED â€” ruled 2026-07-24, and BUILT.**
+**Status: ANSWERED — ruled 2026-07-24, and BUILT.**
 
-**U9 â€” Do the ten status commands collapse into one?** *Recommendation:* yes, one `shall check`
+**U9 — Do the ten status commands collapse into one?** *Recommendation:* yes, one `shall check`
 with sections and narrowing flags; `heal` stays separate because it acts. Old names deleted in
 the same change (P2), not aliased.
 
-**RULED (owner, 2026-07-24): yes â€” "make it intuitive and easy" â€” and the repairs move to
+**RULED (owner, 2026-07-24): yes — "make it intuitive and easy" — and the repairs move to
 `heal`.** Six commands are gone: `status`, `doctor`, `unmanaged`, `absent`, `conflicts`,
 `audit`, folded into `shall check` with seven sections (`config`, `drift`, `unmanaged`,
 `absent`, `conflicts`, `health`, `security`). Deleted, not aliased: an alias is the second way
@@ -655,9 +655,9 @@ to do one thing, kept alive.
 **A section is a positional argument, not seven flags.** `shall check health` reads as a
 question and `shall check --health` reads as a modifier; the ruling asked for intuitive, and
 that is the difference. An unknown section is refused with the legal list printed, from the same
-table the parser reads â€” so the error cannot drift from what is accepted.
+table the parser reads — so the error cannot drift from what is accepted.
 
-**The default output is a verdict per section, each naming the command that acts on it** â€” P8:
+**The default output is a verdict per section, each naming the command that acts on it** — P8:
 a report whose next step is the reader working out what to run has done the easy half.
 
 ```
@@ -670,8 +670,8 @@ ok  config      42 package(s) declared
 
 **`doctor --fix` is gone, and its three repairs are `heal`'s** (owner, asked and answered
 2026-07-24): creating the II.1 directories, reconciling `locks/versions.json`, refreshing a
-stale backend index. That is the whole dividing line the ruling rests on â€” **`check` looks,
-`heal` acts** â€” and it is why `heal` survives the collapse. A command that both diagnoses and
+stale backend index. That is the whole dividing line the ruling rests on — **`check` looks,
+`heal` acts** — and it is why `heal` survives the collapse. A command that both diagnoses and
 repairs is one you cannot run to find out whether you want a repair.
 
 **Two things the entry did not say, decided while building:**
@@ -689,11 +689,11 @@ Conflicts\|Insight\|Metrics\|Audit\)" src/` is silent, and `heal` survives.
 
 ## U14
 
-**Status: ANSWERED â€” ruled 2026-07-24; safety story below.**
+**Status: ANSWERED — ruled 2026-07-24; safety story below.**
 
-**U14 â€” Is sharing wanted, and what makes a vendored module safe to run?** Vendoring puts
+**U14 — Is sharing wanted, and what makes a vendored module safe to run?** Vendoring puts
 someone else's files in your repo, and once `exec:` exists those files can contain a verb. The
-defence on offer is that it lands as a reviewable diff, which is a real defence and a weak one â€”
+defence on offer is that it lands as a reviewable diff, which is a real defence and a weak one —
 nobody reads the whole diff. *Recommendation:* decide the safety story before deciding the
 feature. The candidates are: vendor everything but refuse to run an `exec:` that arrived this way
 without an explicit per-module opt-in; or vendor modules but never backend definitions and never
@@ -701,17 +701,17 @@ without an explicit per-module opt-in; or vendor modules but never backend defin
 and the safety story afterwards is how supply-chain incidents are written.**
 
 
-**RULED (owner, 2026-07-24): build it.** Sharing is wanted, and a module may be referenced by a GitHub or other URL. A vendored module that carries code the repo can run (an `exec:` verb, a backend definition) needs an **opt-in to run**, and a flag or key must be able to force it. The precedent is the II.12 approval ledger and its siblings (`--allow-mass-removal`, `--replace-existing`, `@allow_http`, `@unverified`): refuse the dangerous thing by default, require one deliberate act to permit it. A vendored `exec:` is therefore approved the way every other script the repo runs is â€” `shall lock`, which means a human looked â€” and until then it does not run. **Still to design before building: how a URL reference is written (this changes `use takes a name, never a URL`, V.x), and whether a URL-vendored backend definition is allowed at all or only modules.**
+**RULED (owner, 2026-07-24): build it.** Sharing is wanted, and a module may be referenced by a GitHub or other URL. A vendored module that carries code the repo can run (an `exec:` verb, a backend definition) needs an **opt-in to run**, and a flag or key must be able to force it. The precedent is the II.12 approval ledger and its siblings (`--allow-mass-removal`, `--replace-existing`, `@allow_http`, `@unverified`): refuse the dangerous thing by default, require one deliberate act to permit it. A vendored `exec:` is therefore approved the way every other script the repo runs is — `shall lock`, which means a human looked — and until then it does not run. **Still to design before building: how a URL reference is written (this changes `use takes a name, never a URL`, V.x), and whether a URL-vendored backend definition is allowed at all or only modules.**
 
-**BUILT, 2026-07-24 (`shall add`).** `add <source>` vendors a source's shareable files (`modules/`, `adapters/`, `scripts/`) into the repo as a reviewable diff; `profiles/`, `active` and `priority` are left behind (the other machine's choices). Sources: `github:owner/repo`, any git URL, a raw file URL, a local path. A name collision is refused and named (`--force` overwrites). Vendored code (`exec:`, adapters) arrives UNAPPROVED and II.12 holds it until `shall lock` â€” `--trust` locks in the same step. A stranger's path that escapes the repo (`../../.bashrc`) is dropped by `safe_relative`; symlinks are not followed. Verified end to end: a vendored `exec:` refuses to run until approved.
+**BUILT, 2026-07-24 (`shall add`).** `add <source>` vendors a source's shareable files (`modules/`, `adapters/`, `scripts/`) into the repo as a reviewable diff; `profiles/`, `active` and `priority` are left behind (the other machine's choices). Sources: `github:owner/repo`, any git URL, a raw file URL, a local path. A name collision is refused and named (`--force` overwrites). Vendored code (`exec:`, adapters) arrives UNAPPROVED and II.12 holds it until `shall lock` — `--trust` locks in the same step. A stranger's path that escapes the repo (`../../.bashrc`) is dropped by `safe_relative`; symlinks are not followed. Verified end to end: a vendored `exec:` refuses to run until approved.
 ---
 
 ## U19
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U19 â€” Is Shall acting for a user or for the machine?** Today: implicitly, whoever ran the
-command â€” which the Linux backends mostly agree with by accident, and which the Windows registry
+**U19 — Is Shall acting for a user or for the machine?** Today: implicitly, whoever ran the
+command — which the Linux backends mostly agree with by accident, and which the Windows registry
 adapter (7e) cannot use, because `HKCU` and `HKLM` are a choice with no default that is right
 for both. Three candidate answers, and they are not equally good:
 
@@ -722,7 +722,7 @@ for both. Three candidate answers, and they are not equally good:
    with a per-backend default. Precise, and it puts the question in front of the user at the one
    moment they know the answer. Costs a new option key on three statement kinds.
 3. **The config repo declares its scope once**, at the top, and every line inherits it. One
-   decision per repo rather than per line â€” and a machine that needs both then needs two repos,
+   decision per repo rather than per line — and a machine that needs both then needs two repos,
    which is the wrong shape.
 
 *Recommendation:* **2**, with a default per statement kind that matches what the underlying store
@@ -730,7 +730,7 @@ does anyway (`gsettings` â†’ user, registry â†’ `HKCU`, `apt` â†’
 written**, because whatever the registry adapter picks becomes the convention by precedent and
 then spreads to macOS `defaults`.
 
-**RULED (owner, 2026-07-24): option 2 â€” and writing the default is not an error.** `@scope=user`
+**RULED (owner, 2026-07-24): option 2 — and writing the default is not an error.** `@scope=user`
 on a store whose default is already user is accepted and means exactly what it says. A
 configuration is allowed to state a thing it also gets for free: saying it out loud is how a
 reader learns the answer without going to look it up, and refusing it would punish the person
@@ -738,46 +738,46 @@ being explicit.
 
 **BUILT 2026-07-24, on the rule that nothing may silently ignore it (P7).** The key is accepted
 on `setting:`, `link:` and `shim:` and refused on statements where the question does not arise
-(`service:` is the init system's business, `schedule:` the timer's) â€” a key that means nothing
+(`service:` is the init system's business, `schedule:` the timer's) — a key that means nothing
 where it is written is a key that gets written there and quietly does nothing. A misspelling is
 refused with both legal values named, because a typo that read as "the default" would be a line
 that looks like a decision and behaves as if nobody made one.
 
 **Where it is honoured, and where it is refused:**
 
-- **`setting:`** â€” a `[[setting_store]]` row may carry `system_read`/`system_write`/
+- **`setting:`** — a `[[setting_store]]` row may carry `system_read`/`system_write`/
   `system_reset` beside the per-user three. A store that has them runs *different commands* per
   scope; a store that does not (`gsettings`) **refuses `@scope=system` by name** rather than
   writing the per-user value under a line that says every account. The read-before-write check
   reads in the same scope it will write, or it would compare two different settings and call
   them equal.
-- **`shim:`** â€” refused for `system` today: Shall deploys shims only into this account's
+- **`shim:`** — refused for `system` today: Shall deploys shims only into this account's
   `~/.local/bin`, and a per-user shim under a line saying every account is the wrong answer
   quietly.
-- **`link:`** â€” accepted and carried; the destination is already explicit in `@target=`, so
+- **`link:`** — accepted and carried; the destination is already explicit in `@target=`, so
   there is nothing for it to change until ownership/permission handling exists.
 
 **This unblocks 7e.** The registry adapter writes `HKCU` by default and `HKLM` under
-`@scope=system`, and macOS `defaults` inherits the same convention â€” which is what the entry
+`@scope=system`, and macOS `defaults` inherits the same convention — which is what the entry
 said had to be settled before the first adapter was written.
 
 
-**RULED (owner, 2026-07-24): explicit per-line scope, default user.** Option (c): `@scope=user|system` on the statements where it can vary (`setting:`, `link:`, `shim:`), which is already built. The owner asked for a concrete default, and it is **user** â€” `Scope::resolve(written, Scope::User)`: an unspecified scope is per-user (HKCU, gsettings, `~/.local/bin`), and machine-wide (HKLM, `/etc`) requires writing `@scope=system`. Least privilege: changing every account's state is the deliberate case.
+**RULED (owner, 2026-07-24): explicit per-line scope, default user.** Option (c): `@scope=user|system` on the statements where it can vary (`setting:`, `link:`, `shim:`), which is already built. The owner asked for a concrete default, and it is **user** — `Scope::resolve(written, Scope::User)`: an unspecified scope is per-user (HKCU, gsettings, `~/.local/bin`), and machine-wide (HKLM, `/etc`) requires writing `@scope=system`. Least privilege: changing every account's state is the deliberate case.
 ---
 
 ## U22
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U22 â€” Does the dotfiles tree link files, or directories?** One symlink at `~/.config/nvim`
+**U22 — Does the dotfiles tree link files, or directories?** One symlink at `~/.config/nvim`
 is a single operation and takes the whole directory hostage: everything the application later
-writes there â€” caches, session files, a plugin lockfile â€” lands inside the git-tracked config
+writes there — caches, session files, a plugin lockfile — lands inside the git-tracked config
 repo, and `bundle` then hands it to whoever the backup goes to. Linking each *file* leaves the
 directory the user's and puts nothing in the repo that was not put there deliberately, at the
 cost of walking the tree every sync and of one ledger row per file. *Recommendation:* per
 file. **The consequence that makes it a decision rather than an obvious fix:** per-file linking
 cannot express *"this directory is entirely mine"*, which is what a `nvim` config under version
-control usually is â€” so if the answer is per-file, the directory case needs its own spelling
+control usually is — so if the answer is per-file, the directory case needs its own spelling
 later rather than being reachable by accident.
 
 **RULED (owner, 2026-07-24): per file, as recommended.** One symlink at `~/.config/nvim`
@@ -790,9 +790,9 @@ not put there deliberately.
 
 ## U23
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U23 â€” What happens to a destination that already holds the user's own file?** `link:`
+**U23 — What happens to a destination that already holds the user's own file?** `link:`
 answers this one file at a time with `backup_once`. A tree asks it forty times on the first
 sync of a new machine, which is precisely the machine where the home directory is full of
 files a distribution's defaults put there. Silently backing up forty files is not a preview,
@@ -804,7 +804,7 @@ tree that half-links is worse than one that does not run.
 
 **RULED (owner, 2026-07-24): as recommended, plus an explicit bypass.** The plan lists every
 colliding destination *before* anything is written and the run is refused until they have been
-seen â€” silently backing up forty files is not a preview, and refusing on the first collision
+seen — silently backing up forty files is not a preview, and refusing on the first collision
 leaves the sync half-applied.
 
 **And there is a flag to proceed anyway** (owner's addition): the common case on a fresh machine
@@ -817,12 +817,12 @@ this is a machine where the check does not exist.
 
 ## U24
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U24 â€” Is a `.age` file in the tree a secret?** XII's decrypt mode is an option on a `link:`
+**U24 — Is a `.age` file in the tree a secret?** XII's decrypt mode is an option on a `link:`
 line, and this statement has no per-file options by construction. Either the extension decides
 (magic, and magic that silently writes plaintext), or encrypted files are simply not this
-statement's job and stay on explicit `link:` lines. *Recommendation:* the second â€” **the tree
+statement's job and stay on explicit `link:` lines. *Recommendation:* the second — **the tree
 never decrypts.** T2 is already an open finding about plaintext landing in the config repo, and
 a folder walker that decrypts by filename convention is the same failure with more surface.
 
@@ -834,71 +834,71 @@ writes plaintext; secrets stay on explicit `link:` lines where `@decrypt=` is wr
 
 ## U26
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U26 â€” Is BSD a supported platform, and if so what does `when family` answer there?** (XIII.22.)
+**U26 — Is BSD a supported platform, and if so what does `when family` answer there?** (XIII.22.)
 Two questions, and only the second is blocking: registering `pkg`/`pkg_add` is ordinary backend
 work that can happen whenever, but **`when family` has no answer on a BSD today and silently
 returns the else branch**, so a config that is correct on Linux is quietly wrong there rather
-than refused. *Recommendation:* decide the identifier before either backend is written â€”
+than refused. *Recommendation:* decide the identifier before either backend is written —
 `freebsd`/`openbsd`/`netbsd` as families beside `debian`/`arch`, sourced from `uname -s` when
 `/etc/os-release` is absent, and **an unidentifiable host is an error, not an empty string**,
 because an empty family is what makes every `when` block silently false. The support question
 itself is the owner's: P7 is already unpaid on `setting:` (GNOME-only) and the snapshot promise
 (Linux-only), and a third platform admitted before the second is honest turns the principle into
-a slogan. A legitimate answer is *"listed, dated, not scheduled"* â€” what is not legitimate is
+a slogan. A legitimate answer is *"listed, dated, not scheduled"* — what is not legitimate is
 leaving `family` returning a wrong answer on a platform whose package manager Shall already
 drives (`pkgin` is registered today).
 
 
-**RULED (owner, 2026-07-24): a family that cannot be shown to be X makes `family == X` false, not an error.** The owner rejected the hard-error option: an unidentifiable or non-matching family simply fails the positive comparison, because it cannot be demonstrated to be that family. This is already the behaviour â€” `HostFacts::current` falls back to `std::env::consts::OS`, which is `freebsd`/`openbsd`/`netbsd` on the BSDs, so `family` answers the OS name there and `== debian` is correctly false. The build is a test locking that in and a why note; BSD backend registration (`pkg`/`pkg_add`) is ordinary work for whenever.
+**RULED (owner, 2026-07-24): a family that cannot be shown to be X makes `family == X` false, not an error.** The owner rejected the hard-error option: an unidentifiable or non-matching family simply fails the positive comparison, because it cannot be demonstrated to be that family. This is already the behaviour — `HostFacts::current` falls back to `std::env::consts::OS`, which is `freebsd`/`openbsd`/`netbsd` on the BSDs, so `family` answers the OS name there and `== debian` is correctly false. The build is a test locking that in and a why note; BSD backend registration (`pkg`/`pkg_add`) is ordinary work for whenever.
 ---
 
-# The non-blocking round â€” forty-six questions, all ruled
+# The non-blocking round — forty-six questions, all ruled
 
-*Something could still be built around each of these. Ruled 2026-07-23 through 2026-07-26; the U27â€“U38 extension-surface set closed last, on 2026-07-26.*
+*Something could still be built around each of these. Ruled 2026-07-23 through 2026-07-26; the U27–U38 extension-surface set closed last, on 2026-07-26.*
 
 ## U27
 
-**Status: ANSWERED â€” ruled 2026-07-26.**
+**Status: ANSWERED — ruled 2026-07-26.**
 
-**U27 â€” Is the snapshot/rollback layer opened to a registry and config-driven providers, the way
+**U27 — Is the snapshot/rollback layer opened to a registry and config-driven providers, the way
 backends are, or do new providers stay hand-written Rust? (XIII.23.)** Today `SnapshotProvider`
 is a seven-method trait and the four providers (btrfs, zfs, timeshift, `windows_restore`) are a
 hardcoded vec in `SnapshotManager::new` (`snapshot.rs:528`), first-available active. Adding
 APFS/LVM/bcachefs/WinBtrfs is a full Rust impl each. Two reasonable answers: **(a)** a
 `SnapshotProviderRegistry` plus a config-driven provider and a `custom_snapshots.toml`, matching
-the backend model â€” a create/list/delete/restore filesystem becomes ~thirty lines of data;
-**(b)** a registry only â€” providers stay Rust, but pluggable and no longer a hardcoded vec â€” on
+the backend model — a create/list/delete/restore filesystem becomes ~thirty lines of data;
+**(b)** a registry only — providers stay Rust, but pluggable and no longer a hardcoded vec — on
 the grounds that a provider which gets `restore_capability` wrong bricks a machine (V.60), a
 higher bar than a package listing and maybe too high for a TOML file. *Recommendation:* (a),
-with the one constraint that makes it safe â€” **`restore_capability` is never inferred**: a
+with the one constraint that makes it safe — **`restore_capability` is never inferred**: a
 provider whose config does not prove it can restore a running system is create-only
 (`NotFromRunningSystem`), never `Live`, so the worst a wrong config does is decline an undo it
 could have offered, never perform one it cannot keep. Ownership marking (S3) must be expressible
 or retention is disabled for that provider; a custom provider registers last and never shadows a
 built-in (XIII.2's rule).
 
-**RULED (owner, 2026-07-26): option (a), the full plugin â€” and the restore capability is a value
+**RULED (owner, 2026-07-26): option (a), the full plugin — and the restore capability is a value
 the plugin author enters, not one Shall guesses.** A snapshot provider is a declared block (the
 same shape as a custom backend and a `[[setting_store]]`): the commands to take, list, delete and
 restore a snapshot, as data in a file in the config repo. No new release is needed to teach Shall
 a new snapshot technology.
 
-- **The plugin must state whether it can restore a *running* machine** â€” the one thing that
+- **The plugin must state whether it can restore a *running* machine** — the one thing that
   cannot be inferred (V.60): taking a snapshot and restoring one over the live system are
   different abilities, and a wrong guess is a machine reported safe that is not. The author writes
   it because the author knows it. Restore-capability is a **required field with no default**;
   omitting it is a loud error naming the provider, never a silent "assume it can" or "assume it
-  can't". A provider declared unable to restore a running system is create-only â€” it saves state
+  can't". A provider declared unable to restore a running system is create-only — it saves state
   and refuses the rollback rather than attempting one it cannot finish.
 - **It must work for everything, so the built-ins use the same door.** btrfs, zfs, timeshift and
   Windows System Restore stop being a hardcoded list and become rows read through the one loader a
-  user's row goes through â€” the K17/U1 rule, so the mechanism is proven by the shipped providers
+  user's row goes through — the K17/U1 rule, so the mechanism is proven by the shipped providers
   and cannot drift into a privileged path nobody tested. APFS, LVM, bcachefs and the rest are then
   data, not code.
 - **It must be easy to add.** One file, roughly thirty lines of data, beside the other adapters in
-  `adapters/` (U10), under the II.12 hook ledger because it is argv a shared repo can run â€”
+  `adapters/` (U10), under the II.12 hook ledger because it is argv a shared repo can run —
   approved by `shall lock`, the same trust answer already given for custom backends and settings
   stores, not a new one.
 
@@ -908,30 +908,30 @@ or retention is disabled for that provider; a row missing `restore` or a require
 is refused at load, not half-used. This makes providers plural, which is what **U28** (choose the
 active provider by capability, not list order) now has to answer.
 
-**RULED (owner decision session 2026-07-26): the "built-ins become rows too" half is Option A â€”
+**RULED (owner decision session 2026-07-26): the "built-ins become rows too" half is Option A —
 build it now, no permanent exemption.** The additive `ConfigSnapshotProvider` shipped 2026-07-27;
-this closes the other half the original ruling asked for â€” the built-ins stop being a hardcoded
+this closes the other half the original ruling asked for — the built-ins stop being a hardcoded
 `Vec` (`core/snapshot.rs:528`) and go through the one loader, so the mechanism is proven by the
 shipped providers and cannot drift into a privileged path nobody tested (the K17/U1 invariant).
 
 - **btrfs, zfs, timeshift and lvm become argv rows** in `adapters/snapshot.toml`. Their live
   restore is validated on a Linux box with those filesystems afterwards; the argv and wiring are
   unit-tested here.
-- **Windows System Restore becomes a row too â€” but via typed-placeholder substitution, not a
+- **Windows System Restore becomes a row too — but via typed-placeholder substitution, not a
   free-text template.** This was the one point that needed the owner: Windows System Restore is
   typed PowerShell cmdlets (`Checkpoint-Computer`, `Restore-Computer -RestorePoint {id}`) run
   elevated, and SEC5 closed an injection hole there by making the id a `u32` and the label a fixed
   enum. The owner ruled it stays a row rather than a hand-written exemption, on the condition that
-  the loader substitutes the id only as a validated `u32` and the label only as the enum value â€”
-  never raw interpolation â€” so SEC5's property is preserved by construction. This is buildable and
+  the loader substitutes the id only as a validated `u32` and the label only as the enum value —
+  never raw interpolation — so SEC5's property is preserved by construction. This is buildable and
   testable on the Windows host itself, so nothing about the Windows row waits on foreign hardware.
   Reasoned in **V.82**.
 
 ## U28
 
-**Status: ANSWERED â€” ruled 2026-07-26.**
+**Status: ANSWERED — ruled 2026-07-26.**
 
-**U28 â€” Does a machine use one snapshot provider or several, and is the active one chosen by
+**U28 — Does a machine use one snapshot provider or several, and is the active one chosen by
 capability rather than list order? (XIII.23.)** `SnapshotManager::new` takes the first available
 provider and stops. But a machine can have a btrfs `/` and a ZFS data pool at once, and they are
 not equal: ZFS restores a running system live, btrfs cannot (V.60). Choosing by vec order means
@@ -939,56 +939,56 @@ a btrfs-first machine silently gets the weaker safety net when a live-capable on
 *Recommendation:* prefer a `Live` provider over a create-only one when both are available,
 independent of registration order; leave "several active at once" (snapshot every provider,
 restore from the best) as a later question, since one strong provider is the safety net and N is
-an optimization. Blocked by nothing â€” but it is the wrong default to leave in place once U27
+an optimization. Blocked by nothing — but it is the wrong default to leave in place once U27
 makes providers plural.
 
 **RULED (owner, 2026-07-26): a declared priority list, exactly like package managers.** The active
 provider is not chosen by Shall guessing from capability, and not by whatever order the providers
-were registered â€” it is chosen by an **ordered list the user declares**, the same mechanism
+were registered — it is chosen by an **ordered list the user declares**, the same mechanism
 package-manager `priority` already is: the first provider in the list that is available on this
 machine becomes the active safety net. A default order ships and the user overrides it, exactly as
 `priority` does for backends.
 
 - **The list decides *which* provider; V.60 decides what Shall *promises* about it.** These do not
   conflict. If the declared order puts a create-only provider first, Shall uses it and **says so
-  before the change** â€” the pre-change notice states which kind of snapshot this machine takes, so
+  before the change** — the pre-change notice states which kind of snapshot this machine takes, so
   a weaker net is a visible choice, never a silent one. A provider that cannot restore a running
   machine still refuses the rollback; the list cannot make it promise what it declared it cannot
   do.
 - **One active provider, first-available-wins.** "Snapshot with every provider and restore from
-  the best" (belt-and-suspenders) stays a later question â€” one strong provider is the safety net;
+  the best" (belt-and-suspenders) stays a later question — one strong provider is the safety net;
   N is an optimisation, not the floor.
 
 **Implementing call:** the ordered list is its own preference, sitting with the snapshot settings
-rather than jammed into package `priority` â€” one-question-per-file (U10) â€” but it *is* the
+rather than jammed into package `priority` — one-question-per-file (U10) — but it *is* the
 `priority` shape (an ordered list of names, default shipped, user overrides), not a new one.
 
 ---
 
 ## U29
 
-**Status: ANSWERED â€” ruled 2026-07-26.**
+**Status: ANSWERED — ruled 2026-07-26.**
 
-**U29 â€” Is APFS local-snapshot the macOS safety net, and does an APFS restore count as `Live` or
-`NotFromRunningSystem`? (XIII.24.)** U6 is ruled â€” the Linux-only snapshot promise is documented
-as such â€” but macOS ships APFS with local snapshots (`tmutil localsnapshot`, `diskutil apfs`)
+**U29 — Is APFS local-snapshot the macOS safety net, and does an APFS restore count as `Live` or
+`NotFromRunningSystem`? (XIII.24.)** U6 is ruled — the Linux-only snapshot promise is documented
+as such — but macOS ships APFS with local snapshots (`tmutil localsnapshot`, `diskutil apfs`)
 and Shall uses none of it, so the pre-sync snapshot / `rebuild` revert / `rollback` are simply
 absent on the second supported platform. An `ApfsProvider` is the natural first customer of
-U27's registry. *Recommendation:* build it, and answer the capability honestly â€” an APFS
+U27's registry. *Recommendation:* build it, and answer the capability honestly — an APFS
 snapshot that can only be restored by rebooting into the recovery environment is
 `NotFromRunningSystem`, not `Live` (V.60). Whether macOS parity is *scheduled* or merely *listed*
 (XIII.4) is the owner's call; the *capability* question must be answered before the provider
 ships, whenever that is.
 
-**RULED (owner, 2026-07-26): yes â€” macOS gets APFS as its snapshot provider, and it is built.**
+**RULED (owner, 2026-07-26): yes — macOS gets APFS as its snapshot provider, and it is built.**
 APFS local snapshots (`tmutil localsnapshot`, `diskutil apfs`) become the macOS safety net, as a
-provider row on U27's mechanism â€” the natural first customer of the plugin door. Its restore
+provider row on U27's mechanism — the natural first customer of the plugin door. Its restore
 capability is declared honestly: an APFS snapshot restored only by rebooting into the recovery
 environment is **create-only, not live** (V.60), so it saves state and offers recovery-mode
 restore rather than pretending to be a running-machine undo. This closes the platform gap U6
 documented: macOS is no longer without a net, it has a create-only one, marked as such.
 
-**Governance (owner, 2026-07-26): there is no "listed but not scheduled" â€” everything ruled to
+**Governance (owner, 2026-07-26): there is no "listed but not scheduled" — everything ruled to
 build gets built.** The recommendation offered scheduling as the owner's call; the owner removed
 the option. **The XIII.4 listed-vs-scheduled distinction is retired.** A decision that says "build
 it" is scheduled work, not an acknowledgement filed for later, and this applies to every "open it
@@ -998,42 +998,42 @@ it" is scheduled work, not an acknowledgement filed for later, and this applies 
 
 ## U30
 
-**Status: ANSWERED â€” ruled 2026-07-26.**
+**Status: ANSWERED — ruled 2026-07-26.**
 
-**U30 â€” Is "declare a storage object" a family (zfs datasets, lvm volumes, btrfs subvolumes) or
+**U30 — Is "declare a storage object" a family (zfs datasets, lvm volumes, btrfs subvolumes) or
 separate backends, and what does the guard owe a removal that destroys a filesystem? (XIII.25.)**
 `backends/btrfs.rs` declares subvolumes as objects; there is no zfs-dataset or lvm-volume
 equivalent, though each is the same declared-sized-mounted noun. They do not fit `ManagerConfig`,
-so it is Rust regardless â€” the question is one shared trait versus three backends. *The half that
+so it is Rust regardless — the question is one shared trait versus three backends. *The half that
 is not cosmetic:* `btrfs:` remove runs `subvolume delete`, which destroys a filesystem, and a
 zfs-dataset `remove` (`zfs destroy`) is the same at larger blast radius. **Every removal path
-calls the guard (`app/sync/guard.rs`), and this one must too â€” verified from the code, not
+calls the guard (`app/sync/guard.rs`), and this one must too — verified from the code, not
 assumed** (the II.10 lesson: a removal path nobody names is a removal path nobody guards).
-*Recommendation:* settle the guard's contract for filesystem objects â€” at minimum, a declared
-storage object with data on it is never destroyed without the gate a protected package gets â€”
+*Recommendation:* settle the guard's contract for filesystem objects — at minimum, a declared
+storage object with data on it is never destroyed without the gate a protected package gets —
 before any second storage backend grows a `remove`.
 
-**RULED (owner, 2026-07-26): one family, and the ordinary guard â€” no special escalation.**
+**RULED (owner, 2026-07-26): one family, and the ordinary guard — no special escalation.**
 
 - **Shape: one family.** zfs datasets, lvm volumes and btrfs subvolumes are the same
   declared-sized-mounted noun, so they share one trait, not three backends. (The owner agreed the
   cosmetic half.)
 - **Guard: the normal gate, and it must fire.** A removal that destroys a filesystem goes through
-  `app/sync/guard.rs` exactly as a protected-package removal does â€” the same mass-removal-style
+  `app/sync/guard.rs` exactly as a protected-package removal does — the same mass-removal-style
   confirmation, no stronger dedicated gate and no refuse-to-auto-destroy special case. What is
   **not** optional is that the guard fires at all: this is a removal path, it destroys a
-  filesystem, and II.10 says every removal path calls the guard â€” so a `zfs destroy` / `subvolume
+  filesystem, and II.10 says every removal path calls the guard — so a `zfs destroy` / `subvolume
   delete` reached by removing a line is never silent, it is guarded like any destructive change.
   The owner chose the normal gate over the two stricter options (empty-only auto-destroy;
-  never-auto-destroy-a-populated-volume) â€” a storage removal is guarded, not special-cased.
+  never-auto-destroy-a-populated-volume) — a storage removal is guarded, not special-cased.
 
-The line that was genuinely open â€” *does a filesystem-destroying removal earn MORE than the normal
-gate* â€” is answered **no**. It earns exactly the guard every removal earns, and the danger is met
+The line that was genuinely open — *does a filesystem-destroying removal earn MORE than the normal
+gate* — is answered **no**. It earns exactly the guard every removal earns, and the danger is met
 by the guard firing, not by a second heavier gate.
 
 **And a storage object is protectable exactly like a package (owner, 2026-07-26).** The guard's
-existing protection â€” the `keep.txt` / "never remove" mark a user puts on a package the guard then
-refuses to remove â€” applies to storage objects too: a user may protect a volume, and a protected
+existing protection — the `keep.txt` / "never remove" mark a user puts on a package the guard then
+refuses to remove — applies to storage objects too: a user may protect a volume, and a protected
 volume the guard **refuses to destroy** at all, the same way it refuses a protected package. This
 is not a new mechanism; it is the one protection vocabulary reaching a new noun, which is the
 right shape (no two of everything). So the danger has two answers together: the guard fires on
@@ -1050,38 +1050,38 @@ true, and all three are corrected.
 **The half still unexecuted is the protection, and it is the half that matters most.** No gate
 has ever marked a storage object protected and watched the guard refuse to destroy it. It is also
 the one item in this area that **cannot** be argv-tested, because a refusal never reaches a
-manager and so produces no argv to assert â€” a live run is its only possible proof. That is a
+manager and so produces no argv to assert — a live run is its only possible proof. That is a
 lifecycle step the harness does not have yet, not a ruling in question.
 
 **Build note (owner, 2026-07-26): the providers do not exist yet and must actually be built.**
 Only `backends/btrfs.rs` declares storage objects today; **zfs datasets and lvm volumes have no
-implementation at all.** This ruling is the contract for code that is still owed â€” the shared
+implementation at all.** This ruling is the contract for code that is still owed — the shared
 family trait, the zfs (`zfs create`/`destroy`/list) and lvm backends, the guard wiring and the
-protection mark â€” all of it is work to do, not work done. Do not read this entry as "storage
+protection mark — all of it is work to do, not work done. Do not read this entry as "storage
 objects are finished."
 
 ---
 
 ## U31
 
-**Status: ANSWERED â€” ruled 2026-07-26.**
+**Status: ANSWERED — ruled 2026-07-26.**
 
-**U31 â€” Should health checks be an open vocabulary â€” a user-declared check command â€” rather than
+**U31 — Should health checks be an open vocabulary — a user-declared check command — rather than
 a fixed set? (XIII.26.)** A health-checked upgrade (XIII.5) rolls back when the machine is
 "unhealthy", but health is only what Shall already knows how to test; a user whose service must
 answer on a port, or whose config file must parse, cannot express it. A check is argv with exit
-0 = healthy â€” the most check-shaped extension there is. *Recommendation:* open it, on the II.12
-hook trust model (a check command is argv from a file, and the file may travel), and fail loud â€”
+0 = healthy — the most check-shaped extension there is. *Recommendation:* open it, on the II.12
+hook trust model (a check command is argv from a file, and the file may travel), and fail loud —
 a check that cannot run is a failed check, not a passed one, or "healthy" quietly comes to mean
 "the check was broken" (V's silent-wrongness). Not blocking: the built-in checks work; this is
 the difference between a safety net Shall designed and one the user can shape.
 
-**RULED (owner, 2026-07-26): open it, as recommended.** Health checks become an open vocabulary â€”
+**RULED (owner, 2026-07-26): open it, as recommended.** Health checks become an open vocabulary —
 a user declares a check command (argv, exit 0 = healthy) beside the built-in checks. Two rules,
 both the standard ones:
 
 - **Fail loud: a check that cannot run is a *failed* check.** If Shall cannot execute the check,
-  the result is "unhealthy" and the change rolls back â€” never "assume healthy". Otherwise "healthy"
+  the result is "unhealthy" and the change rolls back — never "assume healthy". Otherwise "healthy"
   silently degrades to "the check was broken", the exact silent-wrongness this design refuses.
 - **Same trust as every runnable thing:** a check command is argv a shared config repo can carry,
   so it rides the II.12 hook ledger and is approved by `shall lock`, not a new trust model.
@@ -1092,9 +1092,9 @@ The exact schema is implementation, not a further ruling.
 
 ## U32
 
-**Status: ANSWERED â€” ruled 2026-07-26.**
+**Status: ANSWERED — ruled 2026-07-26.**
 
-**U32 â€” Do modules take parameters (the macro Shall doesn't have), and is a parameter's type
+**U32 — Do modules take parameters (the macro Shall doesn't have), and is a parameter's type
 checked? (XIII.29.)** A module is a named set of declarations that cannot take an argument, so two
 machines wanting *almost* the same set copy it and drift. *Proposed:* `param user` / `param gpu =
 none` in the module, `use workstation(user=shaul, gpu=nvidia)` at the call site; substitution is
@@ -1102,37 +1102,37 @@ none` in the module, `use workstation(user=shaul, gpu=nvidia)` at the call site;
 ordinary declarations, visible in `shall eval` and the removal preview before it runs. A missing
 `param` with no default is a **loud error naming module and parameter**, never an empty string
 that makes a `when` silently false (P3, the failure `vars` was hardened against). *The actual
-decision:* whether a parameter is typed â€” a `gpu` that must be one of a named set versus free text.
+decision:* whether a parameter is typed — a `gpu` that must be one of a named set versus free text.
 A typed parameter is a second closed vocabulary the user defines: it names its legal values in the
 error (VIII.2's virtue) but is also a second place a name can be misspelled. *Recommendation:*
 build parameters; make types opt-in (free text with a loud "missing" is the floor, a named set is
 sugar on top), so the feature is useful before the type system is finished.
 
 **RULED (owner, 2026-07-26): build it, and the user decides per parameter whether it is typed.**
-Modules take parameters â€” `param user`, `param gpu = none` in the module, `use workstation(user=
+Modules take parameters — `param user`, `param gpu = none` in the module, `use workstation(user=
 shaul, gpu=nvidia)` at the call site, substituted through `vars`' existing interpolation, expanding
 to ordinary declarations visible in `shall eval` and the removal preview before anything runs. Two
 things are fixed:
 
-- **A missing required parameter is a loud error naming the module and the parameter** â€” never an
+- **A missing required parameter is a loud error naming the module and the parameter** — never an
   empty string that makes a `when` silently false (P3, the failure `vars` was hardened against).
 - **Types are the user's choice, per parameter.** Free text is the floor; a user may declare a
-  parameter typed (a named set of legal values, whose error lists them â€” VIII.2's virtue) where
+  parameter typed (a named set of legal values, whose error lists them — VIII.2's virtue) where
   they want that check, and leave it free text where they do not. The same principle as the rest of
-  this round â€” the user can shape it â€” applied to the parameter's own vocabulary. Opt-in, so the
+  this round — the user can shape it — applied to the parameter's own vocabulary. Opt-in, so the
   feature is useful before any type system is finished, and never forced where free text is fine.
 
 ---
 
 ## U33
 
-**Status: ANSWERED â€” ruled 2026-07-26 (owner overrode the recommendation; amends U3 and U4).**
+**Status: ANSWERED — ruled 2026-07-26 (owner overrode the recommendation; amends U3 and U4).**
 
-**U33 â€” Are generated declarations wanted at all â€” a config that runs a program to *produce*
+**U33 — Are generated declarations wanted at all — a config that runs a program to *produce*
 state, not describe it? (XIII.30.)** `vars` already lets a *value* come from a command through the
 hook ledger; this is a whole *declaration* from a command ("install whatever `./pick-python.sh`
 prints"). It is `read`/`eval` with `read`/`eval`'s liability: the config's behaviour stops being
-knowable by reading it. Shall already treats the neighbouring feature as radioactive â€” `exec:` is
+knowable by reading it. Shall already treats the neighbouring feature as radioactive — `exec:` is
 "run a thing", and U3/U4 confined it to actions with no inverse, explicitly *not* installing
 software; a generator that emits installs walks back to that line, now able to *generate* the
 `exec:` (XIII.14's fear). If ever built, only under exec's constraints: output passes the guard
@@ -1142,9 +1142,9 @@ never.** `vars` covers values, U32 covers reuse, and what remains is precisely t
 reading property this design exists to refuse. Filed so the answer is a recorded *no* rather than
 a gap someone fills quietly.
 
-**RULED (owner, 2026-07-26): build it â€” and `exec:` may do anything â€” each gated by a config key.**
+**RULED (owner, 2026-07-26): build it — and `exec:` may do anything — each gated by a config key.**
 The recommendation was a recorded no; the owner overrode it deliberately. Both powers ship, and
-both are **off by default behind an explicit config key** â€” the deliberate opt-in shape Shall
+both are **off by default behind an explicit config key** — the deliberate opt-in shape Shall
 already uses for every dangerous capability (`--allow-mass-removal`, `@allow_http`, `shall lock`).
 A user who wants the power turns the key; a user who does not is never exposed to it.
 
@@ -1152,7 +1152,7 @@ A user who wants the power turns the key; a user who does not is never exposed t
   by its own key. What it emits is **not** exempt from the machine's safety: the output passes the
   guard and the removal preview exactly as if it had been typed, it runs through the II.12 approval
   ledger (V.55), and a failed generator is a **failed sync, never a silently empty set** (VI.0,
-  fail-loud â€” a Part I principle, so it holds regardless of the key). The key buys the
+  fail-loud — a Part I principle, so it holds regardless of the key). The key buys the
   unknowable-by-reading tradeoff; it does not buy silence.
 - **`exec:` may install software and do anything, gated by its own key. This amends U3 and U4.**
   U4 said `exec:` is not a licence to install software; the owner has lifted that categorical
@@ -1160,31 +1160,31 @@ A user who wants the power turns the key; a user who does not is never exposed t
   so an `exec:` that installs still leaves the software when the line goes unless `@undo=` is given,
   and `plan` still says so. The onboarder remains the **better** path for anything installable (it
   gives a noun that removes/lists/locks); it is no longer the *only* permitted one.
-- **Two keys, not one** ("a key which controls each") â€” generated declarations and `exec:`-anything
+- **Two keys, not one** ("a key which controls each") — generated declarations and `exec:`-anything
   are separately gated, so enabling one does not silently enable the other.
 
 **Downstream, owed:** U3 and U4 entries carry an amendment note pointing here; the README's `exec:`
 boundary (U4's deliverable) and XIII.14's fear are revisited when this is built. The Part I
-principles (fail-loud, the guard, the plan showing every change) are **not** waived by either key â€”
+principles (fail-loud, the guard, the plan showing every change) are **not** waived by either key —
 they are what keeps an opened door from being a silent one.
 
 ---
 
 ## U34
 
-**Status: ANSWERED â€” ruled 2026-07-26.**
+**Status: ANSWERED — ruled 2026-07-26.**
 
-**U34 â€” Is `shall repl` worth a second entry point, or is `shall eval | jq` enough? (XIII.31.)** A
+**U34 — Is `shall repl` worth a second entry point, or is `shall eval | jq` enough? (XIII.31.)** A
 read-only prompt that resolves a name against *this* machine, evaluates a `when`, and expands a
-`use workstation(gpu=nvidia)` â€” answering "what does this resolve to here" by trying it. It is
+`use workstation(gpu=nvidia)` — answering "what does this resolve to here" by trying it. It is
 `eval` (XIII.15) with a cursor and must share the same parser and resolver, never a second
-implementation (the U20 rule). *Recommendation:* low priority â€” real value for anyone authoring a
+implementation (the U20 rule). *Recommendation:* low priority — real value for anyone authoring a
 config, but `eval` already exposes the model, so this is ergonomics, not capability. Worth it only
 if it stays a thin front end over the existing engine.
 
-**RULED (owner, 2026-07-26): build it â€” if it is easy.** `shall repl` ships as an interactive
+**RULED (owner, 2026-07-26): build it — if it is easy.** `shall repl` ships as an interactive
 read-only prompt for authoring a config. The owner did not require it be a literal thin wrapper,
-only that it be easy â€” so the implementation shape is free, **with one non-negotiable that is a
+only that it be easy — so the implementation shape is free, **with one non-negotiable that is a
 correctness rule, not a style choice: it shares the one parser and resolver, never a second
 implementation (U20).** Two engines drift and then disagree, which is the failure this rewrite
 exists to end; that constraint holds however the repl is structured. It is ergonomics over the
@@ -1195,15 +1195,15 @@ not worth a half-build.
 
 ## U35
 
-**Status: ANSWERED â€” ruled 2026-07-26 (owner widened past composition-only).**
+**Status: ANSWERED — ruled 2026-07-26 (owner widened past composition-only).**
 
-**U35 â€” May a user name a new verb, strictly as a composition of built-ins? (XIII.31.)** Shall has
+**U35 — May a user name a new verb, strictly as a composition of built-ins? (XIII.31.)** Shall has
 ~sixty commands (XIII.8) and no way to add the sixty-first. A verb that *sequences* existing verbs
-â€” `shall refresh` = `sync`, then `upgrade`, then the fleet report â€” is `defun` over the command
+— `shall refresh` = `sync`, then `upgrade`, then the fleet report — is `defun` over the command
 surface, and safe because it composes audited operations rather than producing new ones. **The
 line:** a user verb sequences built-in verbs and nothing else; the moment it runs arbitrary argv it
 is `exec:` wearing a command's clothes, which U4 already settled as no. *Recommendation:* build it
-with that boundary hard-coded â€” composition only, no shell â€” so the safe 90% ships without
+with that boundary hard-coded — composition only, no shell — so the safe 90% ships without
 reopening the `exec:` trust question the dangerous 10% would.
 
 **RULED (owner, 2026-07-26): build it, and a user verb may run arbitrary commands too.** The
@@ -1211,12 +1211,12 @@ recommendation held the line at composition-only; the owner widened it, consiste
 `exec:` do anything. So a user verb has two registers, and **one door, not two**:
 
 - **Composing built-in verbs is safe and ungated.** `shall refresh` = `sync`, then `upgrade`, then
-  the fleet report â€” it sequences audited operations and produces nothing new, so it needs no key.
+  the fleet report — it sequences audited operations and produces nothing new, so it needs no key.
 - **Running arbitrary commands rides the `exec:` trust model from U33.** The moment a user verb
   runs argv of its own, that portion is the same power `exec:` is, so it inherits the same
   controls: gated behind U33's `exec:`-anything config key (off by default), approved through the
   II.12 ledger, and never exempt from the guard, the plan and fail-loud (Part I). It does **not**
-  get a second, looser trust question of its own â€” that is the mistake the composition-only
+  get a second, looser trust question of its own — that is the mistake the composition-only
   recommendation was guarding against, and routing arbitrary-command verbs through U33's existing
   gate answers it without a new mechanism.
 
@@ -1224,76 +1224,76 @@ recommendation held the line at composition-only; the owner widened it, consiste
 
 ## U36
 
-**Status: ANSWERED â€” ruled 2026-07-26.**
+**Status: ANSWERED — ruled 2026-07-26.**
 
-**U36 â€” Are init systems a declared-provider kind, or does the built-in enum stay closed? (XIII.34.)**
+**U36 — Are init systems a declared-provider kind, or does the built-in enum stay closed? (XIII.34.)**
 `backends/service.rs` is a fixed `enum InitSystem` (Systemd, OpenRC, SysVinit, launchd, Windows
 `sc`) behind a hardcoded command table; s6, dinit, runit, GNU Shepherd and appliance inits are
 unreachable, and a `service:` line on such a host has no branch to take. It is the snapshot vec's
-problem in another file, and the **lowest-risk** surface to open â€” start/stop/enable are ordinary
+problem in another file, and the **lowest-risk** surface to open — start/stop/enable are ordinary
 reversible operations with no data to destroy. *Recommendation:* open it as a `[[init]]` block on
 XIII.33's mechanism; it is the cleanest fit the mechanism has, and P7 is better served by "write
-six lines" than by "unsupported". Not blocking â€” the five built-ins cover most machines.
+six lines" than by "unsupported". Not blocking — the five built-ins cover most machines.
 
 **RULED (owner, 2026-07-26): open it, as recommended.** Init systems become a declared-provider
-kind â€” a `[[init]]` block on the same plugin mechanism as custom backends, setting stores and
+kind — a `[[init]]` block on the same plugin mechanism as custom backends, setting stores and
 snapshot providers, so s6, dinit, runit, GNU Shepherd and any appliance init are reachable by
 writing a small file rather than shipping a release. The five built-ins become rows read through
 the same loader (no two of everything), and a declared init system is argv a shared repo can carry,
-so it rides the II.12 ledger and `shall lock` approves it. This is the lowest-risk surface â€”
-start/stop/enable are reversible and destroy no data â€” so nothing beyond the standard trust rule
+so it rides the II.12 ledger and `shall lock` approves it. This is the lowest-risk surface —
+start/stop/enable are reversible and destroy no data — so nothing beyond the standard trust rule
 is owed. The schema is implementation.
 
 ---
 
 ## U37
 
-**Status: ANSWERED â€” ruled 2026-07-26.**
+**Status: ANSWERED — ruled 2026-07-26.**
 
-**U37 â€” Are notification channels their own declared-provider kind, or is an event hook the
+**U37 — Are notification channels their own declared-provider kind, or is an event hook the
 answer? (XIII.35.)** `app/scheduler/notify.rs` handles only `desktop`, `email`, `both` and warns
-"unknown channel" for the rest, so Slack, ntfy, webhooks, Telegram, paging â€” every channel a real
-fleet uses â€” is absent. **The overlap with XIII.13's event hooks is the decision:** a hook can
+"unknown channel" for the rest, so Slack, ntfy, webhooks, Telegram, paging — every channel a real
+fleet uses — is absent. **The overlap with XIII.13's event hooks is the decision:** a hook can
 already shell out to `curl` on a sync or a guard refusal, so "notify me on Slack" is *possible*
 today; the question is whether a first-class `[[channel]]` block earns its keep on top of that.
-*Recommendation:* do not add a second mechanism â€” route non-built-in channels through the event
-hook that already exists, and document it â€” unless a channel needs something a hook cannot express
+*Recommendation:* do not add a second mechanism — route non-built-in channels through the event
+hook that already exists, and document it — unless a channel needs something a hook cannot express
 (per-level routing), the only thing that would justify a block of its own. Filed so the answer is
 a recorded decision, not a fifth channel bolted on next time someone asks.
 
-**RULED (owner, 2026-07-26): no new mechanism â€” route through the existing event hook, and
+**RULED (owner, 2026-07-26): no new mechanism — route through the existing event hook, and
 document it.** Slack, ntfy, webhooks, Telegram and paging are reached by the event hook U15 already
 shipped (a hook that runs `curl` on `after_sync` / `on_drift` / `on_guard_refusal`), not by a new
-`[[channel]]` provider kind. A dedicated channel block would duplicate the hook â€” two ways to do
+`[[channel]]` provider kind. A dedicated channel block would duplicate the hook — two ways to do
 one thing, the disease this rewrite cures. The one thing that could have justified a block of its
 own, per-severity routing, the owner did not ask for, so it is not built. The work owed here is
-**documentation** â€” a copyable Slack/webhook hook example â€” not a mechanism. If per-level routing
+**documentation** — a copyable Slack/webhook hook example — not a mechanism. If per-level routing
 is ever wanted, that, and only that, reopens the block question.
 
 ---
 
 ## U38
 
-**Status: ANSWERED â€” ruled 2026-07-26. The T-series gate is now clear.**
+**Status: ANSWERED — ruled 2026-07-26. The T-series gate is now clear.**
 
-**U38 â€” Is secret decryption a declared-provider kind, and behind which T-series rulings?
+**U38 — Is secret decryption a declared-provider kind, and behind which T-series rulings?
 (XIII.36.)** `model/secret.rs` is built around `age` (age plugins, hardware tokens); sops, Vault,
 1Password, cloud KMS and GPG have no way in, though each is "run a command that turns a reference
-into plaintext" â€” XIII.33's shape exactly. **This is the surface where openness is not cheap.** A
+into plaintext" — XIII.33's shape exactly. **This is the surface where openness is not cheap.** A
 decrypt provider's output *is* a secret: a bad one writes plaintext to disk, leaves it in the
-process table, or logs it â€” the failure `secret:` exists to prevent. So a declared secret provider
+process table, or logs it — the failure `secret:` exists to prevent. So a declared secret provider
 is bound by the T-series handling rules Shall argued for age (no-disk / in-memory / no-log, T7
 reopened), and one that cannot promise them is refused, not trusted. *Recommendation:* yes in
-principle â€” the mechanism is identical and users genuinely have other secret managers â€” but **not
+principle — the mechanism is identical and users genuinely have other secret managers — but **not
 before the T-series settles how plaintext is handled**, because opening this surface first hands an
 unaudited command the one thing Shall promises to guard. Safe order: rule the T-series, then open
 the door the mechanism already makes trivial.
 
-**RULED (owner, 2026-07-26): open it â€” the T-series is settled, so the gate is clear.** The
+**RULED (owner, 2026-07-26): open it — the T-series is settled, so the gate is clear.** The
 plaintext-handling rules this surface waited on are all ruled: decrypt never silently backs up
 (T1), plaintext cannot be written back into the repo (T2), it is created with locked-down
 permissions (T5), and Shall does not hold secrets in process memory (T7, ruled out). With those
-fixed, secret decryption becomes a declared-provider kind â€” sops, Vault, 1Password, cloud KMS and
+fixed, secret decryption becomes a declared-provider kind — sops, Vault, 1Password, cloud KMS and
 GPG reachable on the same plugin mechanism and `shall lock` approval as every other surface.
 
 - **The safety cost is real and is paid by a refusal, not a warning.** A decrypt provider's output
@@ -1302,34 +1302,34 @@ GPG reachable on the same plugin mechanism and `shall lock` approval as every ot
   refused, not trusted.** Openness here is not free the way it is for init systems (U36): the
   provider proves it handles plaintext safely, or it does not run.
 - Everything ruled gets built (2026-07-26 governance), so this is scheduled work, not a filed
-  intention â€” now that its gate is open.
+  intention — now that its gate is open.
 
 ---
 
 ## U39
 
-**Status: ANSWERED â€” ruled 2026-07-26.**
+**Status: ANSWERED — ruled 2026-07-26.**
 
 **In the tree today:** built in the same commit as this ruling. `capability::INSTALLS_FROM_SOURCE`
-is the one table â€” `("helm", "url")` â€” read by both ends: the grammar admits `@url` as a package
+is the one table — `("helm", "url")` — read by both ends: the grammar admits `@url` as a package
 option and refuses it by name on every backend that installs by name, and `register_helm` builds
 its `ManagerConfig::install_source_option` from the same row. Both harnesses run helm's full
 lifecycle where they previously named it as an open bug and skipped it.
 
 **The first version of this shipped broken, and only a real `helm` said so.** The unit tests built
-a `PackageSpec` by hand, so nothing ever asked the grammar whether `@url` was a legal key â€” and it
-was not: II.2's option table is closed, so every `helm:diff@url=â€¦` line was refused as a
+a `PackageSpec` by hand, so nothing ever asked the grammar whether `@url` was a legal key — and it
+was not: II.2's option table is closed, so every `helm:diff@url=…` line was refused as a
 misspelling while every test passed. `capability.rs` now has a test that every install-source key
 is in `PACKAGE_OPTION_KEYS`, which is the drift this could otherwise repeat.
 
-**U39 â€” When a manager installs by one string and removes by another, which one is the
+**U39 — When a manager installs by one string and removes by another, which one is the
 declaration?** `helm plugin install` takes a URL; `helm plugin list` and `helm plugin uninstall`
 speak the name in the plugin's own `plugin.yaml`. A Shall declaration carries one name, so
-whichever half it named, the other half broke â€” and naming the URL is the half that breaks
+whichever half it named, the other half broke — and naming the URL is the half that breaks
 **silently and permanently**: the install succeeds, then every later sync sees a package that
 `list` never mentions, tries to remove it, and fails identically. One helm plugin wedged every
 operation after it. Proven by a real run on the `tools` image, and it is not helm-specific in
-principle â€” it is the general question of which string is the identity.
+principle — it is the general question of which string is the identity.
 
 **RULED (owner, 2026-07-26): the name is the identity, always. Install-time data rides in an
 option.** A declaration is `helm:diff@url=https://github.com/databus23/helm-diff`.
@@ -1344,7 +1344,7 @@ option.** A declaration is `helm:diff@url=https://github.com/databus23/helm-diff
   be read before the plugin is fetched. The refusal names the fix.
 - **`go` already had the right shape and is why this is a rule rather than a helm patch.**
   `go install` takes a module path and Go ships no uninstaller, but the module path is what
-  `go version -m` reports back, so the identity survives â€” and removal derives the binary from
+  `go version -m` reports back, so the identity survives — and removal derives the binary from
   it. `web` is consistent the other way (the URL is the identity at install, list *and*
   remove). helm was the only backend where the two vocabularies differed and the code assumed
   they did not.
@@ -1353,17 +1353,17 @@ option.** A declaration is `helm:diff@url=https://github.com/databus23/helm-diff
 
 ## U40
 
-**Status: ANSWERED â€” ruled 2026-07-27.**
+**Status: ANSWERED — ruled 2026-07-27.**
 
 **In the tree today:** built in the same commit as this ruling. `RawExecutor` carries a
-`ChildStdin` policy â€” `Closed` for the reader layer, `Interactive` for the mutating one â€” and
+`ChildStdin` policy — `Closed` for the reader layer, `Interactive` for the mutating one — and
 captures stdout and stderr on both. `run_on` sets `SYSTEMD_PAGER`/`PAGER`/`GIT_PAGER` on every
 spawn, and the systemd rows in `init_providers.toml` carry `--no-pager`.
 
-**U40 â€” Does a command Shall runs write to your terminal, or to Shall?** It had been answered
+**U40 — Does a command Shall runs write to your terminal, or to Shall?** It had been answered
 by accident, and both ways at once: `RawExecutor::execute` asked whether *Shall's own stdin* was
 a terminal and, if it was, handed the child all three handles. That meant the answer differed
-between a human and CI, and the human got the worse half of it â€” with stdout inherited,
+between a human and CI, and the human got the worse half of it — with stdout inherited,
 `output.stdout` came back empty and all 79 `run_output` call sites parsed an empty string. `shall
 list -b apt` reported **609 packages piped and 1 under a terminal**. Nothing looked broken,
 because what reached the screen was `dpkg-query`'s own output, which reads like a package list.
@@ -1383,7 +1383,7 @@ Capture is a property of the call, never of the terminal Shall happens to have.
   stderr captured.
 - **A long mutation still shows its progress.** The bytes go both places: captured for the
   caller, mirrored to stderr as they arrive when a terminal is attached. Mirrored to stderr and
-  never stdout â€” stdout carries Shall's own answer, and a manager's chatter interleaved with it
+  never stdout — stdout carries Shall's own answer, and a manager's chatter interleaved with it
   is not parseable by whoever piped us.
 - **Pagers are suppressed at the spawn, not left to the absence of a terminal.** Capturing
   removes the usual trigger, but `$PAGER`/`$SYSTEMD_PAGER` forces one anyway. The suppression
@@ -1401,16 +1401,16 @@ half. Confirmed to fail against the previous behaviour before it was made to pas
 
 ## U41
 
-**Status: ANSWERED â€” ruled 2026-07-27, amended by the owner 2026-08-09.**
+**Status: ANSWERED — ruled 2026-07-27, amended by the owner 2026-08-09.**
 
 **In the tree today:** built in the same commit as this ruling. `Transaction` records a `Prior`
 per node before the node runs, holds the user's `Config`, and its rollback calls
 `guard::protection_of` before any compensating removal.
 
-**U41 â€” What does a rollback do when the guard refuses one of its compensating removals?**
+**U41 — What does a rollback do when the guard refuses one of its compensating removals?**
 `transaction.rs` contained **zero** references to the guard. `guard::enforce` runs at plan time
 over the planner's `Remove` nodes; a rollback's removals are issued at execution time and never
-passed through it, so `protected_packages` and OS-essential protection did not apply to them â€”
+passed through it, so `protected_packages` and OS-essential protection did not apply to them —
 in direct contradiction of the project's own rule that every path that removes calls the guard.
 Wiring it in raises the question the wiring cannot answer: a refused compensating removal leaves
 the transaction **partly applied**, and what Shall should then do is a product decision.
@@ -1433,10 +1433,10 @@ the transaction **partly applied**, and what Shall should then do is a product d
   into an uninstall. Rollback now reinstates the version the package was on; where the manager
   reported no version, it says so and leaves the package alone rather than removing it.
 - **A rolled-back removal comes back pinned.** The reinstall carried `options: HashMap::new()`,
-  so a package restored after a failed removal came back at whatever is newest â€” the declared
+  so a package restored after a failed removal came back at whatever is newest — the declared
   pin silently gone.
 
-**AMENDED (owner, 2026-08-09): one rule, in both directions â€” and the amendment `LX-3` made to
+**AMENDED (owner, 2026-08-09): one rule, in both directions — and the amendment `LX-3` made to
 one arm without telling the register is now the rule for both.**
 
 The 2026-07-27 ruling above said both arms compensate. `LX-3` (commit `e9a6ac4`) then changed the
@@ -1452,19 +1452,19 @@ declared state.**
 - **Install arm** (unchanged from `LX-3`): an install that succeeded, of something the plan still
   intends to be present, is not failed work. It is the goal, reached early.
 - **Removal arm** (new): a removal that succeeded, of something the plan still intends to be
-  absent, is the same event from the other side. **The fact that authorised the removal â€”
-  nothing declares this â€” is still true when the rollback fires, and it is knowable the same way
+  absent, is the same event from the other side. **The fact that authorised the removal —
+  nothing declares this — is still true when the rollback fires, and it is knowable the same way
   it was knowable then.** Re-installing it hands the next sync the same work.
 
 The owner's argument for the second half, in their words: *"we could have figured it out the same
-way we know to delete it: it's not there"* â€” and *"besides you can rollback generations"*.
+way we know to delete it: it's not there"* — and *"besides you can rollback generations"*.
 
 **What this costs, stated rather than buried:** a package the user had, that this run removed,
 stays removed after a failed transaction. That is accepted because **generations and snapshots
 are the durable put-it-back** and this is what they are for; a pre-sync restore point is taken on
 every run and `shall history` reaches it.
 
-**Two scopes are exempt, and each is an exception for a reason** â€”
+**Two scopes are exempt, and each is an exception for a reason** —
 `GuardScope::reconciles()` is exhaustive over all twelve:
 
 - **`Rebuild`** splits one operation into two transactions so a `Remove` and an `Install` of the
@@ -1487,13 +1487,13 @@ The mechanism is in `S60`; the rule is in **II.33**; the reason is in **V.164**.
 
 ## U42
 
-**Status: ANSWERED â€” ruled 2026-07-27.**
+**Status: ANSWERED — ruled 2026-07-27.**
 
 **In the tree today:** built in the same commit as this ruling. `undo` is gone as a top-level
 command; the gallery it opened is `shall snapshot restore`, beside `snapshot list` and
 `snapshot prune`.
 
-**U42 â€” Do the overlapping command clusters get consolidated?** A review counted 45 top-level
+**U42 — Do the overlapping command clusters get consolidated?** A review counted 45 top-level
 commands and named four clusters that overlap "without a clear rule for choosing", the headline
 being that `status` and `prune` are two views of one drift computation and that
 `undo`/`rollback`/`generation` are three vocabularies for restoring prior state.
@@ -1502,18 +1502,18 @@ being that `status` and `prune` are two views of one drift computation and that
 surface is **62 entries, not 45**, and **ten of the thirteen commands named do not exist**:
 `remove`, `prune`, `orphans`, `clean`, `unmanaged`, `status`, `doctor`, `migrate`, `clone`,
 `generation`. Both headline examples are about commands that are not in the program. An audit
-reads what is written; only running it reads what is there â€” and this one was never run.
+reads what is written; only running it reads what is there — and this one was never run.
 
 **RULED (owner, 2026-07-27): no consolidation. One rename, because the fault was a name.**
 
-- **The removal cluster stays whole. It is not a cluster of synonyms** â€” each verb does
+- **The removal cluster stays whole. It is not a cluster of synonyms** — each verb does
   something no other one does: `uninstall` a package; `remove-orphans` what the manager itself
   calls an orphan; `purge-unmanaged` everything Shall does not manage; `unmanage` forget a
   package but keep it installed; `reset` forget everything but keep everything installed;
   `clean-cache` archives and no packages. Collapsing any two removes a capability, and II.17's
   deletion list is the only approved removal.
-- **The one real overlap was a name, not a redundancy.** Going back has two mechanisms â€”
-  filesystem snapshots, and the git manifest history â€” and `undo` was the *snapshot* one while
+- **The one real overlap was a name, not a redundancy.** Going back has two mechanisms —
+  filesystem snapshots, and the git manifest history — and `undo` was the *snapshot* one while
   `history` (a TUI) and `rollback <ref>` (a CLI) are two interfaces onto the *manifest* one.
   A user wanting to undo their last sync reached for `undo` and got the wrong mechanism.
 - **The gallery is now `shall snapshot restore`.** Its name says which of the two it is, and it
@@ -1529,13 +1529,13 @@ not a command. They say `shall check`.
 
 ## U43
 
-**Status: ANSWERED â€” ruled 2026-07-27.**
+**Status: ANSWERED — ruled 2026-07-27.**
 
 **In the tree today:** built in the same commit as this ruling.
 
-**U43 â€” How much does an ordinary run say about itself?** The default filter was `info` and
+**U43 — How much does an ordinary run say about itself?** The default filter was `info` and
 there are 256 `info!`/`warn!` call sites, so every run printed Shall narrating its own startup
-above the answer the user asked for â€” `No state file found at â€¦`, on **every** run, because a
+above the answer the user asked for — `No state file found at …`, on **every** run, because a
 read-only command never writes the registry it just reported missing.
 
 Three things were true of the flags and only one of them was known: `--verbose` promised
@@ -1548,28 +1548,28 @@ touch the log stream either.
 
 - **Default `warn`.** What was on the `info` channel was commentary, not answer.
 - **`-v` is info, `-vv` is debug, `-q` is errors only, and `-q` beats `-v`** when both are
-  given â€” a run that says both meant the quiet half or it would not have typed it. `RUST_LOG`
+  given — a run that says both meant the quiet half or it would not have typed it. `RUST_LOG`
   outranks all of it, unchanged.
 - **The level is read from argv, not from the parsed `Cli`.** It has to be live before the shim
   hijack, and reading it after clap is exactly why `--verbose` did nothing.
 - **A command's answer goes to stdout; only narration goes to the log.** This is the half that
   had to land first: `sync` reported `already up to date` at `info!` with nothing on stdout, so
   dropping the default without moving it would have made a no-op sync silent. Twenty-three
-  lines moved â€” the whole of what `lock` and `unlock` report, `rebuild`'s skips and completion,
+  lines moved — the whole of what `lock` and `unlock` report, `rebuild`'s skips and completion,
   `try`'s verdict, `config init`, `heal`'s repairs, the no-op sync and the no-op upgrade.
 
 ---
 
 ## K18
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**In the tree today:** file writes are already atomic one file at a time â€” `write_atomic` stages
+**In the tree today:** file writes are already atomic one file at a time — `write_atomic` stages
 a temp file and renames it into place, so a `link:` target is never half-written. **Package
 swaps are not atomic and mostly cannot be**, and the existing answer is K3's snapshot: one taken
 before the first removal, reverted if the reinstall fails.
 
-**K18 â€” Should Shall use a backend's own atomic mechanism where one exists (owner question,
+**K18 — Should Shall use a backend's own atomic mechanism where one exists (owner question,
 2026-07-23)?** Asked as *"is there any way to make each swap atomic?"* The honest answer is that
 it splits three ways and only the third is a decision:
 
@@ -1578,37 +1578,37 @@ it splits three ways and only the third is a decision:
   offers a multi-file rename, so *narrower* is the whole of what is available.
 - **Packages, on ordinary managers: no, and not by any effort of Shall's.** `apt`, `dnf`,
   `winget` and the rest expose no transaction to join. **What Shall already has is
-  all-or-nothing in the outcome rather than in the instant** â€” K3's one snapshot before the
+  all-or-nothing in the outcome rather than in the instant** — K3's one snapshot before the
   first removal, reverted on a failed reinstall, with stop-and-name-what-is-missing where no
   snapshot provider exists. The window is real and visible; the end state is not half-done.
 - **Packages, on managers that are genuinely transactional: yes, and this is the question.**
-  `nix` is already a registered backend and its profile switch is a symlink flip â€” atomic, and
+  `nix` is already a registered backend and its profile switch is a symlink flip — atomic, and
   rollback is another flip. `rpm-ostree` and `transactional-update` are the same shape. **Shall
   drives all of them today as if they were `apt`**, taking the snapshot-and-revert path over a
   mechanism that needs neither.
 
 *Recommendation:* a backend may declare that it swaps atomically, and where it does, Shall uses
-that instead of the snapshot path and says so in the plan â€” *"nix: atomic, no snapshot needed"*.
+that instead of the snapshot path and says so in the plan — *"nix: atomic, no snapshot needed"*.
 The value is not speed; it is that **the one honest sentence about a rebuild's risk changes per
 backend**, and today Shall prints the cautious one everywhere. **This is not urgent** and nothing
-is blocked on it â€” it is filed so that the answer stops being "no" when it is only "not yet".
+is blocked on it — it is filed so that the answer stops being "no" when it is only "not yet".
 
 
 **RULED (owner, 2026-07-24): make it an option.** Where a backend has its own atomic swap, a config option lets Shall use it; the default stays K3's pre-removal snapshot, because most package swaps cannot be atomic and a guarantee that only sometimes holds must be asked for, not assumed.
 
-**RULED (2026-07-24): an option, added when a backend needs it.** Where a backend has its own atomic swap, a config option uses it; the default stays K3's pre-removal snapshot. NOT added as a dead key now: no backend currently exposes atomic swap, and this project holds that a preference that silently does nothing is worse than none (K4's own reasoning). The option lands with the first backend that can honour it â€” the ruling is what that backend's option will implement.
+**RULED (2026-07-24): an option, added when a backend needs it.** Where a backend has its own atomic swap, a config option uses it; the default stays K3's pre-removal snapshot. NOT added as a dead key now: no backend currently exposes atomic swap, and this project holds that a preference that silently does nothing is worse than none (K4's own reasoning). The option lands with the first backend that can honour it — the ruling is what that backend's option will implement.
 
 **REAFFIRMED (owner decision session 2026-07-26): stays parked, not part of this build.** The pre-real-machine build does NOT add a dead atomic-swap key. K18 lands with the first backend that actually exposes atomic swap, exactly as ruled above.
 ---
 
 ## T7
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
 **In the tree today:** nothing. `app/run.rs:138` is the only place Shall is in a process's launch
 path at all.
 
-**T7 â€” Runtime injection of secrets into process memory: REOPENED for discussion (owner,
+**T7 — Runtime injection of secrets into process memory: REOPENED for discussion (owner,
 2026-07-23).** XII.2 ruled this out on 2026-07-23 and told the reader not to re-open it; **the
 owner has since said the conversation stays open**, so the refusal is downgraded to a question
 and XII.2 is amended to say so. The reasoning that produced the refusal is not withdrawn and is
@@ -1616,41 +1616,41 @@ the thing to argue with:
 
 - **It asks Shall to be a supervisor.** For a credential never to touch disk, Shall must be in
   the launch path of every program that reads one. That is `systemd`'s `LoadCredential`, a
-  `direnv`, or a secrets agent â€” three things that already exist and that Shall is not.
+  `direnv`, or a secrets agent — three things that already exist and that Shall is not.
 - **The half-measure is worse than either end.** Injecting only into children of `shall run`
   protects exactly the processes Shall starts and none of the ones that actually read
   `~/.npmrc`, while reading as though it protected both.
 - **The bar the original ruling set:** a use case that lives entirely inside `shall run`. That is
-  still the sharpest question to answer first â€” **what program, run how, needs the secret?**
+  still the sharpest question to answer first — **what program, run how, needs the secret?**
 
 *No recommendation.* The refusal was argued; what has not been heard is the case for it.
 
 
-**RULED (owner, 2026-07-24): keep it out â€” if it is hard, do not do it, and it is hard.** Runtime injection of secrets into process memory asks Shall to become a process supervisor (it must stay in the launch path of every process that reads the secret), which is a different and far larger thing than a package manager. The reopening was deliberate; the ruling is to leave XII.2's refusal standing. A secret still reaches a process the ordinary way â€” decrypted to a file the process reads, or an env var â€” never via Shall holding it in memory.
+**RULED (owner, 2026-07-24): keep it out — if it is hard, do not do it, and it is hard.** Runtime injection of secrets into process memory asks Shall to become a process supervisor (it must stay in the launch path of every process that reads the secret), which is a different and far larger thing than a package manager. The reopening was deliberate; the ruling is to leave XII.2's refusal standing. A secret still reaches a process the ordinary way — decrypted to a file the process reads, or an env var — never via Shall holding it in memory.
 ---
 
 ## D8
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**D8 â€” `when` inside an options body.** II.2 says a declaration's body is options, so
-`github { when family == debian { â€¦ } }` is not legal today, and VIII.2's example wraps the whole
+**D8 — `when` inside an options body.** II.2 says a declaration's body is options, so
+`github { when family == debian { … } }` is not legal today, and VIII.2's example wraps the whole
 `github` block in a `when` instead. That works but gets repetitive across four families.
 *Recommendation:* keep it illegal. The wrap form is uglier and does not need a new grammar rule,
 and a new block kind here is how the grammar starts growing exceptions.
 
 
-**RULED (owner, 2026-07-24): keep it illegal.** `when` inside an options body stays disallowed. Wrapping the whole `github { â€¦ }` block in a `when` works and needs no new grammar rule; a new block kind here is how the grammar grows exceptions.
+**RULED (owner, 2026-07-24): keep it illegal.** `when` inside an options body stays disallowed. Wrapping the whole `github { … }` block in a `when` works and needs no new grammar rule; a new block kind here is how the grammar grows exceptions.
 ---
 
 ## D11
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**D11 â€” The default order is detected, so a Shall upgrade can change it.** A machine with no
+**D11 — The default order is detected, so a Shall upgrade can change it.** A machine with no
 `formats` line that installs a `tarball` today could install a `deb` after an upgrade. The lock
 protects an existing install; a fresh `shall lock` or a new machine does not. *Recommendation:*
-treat the default order as versioned and say so in the changelog when it moves â€” or accept the
+treat the default order as versioned and say so in the changelog when it moves — or accept the
 churn explicitly. Not decided.
 
 
@@ -1659,9 +1659,9 @@ churn explicitly. Not decided.
 
 ## D12
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**D12 â€” Network, rate limits, and offline.** Listing assets is a GitHub API call per repo.
+**D12 — Network, rate limits, and offline.** Listing assets is a GitHub API call per repo.
 Unauthenticated is 60/hour, which a repo with thirty `github:` lines exhausts on the second
 `sync`. `SHALL_GITHUB_TOKEN` exists (II.1). *Recommendation:* resolve from `locks/github` without
 any API call when the lock is present and the version is pinned; only `shall lock` and an
@@ -1671,14 +1671,14 @@ plane.
 
 **RULED (owner, 2026-07-24): resolve from the lock offline.** A pinned `github:` line resolves from `locks/github` with no API call; only `shall lock` and an unpinned line hit the network. `lock` is what freezes the resolved asset/version, so a later `sync` reproduces it without the 60/hour unauthenticated GitHub limit. This is what makes `sync` work offline and on a repo with many `github:` lines.
 
-**Already built (`answered_locally` in `github.rs`).** A pinned line with a lock and matching on-disk assets resolves with no API call; only unpinned lines and `shall lock` hit GitHub. The ruling described existing behaviour â€” no new code needed.
+**Already built (`answered_locally` in `github.rs`).** A pinned line with a lock and matching on-disk assets resolves with no API call; only unpinned lines and `shall lock` hit GitHub. The ruling described existing behaviour — no new code needed.
 ---
 
 ## D13
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**D13 â€” Changing a `channel` â€” refresh or reinstall?** `snap refresh --channel=edge` is not
+**D13 — Changing a `channel` — refresh or reinstall?** `snap refresh --channel=edge` is not
 `snap remove && snap install`, and moving `edge â†’ stable` is usually a downgrade. **A downgrade
 is a removal-shaped event and the guard should see it.** *Recommendation:* refresh where the
 backend supports it, and route the downgrade case through the plan and the guard like any other
@@ -1687,43 +1687,43 @@ destructive change.
 
 **RULED (owner, 2026-07-24): refresh, and route a downgrade through the guard.** Changing a `channel` refreshes in place where the backend supports it (`snap refresh --channel=`), and the downgrade case (`edge â†’ stable`) goes through the plan and the guard like any destructive change, because a downgrade is removal-shaped.
 
-**RULED, NOT YET BUILT (2026-07-24).** Refresh where the backend supports it; route a channel downgrade through the plan and guard. Queued rather than built: it needs the planner to detect a *channel change* (query the installed channel, compare to the declared one â€” the planner currently checks version, not channel) AND a notion of channel ordering to tell a downgrade from an upgrade, both of which touch the change-detection core. Deferred to avoid a risky half-change there; the ruling is settled for when it is built.
+**RULED, NOT YET BUILT (2026-07-24).** Refresh where the backend supports it; route a channel downgrade through the plan and guard. Queued rather than built: it needs the planner to detect a *channel change* (query the installed channel, compare to the declared one — the planner currently checks version, not channel) AND a notion of channel ordering to tell a downgrade from an upgrade, both of which touch the change-detection core. Deferred to avoid a risky half-change there; the ruling is settled for when it is built.
 ---
 
 ## D14
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**D14 â€” Does `why` explain the selection?** When `github:x/y` installs a `.tar.gz` on a machine
+**D14 — Does `why` explain the selection?** When `github:x/y` installs a `.tar.gz` on a machine
 the user expected a `.deb` on, the answer lives in three places (line, `priority`, built-in
 default) and `shall why` is the command that should say which one won. *Recommendation:* yes,
 and it is a small amount of work only if the resolver keeps the reason rather than just the
 result. Decide before the resolver is written, not after.
 
 
-**RULED (owner, 2026-07-24): yes.** `shall why` explains WHICH rule selected the artifact â€” the line's `@formats=`, `priority`, or the built-in default. The resolver must keep the reason, not just the result; decided before the artifact resolver is finalised so the reason is retained rather than reconstructed.
+**RULED (owner, 2026-07-24): yes.** `shall why` explains WHICH rule selected the artifact — the line's `@formats=`, `priority`, or the built-in default. The resolver must keep the reason, not just the result; decided before the artifact resolver is finalised so the reason is retained rather than reconstructed.
 
-**BUILT, 2026-07-24.** The artifact lock records `selected_by` â€” which rule chose the file (`@asset=` pattern, `@formats=` line, or the built-in default). `shall why <pkg>` shows `selected: <asset> â€” chosen by <reason>`, read from the lock with no network re-selection.
+**BUILT, 2026-07-24.** The artifact lock records `selected_by` — which rule chose the file (`@asset=` pattern, `@formats=` line, or the built-in default). `shall why <pkg>` shows `selected: <asset> — chosen by <reason>`, read from the lock with no network re-selection.
 ---
 
 ## D17
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**D17 â€” Regex lines.** What `github:re:â€¦@formats=` means when one pattern spans repos with
+**D17 — Regex lines.** What `github:re:…@formats=` means when one pattern spans repos with
 different asset sets is unspecified. *Probably:* the list applies to each match independently and
-a match with no legal asset is the VIII.2 error, named per repo. Not decided, and low urgency â€”
+a match with no legal asset is the VIII.2 error, named per repo. Not decided, and low urgency —
 `github:re:` is rare in practice.
 
 
-**RULED (owner, 2026-07-24): per-repo.** `github:re:â€¦@formats=` applies the format list to each matched repo independently, and a repo with no matching asset is the ordinary VIII.2 error, named for that repo.
+**RULED (owner, 2026-07-24): per-repo.** `github:re:…@formats=` applies the format list to each matched repo independently, and a repo with no matching asset is the ordinary VIII.2 error, named for that repo.
 ---
 
 ## W9
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**W9 â€” Interpolation outside `when`.** IX.5 says no. Record the boundary explicitly so the
+**W9 — Interpolation outside `when`.** IX.5 says no. Record the boundary explicitly so the
 answer is a decision rather than an omission, because the first `link:` request will arrive
 quickly. *Recommendation:* stay narrow; reopen only with a use case that cannot be expressed as
 two `when` arms.
@@ -1734,9 +1734,9 @@ two `when` arms.
 
 ## W10
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**W10 â€” Variables referencing variables.** `tier = $role-heavy`. Introduces ordering, cycles
+**W10 — Variables referencing variables.** `tier = $role-heavy`. Introduces ordering, cycles
 (the same walk as `use` loops and `@requires` loops, II.7), and interpolation-inside-a-value,
 which collides with W9. *Recommendation:* no, and the cycle machinery already existing is not a
 reason to invite the problem.
@@ -1747,26 +1747,26 @@ reason to invite the problem.
 
 ## K6
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
 **In the tree today:** No group syntax anywhere in `src/`.
 
-**K6 â€” Does Shall learn per-backend group syntax** (`@kde-desktop`, `pacman -S plasma`)? It
+**K6 — Does Shall learn per-backend group syntax** (`@kde-desktop`, `pacman -S plasma`)? It
 would make one line install a desktop. It also means `backend:name` has a third meaning on some
 backends and not others, which is the kind of unification VIII.1 refused. *Recommendation:* no
 for now; a `when family` block listing each distro's name is explicit, works today, and reads.
 
 
-**RULED (owner, 2026-07-24): no.** Shall does not learn per-backend group syntax (`@kde-desktop`, `pacman -S plasma`). It would give `backend:name` a third meaning on some backends and not others â€” the unification VIII.1 refused. A `when family` block naming each distro's package is explicit, works today, and reads. Not building.
+**RULED (owner, 2026-07-24): no.** Shall does not learn per-backend group syntax (`@kde-desktop`, `pacman -S plasma`). It would give `backend:name` a third meaning on some backends and not others — the unification VIII.1 refused. A `when family` block naming each distro's package is explicit, works today, and reads. Not building.
 ---
 
 ## K12
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
 **In the tree today:** No symlink handling in `app/locate.rs` or `config/settings.rs`.
 
-**K12 â€” Is a symlink still supported for "my Shall files live in my dotfiles repo"?** With X.6's
+**K12 — Is a symlink still supported for "my Shall files live in my dotfiles repo"?** With X.6's
 settings file the symlink is no longer the only answer, but it costs nothing and some users will
 reach for it first. *Recommendation:* yes, documented, with the settings file as the primary
 mechanism.
@@ -1777,16 +1777,16 @@ mechanism.
 
 ## N4
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**N4 â€” Is `default/incoming` a `firewall:` statement or a preference key?** As a statement it
+**N4 — Is `default/incoming` a `firewall:` statement or a preference key?** As a statement it
 inherits `when` and the plan; as a key in `preferences.toml` it is machine-local and invisible
-to git. *Recommendation:* a statement â€” the default policy is the most important line in a
+to git. *Recommendation:* a statement — the default policy is the most important line in a
 firewall and belongs in the repo with the rest.
 
 **RULED (owner, 2026-07-24): both, and the statement wins.** The default policy may be
 written as a `firewall:` statement (in the repo, gated by `when`, visible in `plan`) or as a key
-in `preferences.toml` (machine-local). Where both say something, **the line wins** â€” the same
+in `preferences.toml` (machine-local). Where both say something, **the line wins** — the same
 precedence the owner set for N6, and for the same reason: the declaration is the thing you can
 read, review and share, and a machine-local key silently overriding it would be the invisible
 answer beating the visible one.
@@ -1795,16 +1795,16 @@ answer beating the visible one.
 
 ## N5
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**N5 â€” What does removal restore?** X.4 ruled that a removed `setting:` resets to the schema
+**N5 — What does removal restore?** X.4 ruled that a removed `setting:` resets to the schema
 default rather than to the value the user had before Shall. *Recommendation:* the same answer,
-for the same reason â€” restoring a per-rule prior state means keeping a per-rule store of it,
+for the same reason — restoring a per-rule prior state means keeping a per-rule store of it,
 and "undeclared means the firewall's own default" is the shape every other statement's removal
 already has. The cost is the same one X.4 recorded and it must be documented, not hidden.
 
 **RULED (owner, 2026-07-24): the firewall's own default, as recommended.** The same answer
-X.4 gave for `setting:`, for the same reason â€” restoring a per-rule prior state means keeping a
+X.4 gave for `setting:`, for the same reason — restoring a per-rule prior state means keeping a
 per-rule store of it, and "undeclared means the firewall's own default" is the shape every other
 removal already has. The cost is documented rather than hidden.
 
@@ -1812,15 +1812,15 @@ removal already has. The cost is documented rather than hidden.
 
 ## N6
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**N6 â€” What happens when a config declares both `firewall:` lines and a `link:` to the
+**N6 — What happens when a config declares both `firewall:` lines and a `link:` to the
 ruleset file?** *Recommendation:* an error at resolve time naming both files and lines, in the
 class of II.7 rule 5. Two owners of one perimeter is the two-of-everything failure, and it
 should be caught before any command runs, not discovered at 2am.
 
 **RULED (owner, 2026-07-24): warn, apply both, and the `firewall:` line wins.** The
-recommendation was an error at resolve time; the owner's answer is softer and more useful â€” a
+recommendation was an error at resolve time; the owner's answer is softer and more useful — a
 config that declares rules *and* links a ruleset file is doing something legible (a base file
 plus specific overrides), so Shall warns that two things own the perimeter and lets the explicit
 declaration take precedence where they disagree. **The warning is not optional**, because two
@@ -1831,9 +1831,9 @@ reported rather than refused.
 
 ## N7
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**N7 â€” Does `watch` revert firewall drift unattended, or only report it?** Everything else
+**N7 — Does `watch` revert firewall drift unattended, or only report it?** Everything else
 `watch` reconciles is software; this reconciles reachability. *Recommendation:* report by
 default, revert only under an explicit key, and never revert a rule that would trip N2.
 
@@ -1841,7 +1841,7 @@ default, revert only under an explicit key, and never revert a rule that would t
 would close the port carrying the session.** The recommendation had it the other way round. The
 owner's answer is the more consistent one: drift is corrected everywhere else in this model, and
 a firewall rule nobody declared is drift. The single exception is the one that cannot be undone
-from the far end of an SSH connection â€” there Shall reports and leaves it, because an
+from the far end of an SSH connection — there Shall reports and leaves it, because an
 un-reverted rule is a thing you fix tomorrow and a reverted one can be a machine you cannot
 reach.
 
@@ -1849,13 +1849,13 @@ reach.
 
 ## N8
 
-**Status: ANSWERED â€” ruled 2026-08-10.**
+**Status: ANSWERED — ruled 2026-08-10.**
 
-**N8 â€” Is closing an undeclared port a removal, and does it count against `max_removals`?**
-Recorded 2026-08-09 as BUILT, NEVER RULED, on the whole-repo review's finding that `N1`â€“`N7`
+**N8 — Is closing an undeclared port a removal, and does it count against `max_removals`?**
+Recorded 2026-08-09 as BUILT, NEVER RULED, on the whole-repo review's finding that `N1`–`N7`
 never ask it. **That finding was half wrong and worth recording as such**: the question had been
-asked, under `Y20` â€” *"closing an undeclared port is one of them. Should it count against
-`max_removals`?"* â€” and answered by the owner the same day. It was searched for in the `N`
+asked, under `Y20` — *"closing an undeclared port is one of them. Should it count against
+`max_removals`?"* — and answered by the owner the same day. It was searched for in the `N`
 series, and it was living in the `Y` series, because it arrived through the removal-guard work
 rather than through the firewall work. A register indexed by where a question came from is a
 register you can search correctly and still miss.
@@ -1866,7 +1866,7 @@ lumped in with resource teardowns, and nothing bounded a command's changes as a 
 
 **RULED 2026-08-10 (owner): a ceiling per category, and a ceiling over all of them.** The owner's
 words: *"you should be able to set a max (per category and all in all) in the config"*, and then
-*"there is a max per all changes also â€” including install, uninstall, etc."*
+*"there is a max per all changes also — including install, uninstall, etc."*
 
 What is binding:
 
@@ -1875,7 +1875,7 @@ What is binding:
    that first declares a perimeter closes far more ports than a settled machine ever tears down
    resources, and it must not spend a teardown allowance to do it.
 2. **`max_total_changes` is new**, default **0 (off)**, and counts **everything one command
-   changes** â€” installs and upgrades, package removals, resource teardowns, resources written,
+   changes** — installs and upgrades, package removals, resource teardowns, resources written,
    ports opened and ports closed. Three ceilings of twenty permit fifty-seven changes; this is
    the number that objects to fifty-seven.
 3. **It is off by default.** A total is a statement about how much churn a particular machine
@@ -1884,14 +1884,14 @@ What is binding:
 4. **Every gate answers the total, including the ones that only add.** `enforce_additions` has no
    ceiling of its own and refuses nothing on its own account; it exists so that a total is a
    total rather than a removal ceiling with a longer name.
-5. **Both mass flags answer the total** â€” it is made of installs and removals both â€” and no third
+5. **Both mass flags answer the total** — it is made of installs and removals both — and no third
    flag is added. `--allow-mass-install` answers the total and the install count and **no removal
    count**: the flag that means *install* that many must never also mean *remove* that many.
 6. **A refusal names every ceiling it hit**, not the first. A set can be over its own number and
    over the total at once, and naming one sends the reader to raise it and meet the other.
 
 **The cost this ruling accepts, unchanged from `Y20`:** a machine with forty ports open and one
-`firewall:22/tcp` line still refuses on its first sync â€” now at `max_port_closures`. Forty ports
+`firewall:22/tcp` line still refuses on its first sync — now at `max_port_closures`. Forty ports
 closing at once is the shape a ceiling exists to interrupt, and the answer is one flag.
 
 The mechanism is in `S79`; the rule is in **II.28**; the reason is in **V.159**.
@@ -1900,9 +1900,9 @@ The mechanism is in `S79`; the rule is in **II.28**; the reason is in **V.159**.
 
 ## T3
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**T3 â€” What does a missing hardware token look like?** The plugin may prompt on a terminal
+**T3 — What does a missing hardware token look like?** The plugin may prompt on a terminal
 nobody is watching. *Recommendation:* a timeout, and a message naming the token and the
 identity file rather than passing the plugin's own text through.
 
@@ -1912,9 +1912,9 @@ identity file rather than passing the plugin's own text through.
 
 ## T4
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**T4 â€” May an unattended `watch` tick decrypt?** A touch-required key turns a background
+**T4 — May an unattended `watch` tick decrypt?** A touch-required key turns a background
 reconcile into a silent block. *Recommendation:* `watch` skips `@decrypt` lines whose identity
 is a plugin stub and says so once, rather than hanging.
 
@@ -1924,65 +1924,65 @@ is a plugin stub and says so once, rather than hanging.
 
 ## U2
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U2 â€” Is a custom backend a full peer of a built-in?** Repos, orphans, dependency queries and
+**U2 — Is a custom backend a full peer of a built-in?** Repos, orphans, dependency queries and
 `is_essential` are `ManagerConfig` fields `CustomBackendDef` does not expose.
 *Recommendation:* expose them as optional keys, absent meaning *this backend cannot answer
-that* â€” the `ManualListing` distinction already made for exactly this reason: "not configured"
+that* — the `ManualListing` distinction already made for exactly this reason: "not configured"
 must not be read as "the answer is none".
 
 
-**RULED (owner, 2026-07-24): first-class.** A custom backend is a full peer of a built-in. The fields a built-in has and `CustomBackendDef` did not â€” repositories, orphan listing, dependency queries, OS-essential â€” are exposed as optional keys, absent meaning *this backend cannot answer that*, never *the answer is none* (the `ManualListing` distinction, generalised). This is the onboarder becoming a true equal, which is the whole 'it can drive anything' thesis.
+**RULED (owner, 2026-07-24): first-class.** A custom backend is a full peer of a built-in. The fields a built-in has and `CustomBackendDef` did not — repositories, orphan listing, dependency queries, OS-essential — are exposed as optional keys, absent meaning *this backend cannot answer that*, never *the answer is none* (the `ManualListing` distinction, generalised). This is the onboarder becoming a true equal, which is the whole 'it can drive anything' thesis.
 ---
 
 ## U4
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U4 â€” Is `exec:` a licence to put a shell script where a backend belongs?** The onboarder is
+**U4 — Is `exec:` a licence to put a shell script where a backend belongs?** The onboarder is
 the better answer for anything that installs software, and `exec:` should not become the way
 people avoid writing eight lines of TOML. *Recommendation:* document the boundary in the
 readme, and treat repeated `exec:` lines that install things as a sign the onboarder needs a
 missing field (U2), not as usage to encourage.
 
 
-**RULED (owner, 2026-07-24): document the boundary.** `exec:` is for actions with no inverse, not for installing software â€” an `exec:` that installs is a one-way door (deleting the line does not undo it). The onboarder is the answer for anything installable: it gives a noun, which removes/lists/locks. The README's `exec:` section now says so and links the onboarder.
+**RULED (owner, 2026-07-24): document the boundary.** `exec:` is for actions with no inverse, not for installing software — an `exec:` that installs is a one-way door (deleting the line does not undo it). The onboarder is the answer for anything installable: it gives a noun, which removes/lists/locks. The README's `exec:` section now says so and links the onboarder.
 
 **AMENDED by U33 (owner, 2026-07-26): the categorical refusal is lifted.** `exec:` may install
 software and do anything, gated behind an explicit config key (off by default). The boundary this
 entry drew is now a *recommendation*, not a prohibition: the onboarder is still the **better** path
 for anything installable (a noun that removes/lists/locks), and the README says so, but `exec:` is
-no longer forbidden from installing when the key is on. Removal is still governed by U3 â€” an
+no longer forbidden from installing when the key is on. Removal is still governed by U3 — an
 installing `exec:` has no automatic inverse without `@undo=`.
 ---
 
 ## U6
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U6 â€” Does this document mark its Linux-only guarantees?** The pre-sync snapshot, `rebuild`'s
+**U6 — Does this document mark its Linux-only guarantees?** The pre-sync snapshot, `rebuild`'s
 revert and `rollback`'s safety net all assume a provider that exists only on Linux
 filesystems. *Recommendation:* yes, immediately and independently of whether VSS or APFS is
-ever adapted â€” an unqualified promise that silently does not hold on two of three platforms is
+ever adapted — an unqualified promise that silently does not hold on two of three platforms is
 P3's failure in prose form.
 
 
-**RULED (owner, 2026-07-24): yes.** The Linux-only guarantees â€” the pre-sync snapshot, `rebuild`'s revert, `rollback`'s safety net â€” are marked as such in the docs, independently of whether VSS or APFS is ever adapted. An unqualified promise that silently does not hold on two of three platforms is P3's silent-wrongness in prose.
+**RULED (owner, 2026-07-24): yes.** The Linux-only guarantees — the pre-sync snapshot, `rebuild`'s revert, `rollback`'s safety net — are marked as such in the docs, independently of whether VSS or APFS is ever adapted. An unqualified promise that silently does not hold on two of three platforms is P3's silent-wrongness in prose.
 ---
 
 ## U7
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U7 â€” Is a health check per-package or per-sync?** Per-package answers "did *this* upgrade
+**U7 — Is a health check per-package or per-sync?** Per-package answers "did *this* upgrade
 break it" and is precise; per-sync catches the breakage a package cannot see (the boot, the
-network). *Recommendation:* both, and they are not alternatives â€” `@health=` on a line, plus a
+network). *Recommendation:* both, and they are not alternatives — `@health=` on a line, plus a
 `health` list in `preferences.toml` for the machine-wide checks, with the same revert path.
 
 **RULED (owner, 2026-07-24): both, as recommended.** `@health=` on a line answers *did this
 upgrade break this*, and a machine-wide `health` list in `preferences.toml` catches what a
-package cannot see â€” the boot, the network, the thing two packages away. They are not
+package cannot see — the boot, the network, the thing two packages away. They are not
 alternatives and share one revert path.
 
 **BUILT, 2026-07-24 (7f).** `@health=` is a package option key and a `health = [...]` list is a
@@ -1994,9 +1994,9 @@ branch reading an option key the grammar never accepted, was deleted in the same
 
 ## U8
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U8 â€” Is the removal preview a flag or a verb?** *Recommendation:* a flag on the commands that
+**U8 — Is the removal preview a flag or a verb?** *Recommendation:* a flag on the commands that
 already compute it. A new verb for an existing computation is how this repo got two of
 everything.
 
@@ -2006,18 +2006,18 @@ everything.
 
 ## U10
 
-**Status: ANSWERED â€” ruled 2026-07-24, and neither option was taken.**
+**Status: ANSWERED — ruled 2026-07-24, and neither option was taken.**
 
-**U10 â€” Where does a backend's bootstrap live?** In `priority`, beside the backend it obtains,
-or in `custom_backends.toml`, beside the definition. *Recommendation:* `priority` â€” it is the
+**U10 — Where does a backend's bootstrap live?** In `priority`, beside the backend it obtains,
+or in `custom_backends.toml`, beside the definition. *Recommendation:* `priority` — it is the
 file that already decides which backends this machine uses, and a custom backend's definition is
 about *how to drive* a manager, not *how to get* one. The two files stay one-question-each.
 
-**RULED (owner, 2026-07-24): a third file â€” and the other two move to join it.** *"It should be
+**RULED (owner, 2026-07-24): a third file — and the other two move to join it.** *"It should be
 a separate file, all 3 should be in the shareable config part, and all should be in the same
 folder."* The recommendation's own reasoning (one question per file) was right and was applied
 one step further than it had been: **how to get a manager** is a third question, so it is a third
-file, and the three sit together because they are one subject â€” what you have taught this Shall.
+file, and the three sit together because they are one subject — what you have taught this Shall.
 
 ```
 adapters/backends.toml    how to drive a package manager Shall does not ship   (XIII.2)
@@ -2025,7 +2025,7 @@ adapters/settings.toml    how to read and write a settings store               (
 adapters/bootstrap.toml   how to obtain a manager this machine does not have   (7c)
 ```
 
-- **In the config repo**, so a definition travels with the configuration that needs it â€” the
+- **In the config repo**, so a definition travels with the configuration that needs it — the
   point 7a/U1 established, now applying to all three.
 - **Each file is approved separately** through II.12's ledger (`adapters:<filename>`), because
   they carry different argv: approving the backends you added is not a review of the settings
@@ -2033,7 +2033,7 @@ adapters/bootstrap.toml   how to obtain a manager this machine does not have   (
   still invalidates the approval.
 - **The K17 arrangement is superseded**: settings adapters shared `custom_backends.toml` because
   at the time that was where repo-supplied definitions lived. They have their own file now.
-- **The folder name is `adapters/`** â€” an implementing call, not a ruling: it is the word the
+- **The folder name is `adapters/`** — an implementing call, not a ruling: it is the word the
   spec already uses for settings stores (K17), and a backend definition adapts a CLI the same
   way. Bootstrap sits with them because it answers a question about the same subject.
 - **NO LEGACY:** the old `custom_backends.toml` path is deleted, not read as a fallback.
@@ -2042,22 +2042,22 @@ adapters/bootstrap.toml   how to obtain a manager this machine does not have   (
 
 ## U11
 
-**Status: ANSWERED â€” ruled 2026-07-24, and generalised past the question that was asked.**
+**Status: ANSWERED — ruled 2026-07-24, and generalised past the question that was asked.**
 
-**U11 â€” Does `watch` imply `--locked`?** An unattended reconcile that silently accepts a new
+**U11 — Does `watch` imply `--locked`?** An unattended reconcile that silently accepts a new
 upstream version is the least supervised place for a version to change. *Recommendation:* yes by
-default, overridable by a key â€” a machine reconciling itself at 3am should be converging to what
+default, overridable by a key — a machine reconciling itself at 3am should be converging to what
 was decided, not to what was published.
 
 **RULED (owner, 2026-07-24): it is not a `watch` question. `sync` itself defaults to the
-recorded version, with an explicit `--upgrade` to move forward â€” and `watch`, being `sync` with
+recorded version, with an explicit `--upgrade` to move forward — and `watch`, being `sync` with
 nobody watching, inherits that rather than being special-cased.** The owner's words: *"it should
 be the same as sync, which if sync does not do this, it needs fixing."*
 
 **It did need fixing, and this was a live defect.** `sync` defaulted to `locked: false` and
 `watch` hard-coded it, so `locks/versions.json` was read *only* under `sync --locked`. A machine
 rebuilt from a config therefore installed whatever upstream had published that morning, not the
-version the lock recorded â€” which is the reproducibility claim the lock exists to make.
+version the lock recorded — which is the reproducibility claim the lock exists to make.
 
 **Three modes now, and the middle one is new:**
 
@@ -2081,12 +2081,12 @@ version the lock recorded â€” which is the reproducibility claim the lock e
 
 ## U12
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U12 â€” Does `try` reuse the Phase 6 images, or build from a base the config names?** Reusing
+**U12 — Does `try` reuse the Phase 6 images, or build from a base the config names?** Reusing
 them is nearly free and covers debian/alpine/arch today; a config-named base is what a user with
 an unusual host actually needs. *Recommendation:* start with the Phase 6 images, and treat a
-config-named base as the second step rather than the blocker â€” the value is in the rehearsal
+config-named base as the second step rather than the blocker — the value is in the rehearsal
 existing at all.
 
 **RULED (owner, 2026-07-24): reuse the Phase 6 images to start.** debian/alpine/arch are
@@ -2097,39 +2097,39 @@ value is the rehearsal existing at all.
 
 ## U13
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U13 â€” Does `@runs=always` exist?** It is the escape hatch inside the escape hatch, and every
+**U13 — Does `@runs=always` exist?** It is the escape hatch inside the escape hatch, and every
 such key eventually becomes the default somebody copies. *Recommendation:* yes, but it prints
-what it is doing on every sync â€” a line that runs unconditionally must be visible in the run it
+what it is doing on every sync — a line that runs unconditionally must be visible in the run it
 made non-idempotent, or the next person debugging a slow sync has no thread to pull.
 
 
 **RULED (owner, 2026-07-24): yes.** `@runs=always` exists and prints a line naming itself on
-every sync (`runs=always â€” every sync`), so a non-idempotent line is visible in the run it made
+every sync (`runs=always — every sync`), so a non-idempotent line is visible in the run it made
 non-idempotent. Once is the default; `@runs=N` runs a set number of times (already built as the
-ceiling). A count may also be expressed by gating `@runs=always` with a `when` â€” the owner's
-preferred spelling â€” which the existing `when` machinery already supports.
+ceiling). A count may also be expressed by gating `@runs=always` with a `when` — the owner's
+preferred spelling — which the existing `when` machinery already supports.
 ---
 
 ## U15
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U15 â€” Where do Shall-level event hooks live, and are they per-machine?** `preferences.toml` is
+**U15 — Where do Shall-level event hooks live, and are they per-machine?** `preferences.toml` is
 machine-local, so `after_sync` on the laptop is invisible to the desktop. That is right for a
-notification hook and wrong for a policy one. *Recommendation:* `preferences.toml` first â€”
+notification hook and wrong for a policy one. *Recommendation:* `preferences.toml` first —
 machine-local behaviour is the honest default for something that talks to *this* machine's
-Slack â€” and revisit only when a real case wants a fleet-wide event.
+Slack — and revisit only when a real case wants a fleet-wide event.
 
 **RULED (owner, 2026-07-24): both locations, not one.** A hook may live in
-`preferences.toml` (machine-local â€” the notification that talks to *this* machine's Slack) or in
+`preferences.toml` (machine-local — the notification that talks to *this* machine's Slack) or in
 the config repo (the policy every machine should run). The recommendation offered only the first;
 the owner's answer is that the choice belongs to the user, because the two kinds of hook are
 genuinely different and forcing them into one file makes one of them wrong.
 
 **They are additive, not overriding.** A repo hook and a machine hook for the same event both
-run â€” the repo's because every machine should, this machine's because it is this machine. A
+run — the repo's because every machine should, this machine's because it is this machine. A
 precedence rule would mean adding a local notification silently disables the shared policy, which
 is the quiet failure this model exists to avoid.
 
@@ -2142,37 +2142,37 @@ so approving the shared policy never rubber-stamps the local file. Events are `a
 
 ## U16
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**Still open, and now reachable â€” 2026-07-23.** `binary` exists (7a), and a path in it is
+**Still open, and now reachable — 2026-07-23.** `binary` exists (7a), and a path in it is
 **refused** with a message saying why: this is the status quo preserved, not an answer. Allowing
 it later is additive; allowing it now would decide the question in code.
 
-**U16 â€” Does the field split (XIII.12) allow an absolute path as `binary`?** A prefix that runs
+**U16 — Does the field split (XIII.12) allow an absolute path as `binary`?** A prefix that runs
 `/opt/vendor/thing` is more useful and is also a definition that only works on one machine.
 *Recommendation:* allow it, resolve `~`, and have `doctor` report a custom backend whose binary
-is missing â€” the failure should be a named diagnosis, not an unknown-backend error three layers
+is missing — the failure should be a named diagnosis, not an unknown-backend error three layers
 away.
 
 
 **RULED (owner, 2026-07-24): yes.** A custom backend's `binary` may be an absolute path; a
 leading `~` is expanded. A definition naming a path that is not on this machine is not refused
-at load â€” it is a named diagnosis in `check health` ("`/opt/vendor/thing` does not exist or is
+at load — it is a named diagnosis in `check health` ("`/opt/vendor/thing` does not exist or is
 not executable"), where the fix is obvious. Whitespace and emptiness are still refused, being a
 malformed value rather than a path.
 ---
 
 ## U17
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U17 â€” Is `shall eval`'s output versioned from the first release?** *Recommendation:* yes, a
+**U17 — Is `shall eval`'s output versioned from the first release?** *Recommendation:* yes, a
 top-level schema version, decided before anything consumes it. P2 says there is no legacy to
 carry, and this is the one output that will acquire consumers Shall cannot see.
 
 **RULED (owner, 2026-07-24): yes.** `shall eval` carries a top-level schema version from its
 first release. It is the one output that will acquire consumers Shall cannot see, and P2 leaves
-no legacy to carry â€” so the version is free now and impossible later.
+no legacy to carry — so the version is free now and impossible later.
 
 **BUILT, 2026-07-24 (7k).** `shall eval` prints the resolved state as JSON with a top-level
 `schema`. It takes no lock and touches no backend. Sources are repo-relative with forward
@@ -2182,47 +2182,47 @@ slashes so two machines' evaluations diff cleanly.
 
 ## U18
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U18 â€” Are grouped backends with per-group priority worth building at all?** The workaround â€”
-write the prefix â€” already works, and what it costs is the portability a bare name exists for.
+**U18 — Are grouped backends with per-group priority worth building at all?** The workaround —
+write the prefix — already works, and what it costs is the portability a bare name exists for.
 *Recommendation:* build it only with the invariant attached: **a bare name still resolves once
 per machine**, and two modules that would resolve the same name through different groups is an
 error naming both, which is II.7 rule 5 reached by a new road rather than a new rule. Without
-that, this feature ships two `ripgrep` binaries fighting over `$PATH` â€” the failure
+that, this feature ships two `ripgrep` binaries fighting over `$PATH` — the failure
 `app/conflicts.rs` already exists to catch.
 
 
-**RULED (owner, 2026-07-24): build it â€” it is only a shortcut.** A group is a NAME for a backend chain, so instead of `apt,dnf,cargo:ripgrep` on every line you define `tools = apt, dnf, cargo` in a `groups` file and write `tools:ripgrep`. It expands to exactly that chain in the one parser (V), inheriting the chain's meaning and safety with nothing added â€” `priority` still exists, a bare name still resolves through it. **Groups nest** (owner): a member may be another group, flattened to terminal backends at load, and a cycle is refused like a `use` loop. This is NOT the per-module-priority design the recommendation feared â€” that footgun does not apply to a chain alias. BUILT the same day: `src/model/groups.rs`, `Vocab::with_groups`, grammar expansion, verified on the binary (`all = cargo, winmgrs` / `winmgrs = scoop, winget` â†’ `all:rg` resolves).
+**RULED (owner, 2026-07-24): build it — it is only a shortcut.** A group is a NAME for a backend chain, so instead of `apt,dnf,cargo:ripgrep` on every line you define `tools = apt, dnf, cargo` in a `groups` file and write `tools:ripgrep`. It expands to exactly that chain in the one parser (V), inheriting the chain's meaning and safety with nothing added — `priority` still exists, a bare name still resolves through it. **Groups nest** (owner): a member may be another group, flattened to terminal backends at load, and a cycle is refused like a `use` loop. This is NOT the per-module-priority design the recommendation feared — that footgun does not apply to a chain alias. BUILT the same day: `src/model/groups.rs`, `Vocab::with_groups`, grammar expansion, verified on the binary (`all = cargo, winmgrs` / `winmgrs = scoop, winget` → `all:rg` resolves).
 ---
 
 ## U20
 
-**Status: ANSWERED â€” ruled 2026-07-24 (build only if thin AND easy; deferred).**
+**Status: ANSWERED — ruled 2026-07-24 (build only if thin AND easy; deferred).**
 
-**U20 â€” Is a language server wanted, and is it allowed to be a second implementation?** *This is
+**U20 — Is a language server wanted, and is it allowed to be a second implementation?** *This is
 the whole question, not the feature.* *Recommendation:* wanted, but only as a thin front end
-over the same parser and resolver the binary uses â€” the moment it re-implements the grammar it
+over the same parser and resolver the binary uses — the moment it re-implements the grammar it
 becomes the second implementation this rewrite exists to end, and it will disagree with the
 first within a release. If it cannot be thin, do not build it.
 
 
-**RULED (owner, 2026-07-24): yes, but only if very easy â€” and it is not, yet.** A language server is a stdio JSON-RPC protocol server (document sync, diagnostic ranges, the LSP handshake); even diagnostics-only is a few hundred lines and a protocol, which is not "very easy" and not worth a half-implementation. **Deferred.** The editor-diagnostic hook it would provide already exists in a thinner form: `shall check config` prints `file:line: message` from the same parser the binary uses, which efm-langserver / null-ls / ALE consume directly. Its one limit is that it stops at the first error rather than collecting all â€” the natural first step if this is ever picked up, and cheaper than an LSP.
+**RULED (owner, 2026-07-24): yes, but only if very easy — and it is not, yet.** A language server is a stdio JSON-RPC protocol server (document sync, diagnostic ranges, the LSP handshake); even diagnostics-only is a few hundred lines and a protocol, which is not "very easy" and not worth a half-implementation. **Deferred.** The editor-diagnostic hook it would provide already exists in a thinner form: `shall check config` prints `file:line: message` from the same parser the binary uses, which efm-langserver / null-ls / ALE consume directly. Its one limit is that it stops at the first error rather than collecting all — the natural first step if this is ever picked up, and cheaper than an LSP.
 ---
 
 ## U21
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
 **In the tree today:** No exit-code table; `main.rs:33` is the only `process::exit` and it is `0`.
 
-**U21 â€” Is the exit-code table settled once, up front?** *Recommendation:* yes â€” 0 converged, 1
-Shall failed, 2 differences found, 3 refused by the guard â€” decided in one place before
+**U21 — Is the exit-code table settled once, up front?** *Recommendation:* yes — 0 converged, 1
+Shall failed, 2 differences found, 3 refused by the guard — decided in one place before
 `--locked`, `try` and `check` are written. An exit code decided per command is a convention no
 script can rely on, and the separation that matters is 3: a guard refusal is neither a failure
 nor a difference.
 
-**RULED (owner, 2026-07-24): yes â€” 0 converged, 1 Shall failed, 2 differences found, 3 refused
+**RULED (owner, 2026-07-24): yes — 0 converged, 1 Shall failed, 2 differences found, 3 refused
 by the guard.** Decided in one place before the commands that use it. **BUILT the same day**
 (`core::exit`), and it exposed a real gap: the guard refused through `Error::Other`, so a refusal
 was indistinguishable from a crash and no script could avoid retrying one. It has its own
@@ -2233,33 +2233,33 @@ turns both into codes. Verified on the binary: findings â†’ 2, clean â†�
 
 ## U25
 
-**Status: ANSWERED â€” ruled 2026-07-24.**
+**Status: ANSWERED — ruled 2026-07-24.**
 
-**U25 â€” One tree or several?** Several (`dotfiles:./dotfiles-work` under a `when`) composes
+**U25 — One tree or several?** Several (`dotfiles:./dotfiles-work` under a `when`) composes
 with the model already and costs nothing; one is simpler to explain. *Recommendation:* several,
 because the statement takes a path anyway and forbidding a second one would be a rule with no
-mechanism behind it â€” but two trees that would link the same destination is an error naming
+mechanism behind it — but two trees that would link the same destination is an error naming
 both, which is II.7 rule 5 reached by a new road rather than a new rule.
 
 **RULED (owner, 2026-07-24): several, as recommended.** The statement takes a path, so
 forbidding a second one would be a rule with no mechanism behind it. Two trees that would link
-the same destination is an error naming both â€” II.7 rule 5 reached by a new road, not a new
+the same destination is an error naming both — II.7 rule 5 reached by a new road, not a new
 rule.
 
 ---
 
-# Answered earlier â€” the first three rounds
+# Answered earlier — the first three rounds
 
 ## T6
 
-**Status: ANSWERED â€” fully ruled (blocking half 2026-07-23; both sub-questions 2026-07-26).**
+**Status: ANSWERED — fully ruled (blocking half 2026-07-23; both sub-questions 2026-07-26).**
 
 **In the tree today:** `backup_once` (`link.rs:172`) has **no opt-out and no bound of any kind
 beyond one-per-target.** It never clobbers an existing backup, so a target accumulates exactly
-one â€” and `remove` (`link.rs:369`) does not delete or restore it, so that one is permanent.
+one — and `remove` (`link.rs:369`) does not delete or restore it, so that one is permanent.
 
-**T6 â€” There must be a way to opt out of the backup, or to limit how many accumulate (owner
-request, 2026-07-23).** Raised while ruling T1, and **it is not a secrets question** â€” every
+**T6 — There must be a way to opt out of the backup, or to limit how many accumulate (owner
+request, 2026-07-23).** Raised while ruling T1, and **it is not a secrets question** — every
 `link:` managed-content write calls `backup_once`, so this governs ordinary config files too.
 Four things need answering and they are not the same question:
 
@@ -2267,12 +2267,12 @@ Four things need answering and they are not the same question:
    of an option key on every `link:` line. A `preferences.toml` key says it once for the machine
    and cannot express *"this one file, not the others"*. Both is two mechanisms for one question.
 2. **What "limit amounts" means, given it is already one per target.** The accumulation is across
-   *targets*, not within one â€” forty linked files means up to forty orphaned backups. So the
+   *targets*, not within one — forty linked files means up to forty orphaned backups. So the
    candidates are an age (delete a backup older than N days), a command that lists and clears
    them, or a rule tying the backup's life to the declaration's.
 3. **Does removing the `link:` line remove the backup, restore it, or leave it?** Today: leave
    it, and that is almost certainly wrong. **Restoring it is the shape every other extra
-   already has** â€” `extras_lock` undoes what a declaration did â€” and it is the answer that makes
+   already has** — `extras_lock` undoes what a declaration did — and it is the answer that makes
    the backup a rollback rather than a leak.
 4. **Is there a command to see them at all?** They are invisible to `check` because they are not
    managed, which means the one thing standing between a user and forty stale plaintexts is
@@ -2288,7 +2288,7 @@ answered, and it answers 2 with it: a backup that is **put back** when the line 
 accumulate, so no retention policy, no age, and no cleanup command are needed for the ordinary
 case. `remove` (`link.rs:369`) currently drops the target and orphans `<target>.shall-backup`
 forever; it will instead restore the original and delete the backup, which is the shape
-`extras_lock` already has for every other extra â€” **a declaration undoes what it did.**
+`extras_lock` already has for every other extra — **a declaration undoes what it did.**
 
 **This shrinks T1.** Decrypt mode still never backs up, but the reason is now narrower and the
 fix smaller: without restore-on-removal a suppressed backup would have been a special case, and
@@ -2301,26 +2301,26 @@ smaller once restore-on-removal exists, and neither blocks it.
 
 **RULED (owner, 2026-07-26): both sub-questions closed. T6 is fully answered.**
 
-- **Sub-question 1 â€” the opt-out is per-line `@backup=no`.** It states the exception exactly where
+- **Sub-question 1 — the opt-out is per-line `@backup=no`.** It states the exception exactly where
   the exception is (this file, not the machine), and restore-on-removal already killed the pile-up
-  a machine-wide key would have been for â€” so a single mechanism, not two, and no "which one wins"
+  a machine-wide key would have been for — so a single mechanism, not two, and no "which one wins"
   question. A machine-wide key is not added.
-- **Sub-question 4 â€” nothing is owed.** NO LEGACY: Shall has no real users, so there are no
+- **Sub-question 4 — nothing is owed.** NO LEGACY: Shall has no real users, so there are no
   pre-ruling orphaned backups in the wild to sweep, and no cleanup command is built. If stray-
-  backup *visibility* is ever wanted it belongs as a line in `check`, never a new verb (U8) â€” but
+  backup *visibility* is ever wanted it belongs as a line in `check`, never a new verb (U8) — but
   it is not built now, because there is nothing to see.
 
 ---
 
 ## N1
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
 **In the tree today:** Nothing. No firewall code exists in `src/`.
 
-**N1 â€” Is the declared perimeter exclusive?** *This is the whole feature.* Additive means the
+**N1 — Is the declared perimeter exclusive?** *This is the whole feature.* Additive means the
 lines say "these rules exist" and anything else a human added survives. Exclusive means they say
-"these rules and no others", and an undeclared rule is drift to be removed â€” which is what
+"these rules and no others", and an undeclared rule is drift to be removed — which is what
 "instantly detecting and purging any unauthorised out-of-band changes" asks for, and is the only
 version that makes the perimeter a fact rather than a floor. It is also the version that deletes
 the rule someone added for a reason nobody wrote down. *Recommendation:* exclusive, because an
@@ -2330,7 +2330,7 @@ additive firewall answers no question worth asking, **but only with N2 answered 
 **RULED (owner, 2026-07-23): the firewall does not get its own answer. `sync` is additive and
 `purge-unmanaged` is exclusive, as always.**
 
-The question was framed as a choice about firewalls and it is not one â€” **it is the model's
+The question was framed as a choice about firewalls and it is not one — **it is the model's
 existing split, applied to a new backend**, and the right answer to *"is my declaration
 exclusive?"* is the same for every backend that ever asks it. The three cases, spelled out
 because the framing hid that they were already decided:
@@ -2338,7 +2338,7 @@ because the framing hid that they were already decided:
 | the rule | who made it | `sync` | `purge-unmanaged` |
 |---|---|---|---|
 | declared, and present | you, in a file | left alone | left alone |
-| declared once, now undeclared | Shall, and the declaration is gone | **removed** â€” it is in the extras ledger | removed |
+| declared once, now undeclared | Shall, and the declaration is gone | **removed** — it is in the extras ledger | removed |
 | never declared, added out of band | a human at 2am | **left alone** | **removed** |
 
 **This deletes the special shape the recommendation proposed.** There is no "exclusive mode
@@ -2347,11 +2347,11 @@ firewall-shaped version of it would have been a second implementation of the one
 model answers once.
 
 **Recorded in II.11, with its reason in V.63**, because it is a general rule about the two
-commands and not a fact about firewalls â€” and because the question could only be asked in the
+commands and not a fact about firewalls — and because the question could only be asked in the
 first place by someone who could not find it written down.
 
 **It also narrows N7.** "Does `watch` revert firewall drift" no longer means "does it purge
-rules nobody declared" â€” it cannot, that is `purge-unmanaged`'s job now. It means only: when a
+rules nobody declared" — it cannot, that is `purge-unmanaged`'s job now. It means only: when a
 rule **Shall owns** is changed out of band, does an unattended tick put it back? That is a
 smaller question and a sharper one, because putting a rule back can close a port somebody opened
 at 2am to fix something, with nobody there to read about it (N2).
@@ -2360,24 +2360,24 @@ at 2am to fix something, with nobody there to read about it (N2).
 
 ## N2
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
 **In the tree today:** Nothing. No firewall code exists in `src/`.
 
-**N2 â€” What does Shall do when the change would close the session it is running over?** A
+**N2 — What does Shall do when the change would close the session it is running over?** A
 confirmation prompt cannot work: the prompt travels over the connection the change severs.
 *Recommendation:* refuse. Detect the port of the controlling connection, and refuse any plan
-that would deny it, naming the port and the rule â€” overridable only by a flag that says the
+that would deny it, naming the port and the rule — overridable only by a flag that says the
 user has console access. Building this feature without this check is building the lockout.
 
 **RULED (owner, 2026-07-23): refuse, and detect the port rather than asking.** A confirmation
-cannot work â€” the prompt travels over the connection the change severs. Shall detects the port
+cannot work — the prompt travels over the connection the change severs. Shall detects the port
 carrying the controlling connection and refuses any plan that would deny it, naming the port and
 the rule that would close it. The only override is a flag asserting console access.
 
 **This check binds every path that can close a port, not just `sync`.** N1's ruling means
 `purge-unmanaged` can close one, and a `watch` tick reconciling a rule Shall owns can close one
-while nobody is watching â€” **which is the more dangerous of the two, because nobody is there to
+while nobody is watching — **which is the more dangerous of the two, because nobody is there to
 read the refusal.** A check on one command is a check on nothing; this is II.10's rule about the
 guard, reached by a new road.
 
@@ -2385,16 +2385,16 @@ guard, reached by a new road.
 
 ## N3
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
 **In the tree today:** Nothing. No firewall code exists in `src/`.
 
-**N3 â€” Which adapters ship, and does one adapter justify the backend?** XI.2 says the backend
+**N3 — Which adapters ship, and does one adapter justify the backend?** XI.2 says the backend
 earns its place across firewalls and not within one. *Recommendation:* it is not worth starting
 below two adapters plus Windows; if only `ufw` is in reach, document the `link:` pair and close
 this part.
 
-**RULED (owner, 2026-07-23): build it â€” and the reason the answer changed is K17.**
+**RULED (owner, 2026-07-23): build it — and the reason the answer changed is K17.**
 
 The entry's own position was that below two adapters plus Windows the honest recommendation is
 to build nothing and document the `link:`+`service:` pair instead. **That argument was entirely
@@ -2402,7 +2402,7 @@ about cost per adapter, and K17 changed the cost.** Adapters are a declarable ta
 built-ins as rows in it, so five firewalls are five rows rather than five Rust backends, and
 XIII.12's field split already showed `firewall:22/tcp` working from six lines of TOML.
 
-**Windows Defender Firewall is in the first set**, not a later platform phase â€” P7, and the
+**Windows Defender Firewall is in the first set**, not a later platform phase — P7, and the
 owner's daily machine. A Linux adapter (`ufw` or `firewalld`) is the other.
 
 **What does not change is XI.2's honesty about the alternative.** The `link:`+`service:` pair
@@ -2414,21 +2414,21 @@ read-before-write.
 
 ## T1
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
 **In the tree today:** **Still live.** `link.rs:319` calls `backup_once` on the managed-content write path that mode D uses; `:172` is the copy. The 0600 at `:285` is applied to the target only.
 
-**T1 â€” `backup_once` copies the previous secret to a world-readable file.** `link.rs:319` and
+**T1 — `backup_once` copies the previous secret to a world-readable file.** `link.rs:319` and
 `:154` run for every managed-content write, including mode D: if the target already holds a
-secret, Shall copies it to `<target>.shall-backup` before overwriting â€” with default umask
+secret, Shall copies it to `<target>.shall-backup` before overwriting — with default umask
 permissions, and with no `.shall-backup` in any ignore file. The 0600 at `:285` is applied to the
 target only. *Recommendation:* mode D never backs up. The point of `backup_once` is that a user
 is not silently robbed of a config file they hand-wrote; a secret Shall itself wrote a moment ago
 is not that, and the backup is a plaintext credential in a predictable path nobody will think to
-delete. **This is a defect in shipped code, not a design question â€” but it is recorded here
+delete. **This is a defect in shipped code, not a design question — but it is recorded here
 rather than fixed silently, per rule 4.**
 
-**CORRECTED 2026-07-23, before the ruling â€” two of the three facts above are false, and the real
+**CORRECTED 2026-07-23, before the ruling — two of the three facts above are false, and the real
 defect is worse than the one recorded.** Read from the code rather than from the sentence:
 
 - **The backup is not written under the default umask.** `link.rs:203` uses `tokio::fs::copy`,
@@ -2451,19 +2451,19 @@ the one the backup exists to prevent.
 
 ## T2
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
 **In the tree today:** **Still live.** Nothing in `link.rs` compares the resolved `@target=` against the config root.
 
-**T2 â€” Nothing stops `@target=` from pointing back into the config repo.** A
+**T2 — Nothing stops `@target=` from pointing back into the config repo.** A
 `link:./secrets/token.age@target=./secrets/token@decrypt=age` writes the plaintext next to the
 ciphertext, inside git, and the next `sync` commits it. *Recommendation:* refuse a `@target=`
-that resolves inside the config root when `@decrypt` is set â€” the check is cheap, the failure is
+that resolves inside the config root when `@decrypt` is set — the check is cheap, the failure is
 unrecoverable (a secret in git history is a rotated secret), and X.5's promise that a backup is
 safe to hand to someone depends on it holding.
 
 **RULED (owner, 2026-07-23): refuse a `@target=` that resolves inside the config root when
-`@decrypt` is set.** The check is cheap and the failure it prevents is unrecoverable â€” a secret
+`@decrypt` is set.** The check is cheap and the failure it prevents is unrecoverable — a secret
 in git history is a rotated secret. X.5's promise that a `bundle` is safe to hand to someone
 depends on this holding, and `core/git.rs:169`'s `*.shall-backup` ignore line does not cover it:
 the plaintext target is not named `.shall-backup`.
@@ -2472,34 +2472,34 @@ the plaintext target is not named `.shall-backup`.
 
 ## T5
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
-**T5 â€” Is the plaintext 0600 at creation, or after?** Today `write_atomic` creates under the
+**T5 — Is the plaintext 0600 at creation, or after?** Today `write_atomic` creates under the
 umask and `set_permissions` follows (`link.rs:285-292`). The window is small and local, and on
 Windows there is no restriction at all. *Recommendation:* create restricted rather than
 chmod after, and on Windows either set an ACL or say plainly in the docs that mode D gives the
-file no special protection there â€” the second is acceptable, silence is not.
+file no special protection there — the second is acceptable, silence is not.
 
 **RULED (owner, 2026-07-23): create restricted, and Windows gets a real answer rather than
 silence.** The plaintext is created with its final permissions rather than created under the
 umask and chmod'd afterwards.
 
 **On Windows the file gets an ACL or the documentation says plainly that it does not.** Silence
-is not acceptable â€” this is the owner's daily platform, and an unqualified *"the plaintext is
+is not acceptable — this is the owner's daily platform, and an unqualified *"the plaintext is
 0600"* that holds on one of three platforms is P3's failure written as prose.
 
 ---
 
 ## K17
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
 **In the tree today:** `backends/setting.rs` has a closed `enum SettingStore` with two variants,
 `GSettings` and `None`. Adding a store means adding a variant, which means shipping a release.
 
-**K17 â€” How does `setting:` reach a store nobody has written an adapter for?** Raised by K7's
+**K17 — How does `setting:` reach a store nobody has written an adapter for?** Raised by K7's
 2026-07-23 ruling, which says *everywhere* rather than naming a closed set. Every adapter is the
-same three operations â€” read a key, write a key, reset a key to its default â€” and for most stores
+same three operations — read a key, write a key, reset a key to its default — and for most stores
 each is one command with the key interpolated into it. That is exactly the shape
 `custom_backends.toml` already describes for package managers (XIII.2, XIII.12): argv from a
 table, output read by a declared parser.
@@ -2509,7 +2509,7 @@ table, output read by a declared parser.
   is the machine most likely to be running something unusual in the first place.
 - **A declarable adapter, the way custom backends already are.** Three commands and a value
   encoding in a table, so a COSMIC or a Hyprland or a thing not invented yet is six lines rather
-  than a pull request. It costs what U1 costs â€” a definition that a shared repo can execute is
+  than a pull request. It costs what U1 costs — a definition that a shared repo can execute is
   II.12's supply-chain surface and must inherit the hook trust model, not a new one.
 - **Both, with the built-ins as data too**, so there is one code path rather than a fast one and
   a slow one. **Two of everything is how this repo got into trouble**, and an enum plus a table
@@ -2517,11 +2517,11 @@ table, output read by a declared parser.
 
 *Recommendation:* the third. The built-in adapters become rows in the same table the user can
 add a row to, `setting:` reads that table and nothing else, and the refusal for an unadapted
-store stays exactly as it is. **Decide before the registry adapter (7e) is written** â€” it is the
+store stays exactly as it is. **Decide before the registry adapter (7e) is written** — it is the
 second adapter, and the second one is where the shape is set.
 
 **RULED (owner, 2026-07-23): a lot of stores, and adding one is a plugin, not a release.** The
-third option â€” the built-in adapters become rows in the same table a user can add a row to,
+third option — the built-in adapters become rows in the same table a user can add a row to,
 `setting:` reads that table and nothing else. **One code path, not a compiled fast one and a
 declared slow one**, because an enum plus a table is two of everything with a new name.
 
@@ -2532,18 +2532,18 @@ declared slow one**, because an enum plus a table is two of everything with a ne
   That is what lets adapters land one at a time and what keeps a key from being silently
   unapplied.
 - **It inherits the hook trust model, not a new one.** An adapter definition is argv that a
-  shared config repo can execute, which is II.12's supply-chain surface â€” the same consequence
+  shared config repo can execute, which is II.12's supply-chain surface — the same consequence
   U1 carries for custom backends, and it must be answered the same way rather than twice.
 
 **BUILT 2026-07-23, as ruled.** `enum SettingStore` is deleted. An adapter is a
-`[[setting_store]]` row â€” `name`, `detect` (the command whose presence means the machine runs
+`[[setting_store]]` row — `name`, `detect` (the command whose presence means the machine runs
 this store), optional `os`, and the `read`/`write`/`reset` argv with `{schema}`, `{key}` and
 `{value}` substituted. `gsettings` is a row in `src/backends/setting_stores.toml`, **parsed by
 the same loader a user's row goes through**, so the shipped adapter cannot drift into a
 privileged path nobody has tested.
 
 **The trust answer is literally the same one, not the same shape.** User rows live in the config
-repo's `custom_backends.toml` â€” the file 7a moved and put under the hook ledger â€” and both
+repo's `custom_backends.toml` — the file 7a moved and put under the hook ledger — and both
 readers go through one `read_approved_definitions`. One file, one approval, one refusal message,
 and no way to add a third kind of definition that quietly skips the check. The alternative
 (`setting_stores.toml` as its own file) would have been a second loader and a second ledger
@@ -2551,7 +2551,7 @@ entry for the identical question.
 
 **A row that cannot be read is refused rather than half-used.** X.4's read-before-write is what
 makes `setting:` a declaration instead of a command that runs every sync, so an adapter with no
-`read` is not a slow adapter â€” it is not an adapter. Same for a missing `reset`: removing the
+`read` is not a slow adapter — it is not an adapter. Same for a missing `reset`: removing the
 declaration would silently do nothing.
 
 **The refusal now names what Shall looked for**, so the machine running the unlisted store learns
@@ -2563,16 +2563,16 @@ what to write a row about rather than only that it failed.
 
 ## D2
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
-**In the tree today:** `backends/artifact/select.rs:260` (`classify_format`) and `platform.rs:96` (`classify`). The entry's own caveat â€” *"needs testing against real releases before it is a rule"* â€” is still unmet.
+**In the tree today:** `backends/artifact/select.rs:260` (`classify_format`) and `platform.rs:96` (`classify`). The entry's own caveat — *"needs testing against real releases before it is a rule"* — is still unmet.
 
-**D2 â€” How is a format recognised from an asset filename?** There is no metadata on a GitHub
-asset saying "this is a tarball" â€” only a filename, and release naming is a free-for-all
+**D2 — How is a format recognised from an asset filename?** There is no metadata on a GitHub
+asset saying "this is a tarball" — only a filename, and release naming is a free-for-all
 (`fd-v10.2.0-x86_64-unknown-linux-gnu.tar.gz`, `fd_10.2.0_amd64.deb`, `fd-linux`, `fd`). Pure
 extension matching fails on `binary`, which has no extension by definition. *Recommendation:*
 extension match for everything that has one, and `binary` means "matched this machine's os/arch
-and has no recognised extension" â€” but this needs testing against real releases before it is a
+and has no recognised extension" — but this needs testing against real releases before it is a
 rule, because it is the one part of this feature that fails quietly rather than loudly.
 
 **RULED (owner, 2026-07-23): confirmed as the rule, and the testing the entry asked for is now
@@ -2581,7 +2581,7 @@ extension that matches this machine's os/arch is `binary`.
 
 **The caveat is the reason the work is filed, not a reservation about the rule.** A wrong
 *extension* guess produces an error. A wrong *`binary`* guess installs the wrong file and says
-nothing â€” the one place in this feature that fails quietly rather than loudly. The entry said it
+nothing — the one place in this feature that fails quietly rather than loudly. The entry said it
 needed checking against real releases before becoming a rule; that never happened, and it is now
 in the plan.
 
@@ -2591,14 +2591,14 @@ three platforms. The fixture is `src/backends/artifact/real_releases.txt` and th
 asserted, so this is a check that can fail rather than an inspection that happened once.
 
 - **`accepts` is not "matched".** The code read the rule as *does not contradict this machine*,
-  and the ruling says *matched*. Under the weak reading, `MD5SUMS` â€” a real asset of every
-  rclone release, no extension, naming nothing â€” was an executable candidate on every platform,
+  and the ruling says *matched*. Under the weak reading, `MD5SUMS` — a real asset of every
+  rclone release, no extension, naming nothing — was an executable candidate on every platform,
   and so was anything else extension-less that a release happens to attach. **A `binary` now
   requires the filename to name this machine's os or arch**, which is what the ruling says.
-  `@asset=` naming the file exactly overrides it, because naming it *is* the claim â€” otherwise
+  `@asset=` naming the file exactly overrides it, because naming it *is* the claim — otherwise
   a project shipping one bare `mytool` would become uninstallable.
 - **`linux64` named no operating system.** The token matcher required a non-alphanumeric after
-  an alias, so `linux` inside `jq-linux64` â€” a real asset of jq's release â€” did not match, and
+  an alias, so `linux` inside `jq-linux64` — a real asset of jq's release — did not match, and
   the file read as running anywhere. On Windows it was an executable candidate. A closing run of
   digits is part of the boundary now (`linux64`, `win64`, `mac64`), while the leading boundary
   is unchanged so `386` still does not match inside `i386`.
@@ -2610,7 +2610,7 @@ than asked for. **Owner ruled: a detected order yields to the machine; a `@forma
 wrote still wins outright.** The tie-break now leads with specificity when
 `FormatOrder::is_user_specified()` is false and with format rank when it is true; jq resolves to
 `jq-linux-amd64`, and a user who writes `@formats=tarball` still gets the tarball. The macOS
-default order also gained `zip` in the same change â€” gh, rclone and starship ship their macOS
+default order also gained `zip` in the same change — gh, rclone and starship ship their macOS
 build as one and resolved to nothing without it. Both are covered by the real-release fixture,
 whose expectations are now the file a human would pick on every row.
 
@@ -2618,11 +2618,11 @@ whose expectations are now the file a human would pick on every row.
 
 ## K5
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
 **In the tree today:** Built as recommended.
 
-**K5 â€” May a level-3 reset (X.3) run while a config repo exists?** Forgetting the registry
+**K5 — May a level-3 reset (X.3) run while a config repo exists?** Forgetting the registry
 while the declarations remain leaves Shall believing it manages nothing and the files saying
 otherwise. *Recommendation:* refuse unless the repo is empty or `--force`, and say which.
 **BUILT the recommendation, 2026-07-20:** `shall reset` refuses when `modules/`, `profiles/`
@@ -2637,13 +2637,13 @@ saying otherwise, and there is no reading of that state that is not a trap.
 
 ## K11
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
-**In the tree today:** `config/settings.rs:17` â€” `const ONLY_KEY: &str = "config_root"`, enforced by the parser.
+**In the tree today:** `config/settings.rs:17` — `const ONLY_KEY: &str = "config_root"`, enforced by the parser.
 
-**K11 â€” May Shall's settings file (X.6) hold anything besides the repo path?** *Recommendation:*
+**K11 — May Shall's settings file (X.6) hold anything besides the repo path?** *Recommendation:*
 no, and the refusal should be enforced by the parser, not by discipline. **A file holding exactly
-one key is the file that grows a second one** â€” and the moment it does, there are two preference
+one key is the file that grows a second one** — and the moment it does, there are two preference
 systems (it and `preferences.toml`) and a new question about which wins on every key either
 could hold. The one key it holds is the one key `preferences.toml` structurally cannot.
 
@@ -2655,16 +2655,16 @@ hold would raise a new question about which one wins.
 
 ## K14
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
 **In the tree today:** `handle_rebuild` never reaches `git_autocommit`. **No test asserts it**, as the entry says.
 
-**K14 â€” Does `rebuild` produce a git commit?** Nothing about the declared state changed, so
-there is nothing to commit â€” but a history that does not record a rebuild means `git log` is no
+**K14 — Does `rebuild` produce a git commit?** Nothing about the declared state changed, so
+there is nothing to commit — but a history that does not record a rebuild means `git log` is no
 longer a complete account of what happened to the machine (II.4's claim). *Recommendation:* no
 commit; `rebuild` is recorded wherever snapshots are, not wherever intent is.
 
-**The recommendation holds and is what the code does** â€” `handle_rebuild` never calls
+**The recommendation holds and is what the code does** — `handle_rebuild` never calls
 `perform_maintenance`, which is the only path to `git_autocommit`. **It is still not asserted by
 a test** (2026-07-21): the honest one needs a backend that can really remove and reinstall, and
 a test that only greps the source would pass on a rebuild that committed through some other
@@ -2679,30 +2679,30 @@ committed through some other route, so the honest one needs a backend that reall
 reinstalls.
 
 **Checked 2026-07-23: the test exists and has never been run.** `docker/integration/run-in-container.sh`
-section 12 does exactly what this entry asks â€” a real package removed and reinstalled, and git
+section 12 does exactly what this entry asks — a real package removed and reinstalled, and git
 asked directly for its commit count rather than `shall git log`. It cannot run here: there is no
 container runtime on the development machine, and the harness installs and removes real system
 packages, so pointing it at the WSL install would not be a test, it would be an incident. **Filed
-as Phase 6, not as owed work** â€” the code is written, the run is what is missing.
+as Phase 6, not as owed work** — the code is written, the run is what is missing.
 
 ---
 
 ## K16
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
 **In the tree today:** Built as recommended.
 
-**K16 â€” Does `clean-cache --all` need the guard?** It removes no packages, so today's answer is
+**K16 — Does `clean-cache --all` need the guard?** It removes no packages, so today's answer is
 no (R19 established exactly this reasoning for `clean-cache`). Level 3 of X.3 is a different
-command and does need confirmation. *Recommendation:* keep the split â€” the guard protects
+command and does need confirmation. *Recommendation:* keep the split — the guard protects
 packages, not disk space, and widening it to cover caches dilutes what a guard refusal means.
 **BUILT the split, 2026-07-20:** `clean-cache --all` takes no confirmation and no guard (it
 touches caches and `tmp_dir`, no installed software); `shall reset` takes the typed-count
 confirmation because it destroys the registry. The reason is written into `handle_clean_cache`.
 
 **RULED (owner, 2026-07-23): confirmed as built.** `clean-cache --all` takes no guard and no
-confirmation. **The guard protects packages, not disk space** â€” widening it to cover caches would
+confirmation. **The guard protects packages, not disk space** — widening it to cover caches would
 dilute what a guard refusal means, and the worst outcome of a wrong `clean-cache --all` is
 re-downloading.
 
@@ -2717,30 +2717,30 @@ K5 is where that lives. Recorded because the contrast read as though the two wer
 
 ## U5
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
-**U5 â€” Does `setting:` get a Windows registry adapter and a macOS `defaults` adapter?** This is
-P7's first real test. *Recommendation:* yes, registry first â€” it is the cleanest
+**U5 — Does `setting:` get a Windows registry adapter and a macOS `defaults` adapter?** This is
+P7's first real test. *Recommendation:* yes, registry first — it is the cleanest
 read-before-write store on any platform, and it is the difference between Shall declaring a
 Windows machine's software and declaring the machine.
 
 **ANSWERED by K7's ruling (owner, 2026-07-23): yes.** `setting:` must work everywhere, so the
-registry and `defaults` adapters are owed rather than optional. *(This once read "does not unblock the work â€” U19 is still open".)* **U19 is answered and
+registry and `defaults` adapters are owed rather than optional. *(This once read "does not unblock the work — U19 is still open".)* **U19 is answered and
 built** (2026-07-24): `@scope=user|system`, defaulting to whatever the store does anyway, and it
 is the convention macOS `defaults` inherits. **Nothing blocks the adapters now**; they are simply
-unwritten â€” `setting_stores.toml` still ships `gsettings` and nothing else.
+unwritten — `setting_stores.toml` still ships `gsettings` and nothing else.
 
 ---
 
 ## D1
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
 **In the tree today:** `github.rs:159` takes GitHub's own `releases/latest` (non-draft, non-prerelease) and `:241` strips a leading `v` from a `@version=` pin. The recommendation's "errors if both exist" half is not there.
 
-**D1 â€” What is "the release"?** `github:sharkdp/fd` names a repo, not a version. GitHub has
+**D1 — What is "the release"?** `github:sharkdp/fd` names a repo, not a version. GitHub has
 draft releases, prereleases, and tags that never became releases at all. And `@version=10.2.0`
-has to mean *something* here â€” a tag, presumably, but tags are `v10.2.0` about half the time.
+has to mean *something* here — a tag, presumably, but tags are `v10.2.0` about half the time.
 *Recommendation:* latest non-draft, non-prerelease release; `@version=` matches the tag with and
 without a leading `v` and errors if both exist; no "track prereleases" option until someone asks.
 
@@ -2749,26 +2749,26 @@ GitHub's newest non-draft, non-prerelease; `@version=` matches the tag with and 
 `v`. **Owed:** a repo carrying both `10.2.0` and `v10.2.0` as tags must be an error naming both.
 Today one wins silently, which is the quiet failure this whole entry existed to prevent.
 
-**ALREADY BUILT when the ruling was written â€” checked 2026-07-23, nothing to do.** `one_release`
+**ALREADY BUILT when the ruling was written — checked 2026-07-23, nothing to do.** `one_release`
 (`github.rs`) returns `Error::Validation` naming both tags when both spellings resolve, and
 `resolve_release` is its only caller, so there is no second path where one wins silently. Tests:
 `a_pin_that_answers_to_both_spellings_is_an_error_naming_both` and
 `either_spelling_alone_resolves_to_that_release`. It landed on **2026-07-20** in `8a63c80`, three
 days before the entry said it was missing. **This is the tree being better than the sentence
-again** â€” the same direction Part VII warns about, and the reason "In the tree today" lines are
+again** — the same direction Part VII warns about, and the reason "In the tree today" lines are
 worth re-running rather than reading.
 
 ---
 
 ## D10
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
-**In the tree today:** `backends/artifact/format.rs` â€” one `Format` enum, one `ALL` table, the error names the legal set.
+**In the tree today:** `backends/artifact/format.rs` — one `Format` enum, one `ALL` table, the error names the legal set.
 
-**D10 â€” The closed vocabulary, and where it lives.** VIII.2 fixes ten names and makes an
+**D10 — The closed vocabulary, and where it lives.** VIII.2 fixes ten names and makes an
 eleventh an error. That list has to live somewhere both the parser and the error message read
-from, or it drifts â€” and a typed list of names that drifts is precisely the failure this document
+from, or it drifts — and a typed list of names that drifts is precisely the failure this document
 has recorded seven times. *Recommendation:* one table in the grammar crate, and the error message
 prints it rather than restating it.
 
@@ -2779,15 +2779,15 @@ rather than restating it.
 
 ## W1
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
 **In the tree today:** `$` shipped throughout `model/vars.rs`; a bare name is not accepted.
 
-**W1 â€” The sigil: `$role`, or bare `role`?** IX.4 argues for `$`. The counter-argument is real:
+**W1 — The sigil: `$role`, or bare `role`?** IX.4 argues for `$`. The counter-argument is real:
 bare names read better, the reserved set is five words and could simply be reserved forever, and
-`$` in a file that is not a shell invites people to expect shell semantics (`${}`, `$(â€¦)`,
-env fallthrough) that will not exist. *Recommendation:* keep the sigil â€” the future-fact
-collision is the kind of quiet, delayed breakage this document has recorded seven times â€” but
+`$` in a file that is not a shell invites people to expect shell semantics (`${}`, `$(…)`,
+env fallthrough) that will not exist. *Recommendation:* keep the sigil — the future-fact
+collision is the kind of quiet, delayed breakage this document has recorded seven times — but
 this is the single most reversible-now, expensive-later choice in the part.
 
 **RULED (owner, 2026-07-23): confirmed as built.** The sigil stays. `$role`, never bare.
@@ -2796,11 +2796,11 @@ this is the single most reversible-now, expensive-later choice in the part.
 
 ## W6
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
-**In the tree today:** `model/vars_provider.rs:43` ignores directories by name: *"a `vars.d/` â€¦"*.
+**In the tree today:** `model/vars_provider.rs:43` ignores directories by name: *"a `vars.d/` …"*.
 
-**W6 â€” Is `vars` one file or a directory?** One file matches `active`/`priority`. A repo with
+**W6 — Is `vars` one file or a directory?** One file matches `active`/`priority`. A repo with
 forty machines may want `vars.d/`. *Recommendation:* one file; revisit only with a real fleet
 complaining.
 
@@ -2811,14 +2811,14 @@ by name until a real fleet asks otherwise.
 
 ## K7
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
-**In the tree today:** `backends/setting.rs` â€” the `SettingStore` enum is `GSettings` and `None`; `None` makes every `setting:` line an error.
+**In the tree today:** `backends/setting.rs` — the `SettingStore` enum is `GSettings` and `None`; `None` makes every `setting:` line an error.
 
-**K7 â€” Which desktops does `setting:` adapt to, and in what order?** In scope as of the owner's
+**K7 — Which desktops does `setting:` adapt to, and in what order?** In scope as of the owner's
 ruling (X.4), so the question is no longer whether. GNOME via `gsettings` is the largest
 population and the cleanest adapter (typed schemas, readable current values); KDE via
-`kwriteconfig` is ini files with no schema, so *reading the current value* â€” which X.4 requires â€”
+`kwriteconfig` is ini files with no schema, so *reading the current value* — which X.4 requires —
 is harder there. *Recommendation:* GNOME first, KDE second, and **`setting:` refuses on a desktop
 with no adapter rather than falling back to writing something.** A key silently unapplied is
 worse than an error, because the whole point is that the file is the truth.
@@ -2826,12 +2826,12 @@ worse than an error, because the whole point is that the file is the truth.
 **BUILT the recommendation, 2026-07-20: GNOME via `gsettings`, KDE refused for now.** The
 `SettingStore` enum has exactly `GSettings` and `None`; a desktop that resolves to `None` makes
 every `setting:` line an error naming the missing adapter. KDE joins by adding a variant and its
-three command mappings â€” the pure-function shape is set up so that is the whole change.
+three command mappings — the pure-function shape is set up so that is the whole change.
 
 **RULED (owner, 2026-07-23): `setting:` must work everywhere. GNOME-only is a stage, not the
 answer.** The recommendation is confirmed as far as it goes and its scope is rejected: KDE, the
 Windows registry and macOS `defaults` are all owed, not optional, because **P7 says a feature is
-unfinished until Windows and macOS have an equivalent or a written reason there can be none** â€”
+unfinished until Windows and macOS have an equivalent or a written reason there can be none** —
 and there is no such reason here. Every one of these stores can be read before it is written,
 which is the only property X.4 requires.
 
@@ -2853,33 +2853,33 @@ release, and the machine that needs it is the one that cannot wait for one.
 
 | store | how a value is read and written | state |
 |---|---|---|
-| **Windows registry** | the registry itself, typed | **owed, and first** â€” the owner's daily machine |
+| **Windows registry** | the registry itself, typed | **owed, and first** — the owner's daily machine |
 | **KDE** | `kreadconfig5`/`kreadconfig6`, `kwriteconfig` | owed |
 | **COSMIC** | the file tree under `~/.config/cosmic/`, one file per key | owed |
-| **Hyprland** | a plain text config file, plus `hyprctl` at runtime | owed, **and it may not be a `setting:` at all** â€” see below |
+| **Hyprland** | a plain text config file, plus `hyprctl` at runtime | owed, **and it may not be a `setting:` at all** — see below |
 | GNOME | `gsettings` | built, and **the one store the owner does not use** |
 
 **Hyprland is a different shape and must not be forced into this one.** The other four are
 key-value stores with a read API; Hyprland's truth is a text config file, with `hyprctl
 getoption` reporting a runtime value that can disagree with it. A `setting:` line there means
-Shall owning individual lines inside a file it did not write â€” which is not what any other
+Shall owning individual lines inside a file it did not write — which is not what any other
 adapter does, and `link:` already places whole files. **Whether Hyprland is a `setting:` adapter,
 a `link:` case, or a third thing is open and is not decided by this ruling.**
 
 **This answers U5: yes.** It no longer waits on anything: the registry adapter's first line is
-`HKCU` or `HKLM`, which is **U19 â€” answered and built** (`@scope=user|system`, 2026-07-24). The
+`HKCU` or `HKLM`, which is **U19 — answered and built** (`@scope=user|system`, 2026-07-24). The
 adapter rows are unwritten work, not blocked work.
 
 ---
 
 ## K7b
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
 **In the tree today:** `backends/setting.rs` implements the statement form.
 
-**K7b â€” What is the key syntax?** `setting:SCHEMA/KEY @value=â€¦` is one spelling; a backend-shaped
-`gsettings:org.gnomeâ€¦` is another and would reuse the `backend:name` parser instead of adding a
+**K7b — What is the key syntax?** `setting:SCHEMA/KEY @value=…` is one spelling; a backend-shaped
+`gsettings:org.gnome…` is another and would reuse the `backend:name` parser instead of adding a
 statement. *Recommendation:* the statement form, because the desktop is not a backend (X.4) and
 the adapter is chosen by what is running, not by what the user typed.
 
@@ -2890,16 +2890,16 @@ backend, and the adapter is chosen by what is running rather than by what the us
 
 ## K8
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
 **In the tree today:** Built as recommended: the affected commands bail, `doctor` reports git as degraded.
 
-**K8 â€” How does a git-less Shall announce what it cannot do?** Once at `init`, on every
+**K8 — How does a git-less Shall announce what it cannot do?** Once at `init`, on every
 affected command, or only in `doctor`. *Recommendation:* on the affected commands (they are
-few, and that is where the user is when it matters) plus a `doctor` line. Never on `sync` â€”
+few, and that is where the user is when it matters) plus a `doctor` line. Never on `sync` —
 warning on the command that runs unattended, every time, teaches people to ignore it.
 
-**BUILT the recommendation, 2026-07-20.** The affected commands already said it â€” `rollback`,
+**BUILT the recommendation, 2026-07-20.** The affected commands already said it — `rollback`,
 `diff` and `history` each bail with "this needs git, run `shall git init`" rather than
 crashing, and `git_autocommit` is a silent no-op without a repo. The one gap was the standing
 `doctor` line, now added: `doctor` reports git as *degraded* (not a fault) when it is absent or
@@ -2912,11 +2912,11 @@ the standing line, and `sync` never warns.
 
 ## K10
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
 **In the tree today:** `cli/args.rs:507` and `:520`; `main.rs:192-193`. Two commands, exactly the recommendation.
 
-**K10 â€” `shall edit` and `shall path`, or flags on an existing command?** *Recommendation:* two
+**K10 — `shall edit` and `shall path`, or flags on an existing command?** *Recommendation:* two
 small commands, because both are things a shell wants to call directly.
 
 **RULED (owner, 2026-07-23): confirmed as built.** Two commands, because both are things a shell
@@ -2926,13 +2926,13 @@ calls directly.
 
 ## K11b
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
-**In the tree today:** `config/settings.rs` â€” the platform config dir, and a flat file rather than a nested one so it cannot land inside the repo it locates.
+**In the tree today:** `config/settings.rs` — the platform config dir, and a flat file rather than a nested one so it cannot land inside the repo it locates.
 
-**K11b â€” What is that file called and where exactly does it live?** It is not in the repo, not in
+**K11b — What is that file called and where exactly does it live?** It is not in the repo, not in
 git, and not scanned; beyond that the platform config dir and `$SHALL_DATA_DIR` are both
-defensible. *Recommendation:* the platform config dir â€” it is configuration, not data, and
+defensible. *Recommendation:* the platform config dir — it is configuration, not data, and
 putting it next to the data dir invites the assumption that deleting the data dir is safe.
 
 **RULED (owner, 2026-07-23): confirmed as built.** The platform config directory, and a flat
@@ -2942,11 +2942,11 @@ file rather than a nested one so it cannot land inside the repo it exists to loc
 
 ## K13
 
-**Status: ANSWERED â€” ruled 2026-07-23.**
+**Status: ANSWERED — ruled 2026-07-23.**
 
 **In the tree today:** `schedule.rs` carries a `NEVER_UNATTENDED` list.
 
-**K13 â€” Does `rebuild` appear in `schedules`?** *Recommendation:* no, and the parser should
+**K13 — Does `rebuild` appear in `schedules`?** *Recommendation:* no, and the parser should
 refuse it by name, for the reason in X.1. A destructive repair operation that can be scheduled
 is one that will run at 3am on a machine nobody is watching.
 
@@ -2966,7 +2966,7 @@ to by hand.
 - **The default preserves today's behaviour exactly.** A config that says nothing refuses both
   commands, as it does now, so no existing setup changes meaning.
 - **It answers the sibling in the same change.** `purge-unmanaged` is not a separate ruling and
-  does not need one â€” it is a row in the same list, removable on the same terms, which is what
+  does not need one — it is a row in the same list, removable on the same terms, which is what
   makes this a fix to the class rather than to `rebuild`.
 - **It is a `[guard]` list, not a `[schedules]` one.** `[schedules]` in `preferences.toml` was
   deleted by the 2026-07-20 audit so the `schedules` file is the only schedule store;
@@ -2980,7 +2980,7 @@ to by hand.
 home (`preferences.toml`) and the check is testable without a config on disk. The refusal quotes
 the key **and its current contents**. Five tests, including the two the ruling's own wording
 implies and nothing else would have covered: **taking a name out permits that command and leaves
-the other refused**, and **an empty list refuses nothing** â€” the alternative, an empty list
+the other refused**, and **an empty list refuses nothing** — the alternative, an empty list
 silently restoring the built-in pair, is the shape that makes a guard setting unable to mean what
 it says.
 
@@ -2990,13 +2990,13 @@ it says.
 
 **Status: ANSWERED.**
 
-**D3 â€” Two assets, same format, both legal for this machine.** `fd_10.2.0_amd64.deb` and
+**D3 — Two assets, same format, both legal for this machine.** `fd_10.2.0_amd64.deb` and
 `fd-musl_10.2.0_amd64.deb`. `formats = deb` selects both and must pick one.
 
 **RULED (owner, 2026-07-20): shortest filename wins, said out loud, plus `@asset=` taking a
 pattern.** Four parts, and the fourth is a separate axis the question surfaced:
 
-1. **Default: shortest matching filename**, and the selection is *reported* â€” the plan names the
+1. **Default: shortest matching filename**, and the selection is *reported* — the plan names the
    asset it chose and the ones it passed over, and the chosen name goes in `locks/github` so it
    cannot drift under a pinned line. A guess that is printed and locked is not the silent guess
    D3 was afraid of.
@@ -3015,11 +3015,11 @@ pattern.** Four parts, and the fourth is a separate axis the question surfaced:
 
 **Status: ANSWERED.**
 
-**D4 â€” What does installing a `tarball`/`zip`/`binary` actually do?** A `.deb` is
+**D4 — What does installing a `tarball`/`zip`/`binary` actually do?** A `.deb` is
 self-installing; an archive is not. Something has to decide where it extracts, which file inside
 it is the executable, and what lands on `PATH`.
 
-**RULED (owner, 2026-07-20): extract, find the executable, shim it â€” with `@bin=` to name it
+**RULED (owner, 2026-07-20): extract, find the executable, shim it — with `@bin=` to name it
 when the guess is wrong.**
 
 - Shall extracts to its own artifact directory and **must not invent a second way onto `PATH`.**
@@ -3033,12 +3033,12 @@ when the guess is wrong.**
   > directory. **The rule that survives is the one that mattered: one deployment mechanism, not
   > one per backend.** See the 2026-07-20 entry in Part VII.
 - **The default guesses**, by looking for an executable whose name matches the package. The guess
-  is *reported* in the plan, like D3's â€” the same discipline, for the same reason.
+  is *reported* in the plan, like D3's — the same discipline, for the same reason.
 - **`@bin=PATH` names the executable inside the archive** (`github:foo/bar@bin=build/bar`) and
   turns the guess off. It is the escape hatch for odd layouts and for archives holding several
   executables.
 - **An archive where the guess finds nothing, or finds several, is an error listing what it
-  found** â€” never a silent pick. D3's tie-break is for *assets*, not for executables inside one:
+  found** — never a silent pick. D3's tie-break is for *assets*, not for executables inside one:
   two binaries in a tarball are two different programs, and shortest-name is meaningless there.
 
 ---
@@ -3047,10 +3047,10 @@ when the guess is wrong.**
 
 **Status: ANSWERED.**
 
-**D6 â€” `@sha256` cannot cover a per-machine asset.** A shared module says
-`github:x/y@sha256=â€¦`, but the Ubuntu box downloads the `.deb` and the Fedora box downloads the
+**D6 — `@sha256` cannot cover a per-machine asset.** A shared module says
+`github:x/y@sha256=…`, but the Ubuntu box downloads the `.deb` and the Fedora box downloads the
 `.rpm`. **One hash cannot verify two files.** So either the checksum option is per-asset (a list,
-keyed by filename â€” verbose, and generated by hand), or it is only legal alongside a single
+keyed by filename — verbose, and generated by hand), or it is only legal alongside a single
 pinned format, or checksums move into `locks/github` as generated content and stop being a
 hand-written option. This collides directly with the unimplemented SEC checksum work in Phase 5
 and **must be settled with it, not separately.**
@@ -3077,15 +3077,15 @@ Two consequences that follow and are not separately decidable:
 
 **Status: ANSWERED.**
 
-**D7 â€” Does a `github { formats = â€¦ }` block in `priority` mean the backend is enabled?**
+**D7 — Does a `github { formats = … }` block in `priority` mean the backend is enabled?**
 V.15 says listed = available. A block with an options body is still a listing, so presumably yes
-â€” but then a user who writes only a formats block has silently enabled a backend. *Recommendation:*
-yes, it enables â€” one list, one question, exactly as V.15 argues. Say so explicitly.
+— but then a user who writes only a formats block has silently enabled a backend. *Recommendation:*
+yes, it enables — one list, one question, exactly as V.15 argues. Say so explicitly.
 
 **ADOPTED and BUILT (2026-07-20): yes, a body is a listing.** `Priority::parse` pushes the
 backend onto the order and stores its body, so a lone `github { formats = deb }` both enables
 `github` and sets its default. One list answering one question, as V.15 argues. The alternative
-â€” a body that configures a backend without enabling it â€” would mean `priority` had two kinds of
+— a body that configures a backend without enabling it — would mean `priority` had two kinds of
 mention with different force, which is the `backend_priority`/`enabled_backends` split V.15
 already deleted once.
 
@@ -3095,16 +3095,16 @@ already deleted once.
 
 **Status: ANSWERED.**
 
-**D9 â€” A line's `formats` replaces the backend's list. Confirm.** VIII.2 asserts replace-not-
+**D9 — A line's `formats` replaces the backend's list. Confirm.** VIII.2 asserts replace-not-
 extend. The alternative (prepend the line's entries, keep the backend's as fallback) is more
-forgiving and produces an order nobody wrote. *Recommendation:* replace, as written â€” but it is
+forgiving and produces an order nobody wrote. *Recommendation:* replace, as written — but it is
 an assertion I made, not a ruling, so it is listed here.
 
 **ADOPTED and BUILT (2026-07-20): replace, at both seams.** `to_spec` writes the backend's
 `priority` body into the spec first and lets the line's own options overwrite the key whole, so
 all three levels compose as *line beats `priority` beats built-in default* with no partial
 merge at either step. The merge happens once, in the one function that turns a declaration into
-a spec, rather than in each backend â€” a backend that resolved its own precedence would be the
+a spec, rather than in each backend — a backend that resolved its own precedence would be the
 second implementation of it.
 
 ---
@@ -3113,26 +3113,26 @@ second implementation of it.
 
 **Status: ANSWERED.**
 
-**W2 â€” Are values typed?** IX.2 shows strings only. But `when $role in [travel, work]` already
+**W2 — Are values typed?** IX.2 shows strings only. But `when $role in [travel, work]` already
 exists in the grammar, so a list value is a natural request, and `when $gpu == true` reads worse
 than a flag. Options: strings only and every comparison is a string compare (simplest, one type,
 no coercion surprises); or add lists; or add booleans. ~~*Recommendation:* strings only for v1.~~
 
-**RULED (owner, 2026-07-20): full JSON types â€” strings, numbers, booleans, lists.** The
+**RULED (owner, 2026-07-20): full JSON types — strings, numbers, booleans, lists.** The
 position-1 recommendation above is void, as IX.6 said every W recommendation is. A provider that
 returns JSON has these types already, and flattening them to strings at the boundary throws away
 information the user deliberately produced. *(Options offered: strings only, strings plus lists,
 or full JSON types.)*
 
 **This buys a coercion problem, and the coercion rules are the work.** They are not a detail
-that falls out of the implementation â€” each one is a place a comparison can quietly answer the
+that falls out of the implementation — each one is a place a comparison can quietly answer the
 wrong question, so each is decided here or it is decided by accident:
 
 - **No cross-type coercion in comparisons.** `"1" == 1` is **false**, not true, and not an
   error. A provider that returns a JSON string is making a claim about the type, and silently
   equating it to a number would make the type annotation meaningless.
 - **`==` and `!=` are legal between any two values; ordering (`<`, `>`) is legal only between
-  numbers.** Ordering strings invites version-compare expectations Shall cannot honour â€”
+  numbers.** Ordering strings invites version-compare expectations Shall cannot honour —
   `"10" > "9"` is false under every string ordering and true under every intuition.
 - **`in` tests list membership** with the same no-coercion equality.
 - **There is no truthiness.** W3's "no bare `$flag`" holds and gets stronger: `when $gpu` stays a
@@ -3148,7 +3148,7 @@ case-insensitive**, preserving the detected-fact behaviour `os == LINUX` has alw
 
 **Owed:** the value type lands in Part II with a Part V entry naming the bug (a comparison that
 answers a question the reader did not ask), and `shall vars` (W12) prints the type alongside the
-value or the whole feature is undebuggable. **Deferred until stages 2â€“6 land**, so Part II does not
+value or the whole feature is undebuggable. **Deferred until stages 2–6 land**, so Part II does not
 describe a half-built feature.
 
 ---
@@ -3157,10 +3157,10 @@ describe a half-built feature.
 
 **Status: ANSWERED.**
 
-**W3 â€” Is a bare `$flag` a condition?** `when $gpu { â€¦ }` meaning "non-empty" is the obvious
+**W3 — Is a bare `$flag` a condition?** `when $gpu { … }` meaning "non-empty" is the obvious
 shorthand and it needs deciding before people write `gpu = false` and find that it fires.
-*Recommendation:* no bare form â€” require an explicit comparison, and make `when $gpu` a parse
-error suggesting `$gpu == â€¦`. **`false` as a truthy string is a footgun with no upside.**
+*Recommendation:* no bare form — require an explicit comparison, and make `when $gpu` a parse
+error suggesting `$gpu == …`. **`false` as a truthy string is a footgun with no upside.**
 **ADOPTED and BUILT (2026-07-20, fourth session):** a bare `$flag` in `when` is a parse error
 naming the fix.
 
@@ -3170,8 +3170,8 @@ naming the fix.
 
 **Status: ANSWERED.**
 
-**W4 â€” Where in resolution does `vars` load?** It has to be parsed and resolved before any file
-containing `when` is evaluated, including `active` â€” which means before profiles are known. And
+**W4 — Where in resolution does `vars` load?** It has to be parsed and resolved before any file
+containing `when` is evaluated, including `active` — which means before profiles are known. And
 `vars` itself contains `when` over detected facts. So: detect facts â†’ resolve `vars` â†’ everything
 else. *Recommendation:* state this as a fixed phase in II.7, because getting it wrong produces an
 ordering bug that will look like an intermittent one. **BUILT (2026-07-20):** vars resolve once
@@ -3185,7 +3185,7 @@ that could disagree (Stage 5). Owed: writing the phase into II.7 as text.
 
 **Status: ANSWERED.**
 
-**W5 â€” What does `shall check` do with `vars`?** `check` parses everything on demand (II.3). A
+**W5 — What does `shall check` do with `vars`?** `check` parses everything on demand (II.3). A
 variable defined but never used is harmless; a variable *used* but not defined is an error W3/IX.3
 catches at parse time. But an unused variable on a fleet may mean "the block that used it was
 deleted on this branch". *Recommendation:* `check` reports unused variables as a note, not an
@@ -3193,8 +3193,8 @@ error. **BUILT (2026-07-20, fifth session).** It is not done through resolution 
 scan, which is the *more* correct reading of the intent: `model/vars::referenced_names` reads
 every `$name` out of the model files (`modules/`, `profiles/`, `active`, `priority`, `schedules`,
 and a line-file `vars`), and `check` lists any resolved variable absent from that set as a note,
-never an error. Static because the motivating case is a fleet â€” a variable used only in another
-host's `when host == â€¦` arm must count as used, and this host's resolution never reaches that
+never an error. Static because the motivating case is a fleet — a variable used only in another
+host's `when host == …` arm must count as used, and this host's resolution never reaches that
 arm. So the answer is the whole repo's references, not just the ones this box hit.
 
 ---
@@ -3203,18 +3203,18 @@ arm. So the answer is the whole repo's references, not just the ones this box hi
 
 **Status: ANSWERED.**
 
-**W7 â€” The undetectable variable â€” is there an escape hatch?** "Is this a work machine" is not
+**W7 — The undetectable variable — is there an escape hatch?** "Is this a work machine" is not
 derivable from hostname, os, or arch on every fleet, and **IX.1's central claim quietly depends
 on it usually being derivable.** When it is not, the options are: an env var
-(`SHALL_VAR_ROLE=work`) â€” which makes the resolved state depend on how the command was invoked,
+(`SHALL_VAR_ROLE=work`) — which makes the resolved state depend on how the command was invoked,
 and II.6 already establishes wariness there (*"an unset `$PROFILE` must not empty the machine"*);
-a gitignored local file â€” which is per-machine hand-maintained state, the exact thing II.1
+a gitignored local file — which is per-machine hand-maintained state, the exact thing II.1
 forbids; or a refusal, forcing the user to add a `when hostname ==` arm. *No recommendation.*
 **This is the decision that determines whether IX.1's argument is honest or a technicality,
 and it should be ruled on before anything else in this part.**
 **ANSWERED by the provider model (2026-07-20):** an external `vars.py` or the embedded `env(name)`
 reads `SHALL_VAR_ROLE` (or any variable) itself, so the escape hatch is the environment via a
-provider â€” no per-machine committed state, no Shall-level env-var mechanism. The `env()` host
+provider — no per-machine committed state, no Shall-level env-var mechanism. The `env()` host
 function is built (Stage 4).
 
 ---
@@ -3223,28 +3223,28 @@ function is built (Stage 4).
 
 **Status: ANSWERED.**
 
-**W8 â€” Do variables work in `active`?** `when $role == travel { Travel }` is the single most
+**W8 — Do variables work in `active`?** `when $role == travel { Travel }` is the single most
 useful place for this feature and also the place with the sharpest edge: `activate` and
 `deactivate` edit `active` as a file (II.6), including its `when` blocks, and they currently
-reason about host blocks specifically â€” *"Travel is not active on this host, `active` line 4
+reason about host blocks specifically — *"Travel is not active on this host, `active` line 4
 activates it when host == laptop"*. That message and that logic have to learn variables.
 *Recommendation:* yes, allow it, and treat the `activate`/`deactivate` message work as part of
-the feature rather than a follow-up â€” a half-taught `deactivate` would report a state it did not
+the feature rather than a follow-up — a half-taught `deactivate` would report a state it did not
 reach, which II.6 already calls out as the defect to avoid.
-**CORE BUILT (2026-07-20):** `when $role == travel { Travel }` in `active` resolves â€” it read its
+**CORE BUILT (2026-07-20):** `when $role == travel { Travel }` in `active` resolves — it read its
 own varless facts before and failed with "unknown when key `$role`"; `parse_active` now threads the
 run's facts (which carry the variables).
 
 **COMPLETE (2026-07-20, sixth session), and it was a bug, not only a message.** The resolution path
 had been taught variables; **every path that EDITS your files had not.** `activate -a`,
 `deactivate`, `uninstall` and `declares` all read `active` through `HostFacts::current()`, whose
-variable set is empty â€” and an empty set does not make `when $role == travel` a block that fails to
+variable set is empty — and an empty set does not make `when $role == travel` a block that fails to
 match, it makes `$role` an unknown key. Each of those verbs refused a correct file outright. Fixed
 by deleting the varless readers rather than defaulting them: `parse_active`/`read_active` take
 facts, `Editor::new` takes facts, and **`StateResolver::facts_for_host` is the one place that
 produces them** (`resolve_model` now calls it instead of resolving variables inline). The messaging
-half is `model::profiles::describe_gate`: a block is named with its variables' current values â€”
-*"`when $role == travel` ($role is desktop)"* â€” because `active` holds the condition and `vars`
+half is `model::profiles::describe_gate`: a block is named with its variables' current values —
+*"`when $role == travel` ($role is desktop)"* — because `active` holds the condition and `vars`
 holds the value, and pointing a reader at the first without the second explains nothing. Verified
 against the binary: `deactivate Trip` on a `when $role == travel` block reports the removal, the
 emptied block, and the value, where it used to fail to parse the file.
@@ -3255,16 +3255,16 @@ emptied block, and the value, where it used to fail to parse the file.
 
 **Status: ANSWERED.**
 
-**W11 â€” Does `why` explain a variable?** When a package is present because
+**W11 — Does `why` explain a variable?** When a package is present because
 `when $role == travel` matched, `shall why` should say *"`$role` is `travel`, set at `vars`
-line 6 by `when host in [thinkpad, x220]`"* â€” one hop further than it explains today.
+line 6 by `when host in [thinkpad, x220]`"* — one hop further than it explains today.
 *Recommendation:* yes, and W4's fixed resolution phase is what makes it cheap. Decide before
 the resolver is written. **BUILT (2026-07-20, sixth session).** The definition half was W12's
 `VarOrigins`. The gating half is now built: the resolver's per-statement `conditional` flag became
 a **chain** of `Gate`s (a predicate and the line it is written on, `Gates` beside `Origin` in the
-grammar â€” two questions, two answers). The chain composes across all three levels that can gate a
-package â€” the `active` block that turned the profile on, the profile's block around its `use`, the
-module's own block â€” and lands on the spec as `__gated_by`, filtered to the conditions that test a
+grammar — two questions, two answers). The chain composes across all three levels that can gate a
+package — the `active` block that turned the profile on, the profile's block around its `use`, the
+module's own block — and lands on the spec as `__gated_by`, filtered to the conditions that test a
 variable, which is the hop `why` cannot make from the file alone. `why` prints it under
 `because:`.
 
@@ -3282,12 +3282,12 @@ mistake that made `upgrade --module dev` match a filename.
 
 **Status: ANSWERED.**
 
-**W12 â€” Is there a command to print resolved variables?** `shall vars`, showing each name, its
+**W12 — Is there a command to print resolved variables?** `shall vars`, showing each name, its
 value on this machine, and which line set it. Debugging a fleet without it means reading the
-file and simulating the `when` blocks by hand. *Recommendation:* yes â€” small, and it is the
+file and simulating the `when` blocks by hand. *Recommendation:* yes — small, and it is the
 first thing anyone will want when a block does not fire. **BUILT (2026-07-20), completed fifth
 session:** `shall vars` prints each name, its typed value, its type, the active provider (line
-file / external / embedded), and now *"set at vars:6"* â€” the winning definition's line, or the
+file / external / embedded), and now *"set at vars:6"* — the winning definition's line, or the
 provider file for a script. Resolution carries a `VarOrigins` map beside the value set
 (`resolve_with_origins`/`load_vars_with_origins`), computed by the one resolution core so the
 value path never pays for it. This is the origin foundation W11 needs.
@@ -3298,12 +3298,12 @@ value path never pays for it. This is the origin foundation W11 needs.
 
 **Status: ANSWERED.**
 
-**W13 â€” Does changing a variable go through the guard?** It must: editing one line in `vars`
+**W13 — Does changing a variable go through the guard?** It must: editing one line in `vars`
 can deactivate a profile and remove a hundred packages. That is the ordinary plan-and-guard path
-(II.8) and needs no new mechanism â€” but it does mean **a one-line edit to `vars` is potentially
+(II.8) and needs no new mechanism — but it does mean **a one-line edit to `vars` is potentially
 the most destructive edit in the repo**, and the plan output should make the cause visible
 rather than presenting a hundred unexplained removals. **CORE SATISFIED by construction
-(2026-07-20):** variables feed the desired state, which feeds the plan, which feeds the guard â€” a
+(2026-07-20):** variables feed the desired state, which feeds the plan, which feeds the guard — a
 `vars` edit that removes a hundred packages hits `max_removals`/`protected` like any other change.
 
 **RULED (owner, 2026-07-20, fifth session): the plan shows a run-level note, not per-package
@@ -3311,7 +3311,7 @@ attribution.** The three options were a run-level note (compare the plan's froze
 run's and print *"Variables changed: role (travel â†’ desktop)"* above the removals), per-package
 attribution (resolve twice and diff the gating, so each removed package names the variable that
 dropped it), or nothing. The owner chose the note. It is decoupled from the W11/W8 gating-side
-tracking entirely â€” the plan already freezes its resolved vars (Stage 5), so the note is a diff
+tracking entirely — the plan already freezes its resolved vars (Stage 5), so the note is a diff
 of two `Vars` maps with no second resolution and no per-package guesswork. It gives the cause
 next to the count, which is the property W13 asks for. **BUILT (fifth session):** the plan/sync
 preview prints changed variables above the removals when the run's vars differ from the frozen
@@ -3323,7 +3323,7 @@ plan's.
 
 **Status: ANSWERED.**
 
-**W14 â€” Does `vars` belong in `shall diff`?** Phase 4 limits `diff` to
+**W14 — Does `vars` belong in `shall diff`?** Phase 4 limits `diff` to
 `modules/profiles/active/priority/schedules`. **`vars` has to join that list or the file that
 explains a change is the one file the change view cannot show.** *Recommendation:* yes; this is
 a one-line fix that will be forgotten if it is not written down here. **BUILT (2026-07-20):**
@@ -3335,7 +3335,7 @@ a one-line fix that will be forgotten if it is not written down here. **BUILT (2
 
 **Status: ANSWERED.**
 
-**K1 â€” Does `rebuild` remove everything before installing anything, or one package at a time?**
+**K1 — Does `rebuild` remove everything before installing anything, or one package at a time?**
 *This is the whole feature.* All-at-once genuinely forces orphan collection and can leave the
 machine unusable partway through; one-at-a-time is safe and collects nearly nothing, because a
 shared dependency is never orphaned at any instant. Batch-per-backend is a third answer.
@@ -3344,7 +3344,7 @@ shared dependency is never orphaned at any instant. Batch-per-backend is a third
 down, then all of them go back up, then the next backend. The reasoning the ruling settles on:
 
 - **It collects.** Within a backend, a dependency shared only by packages that are all removed
-  in the same batch really does become an orphan, so the repair actually repairs â€” which
+  in the same batch really does become an orphan, so the repair actually repairs — which
   one-at-a-time does not.
 - **It bounds the blast radius.** A failure strands one backend's software, not the machine.
   A box mid-`rebuild` of `cargo` still has a shell, a package manager and a network stack,
@@ -3357,8 +3357,8 @@ down, then all of them go back up, then the next backend. The reasoning the ruli
 backend that owns the shell and the system libraries goes first.
 
 **RULED and built (2026-07-20): foundation first, where foundation is `needs_root()`, then the
-rest, each tier in `priority` order.** The blast-radius reasoning first offered for this â€” put
-the risky batch first so a strand lands furthest from boot â€” **is wrong and is not the reason**;
+rest, each tier in `priority` order.** The blast-radius reasoning first offered for this — put
+the risky batch first so a strand lands furthest from boot — **is wrong and is not the reason**;
 `apt` stranding first is the worst outcome available, not the best. The reason is dependency
 direction: a crate can need a system compiler, and no system package has ever needed a crate.
 See V.49.
@@ -3369,7 +3369,7 @@ See V.49.
 
 **Status: ANSWERED.**
 
-**K3 â€” What does `rebuild` do when the reinstall fails after the removal succeeded?** The
+**K3 — What does `rebuild` do when the reinstall fails after the removal succeeded?** The
 machine is now missing declared software and the command is halfway. Snapshot-and-revert
 (II.10's pre-sync snapshot path) is the existing mechanism and probably the answer, but it has
 to be decided, because "rebuild left me with nothing" is the review this feature gets if it is
@@ -3379,7 +3379,7 @@ not.
 *(Options offered: snapshot-and-revert, stop-and-report, or refuse to start without a snapshot
 provider.)* Three things the ruling settles that the question did not contain:
 
-1. **One snapshot, taken before the first removal â€” not one per batch.** A per-batch snapshot
+1. **One snapshot, taken before the first removal — not one per batch.** A per-batch snapshot
    could only restore the batch that failed, and by then an earlier backend has already been
    rebuilt on top of it. The unit of the rollback is the rebuild, not the batch.
 2. **No snapshot provider is not a refusal.** `rebuild` still runs and says up front that a
@@ -3396,9 +3396,9 @@ provider.)* Three things the ruling settles that the question did not contain:
 
 **Status: ANSWERED.**
 
-**K9 â€” Is the backup command `bundle`, an alias, or nothing?** **RULED 2026-07-22 (owner): it is
+**K9 — Is the backup command `bundle`, an alias, or nothing?** **RULED 2026-07-22 (owner): it is
 `bundle`, finished.** Open since 2026-07-19 with the implementation deliberately unproposed; the
-constraint that was recorded then â€” **not a second archive writer** â€” is what decided it. `bundle`
+constraint that was recorded then — **not a second archive writer** — is what decided it. `bundle`
 already writes everything a backup needs and stops at a `RESTORE.md`, so the answer is the
 missing half: **`restore DIR`**, a command rather than an instruction file, refusing a non-empty
 config directory unless told otherwise, with an end-to-end test that runs **without git** because
@@ -3410,14 +3410,14 @@ that is the case X.5 leaves it carrying alone. Reasoned in **V.59**; the rule is
 
 **Status: ANSWERED.**
 
-**K15 â€” Does `plan` distinguish a rebuild's removals from real ones?** A plan showing "remove
+**K15 — Does `plan` distinguish a rebuild's removals from real ones?** A plan showing "remove
 214 packages" when all 214 come straight back is technically true and will terrify the reader.
-*Recommendation:* yes â€” the plan says *reinstall* where remove-then-install is the same package,
+*Recommendation:* yes — the plan says *reinstall* where remove-then-install is the same package,
 and reserves *remove* for removals that stay removed.
 
 **BUILT (2026-07-21).** `rebuild` prints its own plan, which never says "remove". The gap was
 that the two transactions it runs go through the ordinary `sync` path, whose summary narrated
-214 removals â€” the sentence K15 exists to prevent. The engine is now told which run it is
+214 removals — the sentence K15 exists to prevent. The engine is now told which run it is
 narrating (`metrics::Narration`, from the guard scope): under a rebuild the counters read
 `Reinstalled` and `Removed to reinstall`, and plain `Removals` is reserved for removals that
 stay removed. The backends' own progress logs are unchanged, deliberately: `apt` really is
@@ -3427,61 +3427,61 @@ removing those packages at that moment.
 
 ---
 
-# Parked â€” each on a condition, and the conditions are checked now
+# Parked — each on a condition, and the conditions are checked now
 
 **A parking condition is a claim that has to be re-checked, and D15's was not.** It said "parked
 until D5 is answered", D5 was ruled and built five days later, and the entry went on saying
-PARKED â€” filed among the questions that need nothing, which is where a question that needs a
+PARKED — filed among the questions that need nothing, which is where a question that needs a
 ruling goes to be missed. **Every `PARKED` entry names what it waits on; nothing re-read those
 names when the thing arrived.** `scripts/decision-count.sh --check` now does: a parked `Status:`
 line must carry `waits on <what>`, and the run fails if the clause is missing or names a decision
 that has since been ANSWERED (V.109).
 
 **D15 is parked twice over, and the second parking is the interesting one.** Freed by D5, it was
-re-parked the same day on a *measurement* rather than ruled on an argument â€” because what it
+re-parked the same day on a *measurement* rather than ruled on an argument — because what it
 turns on is a fact about snapd that nobody here has observed. A condition a script cannot check
 (D16 waits on someone hitting the case; D15 waits on an experiment) is allowed and says so, since
 a clause that reads as checkable and quietly is not would be worse than none.
 
 ## D15
 
-**Status: PARKED â€” waits on a measurement of what snapd does to a sideloaded snap.** Parked once
+**Status: PARKED — waits on a measurement of what snapd does to a sideloaded snap.** Parked once
 before on D5; **D5 was ruled 2026-07-24 and built 2026-07-26**, so that brake came off and nobody
 noticed, and the entry sat under a met condition for a week (V.109). Reopened 2026-07-31 and
-**re-parked the same day, deliberately and on a different condition** â€” the owner declined to
+**re-parked the same day, deliberately and on a different condition** — the owner declined to
 rule it on an argument when twenty minutes of experiment settles it.
 
 **The condition is an experiment, and it is small.** On a machine with snapd: install a snap from
 a local file, then make it refresh, and record what snapd does to it. The answer decides this
 entry outright and nothing else needs deciding first. **Re-parking on a measurement rather than
-ruling on a guess is the point** â€” the alternative was a ruling whose reasoning was "probably".
+ruling on a guess is the point** — the alternative was a ruling whose reasoning was "probably".
 
-**D15 â€” `.flatpak`/`.snap` assets in a GitHub release.** They exist. Adding them to the
-vocabulary means `github` installing something `flatpak` then does not own â€” **D5's ownership
+**D15 — `.flatpak`/`.snap` assets in a GitHub release.** They exist. Adding them to the
+vocabulary means `github` installing something `flatpak` then does not own — **D5's ownership
 question, one layer worse.**
 
 **What D5 settled, and what it does not.** The installing backend owns the artifact: the lock
 records it, removal routes back through it, and `check`'s dedup and `purge-unmanaged` defer to
-it. That machinery is generic â€” `backends/artifact/system_pkg.rs` and
-`Queryable::owned_system_packages` â€” so a `.flatpak` handed to `flatpak install` would inherit
+it. That machinery is generic — `backends/artifact/system_pkg.rs` and
+`Queryable::owned_system_packages` — so a `.flatpak` handed to `flatpak install` would inherit
 the same ownership rule a `.deb` handed to `dpkg` already has, and the question D15 was parked on
 has an answer.
 
 **What is still a question is whether the rule holds where the manager is a running service.**
 `dpkg` writes a database and then stops; `snapd` and `flatpak` keep running, hold remotes, and
-refresh on a schedule of their own. So the sharp form of D15 is no longer "who owns it" â€” it is
+refresh on a schedule of their own. So the sharp form of D15 is no longer "who owns it" — it is
 **what a sideloaded snap does over time**, and that has two possible answers and they fail in
 opposite directions: if snapd refreshes it from the store, Shall's lock describes a file that has
 been replaced; if it never refreshes it (a sideloaded snap has no store association to refresh
 *from*), the declaration silently pins a build that ages forever while `check` reports it
-healthy. **Which of those actually happens has not been measured** â€” it needs a machine with
+healthy. **Which of those actually happens has not been measured** — it needs a machine with
 snapd and a release asset, not an argument. A `.flatpak` from a release has the same shape one
 step down.
 
 **Two answers, failing in opposite directions, and nobody knows which one is real.** If snapd
 refreshes a sideloaded snap from the store, the lock describes a build that has been replaced and
-Shall believes the machine matches a config it no longer matches. If snapd *never* refreshes it â€”
-plausible, because a sideloaded snap has no store association to refresh from â€” the declaration
+Shall believes the machine matches a config it no longer matches. If snapd *never* refreshes it —
+plausible, because a sideloaded snap has no store association to refresh from — the declaration
 pins a build that ages for ever, takes no security updates, and `check` calls it healthy.
 Neither is acceptable and they need opposite fixes, which is exactly why guessing is worse than
 waiting.
@@ -3498,24 +3498,24 @@ manager that acts on its own schedule is a fact about snapd, and facts are measu
 
 ## D16
 
-**Status: PARKED â€” waits on someone actually hitting it.** Not on another decision: `D3`'s
+**Status: PARKED — waits on someone actually hitting it.** Not on another decision: `D3`'s
 ruling already covers the case in principle, and what is missing is a real machine where the
-ambiguity bites. An event, not a question, so no check can tell when it arrives â€” which is
+ambiguity bites. An event, not a question, so no check can tell when it arrives — which is
 itself worth writing down, because the alternative is a condition that reads as checkable and is
 not.
 
-**D16 â€” libc variants** (`gnu` vs `musl`, both valid for this machine). A real ambiguity
+**D16 — libc variants** (`gnu` vs `musl`, both valid for this machine). A real ambiguity
 `formats` cannot express, and a fourth axis is not worth opening until someone hits it. **D3's
 answer probably resolves this one for free**, which is the argument for answering D3 properly
 rather than expediently.
 
 ---
 
-# The Q-series â€” what building it kept asking
+# The Q-series — what building it kept asking
 
 Nineteen questions the code raised after the six proposal rounds closed, each one found by a
 thing that did not work. They were filed under *Parked or closed* because they were appended to
-the end of the file and that was the last heading in it â€” nineteen entries, none of them parked,
+the end of the file and that was the last heading in it — nineteen entries, none of them parked,
 under a heading that said they were. **A section heading is a claim about what is under it**,
 and this file's whole argument is that an unchecked claim rots.
 
@@ -3523,18 +3523,18 @@ and this file's whole argument is that an unchecked claim rots.
 
 **Status: ANSWERED.**
 
-**Q1 â€” Does a failed install leave its line in the file?** **RULED 2026-07-27 (owner): withdraw
+**Q1 — Does a failed install leave its line in the file?** **RULED 2026-07-27 (owner): withdraw
 it when it can never succeed.**
 
-The two integration harnesses had contradicted each other *in writing* about this for months â€”
+The two integration harnesses had contradicted each other *in writing* about this for months —
 `run-in-container.sh:252` said "The failure must not be left in the manifest",
 `integration-windows.sh:259` said "a pinned name that a manager could not install is a failed
-sync, not a wrong name, and only a name nothing can resolve is withdrawn" â€” and neither claim
+sync, not a wrong name, and only a name nothing can resolve is withdrawn" — and neither claim
 was in any spec file. Both harnesses then deleted the line themselves and asserted it was gone,
 so neither reading was ever tested.
 
 The rule: **a line is withdrawn when the sync failed in a way that cannot succeed on a second
-attempt** â€” `Unresolvable` (no backend claims the name) *or* a `CommandFailed` the backend's own
+attempt** — `Unresolvable` (no backend claims the name) *or* a `CommandFailed` the backend's own
 `ExitPolicy` classified `Permanent`. Everything else keeps the line, because a dropped network,
 a held lock or a failed hook all mean you did mean it and retrying is right.
 
@@ -3542,12 +3542,12 @@ Three constraints came with the ruling and are part of it:
 
 1. **Permanence is read off `CommandFailed`, never off `Error::retryability()`.** That method
    also calls a refusal, a cancelled prompt, a bad config file and an unsupported platform
-   `Permanent` â€” true about retrying, and none of them says the name was wrong. Deleting a
+   `Permanent` — true about retrying, and none of them says the name was wrong. Deleting a
    declaration because someone answered "no" to a prompt would be worse than the wedge.
 2. **Only lines the manager actually named are withdrawn.** A batch install whose manager
    stopped at the first bad name leaves the rest alone; withdrawing on a guess is the one
    outcome worse than keeping.
-3. **A line kept on purpose says so, names its file, and says how to remove it** â€”
+3. **A line kept on purpose says so, names its file, and says how to remove it** —
    `shall unmanage <line>`. The wedge was never only that the line stayed; it was that nothing
    told the user which file to open. A wedge with an exit is not a wedge.
 
@@ -3559,7 +3559,7 @@ The rule is in **II.8**; the reason is in **V.90**.
 
 **Status: ANSWERED.**
 
-**Q2 â€” Is a package manager you never installed "critical"?** **RULED 2026-07-27 (owner): no â€”
+**Q2 — Is a package manager you never installed "critical"?** **RULED 2026-07-27 (owner): no —
 absent is its own state.**
 
 `shall check health` opened with `Backends: 25 OK, 0 degraded, 23 critical (of 48 total)` on an
@@ -3580,16 +3580,16 @@ The rule is in **II.10**; the reason is in **V.91**.
 
 **Status: ANSWERED.**
 
-**Q3 â€” What does a mistyped command exit with?** **RULED 2026-07-27 (owner): 1, and the
+**Q3 — What does a mistyped command exit with?** **RULED 2026-07-27 (owner): 1, and the
 published table stays at four codes.**
 
 `readme.md:708` publishes four exit codes and says "a script can branch on them". Measured,
 `shall nosuchcommand`, `shall --nosuchflag` and `shall sync --badflag` all exited **2**, which
-that table defines as "a read-only command looked and found work to do" â€” so a CI job following
+that table defines as "a read-only command looked and found work to do" — so a CI job following
 the documentation read a typo as a drifted machine, defeating the entire purpose of code 2. The
 cause is that clap uses 2 for usage errors and exits before Shall's own mapping runs.
 
-The rule: **a usage error exits 1.** "Failed â€” something went wrong" is already in the table and
+The rule: **a usage error exits 1.** "Failed — something went wrong" is already in the table and
 is exactly true; Shall did not do what was asked. No fifth code, because "the same four
 everywhere" is the property the table is for.
 
@@ -3606,10 +3606,10 @@ The rule is in **II.8**; the reason is in **V.92**.
 
 **Status: ANSWERED.**
 
-**Q4 â€” Are unverified backends labelled "experimental"?** **RULED 2026-07-27 (owner): NO. They
+**Q4 — Are unverified backends labelled "experimental"?** **RULED 2026-07-27 (owner): NO. They
 are tested instead, and nothing ships until they are.**
 
-The proposal â€” from the readiness review, and recommended by its author â€” was to split the
+The proposal — from the readiness review, and recommended by its author — was to split the
 backend list into *supported* (has passed a real install â†’ list â†’ binary â†’ remove round-trip in
 an automated gate) and *experimental* (everything else), and to say so in `check health`, in the
 `priority` file `init` writes, and in the readme. 52 backends are registered and 22 have ever
@@ -3618,12 +3618,12 @@ been run against the real tool; every defect the review found lives in that rema
 **The owner rejected it, and the reason is the rule:** *this codebase does things; it does not
 cover for not doing them.* A label converts an unfinished job into a permanent disclaimer, and a
 disclaimer nobody has to retire is one nobody does. Shall does not go to production until every
-registered backend has been thoroughly tested and reviewed â€” so the work is the coverage, and
+registered backend has been thoroughly tested and reviewed — so the work is the coverage, and
 the missing coverage is a **release blocker**, not a caption.
 
 What follows from it, and all of it is binding:
 
-1. **No `experimental` or `supported` label exists** â€” not in `check health`, not in `priority`,
+1. **No `experimental` or `supported` label exists** — not in `check health`, not in `priority`,
    not in the readme. There is nothing to add and nothing to grep for.
 2. **`shall init` keeps scaffolding every manager it finds.** Scaffolding fewer would have been
    the same disclaimer written as a default.
@@ -3641,13 +3641,13 @@ reason is in **V.93**, and the coverage it demands is tracked in `plan.md`.
 
 **Status: ANSWERED.**
 
-**Q5 â€” Does `@unverified` reach past the backends that download?** **RULED 2026-07-28 (owner):
-YES â€” add it.**
+**Q5 — Does `@unverified` reach past the backends that download?** **RULED 2026-07-28 (owner):
+YES — add it.**
 
 The flag was scoped to `web:`, `appimage:` and `github:`, the three places Shall itself fetches a
 URL and runs the result, and II.2 said so: *"Downloading backends only."* helm broke the framing.
-helm v4 verifies a plugin's signature before installing it, and a source that cannot carry one â€”
-a git URL, which has no `.prov` beside it â€” is **refused outright**, not warned about:
+helm v4 verifies a plugin's signature before installing it, and a source that cannot carry one —
+a git URL, which has no `.prov` beside it — is **refused outright**, not warned about:
 
 ```
 Error: plugin source does not support verification. Use --verify=false to skip verification
@@ -3658,7 +3658,7 @@ declaration, and the readiness review's reading of this as an argv defect (E11) 
 was correct and Shall had no way to say the one thing that would let it through.
 
 The rejected repair was to put `--verify=false` in helm's install command. That is a global
-switch â€” verification off for every helm plugin, every user, invisibly â€” which is the failure
+switch — verification off for every helm plugin, every user, invisibly — which is the failure
 `@unverified` is a per-line flag to prevent. A helm-specific flag (`@no_signature`) was also
 rejected: two spellings of one decision.
 
@@ -3672,7 +3672,7 @@ What is binding:
 3. **`@allow_http` did not follow.** The two never imply each other (SEC2); helm's plain-HTTP
    switch is for OCI registries Shall does not reach, so `@allow_http` on `helm:` stays refused.
 4. **Per line, still.** An install batch whose specs disagree about the flag becomes two
-   commands â€” a shared command would hand one line's opt-out to a line that never asked.
+   commands — a shared command would hand one line's opt-out to a line that never asked.
 5. **Visible after the fact.** `status` lists it for as long as the package is installed, and the
    heading says *installed with* rather than *downloaded with*, since for helm Shall downloads
    nothing.
@@ -3685,14 +3685,14 @@ The rule is in **II.2**; the reason is in **V.94**.
 
 **Status: ANSWERED.**
 
-**Q6 â€” May a definition in `adapters/backends.toml` take a built-in's name?** **RULED
-2026-07-28 (owner): YES, and only by saying so â€” it is a key.**
+**Q6 — May a definition in `adapters/backends.toml` take a built-in's name?** **RULED
+2026-07-28 (owner): YES, and only by saying so — it is a key.**
 
 The onboarder registered custom backends last and skipped any name already in use, so a
 definition named `apt` was silently ignored. That kept a pulled config from hijacking `apt` by
 guessing a popular name, and that half stays. But it also meant that when a manager changes its
-CLI under Shall â€” helm v4's plugin signatures, pixi's renamed `global upgrade-all`, nimble's
-`--` â€” the person watching it fail could see the fix and had no way to apply it before a
+CLI under Shall — helm v4's plugin signatures, pixi's renamed `global upgrade-all`, nimble's
+`--` — the person watching it fail could see the fix and had no way to apply it before a
 release.
 
 What is binding:
@@ -3701,12 +3701,12 @@ What is binding:
    Absent, the collision is skipped with a warning that names the key.
 2. **Two deliberate acts, never one.** The sentence in the definition, and II.12's approval of
    the file. A name alone changes nothing, which is the security property.
-3. **Announced on every run that loads it**, naming the backend and the program it now runs â€”
+3. **Announced on every run that loads it**, naming the backend and the program it now runs —
    not once at approval time.
 4. **`check health` answers for the replacement**, so an override whose binary is absent reports
    that backend critical. That needed no special case: health probes the definition that won.
 5. **Backends only.** Snapshot providers, init systems and secret stores still never shadow a
-   built-in. Same argument, different blast radius â€” a wrong `apt` installs the wrong thing, a
+   built-in. Same argument, different blast radius — a wrong `apt` installs the wrong thing, a
    wrong snapshot provider removes the rollback that was meant to save you. Widening is a
    separate ruling and has not been made.
 
@@ -3718,13 +3718,13 @@ The rule is in **II.1** (`adapters/`); the reason is in **V.95**.
 
 **Status: ANSWERED.**
 
-**Q7 â€” Does the removal guard cover the resources a declaration puts in place, or only
+**Q7 — Does the removal guard cover the resources a declaration puts in place, or only
 packages?** **RULED 2026-07-28 (owner): the resources are guarded the same way.**
 
 Deleting a `link:`, `service:`, `setting:`, `shim:`, `schedule:` or `repo:` line made the next
 `sync` tear that resource down without counting it, without naming it in the plan or the
 `--dry-run` preview, and without consulting `protected_packages`. Measured: five link targets
-deleted â€” including one the user had protected â€” with `max_removals = 1` set, reported as
+deleted — including one the user had protected — with `max_removals = 1` set, reported as
 `already up to date`. `readme.md` had said for months that every path removing anything went
 through one guard. There were eleven such paths and nine guards.
 
@@ -3735,19 +3735,19 @@ decrypted secret, a `service:` is something running now, a `setting:` is system-
 What is binding:
 
 1. **`protected_packages` applies to resources**, matched on the key and also on the final
-   component of a path key â€” `protected_packages = ["vimrc"]` protects `link:/home/u/.vimrc`.
+   component of a path key — `protected_packages = ["vimrc"]` protects `link:/home/u/.vimrc`.
 2. **The ceiling counts the whole command**, not each phase separately. *(Amended 2026-08-09
    by `Y20`: packages and resources are counted separately, against `max_removals` and
    `max_extra_removals`. The "whole command, not each phase" half stands unchanged; the
    "together" half does not.)*
 3. **OS-essential and undeclarable do not apply.** No resource manager publishes an essential
-   list, and no resource key parses as a package line â€” applying that second test would refuse
+   list, and no resource key parses as a package line — applying that second test would refuse
    every teardown on every machine forever.
 4. **`--allow-mass-removal` answers the count and nothing else**, exactly as it does for
    packages. Protection stays a refusal (V.26).
 5. **The teardown is announced before it happens**, at a level the default filter shows, and
    `sync` no longer reports `already up to date` over work it did.
-6. **`shall repo remove` is guarded too** â€” the imperative twin of the `repo:` teardown. Guarding
+6. **`shall repo remove` is guarded too** — the imperative twin of the `repo:` teardown. Guarding
    one and not the other is the twin-branch shape `history.md` records as S6.
 7. **The claim is re-counted, not re-asserted.** `tests/removal_guard_enumeration_tests.rs`
    enumerates every removal call in `src/` and fails on one no ledger entry accounts for.
@@ -3760,7 +3760,7 @@ The rule is in **II.10**; the reason is in **V.96**.
 
 **Status: ANSWERED.**
 
-**Q8 â€” Should the security refusals return the documented refusal code, or the failure code
+**Q8 — Should the security refusals return the documented refusal code, or the failure code
 they return today?** **RULED 2026-07-28 (owner): all of them return 3.**
 
 `readme.md` publishes four exit codes "so a script can branch on them", and `3` means Shall
@@ -3778,10 +3778,10 @@ that were reported:
 | `app/shim_manager.rs` | deploy over a foreign file | SEC1 | `Validation` |
 | `utils/file.rs` | deploy over a foreign file | SEC1 | `Validation` |
 | `app/apply/dotfiles.rs` | files outside `$HOME` | SEC3 | `Other` |
-| `app/snapshot_restore.rs` | a registry path that is a file-read primitive | â€” | `Snapshot` |
+| `app/snapshot_restore.rs` | a registry path that is a file-read primitive | — | `Snapshot` |
 
-The last was one of five the grader could not classify. The other four â€”
-`model/firewall.rs`, `model/health.rs` and `model/rehearsal.rs` twice â€” were **already
+The last was one of five the grader could not classify. The other four —
+`model/firewall.rs`, `model/health.rs` and `model/rehearsal.rs` twice — were **already
 correct**: the message is built in one file and wrapped in `Error::Refused` in another, and a
 scan whose window stopped at the file boundary read the split as an offence.
 
@@ -3789,7 +3789,7 @@ scan whose window stopped at the file boundary read the split as an offence.
 one point every refusal in the program passes through, so no command can be added that refuses
 without the hook hearing about it". Someone who wires `on_guard_refusal` to be told when Shall
 refuses was told about a mass removal and **not** about a refused unverified download, an
-unprotected secret or an unapproved hook â€” silent exactly where it matters most.
+unprotected secret or an unapproved hook — silent exactly where it matters most.
 
 What is binding:
 
@@ -3813,24 +3813,24 @@ The rule is in **II.10** and the exit-code table in `readme.md`; the reason is i
 
 **Status: ANSWERED.**
 
-**Q9 â€” Should a verb that takes a backend name refuse one that does not exist, the way
+**Q9 — Should a verb that takes a backend name refuse one that does not exist, the way
 `install` does?** **RULED 2026-07-28 (owner): yes, with `install`'s message.**
 
 `install nosuchbackend:foo` refused loudly and named both the file to edit and the spelling to
-check. `list -b nosuchbackend` printed nothing and exited 0 â€” and so did `aptt`, `APT`, and the
+check. `list -b nosuchbackend` printed nothing and exited 0 — and so did `aptt`, `APT`, and the
 empty string. Zero rows and exit 0 is exactly what a real backend with nothing installed
 prints, so a user who mistyped `--backend` was told, in the program's own voice, that the
 manager was empty. Principle I is "fail loud, never silent", and one verb obeyed it while its
 siblings did not.
 
-**It also disarmed a check.** Â§8.1's A bar is "every `[READY]` backend can answer `list`". Run
-over all 24 ready backends on a Windows host, all 24 exited 0 â€” and only 11 returned any rows.
+**It also disarmed a check.** §8.1's A bar is "every `[READY]` backend can answer `list`". Run
+over all 24 ready backends on a Windows host, all 24 exited 0 — and only 11 returned any rows.
 The other 13 were indistinguishable from a name that does not exist, so the measurement could
 not fail for half its subjects.
 
 What is binding:
 
-1. **Every verb taking a backend name refuses an unknown one** â€” `list`, `upgrade`, `rebuild`
+1. **Every verb taking a backend name refuses an unknown one** — `list`, `upgrade`, `rebuild`
    and `repo`, checked from the code rather than from the one that was reported.
    **Completed 2026-07-29 for the `backend:name` form, which that enumeration missed.** The four
    verbs named above take the backend as a `--backend` flag; the same ruling applies to the verbs
@@ -3848,7 +3848,7 @@ What is binding:
 2. **One message**, `install`'s, naming the `priority` file and the spelling. Two spellings of
    one refusal is how E18's family started.
 3. **A real backend that cannot run here is a different answer.** `flatpak` on a machine
-   without flatpak is not a typo â€” it is a fact about the machine â€” so it says that and exits
+   without flatpak is not a typo — it is a fact about the machine — so it says that and exits
    0. Both used to be the same silence, and only one of them is the user's mistake.
 
 The rule is in **II.8**; the reason is in **V.99**.
@@ -3859,8 +3859,8 @@ The rule is in **II.8**; the reason is in **V.99**.
 
 **Status: ANSWERED.**
 
-**Q10 â€” Should the `mix` backend install Hex before installing an archive from it?** **RULED
-2026-07-29 (owner): yes â€” and it asks first, with `--yes` as the flag that forces it.** The
+**Q10 — Should the `mix` backend install Hex before installing an archive from it?** **RULED
+2026-07-29 (owner): yes — and it asks first, with `--yes` as the flag that forces it.** The
 general form of the ruling, given on the same day for all three of Q10, Q11 and Q13: *Shall
 should ask whether to do that setup for you, with a flag to force it.*
 
@@ -3878,7 +3878,7 @@ $ mix archive.install hex --force phx_new 1.6.16   -> * creating /root/.mix/arch
 ```
 
 **What the ruling is, exactly.** Shall does not install Hex silently and does not merely print
-the command. It says what is missing and what it would run, and runs it if you agree â€”
+the command. It says what is missing and what it would run, and runs it if you agree —
 `--yes` agreeing in advance, which is the same flag that already answers the plan. A
 non-interactive run without `--yes` says what it would have asked and changes nothing, because
 an installer that runs because a config file said so and nobody was there to look is the risk
@@ -3896,7 +3896,7 @@ Two defects were found underneath this one and fixed with it, neither of them He
   even with Hex present. The Hex defect and an impossible canary were reported as one failure.
 - **`mix archive.uninstall` without `--force` prompts**, takes the empty answer from a closed
   stdin, **exits 0 and leaves the archive installed.** Shall reported removals that did not
-  happen â€” the scoop-exit-0 shape (E7), one manager over.
+  happen — the scoop-exit-0 shape (E7), one manager over.
 
 The rule is in **II.7**; the reason is in **V.102**.
 
@@ -3906,8 +3906,8 @@ The rule is in **II.7**; the reason is in **V.102**.
 
 **Status: ANSWERED.**
 
-**Q11 â€” What should `opam:` do on a machine with no opam switch?** **RULED 2026-07-29 (owner):
-offer to create one, ask first, `--yes` forces it â€” and `check health` stops calling opam ready
+**Q11 — What should `opam:` do on a machine with no opam switch?** **RULED 2026-07-29 (owner):
+offer to create one, ask first, `--yes` forces it — and `check health` stops calling opam ready
 until there is one.** Same ruling as Q10 and Q13, and the same mechanism.
 
 Measured in the `tools` container:
@@ -3919,7 +3919,7 @@ with a switch:  opam switch show -> `default` (exit 0), and the install succeeds
 ```
 
 **The compiler is still not chosen for you.** The offered command is
-`opam switch create default ocaml-system` â€” the compiler the machine already has. It is not a
+`opam switch create default ocaml-system` — the compiler the machine already has. It is not a
 version number, because pinning one is choosing for someone: it fixes the compiler for the
 whole account and it is a long build. On a machine with no OCaml at all it fails in four
 seconds with opam's own `unmet availability conditions`, which is the point at which the choice
@@ -3927,17 +3927,17 @@ really is the user's and they name one. That is what the earlier recommendation 
 not create one") was protecting, and asking protects it too.
 
 **The health half is built.** A manager that is installed, answers `list`, and cannot install
-anything is reported **degraded** with the reason and the command â€” not `[READY]`. Degraded
+anything is reported **degraded** with the reason and the command — not `[READY]`. Degraded
 rather than critical: reads genuinely work and the fix is one line. This is the W11 shape
 (a backend that reports health and cannot work) applied to a *state* rather than to a missing
-binary, and it is checked for manager-level prerequisites only â€” a per-package one like asdf's
+binary, and it is checked for manager-level prerequisites only — a per-package one like asdf's
 plugin is a question about a declaration, and `check health` has no declarations.
 
 **The `tools` image was also wrong, and that is fixed here.** Its Dockerfile ran
 `opam switch create default` with no compiler and swallowed the failure with `|| echo "SKIP
 opam init"`, so the image has shipped with no switch since it was written, every opam install
 in it failed, and the nightly job read that as an opam defect. It now installs `ocaml-nox`,
-creates the switch with `ocaml-system`, and asserts `opam switch show` succeeds â€” a setup step
+creates the switch with `ocaml-system`, and asserts `opam switch show` succeeds — a setup step
 nobody checks is a setup step that quietly stops happening.
 
 The rule is in **II.7**; the reason is in **V.102**.
@@ -3948,13 +3948,13 @@ The rule is in **II.7**; the reason is in **V.102**.
 
 **Status: ANSWERED.**
 
-**Q12 â€” Should the integration sweep fail when its real coverage collapses, and against what
+**Q12 — Should the integration sweep fail when its real coverage collapses, and against what
 number?** **RULED 2026-07-28 (owner, deferring the threshold to the builder): a ratchet per host
-class â€” record the count, fail when it falls, never when it rises.**
+class — record the count, fail when it falls, never when it rises.**
 
 The coverage audit asks whether every registered backend got a lifecycle **or** a plan-smoke,
 and a plan-smoke satisfies it. So a run with 4 real lifecycles and a run with 15 both PASS. The
-clean Windows sweep reported 4 â€” not because anything broke, but because 8 of 15 canaries were
+clean Windows sweep reported 4 — not because anything broke, but because 8 of 15 canaries were
 already installed on that host and the harness correctly refuses to remove software the user
 already had. **The gate's coverage is inversely proportional to how much the machine is used,
 and nothing noticed.**
@@ -3967,7 +3967,7 @@ What is binding:
    is the kind of constant this repo keeps rediscovering was wrong. A ratchet needs no guess: it
    only asserts "this host class did better before, so it can again".
 2. **The host class is `<harness>-<os>[-<distro>]-<ci|local>`.** `ci` and `local` are separate
-   deliberately â€” that *is* the difference the finding is about, and holding a developer's box
+   deliberately — that *is* the difference the finding is about, and holding a developer's box
    to a clean runner's number would make the gate red on every machine that has been used, which
    is how a gate learns to be ignored. The distro is in the key because ubuntu and the `tools`
    image are not comparable runs.
@@ -3976,7 +3976,7 @@ What is binding:
 4. **An unrecorded host class is recorded, not failed.** A gate that fails the first time it
    sees a new platform is a gate that stops people adding platforms.
 5. **The numbers live in `scripts/lifecycle-floor.txt`**, with the reasoning beside them, so
-   lowering one is a visible line in a diff â€” the single edit the mechanism exists to expose.
+   lowering one is a visible line in a diff — the single edit the mechanism exists to expose.
 6. **Both harnesses carry it**, native and container. A ratchet on one is the "guard on one
    command" shape again.
 
@@ -3987,7 +3987,7 @@ The rule is in **IV.1**; the reason is in **V.101**.
 
 **Status: ANSWERED.**
 
-**Q13 â€” Should `asdf:` add the plugin a declared tool needs?** **RULED 2026-07-29 (owner): yes,
+**Q13 — Should `asdf:` add the plugin a declared tool needs?** **RULED 2026-07-29 (owner): yes,
 asking first, `--yes` forces it.** Raised with Q10 and Q11 as one question, because they are one
 question: *when a manager needs a setup step before it can install anything, does Shall do it or
 print it?*
@@ -4012,7 +4012,7 @@ Two details the mechanism gets from this row specifically:
   declared beside it, so a row cannot claim one and be written as the other.
 - **The probe reads output, not an exit code.** `asdf plugin list` exits 0 and prints
   `No plugins installed`, so an exit-code probe would report every missing plugin as present.
-  One line of the output, trimmed, must equal the name â€” `jq` must not be answered by `jqx`.
+  One line of the output, trimmed, must equal the name — `jq` must not be answered by `jqx`.
 
 The harness canary moved from `nodejs` to `jq` at the same time: both need the plugin, and jq's
 downloads one binary in seconds where nodejs fetches a release tarball.
@@ -4025,9 +4025,9 @@ The rule is in **II.7**; the reason is in **V.102**.
 
 ## Q14
 
-**Status: ANSWERED â€” ruled 2026-07-30.**
+**Status: ANSWERED — ruled 2026-07-30.**
 
-**Q14 â€” What should `@unverified` do on a tool version that has no flag to turn verification
+**Q14 — What should `@unverified` do on a tool version that has no flag to turn verification
 off?** Q5 ruled that `@unverified` reaches a manager that verifies signatures itself, and named
 helm's `--verify=false`. That flag is **helm 4's**. Measured 2026-07-30 on helm 3.16.2: `helm
 plugin install --help` does not document it, `tool_help::accepts_flag` answers `Some(false)`,
@@ -4040,8 +4040,8 @@ Two consequences, both measured rather than argued:
   refuses an unsignable source, the advice names the option the user already wrote.
 - **The gate the round-3 grade asked for cannot exist on such a host.** Withholding a correct flag
   and withholding a drifted one are the same action, so no assertion can tell them apart there.
-  `tests/grade2_flag_drift_blindspot_tests.rs` â€” written by the grader, verified green on their
-  helm 4.2.3 host and red on a planted mutation â€” is **red on helm 3**, for a reason that is not
+  `tests/grade2_flag_drift_blindspot_tests.rs` — written by the grader, verified green on their
+  helm 4.2.3 host and red on a planted mutation — is **red on helm 3**, for a reason that is not
   drift.
 
 The options:
@@ -4051,26 +4051,26 @@ The options:
   become a named skip everywhere else.
 - **(b) Refuse the declaration.** `@unverified` on a backend whose installed tool cannot honour it
   is a config error, named in the file, so the option never silently does nothing. But it removes
-  the only declaration that installs a helm plugin on helm 3 â€” which is what Q5's ruling existed
+  the only declaration that installs a helm plugin on helm 3 — which is what Q5's ruling existed
   to make possible.
 - **(c) Version-split the behaviour**: emit on 4, refuse on 3.
 
-Not decided in code. The builder's lean is **(b)** â€” "accepted and does nothing" is the class of
-defect this register keeps closing â€” while noting that (b) is the option that takes a capability
+Not decided in code. The builder's lean is **(b)** — "accepted and does nothing" is the class of
+defect this register keeps closing — while noting that (b) is the option that takes a capability
 away from a user on the older tool, which is why the choice is the owner's and not the builder's.
 
-**RULED (owner, 2026-07-30): none of the three â€” the question rested on a wrong fact, and it was
+**RULED (owner, 2026-07-30): none of the three — the question rested on a wrong fact, and it was
 measured before it was asked again.** helm 3.21.3's `helm plugin install --help` documents exactly
 two flags, `--help` and `--version`. There is no `--verify`, no `--keyring` and no provenance:
-**helm 3 does not verify plugins at all.** It verifies *charts* â€” `helm install --verify` and
-`--keyring` are both there â€” and helm 4 added plugin verification, which is where `--verify=false`
+**helm 3 does not verify plugins at all.** It verifies *charts* — `helm install --verify` and
+`--keyring` are both there — and helm 4 added plugin verification, which is where `--verify=false`
 comes from.
 
 So on helm 3 the state `@unverified` asks for is the state the machine is already in. **The line
-is accepted, no flag is built, and nothing is said** â€” not "accepted and does nothing", which is
+is accepted, no flag is built, and nothing is said** — not "accepted and does nothing", which is
 the defect class this register keeps closing, but *accepted and already true*, which is a correct
 no-op. Option (b) would have refused a correct declaration and removed the only way to install a
-helm plugin on helm 3 â€” the capability Q5's ruling existed to create.
+helm plugin on helm 3 — the capability Q5's ruling existed to create.
 
 **The `warn!` goes.** Withholding a flag the tool never had is not an event, and a warning on a
 run that did the right thing is how people learn to stop reading warnings.
@@ -4081,21 +4081,21 @@ verifies, and no flag and no warning where it does not. That can go red on eithe
 `tests/grade2_flag_drift_blindspot_tests.rs` asserts the one-directional version and is red on
 helm 3 for a reason that was never drift; it is **replaced, not skipped**.
 
-The rule is in **II.2** â€” the `@unverified` row and the subsection below the option table; the
+The rule is in **II.2** — the `@unverified` row and the subsection below the option table; the
 reason is in **V.104**.
 
 ---
 
 ## Q15
 
-**Status: ANSWERED â€” ruled 2026-07-30.**
+**Status: ANSWERED — ruled 2026-07-30.**
 
-**Q15 â€” Should a command whose whole output is a file it was told to write honour `--dry-run`?**
+**Q15 — Should a command whose whole output is a file it was told to write honour `--dry-run`?**
 Measured 2026-07-30, on a fresh config, after the round-4 work made `--dry-run` a property of the
 one writer:
 
-- `shall --dry-run bundle --out X` writes **five files** into `X` â€” `active`, `priority`,
-  `modules/starter.txt`, `packages.json`, `plan.json` â€” byte-identical to the run without the
+- `shall --dry-run bundle --out X` writes **five files** into `X` — `active`, `priority`,
+  `modules/starter.txt`, `packages.json`, `plan.json` — byte-identical to the run without the
   flag, and prints `See X/RESTORE.md for offline restore steps.`
 - `shall --dry-run plan` writes `shall-plan.json`, the same as `shall plan`.
 - `shall --dry-run export --out X` was **not** measured either way: the fixture had no package to
@@ -4103,7 +4103,7 @@ one writer:
 
 II.8b says *"a preview writes no file the run would have written"*, and by the letter of it these
 are violations. The counter-argument is in the exemption these three carry in
-`tests/dry_run_every_verb_tests.rs` â€” *"writes to a path the user names"* â€” which is a real
+`tests/dry_run_every_verb_tests.rs` — *"writes to a path the user names"* — which is a real
 distinction: nothing about the machine changes, the destination was named on the command line,
 and `--dry-run plan` producing no plan is a command with no output at all.
 
@@ -4120,10 +4120,10 @@ The options:
 The builder's lean is **(c)**, and this was deliberately not decided in code: it changes what a
 user sees, and the reason `bundle` feels different from `plan` is a judgement about what those
 commands are for, which is the owner's to make. What was fixed instead is the half that is not a
-judgement â€” the two verbs that *said* they had written when they had not (`lock`, `heal`).
+judgement — the two verbs that *said* they had written when they had not (`lock`, `heal`).
 
-**RULED (owner, 2026-07-30): (c), the split â€” and `export` goes with `bundle`.** The line is not
-*"did the user name the path"* â€” they name it for `bundle` too â€” but **is the file the preview or
+**RULED (owner, 2026-07-30): (c), the split — and `export` goes with `bundle`.** The line is not
+*"did the user name the path"* — they name it for `bundle` too — but **is the file the preview or
 the result**.
 
 - `bundle` and `export` produce an artifact that outlives the run and can be carried elsewhere. A
@@ -4131,16 +4131,16 @@ the result**.
   person to find it cannot tell it was a rehearsal. Both honour the flag: they print what they
   would write, to where, and write nothing.
 - `plan`'s file **is** its preview. `--dry-run plan` that wrote nothing would be a command with no
-  output â€” the flag would turn the command off rather than make it safe. It is exempt, and the
+  output — the flag would turn the command off rather than make it safe. It is exempt, and the
   exemption is a rule with a reason rather than a line in a test's exemption list.
 
-`export` was **not measured either way** by the grader â€” its fixture had no package to export, so
+`export` was **not measured either way** by the grader — its fixture had no package to export, so
 neither run wrote anything and there was no control. It is ruled with `bundle` on the reasoning
 above rather than on a measurement, and that is recorded here so the builder measures it rather
 than assuming this entry did.
 
 Whatever a preview declines to write, it says so with the `[DRY-RUN]` marker every other verb
-uses and never in the past tense â€” `bundle` printed *"Bundle written to X"* over nine files it
+uses and never in the past tense — `bundle` printed *"Bundle written to X"* over nine files it
 had really written under the flag, which is B-1's defect with the sign flipped.
 
 The rule is in **II.8b**; the reason is in **V.105**.
@@ -4149,10 +4149,10 @@ The rule is in **II.8b**; the reason is in **V.105**.
 
 ## Q16
 
-**Status: ANSWERED â€” ruled 2026-07-30.** Raised by the round-5 grader, measured rather than argued.
+**Status: ANSWERED — ruled 2026-07-30.** Raised by the round-5 grader, measured rather than argued.
 
-**Q16 â€” Is a bare grammar keyword a package name?** A package name is one bare word (II.2), so a
-line containing only `link` is a grammatically valid package declaration â€” and that is what Shall
+**Q16 — Is a bare grammar keyword a package name?** A package name is one bare word (II.2), so a
+line containing only `link` is a grammatically valid package declaration — and that is what Shall
 makes of it. Measured on a release binary, a module containing the single word `link`:
 
 ```
@@ -4166,7 +4166,7 @@ $ shall check
 ```
 
 Thirteen of fourteen keywords behave this way, and each resolves to a real backend holding a real
-package of that name â€” the resolver searched live indexes to produce these:
+package of that name — the resolver searched live indexes to produce these:
 
 ```
 when -> cargo:when      absent -> pip:absent    link  -> cargo:link    service -> cargo:service
@@ -4176,14 +4176,14 @@ include -> cargo:include                        use  -> refused (the only one)
 ```
 
 **This is not a parser defect, which is why it is a question.** Written with their punctuation the
-same words refuse correctly and legibly â€” `link:`, `service:`, `shim:`, `when linux`,
+same words refuse correctly and legibly — `link:`, `service:`, `shim:`, `when linux`,
 `when linux {` all exit 1 with a located `Configuration error`. The ambiguity is confined to the
 bare word, and it is a property of the language rather than a bug in the code that implements it.
 
-The cost is that the most likely typo in the format â€” typing a resource prefix and stopping before
-the colon â€” silently declares a package, and every preview in the program then agrees, because the
+The cost is that the most likely typo in the format — typing a resource prefix and stopping before
+the colon — silently declares a package, and every preview in the program then agrees, because the
 model genuinely contains it. `check` recommends the sync. A side effect worth pricing in: resolving
-one of these costs 10â€“27 seconds, since a bare name has no backend and the resolver asks every
+one of these costs 10–27 seconds, since a bare name has no backend and the resolver asks every
 manager in priority order; the same fixture with `cargo:ripgrep` is 0.2s.
 
 The options:
@@ -4192,7 +4192,7 @@ The options:
   user probably meant (`link` â†’ *"did you mean `link:PATH`?"*). Costs anyone whose package really is
   called `end` the need to write `cargo:end`.
 - **(b) Warn and continue.** Declare it, but say so once per line. Keeps every name declarable and
-  puts a sentence between the typo and the install â€” but a warning on a `sync` that is about to do
+  puts a sentence between the typo and the install — but a warning on a `sync` that is about to do
   the right thing for everybody else is noise, and V.42's objection to narration applies.
 - **(c) Require a backend for a colliding name.** `end` alone is refused; `cargo:end` is accepted.
   This is (a) with an escape hatch, and it is the only option that keeps every package reachable
@@ -4205,12 +4205,12 @@ remove the ability to declare a package by a bare name, and both are the owner's
 Red tests are committed and failing: `tests/grade4_keyword_is_not_a_package_tests.rs`, driven off
 `known_prefixes()` so a prefix added later is covered without anyone remembering.
 
-**RULED (owner, 2026-07-30): (c) â€” refuse the bare word, and keep every package reachable.** A
+**RULED (owner, 2026-07-30): (c) — refuse the bare word, and keep every package reachable.** A
 line containing only a keyword is a parse error that names both ways to mean it:
 
 ```
 modules/dev.txt:4: `link` is a keyword, not a package name
-  to link a file:                      link:/path/to/source @target=â€¦
+  to link a file:                      link:/path/to/source @target=…
   to install a package by that name:   list:link   (or pin one: cargo:link)
 ```
 
@@ -4221,7 +4221,7 @@ escape hatch and it is the wrong one here: **V.10** already rejected quotes beca
 `\"` needs `\` needs a newline rule, and nothing about this question disturbs that reasoning.
 The ruling adds a refusal and takes nothing away.
 
-It binds the bare **word**, not the prefix â€” `link:` with its colon and nothing after it was
+It binds the bare **word**, not the prefix — `link:` with its colon and nothing after it was
 already a legible refusal and stays exactly as it is.
 
 The rule is in **II.2**; the reason is in **V.103**.
@@ -4230,14 +4230,14 @@ The rule is in **II.2**; the reason is in **V.103**.
 
 ## Q17
 
-**Status: ANSWERED â€” ruled 2026-07-30.** A follow-on from `Q4`: that ruling made missing coverage
+**Status: ANSWERED — ruled 2026-07-30.** A follow-on from `Q4`: that ruling made missing coverage
 a release blocker, and this one says how the remaining coverage is obtained.
 
-**Q17 â€” How does a backend that mutates the real machine get its first real lifecycle?**
+**Q17 — How does a backend that mutates the real machine get its first real lifecycle?**
 
 Twenty of the sixty registered backends had never completed a real install â†’ list â†’ binary â†’
 remove in any harness, and twelve of those were in **neither** the canary table nor the
-exemption table of either sweep â€” no coverage and no stated reason. Three of them, `winget`,
+exemption table of either sweep — no coverage and no stated reason. Three of them, `winget`,
 `choco` and `psresource`, were excused in writing on the grounds that they *"install machine-wide
 on a developer's real machine"*. The excuse did not survive being read next to the rest of the
 table: `scoop`, `npm`, `cargo`, `go`, `dotnet` and eleven others install on that same real
@@ -4245,7 +4245,7 @@ machine and have had real lifecycles all along.
 
 **RULED (owner, 2026-07-30): install and uninstall them, like everything else.** A disposable
 Windows box is not a precondition. The harness already refuses to remove software the host
-already had â€” that guard is what makes this safe, and it is the same guard the other sixteen
+already had — that guard is what makes this safe, and it is the same guard the other sixteen
 managers rely on.
 
 **And privileged containers are authorised** for `lvm`, `zfs` and `btrfs`, which cannot be
@@ -4261,10 +4261,10 @@ What binds:
    pattern already existed for `pip` and PEP 668 and is now the rule: an assumed skip is a check
    nobody revisits, which is `Q4`'s disclaimer wearing harness clothes.
 2. **"It touches the real machine" is not a reason.** Every package manager does. The reason has
-   to be something the harness genuinely cannot do â€” no such userland, no such device, no
+   to be something the harness genuinely cannot do — no such userland, no such device, no
    account to sign in with.
 3. **Coverage is measured across harnesses, not within one.** Each sweep audited only its own
-   registry, so `winget` â€” excused on Windows and absent from Linux â€” was examined by nothing
+   registry, so `winget` — excused on Windows and absent from Linux — was examined by nothing
    anywhere. A claim that some *other* image lifecycles a backend is verified on the run of that
    image, so no row can excuse a backend on the strength of a sweep nobody performs.
 4. **A platform we do not have is still a release blocker, not an exemption.** `mas` needs a
@@ -4272,7 +4272,7 @@ What binds:
    Those stay counted.
 
 This is a rule about how the project is tested rather than about the program, so it has no Part
-II entry â€” the same shape as `Q4`, whose reason it extends. Its reason is in **V.93**.
+II entry — the same shape as `Q4`, whose reason it extends. Its reason is in **V.93**.
 
 ---
 
@@ -4280,10 +4280,10 @@ II entry â€” the same shape as `Q4`, whose reason it extends. Its reason is
 
 ## Q18
 
-**Status: ANSWERED â€” ruled 2026-07-31.** Raised 2026-07-30 by the first run of the storage
+**Status: ANSWERED — ruled 2026-07-31.** Raised 2026-07-30 by the first run of the storage
 backends in the project's history (`Q17`'s privileged image).
 
-**Q18 â€” The storage backends read options the grammar refuses. Which half of Part II is wrong?**
+**Q18 — The storage backends read options the grammar refuses. Which half of Part II is wrong?**
 
 `lvm:` cannot be written at all. Measured, in a privileged container with a real volume group on
 a loopback device:
@@ -4299,7 +4299,7 @@ Error: Configuration error: <argument>: `@size` is not an option
 And without it:
 
 ```
-Error: `lvm:shallvg/canary` has no `size` â€” a logical volume needs one to be created,
+Error: `lvm:shallvg/canary` has no `size` — a logical volume needs one to be created,
        e.g. `lvm:shallvg/canary@size=10G`.
 ```
 
@@ -4309,30 +4309,30 @@ is no third form. `lvm:` is unusable by construction, and has been since it was 
 **Part II says both things.** II.2's option table (`PACKAGE_OPTION_KEYS` in
 `config/grammar/statement.rs`, whose comment cites II.2 as its source) permits fifteen keys and
 none of these. The storage paragraph says the opposite in plain words: *"`zfs:tank/data` and
-`lvm:vg0/data` join `btrfs:` as declared, sized, mounted objects â€” Rust, not a `ManagerConfig`,
+`lvm:vg0/data` join `btrfs:` as declared, sized, mounted objects — Rust, not a `ManagerConfig`,
 **because a volume has a size and a mountpoint**, not a version."*
 
 The full extent, from the code rather than from the paragraph:
 
 | backend | options it reads | in II.2's table |
 |---|---|---|
-| `lvm` | `size` (**required** â€” install refuses without it) | no |
+| `lvm` | `size` (**required** — install refuses without it) | no |
 | `zfs` | `quota`, `mount` | no |
 | `btrfs` | `quota`, `mount`, `options` | no |
 
 So `lvm:` is entirely unusable; `btrfs:` and `zfs:` install fine by name and **every documented
-option on them is refused**. A declaration that sizes or mounts a volume â€” the thing the
-paragraph says these backends exist for â€” cannot be written.
+option on them is refused**. A declaration that sizes or mounts a volume — the thing the
+paragraph says these backends exist for — cannot be written.
 
 **Why this is the owner's and not the builder's.** `CLAUDE.md` rule 4: *anything where Part II
-looks wrong â€” do not fix Part II yourself.* Part II contradicts itself here, and both halves are
+looks wrong — do not fix Part II yourself.* Part II contradicts itself here, and both halves are
 implemented. It is also rule 2: whichever way it goes changes what a user may write.
 
 The options:
 
 - **(a) Add them to II.2's table, scoped to the backends that read them.** `@size`, `@quota`,
   `@mount`, `@options` become legal on `lvm:`/`zfs:`/`btrfs:` and are refused by name everywhere
-  else â€” the shape `@url` (U39) and `@download_only` (D3b) already use, with
+  else — the shape `@url` (U39) and `@download_only` (D3b) already use, with
   `capability::INSTALLS_FROM_SOURCE` as the precedent for one table both the grammar and the
   install path read. Makes the storage paragraph true. Costs one row per option.
 - **(b) Delete the option reads from the three backends.** Volumes get created at a default size
@@ -4353,14 +4353,14 @@ nothing depends on it" is the strongest argument this repo recognises.
 **RULED (owner, 2026-07-31): (a), and the table is the half that was wrong.** `@size`, `@quota`,
 `@mount` and `@mount_options` are legal on the backends that read them and refused by name
 everywhere else. The direction given with the ruling binds the shape of it: **broaden so that
-everything the code can do can be written â€” never restrict the code to fit the table.** So the
-narrowed form the builder had offered â€” ship `@size` and `@quota` now, leave `@mount` refused
-until the fstab path has been exercised â€” was **not** taken. `@mount` ships, and the fstab path it
+everything the code can do can be written — never restrict the code to fit the table.** So the
+narrowed form the builder had offered — ship `@size` and `@quota` now, leave `@mount` refused
+until the fstab path has been exercised — was **not** taken. `@mount` ships, and the fstab path it
 reaches was fixed and given a real lifecycle in the same change rather than left legal on paper.
 
 **`@options` is spelled `@mount_options`.** It is what an fstab entry's option field carries, and
 in a flat namespace a key called `options` is a collision waiting for the next feature. Nobody
-could have written the old spelling â€” the parser refused it â€” so there is nothing to migrate and
+could have written the old spelling — the parser refused it — so there is nothing to migrate and
 no second spelling kept alive.
 
 **The ruling was applied to the whole family, not to the three backends that raised it.** Q18's
@@ -4371,11 +4371,11 @@ three more keys in the same state, and all three ship legal here:
 | key | read by | what it had been doing |
 |---|---|---|
 | `classic` | `snap` | `--classic` is how an unconfined snap is installed; the branch had never run |
-| `shim` | `sync` | a shim asked for on the tool's own line â€” **the form `R3` named** when it deleted the imperative `shim` command (2026-07-19) |
+| `shim` | `sync` | a shim asked for on the tool's own line — **the form `R3` named** when it deleted the imperative `shim` command (2026-07-19) |
 | `sandbox` | `sync`, `run` | the same shim, plus confinement for `shall run` |
 
 `R3` is the one that stings. **Measured rather than asserted:** a standalone `shim:NAME` statement
-still parsed and is still reconciled (`app/apply/dependents.rs`), so shims were not unmakeable â€”
+still parsed and is still reconciled (`app/apply/dependents.rs`), so shims were not unmakeable —
 the first draft of this entry said they were, and reading the code disproved it. What *was* true
 is worse in a quieter way: R3 deleted the imperative command and pointed at `@shim=true` on the
 package line as the declarative form, and a different change in the same month closed the option
@@ -4389,15 +4389,15 @@ reachable for the first time, and it was not fit to be reached: it dropped every
 *containing* the mount point as a substring (so declaring `/mnt` would have deleted `/mnt/data`
 and `/mnt/home`), it wrote `subvol=` as the declared path instead of the path from the filesystem
 root (the same offset bug `list` was fixed for the day before, mirrored), and removal left the
-entry behind â€” an fstab line naming a subvolume that no longer exists is a machine that stops in
+entry behind — an fstab line naming a subvolume that no longer exists is a machine that stops in
 the initramfs. All three are fixed here, with unit tests, and `@mount` now also collapses the
 second name it creates for one subvolume so `remove-orphans` cannot offer to destroy a declared
 volume under its other path.
 
 **Running it found three defects reading it had not**, all of them in the newly-reachable mount
 path: the UUID parser wanted a line *starting* `uuid:` from a report that reads
-`Label: none  uuid: â€¦`; the query was put to the **subvolume** when `btrfs filesystem show` only
-answers for a filesystem; and `info()` â€” which is what the planner asks, not `list_installed` â€”
+`Label: none  uuid: …`; the query was put to the **subvolume** when `btrfs filesystem show` only
+answers for a filesystem; and `info()` — which is what the planner asks, not `list_installed` —
 answered `Path::exists`, so any directory was an installed subvolume and the record it built
 carried no properties at all. A half-applied declaration therefore reported itself satisfied for
 ever, so a declared `@mount=` that does not match the machine is drift now, decided beside
@@ -4406,14 +4406,14 @@ ever, so a declared `@mount=` that does not match the machine is drift now, deci
 **And the harness stopped being deliberately red.** The `lvm:VG/LV@size=64M` canary that failed
 by name every run now passes; `btrfs`'s canary carries `@quota` and `@mount` so the fstab path
 has a real lifecycle on a real device rather than a legal spelling. `lvm` then failed once more
-for a reason that was **not** Shall â€” `device not cleared`, reproduced with a hand-run
+for a reason that was **not** Shall — `device not cleared`, reproduced with a hand-run
 `lvcreate`, because the image's udev workaround `sed`-ed keys Ubuntu ships commented out and the
 `grep` meant to verify it matched the comments and passed. Fixed in the image, and 13c now
 probes with a real volume before claiming lvm has a canary. The storage job moves to the fast
 matrix, which is what its own comment said to do the moment this was ruled.
 
 **Final measurement, on real block devices: `pass=274 fail=0 soft=7`.** The image's
-real-lifecycle floor goes 3 â†’ 5 â€” apt, github, btrfs, cargo, lvm. `zfs:` is still not among
+real-lifecycle floor goes 3 → 5 — apt, github, btrfs, cargo, lvm. `zfs:` is still not among
 them and is not excused: this kernel ships no ZFS module, which `Q4` counts as a release
 blocker. So `@quota` and `@mount` are proven on btrfs and `@size` on lvm; on `zfs:` they are
 argv-tested and read the same options through the same table, and that is the honest limit of
@@ -4423,15 +4423,15 @@ what has been run.
 
 ## Q19
 
-**Status: ANSWERED â€” ruled 2026-07-31.** Raised the same day by building `Q18`: the keys were
+**Status: ANSWERED — ruled 2026-07-31.** Raised the same day by building `Q18`: the keys were
 writable and applied, and nothing decided what a *changed* one meant.
 
-**Q19 â€” When a declared size changes, does Shall resize the volume?**
+**Q19 — When a declared size changes, does Shall resize the volume?**
 
 `@mount` converges: a declared mountpoint that does not match the machine is drift, and `sync`
 re-applies it (that shipped with `Q18`, because a mount that silently never happened was the
 defect being fixed). **`@quota` and `@size` do not.** Editing `@quota=100M` to `200M`, or
-`@size=10G` to `20G`, changes nothing on the next sync â€” the volume is present under its name,
+`@size=10G` to `20G`, changes nothing on the next sync — the volume is present under its name,
 so there is no drift to act on.
 
 Two questions, and they are not the same size:
@@ -4439,16 +4439,16 @@ Two questions, and they are not the same size:
 - **`@quota` on `btrfs:`/`zfs:` is safe to re-apply.** `btrfs qgroup limit` and `zfs set quota=`
   are idempotent property writes, and lowering a quota below current usage is refused by the tool
   rather than destroying anything. The only real work is comparing a declared `100M` against a
-  reported byte count without a normalisation bug â€” and a wrong comparison here has a specific
+  reported byte count without a normalisation bug — and a wrong comparison here has a specific
   failure mode worth naming: **every sync reports a change for ever**, which is exactly what D13
   warned about when it required a *readable* current value.
-- **`@size` on `lvm:` is not.** Honouring it means `lvextend` to grow â€” and its mirror image,
+- **`@size` on `lvm:` is not.** Honouring it means `lvextend` to grow — and its mirror image,
   `lvreduce` to shrink, **destroys data** unless the filesystem is shrunk first, which Shall
   does not do and should probably never do unattended. So this is not "add a comparison"; it is
   a decision about whether a declaration may resize a filesystem at all, and whether shrinking
   is refused by name.
 
-**RULED (owner, 2026-07-31): it edits â€” and where editing can lose data, the line has to say
+**RULED (owner, 2026-07-31): it edits — and where editing can lose data, the line has to say
 so.** A declaration is the machine's description of itself, so an edited `@quota` or `@size` is
 drift like any other and `sync` converges it. The owner declined the half of the recommendation
 that refused shrinking outright: shrinking is *allowed*, behind a flag, because the register's
@@ -4463,7 +4463,7 @@ nobody shrinks a filesystem by editing a number and pressing enter.
   the line carries `@allow_shrink=true`**, and the refusal names the actual size, the declared
   size, and the way out.
 - **`--resizefs` on both directions, never a bare `lvreduce`.** It shrinks the filesystem before
-  the volume, so the bytes given up are ones nothing is using â€” which is what makes the flag a
+  the volume, so the bytes given up are ones nothing is using — which is what makes the flag a
   permission to *resize* rather than a permission to truncate. A filesystem that cannot shrink
   (xfs) fails there, before the volume is touched.
 - **`@allow_shrink` without `@size` is a parse error**, the same one level in `@mount_options`
@@ -4471,7 +4471,7 @@ nobody shrinks a filesystem by editing a number and pressing enter.
   line that does nothing, because someone will believe it.
 
 **The comparison is by value, in bytes, and only the declared side is ever parsed.** Every tool
-is asked for raw bytes â€” `zfs list -p`, `lvs --units b --nosuffix`, `btrfs qgroup show --raw` â€”
+is asked for raw bytes — `zfs list -p`, `lvs --units b --nosuffix`, `btrfs qgroup show --raw` —
 so `@quota=10240M` against a reported `10737418240` is not a change. `D13`'s failure mode was the
 one to design against here: a comparator that had to reconcile `10.00GiB`, `10.00g` and `10G`
 reports a change on every sync, for ever.
@@ -4483,13 +4483,13 @@ gets re-applied on every sync for ever; reading it as "satisfied" is how one nev
 at all.
 
 **The sibling this fix would have shipped past.** `@mount` used to `return` out of the drift
-check, so a line carrying both a mount and a quota had only the mount looked at â€” the second
+check, so a line carrying both a mount and a quota had only the mount looked at — the second
 option was dead the moment anyone wrote the two together, which is the ordinary way to write
 them. The facets are OR-ed now. `@mount_options` was dead the same way and converges too: a
 changed option field rewrites the fstab entry, where before it kept yesterday's options through
 every sync and every reboot.
 
-**Run, not argued â€” on a real logical volume, `docker/integration/run-in-container.sh` Â§14b.**
+**Run, not argued — on a real logical volume, `docker/integration/run-in-container.sh` §14b.**
 The storage image goes **`pass=274 fail=0 soft=7` â†’ `pass=279 fail=0 soft=7`**, and the five are
 these; the real-lifecycle ratchet holds at 5 â‰¥ 5 (`btrfs`, `lvm` both on real devices, `zfs`
 still short a kernel module):
@@ -4502,25 +4502,25 @@ PASS  lvm: @allow_shrink shrank shallvg/resizer, 134217728 -> 67108864 bytes
 PASS  lvm: the resize canary uninstalls
 ```
 
-The edit is made **in the module file and applied by `sync`**, never by re-running `install` â€”
+The edit is made **in the module file and applied by `sync`**, never by re-running `install` —
 `install` hands a named spec to the backend, so it would prove the resize argv and skip the half
 that was broken, which was the planner deciding a volume already present under its name still
 needs work. **The second line is the one that could not be got any other way:** D13's failure
 mode is a comparison that reports a change on every sync for ever, and a harness that syncs once
-cannot see it. `btrfs:` and `zfs:` did not run here â€” the kernel that run borrowed had neither
-module â€” so `@quota` re-apply is argv-and-unit-tested and not yet executed. **The `zfs:` half of
+cannot see it. `btrfs:` and `zfs:` did not run here — the kernel that run borrowed had neither
+module — so `@quota` re-apply is argv-and-unit-tested and not yet executed. **The `zfs:` half of
 that sentence stopped being about Q4's release blocker on 2026-08-18**: the `storage` leg drives
 a real `zfs` install â†’ list â†’ uninstall â†’ gone in CI (run 32132445664), which empties the set Q4
-counts. What remains here is narrower and still true â€” that leg creates and destroys a pool, so
+counts. What remains here is narrower and still true — that leg creates and destroys a pool, so
 the *re-apply* of `@quota` on a dataset that already carries one is not what it measures.
 
 **Deleting the option is not declaring "no limit".** A line that drops `@quota=` stops declaring
 a quota; it does not ask for the existing one to be lifted. That is the same reading `@mount`
-already has â€” an option nobody wrote is an option nobody is managing â€” and the opposite reading
+already has — an option nobody wrote is an option nobody is managing — and the opposite reading
 would make removing a word from a config file silently uncap a filesystem.
 
 **What is not covered.** `lvm:` grows through `fsadm`, so a volume carrying **no** filesystem
-fails loudly rather than growing silently â€” the honest limit of resizing by declaration, and
+fails loudly rather than growing silently — the honest limit of resizing by declaration, and
 better than applying half of one. And a resize appears in the preview as an install of the
 object, the same shape `@mount` and `@channel` already take; a `Resize` node of its own would be
 a fourth spelling of "this line needs work" threaded through the guard, the transaction and the
@@ -4530,14 +4530,14 @@ preview.
 
 ## Q20
 
-**Status: ANSWERED â€” ruled 2026-07-31.** Raised the same day by `Q19`'s sibling sweep: the fix
+**Status: ANSWERED — ruled 2026-07-31.** Raised the same day by `Q19`'s sibling sweep: the fix
 for storage geometry found the identical defect on `snap:`, and the owner ruled it the same way
 in the same session.
 
-**Q20 â€” When `@classic` changes, does Shall re-confine the snap?**
+**Q20 — When `@classic` changes, does Shall re-confine the snap?**
 
 `@classic` is read in exactly one place: when the install argv is built. So a snap that gains the
-option *after* it was installed stays strictly confined for ever â€” `snap list` shows the name,
+option *after* it was installed stays strictly confined for ever — `snap list` shows the name,
 the planner finds nothing to do, and `sync` reports success over a declaration it never applied.
 That is `Q19` word for word with a different noun, which is why it was found by looking for
 siblings rather than by anyone hitting it.
@@ -4547,7 +4547,7 @@ it.
 
 **But the two directions are not symmetric, and snapd is what makes them asymmetric.**
 `snap refresh --classic` relaxes confinement in place; **there is no switch that narrows it
-back.** The only way from classic to strict is remove-and-reinstall â€” a removal, of a package the
+back.** The only way from classic to strict is remove-and-reinstall — a removal, of a package the
 user declared, to satisfy an option. That is the guard's decision and not a backend's, so:
 
 - **`@classic=true` on a strictly-confined snap** â†’ `snap refresh --classic`. Automatic, and
@@ -4560,20 +4560,20 @@ user declared, to satisfy an option. That is the guard's decision and not a back
   is what keeps the refusal above from firing on configs nobody edited.
 
 **The sibling inside the sibling.** `@channel`'s drift check `return`ed from the function, so a
-snap carrying a channel *and* `@classic` had only the channel looked at â€” the identical fault
+snap carrying a channel *and* `@classic` had only the channel looked at — the identical fault
 `Q19` fixed for `@mount`, in the branch immediately above it, found because the fix for one was
 being written next to the other. Both are folded into one accumulator now. The argv had the
 matching bug: the refresh was built from `@channel` alone, so a line asking for both changes
 would have dropped one. One refresh carries both switches.
 
 **And `snap info` is now read once.** `is_installed` asked `snap list` and `current_channel`
-asked `snap info` for facts printed on the same page of the same report â€” two subprocesses per
+asked `snap info` for facts printed on the same page of the same report — two subprocesses per
 snap per sync, and two answers that could disagree across the gap between them. Presence is the
 `installed:` line, not the exit code: `snap info` answers just as happily for a snap that only
 exists in the store, and reading that as installed would send every first install down the
 refresh path.
 
-**Not run.** No image here has a working snapd â€” a container cannot run it â€” so this is argv- and
+**Not run.** No image here has a working snapd — a container cannot run it — so this is argv- and
 unit-tested against real `snap info` output and has never been executed. It is named that way
 rather than counted, exactly as `zfs:` is.
 
@@ -4581,15 +4581,15 @@ rather than counted, exactly as `zfs:` is.
 
 ## Q21
 
-**Status: ANSWERED â€” ruled 2026-07-31.** Raised by `Q19` and `Q20` landing in the same session
+**Status: ANSWERED — ruled 2026-07-31.** Raised by `Q19` and `Q20` landing in the same session
 from the same cause, which is the definition of a class rather than two bugs.
 
-**Q21 â€” Must every option a backend reads converge when it changes?**
+**Q21 — Must every option a backend reads converge when it changes?**
 
 `Q19` found four options applied at creation and never again (`@quota`, `@size`, `@mount`,
 `@mount_options`). `Q20` found a fifth on a different backend (`@classic`) by asking the rest of
 the tree the same question. Neither was reported by a user; both were found by looking. **The
-question is therefore not about those five â€” it is whether "an option changes the machine when
+question is therefore not about those five — it is whether "an option changes the machine when
 you change it" is a property of every option, or a thing five options happen to have.**
 
 **RULED (owner, 2026-07-31): every option, and the builder proves it per option.** An option a
@@ -4599,7 +4599,7 @@ is the defect `Q18` existed to prevent, arriving one layer in. So:
 - **Changing an option changes the machine**, or the line is refused with a reason. There is no
   third outcome, and "nothing happens" is not one of them.
 - **The proof is per option, not per backend.** A lifecycle is install â†’ list â†’ remove, which by
-  construction never edits a declaration â€” which is exactly why all five sat dead through
+  construction never edits a declaration — which is exactly why all five sat dead through
   thousands of green checks. A backend with a real lifecycle is *not* covered for this.
 - **Where the change cannot be applied, it is refused by name** with the by-hand path
   (`Q19`'s shrink, `Q20`'s narrowing), never ignored.
@@ -4607,19 +4607,19 @@ is the defect `Q18` existed to prevent, arriving one layer in. So:
   every existing config acquires refusals it never asked for (`V.107`, `V.108`).
 
 **In the tree today: NOT swept.** The five named above converge and are tested. Every other
-option a backend reads is unaudited against this rule â€” `PACKAGE_OPTION_KEYS` and
+option a backend reads is unaudited against this rule — `PACKAGE_OPTION_KEYS` and
 `capability.rs`'s tables are the list to work from, and the work is in `plan.md`'s Tier 0. The
-grader carries the same sweep as Â§3.5, because it is the check and this entry is the obligation.
+grader carries the same sweep as §3.5, because it is the check and this entry is the obligation.
 
 ## Q22
 
-**Status: ANSWERED â€” ruled 2026-07-31.** Raised by the round-8 builder after reading `shall eval`
+**Status: ANSWERED — ruled 2026-07-31.** Raised by the round-8 builder after reading `shall eval`
 on a module saved the way Windows saves files.
 
-**Q22 â€” A config file that begins with a byte-order mark: refuse it, or read it?**
+**Q22 — A config file that begins with a byte-order mark: refuse it, or read it?**
 
 Notepad writes UTF-8 **with** a BOM by default, and so does PowerShell 5.1's `Set-Content
--Encoding utf8` â€” the editor and the shell this project is developed in. The three bytes are an
+-Encoding utf8` — the editor and the shell this project is developed in. The three bytes are an
 encoding artefact: no editor displays them, and the user has no way to see what is wrong.
 Shall took them as part of the first name on the first line:
 
@@ -4630,32 +4630,32 @@ Error: .../modules/starter.txt:1: `<U+FEFF>cargo` is not a backend Shall uses
 ```
 
 Two names that render identically, and advice the user has already followed. The alternative to
-reading the file was refusing it by name â€” *"this file begins with a byte-order mark; save it as
-UTF-8 without one"* â€” which is loud, honest, and makes every Windows user's first config fail.
+reading the file was refusing it by name — *"this file begins with a byte-order mark; save it as
+UTF-8 without one"* — which is loud, honest, and makes every Windows user's first config fail.
 
 **RULED (owner, 2026-07-31): read it.** A leading BOM is stripped where config text enters a
 parser, for every file: modules, profiles, `priority`, `active`, `vars`, `schedules`,
 `preferences.toml` and the settings file. The rule is II.1's, the reason is `V.112`.
 
 **Only the mark, and only at the start.** A U+FEFF anywhere else in a line is a zero-width
-character that nothing but a paste puts there, and it is still refused by name â€” stripping every
+character that nothing but a paste puts there, and it is still refused by name — stripping every
 occurrence would be the silent repair this codebase exists as a reaction to. The refusal names
 the codepoint rather than drawing it, which is the same session's fix to `GrammarError`.
 
 **Where it is applied is part of the ruling.** At the parser, not at the read: `model/edit.rs`
 reads the same files in order to rewrite them, and II.16 says Shall must not rewrite your files
-â€” which includes their encoding. A file that arrived with a mark keeps it.
+— which includes their encoding. A file that arrived with a mark keeps it.
 
 
 
 ## Q23
 
-**Status: ANSWERED â€” ruled 2026-07-31.** Raised by CI: both `Build` jobs were red on
+**Status: ANSWERED — ruled 2026-07-31.** Raised by CI: both `Build` jobs were red on
 `tests/grade2_info_tests.rs`, on two platforms, for one cause.
 
-**Q23 â€” Is an `@` that opens a package name part of the name, or the start of the options?**
+**Q23 — Is an `@` that opens a package name part of the name, or the start of the options?**
 
-npm's scoped packages are named `@scope/name` â€” `@angular/cli`, `@vue/cli`, `@bazel/bazelisk` â€”
+npm's scoped packages are named `@scope/name` — `@angular/cli`, `@vue/cli`, `@bazel/bazelisk` —
 and `npm ls -g` prints them, so `shall list` reports them. Writing one back was impossible:
 
 ```text
@@ -4670,23 +4670,23 @@ error was advice about a mistake nobody had made.
 
 **RULED (owner, 2026-07-31): the leading `@` is part of the name.** Only the first character of
 the name is special; every later `@` still opens the options, so `npm:@angular/cli@version=17.3.0`
-is a pinned scoped package. Nothing existing can break â€” a line beginning `npm:@...` did not
+is a pinned scoped package. Nothing existing can break — a line beginning `npm:@...` did not
 parse, so no config anywhere contains one. Rule in II.2, reason in **V.113**.
 
 **The owner also named a fallback and it is deliberately NOT built:** *"if it gets confusing, we
-can have them quote it."* Quoting was rejected once as **V.10** â€” a quote needs an escape, which
-needs a backslash rule, which needs a newline rule â€” so it stays a decision to be re-argued
+can have them quote it."* Quoting was rejected once as **V.10** — a quote needs an escape, which
+needs a backslash rule, which needs a newline rule — so it stays a decision to be re-argued
 rather than a convenience to be assumed. Nothing today is ambiguous enough to need it: the rule
 is positional, and there is exactly one special position.
 
 ## Q24
 
-**Status: ANSWERED â€” built 2026-08-02, ruled 2026-08-10.** The owner said *"find the shall bug
+**Status: ANSWERED — built 2026-08-02, ruled 2026-08-10.** The owner said *"find the shall bug
 (not just symptom but root) and fix"*, which ruled that a bound must exist. It did not rule the
 number, and the number is the whole cost of being wrong in either direction.
 
 **RULED (owner, 2026-08-10): the user sets it, and the default is the builder's call.** The
-numbers stand â€” **900s for a mutation, 120s for a read** â€” and the reason for keeping 900 rather
+numbers stand — **900s for a mutation, 120s for a read** — and the reason for keeping 900 rather
 than lowering it is worth writing down, because the instinct was to lower it:
 
 - **The costs are asymmetric.** Killing a package manager that was legitimately working in
@@ -4696,7 +4696,7 @@ than lowering it is worth writing down, because the instinct was to lower it:
   other wastes time, the number belongs on the side that wastes time.
 - **The bound that actually fires is already tight and already measured.** `Q32` split reads out
   as `query_idle_timeout_secs`, sized at 120s against a cold `winget list` at 2.6s under
-  sixteen-way contention â€” about 46Ã— the worst observed. A wedged *question* costs two minutes,
+  sixteen-way contention — about 46× the worst observed. A wedged *question* costs two minutes,
   not fifteen, and questions are what wedge.
 - **The fifteen-minute hangs the owner was actually seeing were not this bound doing its job.**
   They were `S88`: sudo waiting on `/dev/tty` for a password nobody was going to type, running out
@@ -4706,7 +4706,7 @@ than lowering it is worth writing down, because the instinct was to lower it:
 So the ceiling stays where a legitimately slow command survives it, and the sharp numbers live on
 the two bounds that can be sized from measurements: reads, and now the sudo prompt.
 
-**Q24 â€” How long may a command say nothing before Shall stops waiting for it?**
+**Q24 — How long may a command say nothing before Shall stops waiting for it?**
 
 `shall -y uninstall choco:bat` ran 76 minutes and removed nothing. The child was
 `Checkpoint-Computer`; Windows event 8194 records the restore point created **18 seconds in**, and
@@ -4717,14 +4717,14 @@ reads, guards and `plan` all run outside it. Two earlier hangs (`gem:colorize` a
 into the *harness*, not the product.
 
 **The shape is settled and is not what needs a ruling.** The bound is on **silence, not
-duration** â€” a working `cargo install` prints for an hour and must never be touched, and no
+duration** — a working `cargo install` prints for an hour and must never be touched, and no
 wall-clock cap can be set above that and below a hang. Rule in II.12, reason in **V.114**.
 
 **What is built, pending confirmation:**
 
 - `command_idle_timeout_secs`, default **900**, `0` removes the bound.
-- 900 because the adversarial case is a command that is legitimately silent for its whole run â€”
-  `Checkpoint-Computer` is exactly that â€” so the number has to clear a real one. It is a
+- 900 because the adversarial case is a command that is legitimately silent for its whole run —
+  `Checkpoint-Computer` is exactly that — so the number has to clear a real one. It is a
   judgement, not a measurement: **nobody has measured the longest legitimate silence in Shall's
   own workload.** The observed hang was 76 minutes and the observed real snapshot was 18 seconds,
   which brackets it loosely and no better than that.
@@ -4734,17 +4734,17 @@ wall-clock cap can be set above that and below a hang. Rule in II.12, reason in 
 
 **What could reverse it:** a lower default (a hang costs less, a slow silent command breaks), or
 per-class bounds keyed to `latency.rs`'s `Class` (a read bounded in seconds, a mutation in the
-quarter hour) â€” which is better and is not built, because the classes describe Shall's own verbs
+quarter hour) — which is better and is not built, because the classes describe Shall's own verbs
 and the bound is per *child process*.
 
 ---
 
 ## Y1
 
-**Status: ANSWERED â€” ruled 2026-08-02.** Raised by `docs/INEFFICIENCIES.md`, measured with
+**Status: ANSWERED — ruled 2026-08-02.** Raised by `docs/INEFFICIENCIES.md`, measured with
 counting shims around each manager binary rather than argued.
 
-**Y1 â€” Does Shall put several packages on one manager command line?** It did not. Every install
+**Y1 — Does Shall put several packages on one manager command line?** It did not. Every install
 and every removal was its own DAG node and every node called its backend with a one-element
 slice, so installing 50 apt packages was 50 `apt-get install <one>` invocations. Measured in a
 disposable Ubuntu container: six declared packages produced six `apt` processes and 12,465 ms,
@@ -4760,7 +4760,7 @@ between any two of them, goes on one command line. Rule in **II.19**, reason in 
   `Y9`, 2026-08-06: the only such edges are the `@requires` a user wrote. The planner used to
   manufacture them by asking each backend what a declared package depends on, which is why the
   case where Shall knew two packages were related was the case it refused to batch.)*
-- The line is bounded â€” 100 names or 6000 bytes, whichever comes first â€” because `cmd.exe` caps
+- The line is bounded — 100 names or 6000 bytes, whichever comes first — because `cmd.exe` caps
   a command line at 8191 characters and every manager has some limit.
 - **Rollback granularity is unchanged.** What each package looked like before is still captured
   per package, before the command runs, and the compensation loop still walks per package. A
@@ -4782,11 +4782,11 @@ already accept multiple names.
 
 ## Y2
 
-**Status: ANSWERED â€” ruled 2026-08-02.**
+**Status: ANSWERED — ruled 2026-08-02.**
 
-**Y2 â€” Is one concurrency number enough?** `max_parallel` was doing three jobs: CPU/process
+**Y2 — Is one concurrency number enough?** `max_parallel` was doing three jobs: CPU/process
 fan-out, transaction concurrency, and pure network fan-out. It defaults to the core count, which
-is right for the first two and arbitrary for the third â€” on a four-core laptop `shall search` ran
+is right for the first two and arbitrary for the third — on a four-core laptop `shall search` ran
 its ~22 registry queries in six sequential waves.
 
 **RULED: split the knob, do not remove it.** `max_parallel` stays the process knob (owner ruling
@@ -4796,15 +4796,15 @@ regardless of cores, and bounds concurrent network requests. Rule in **II.19**, 
 
 **What the ruling binds:**
 
-- Nothing that fans out reads a third number. The three hardcoded caps â€” `installed_sets`'s 8,
-  the health probe's 4, `TransactionConfig::patient`'s 4 â€” read a knob now.
+- Nothing that fans out reads a third number. The three hardcoded caps — `installed_sets`'s 8,
+  the health probe's 4, `TransactionConfig::patient`'s 4 — read a knob now.
 - Where two fan-outs nest, the cap is held by the leaf that talks to the network, so they do not
   multiply.
 - **`upgrade` fans out across the managers that contend with nothing.** The `needs_root()` set
   stays strictly sequential; `cargo`, `npm`, `pipx`, `uv`, `yarn`, `pnpm`, `vscode`, `emacs`,
   `krew` and `go` overlap. This narrows a rule recorded in `history.md:2055` to the case its
   reason actually covers.
-- **Variables resolve once per invocation** â€” which II.6b already required and the code did not
+- **Variables resolve once per invocation** — which II.6b already required and the code did not
   do. Measured: one `shall check` ran the user's `vars.sh` three times.
 
 **What could reverse it:** a registry that reads 16 concurrent queries as abuse. The default is a
@@ -4814,9 +4814,9 @@ judgement, not a measurement, and it is a key precisely so a machine can say oth
 
 ## Y3
 
-**Status: ANSWERED â€” ruled 2026-08-02.**
+**Status: ANSWERED — ruled 2026-08-02.**
 
-**Y3 â€” May a read-only command give up on a backend that will not answer?** `search` had no
+**Y3 — May a read-only command give up on a backend that will not answer?** `search` had no
 per-backend deadline, so its latency was the maximum over ~22 registries rather than the median:
 one rate-limited GitHub call set the whole runtime, and the command measured 15.5s / 25.5s /
 48.0s / 160.2s across four runs. `check health` had already answered this question for its own
@@ -4829,7 +4829,7 @@ failed and were skipped" line. Rule in **II.19**, reason in **V.117**.
 **What the ruling binds:**
 
 - A `@health=` port probe gives up after 5s. A *closed* localhost port refuses immediately, but a
-  **filtered** one â€” which `apply/firewall.rs` can itself create â€” waits out the OS default:
+  **filtered** one — which `apply/firewall.rs` can itself create — waits out the OS default:
   ~21s on Windows, ~130s on Linux, while deciding whether to roll a sync back.
 - **A download still carries no whole-request timeout.** A release asset can legitimately take an
   hour, and a bound sized for an API call turns a slow link into a corrupt install. Where a wait
@@ -4842,17 +4842,17 @@ having failed. The alternative is the command that took 160 seconds without sayi
 
 ## Y4
 
-**Status: ANSWERED â€” ruled 2026-08-02.**
+**Status: ANSWERED — ruled 2026-08-02.**
 
-**Y4 â€” Must the pre-sync restore point finish before anything else starts?** It was awaited as a
-barrier before any work, and on Windows it is `Checkpoint-Computer` â€” measured at **50.8s**, with
+**Y4 — Must the pre-sync restore point finish before anything else starts?** It was awaited as a
+barrier before any work, and on Windows it is `Checkpoint-Computer` — measured at **50.8s**, with
 no faster API to swap to. So every install and every uninstall on Windows paid a fixed ~51-second
 tax in front of work that had to happen anyway, and **nothing in the output said it was
 happening**, so the pause read as a hang. It was reported as one, twice, and killed by hand both
 times.
 
 **RULED: it starts first and is joined last, and it announces itself.** The snapshot begins
-before the read-only pre-flight and is joined immediately before the first mutating command â€”
+before the read-only pre-flight and is joined immediately before the first mutating command —
 which is the whole requirement, since a snapshot taken after the change would revert to the
 change. Rule in **II.19**, reason in **V.118**.
 
@@ -4864,7 +4864,7 @@ change. Rule in **II.19**, reason in **V.118**.
   `-NoProfile` all along, and this was the third of three.
 - **The write-ahead journal is `journal.jsonl`**, one JSON value per line, appended. It used to
   re-serialise the entire map, pretty printed, through a temp file and a rename, on every state
-  change â€” O(nÂ²) bytes in the number of actions, under the one mutex every concurrent DAG worker
+  change — O(n²) bytes in the number of actions, under the one mutex every concurrent DAG worker
   has to take, which made it a throttle that got worse as `Y1` widened the graph. A pre-existing
   `journal.json` is not read: under NO LEGACY there is no old-format reader, and a wholly
   unreadable WAL is still moved aside and named rather than swallowed (S10).
@@ -4876,11 +4876,11 @@ three built-in providers and the config-driven one only read while creating.
 
 ## Y5
 
-**Status: ANSWERED â€” ruled 2026-08-03.** Raised by the owner while asking whether Shall was fast
+**Status: ANSWERED — ruled 2026-08-03.** Raised by the owner while asking whether Shall was fast
 enough to adopt, and the question could not be answered from inside Shall.
 
-**Y5 â€” Does Shall say where its own time went?** It did not. `latency.rs` measured the *total*
-and warned when a class crossed its budget â€” enough to notice the 98-second `info` (E14), and
+**Y5 — Does Shall say where its own time went?** It did not. `latency.rs` measured the *total*
+and warned when a class crossed its budget — enough to notice the 98-second `info` (E14), and
 not enough to act on one, because the next question is always *which manager*. Answering it
 meant timing each manager by hand outside Shall and subtracting, which is how an afternoon gets
 spent proving that a 3.2-second `list` is 2.35 seconds of `winget list` and 0.8 seconds of
@@ -4893,34 +4893,34 @@ reason in **V.119**.
 **What the ruling binds:**
 
 - **The ratio is the point, not the list.** Shall's whole design is overlapping other people's
-  processes, so 19.52s of child time inside a 3.15s wall clock â€” 6.2Ã— â€” is the claim `Y1`â€“`Y3`
+  processes, so 19.52s of child time inside a 3.15s wall clock — 6.2× — is the claim `Y1`–`Y3`
   make, stated as a number the user can check on their own machine. A breakdown printing only
   a sorted list would show the same seconds and hide whether any of them were overlapped.
 - **Recording is off unless asked for.** A measurement nobody requested is the eager work this
   whole round exists to delete.
 - **stderr, never stdout.** `shall eval --timings | jq` still gets JSON.
-- **Instrumented at the choke point**, `CommandExecutor::run_on` â€” the one call every manager
-  invocation funnels through â€” rather than per verb. A budget every verb has to remember to
+- **Instrumented at the choke point**, `CommandExecutor::run_on` — the one call every manager
+  invocation funnels through — rather than per verb. A budget every verb has to remember to
   check is the shape `latency.rs` already rejected.
 - **The one automatic probe that spawns outside that choke point is instrumented too**
   (`psresource`'s PowerShell cmdlet check, and the external `vars` providers). Interactive
   children are deliberately left out: `shall shell`, the history pager, `bisect`'s test command
   and `setup`'s installer are the user's own program in the foreground, and a duration for
   "how long you sat in your shell" is not a fact about Shall.
-- The label is the program and its **first argument** â€” `winget list`. Keyed by full argv, an
+- The label is the program and its **first argument** — `winget list`. Keyed by full argv, an
   install would produce one row per package instead of one row per thing the run waited on.
 
 **What could reverse it:** a per-child JSON emission (a `--timings=json`) if anything ever wants
-to gate on these numbers in CI. Deliberately not built now â€” nothing consumes it, and
+to gate on these numbers in CI. Deliberately not built now — nothing consumes it, and
 `lifecycle-floor.txt` is the standing argument against a threshold nobody measured.
 
 ---
 
 ## Y6
 
-**Status: ANSWERED â€” ruled 2026-08-03.** Raised by the owner: *"it should cache optionally."*
+**Status: ANSWERED — ruled 2026-08-03.** Raised by the owner: *"it should cache optionally."*
 
-**Y6 â€” May a manager's answer outlive the run that asked for it?** `Y1`â€“`Y5` took every
+**Y6 — May a manager's answer outlive the run that asked for it?** `Y1`–`Y5` took every
 question Shall asks in one run down to one ask, overlapped: `shall list` puts 19.5 s of manager
 work into ~3.2 s, 6.2Ã—, and the floor is `winget list` at 2.35 s. There is nothing left to
 overlap. The next `shall list` then asks all 24 managers the same question again, about a
@@ -4937,28 +4937,28 @@ command surviving instead of 24. Rule in **II.19**, reason in **V.120**.
   the machine is how a declarative tool removes something it should not have. The user turns it
   on for their machine, knowing their machine.
 - **Any mutation drops it**, on disk as well as in memory. `forget_all` clears both, because an
-  invalidation that clears the memo and leaves the file is an invalidation that does nothing â€”
+  invalidation that clears the memo and leaves the file is an invalidation that does nothing —
   the next question re-reads the pre-mutation answer straight off disk. Third time this repo has
   found that shape (the guard's tenth removal path, the run-scoped memos, this).
-- **`--no-cache` bypasses it for one run**, and `shall clean-cache` forgets it outright â€” the
+- **`--no-cache` bypasses it for one run**, and `shall clean-cache` forgets it outright — the
   latter unconditionally, since the files may have been written by a run that had it on.
 - **It answers a command that reports, and never one that writes its answer down.** `list`,
-  `search`, `check`, `outdated`, `info`, `why` â€” an allowlist, so a command added later has to
+  `search`, `check`, `outdated`, `info`, `why` — an allowlist, so a command added later has to
   say it is a reader. The setting says how long a *reading* may be reused; it never said a plan
   or an adoption may be built on one. A `sync` planned from a listing taken before the user
   removed something by hand skips the install and reports success, which is a declared package
-  left absent with nothing saying so â€” the exact class the "off by default" clause above is
+  left absent with nothing saying so — the exact class the "off by default" clause above is
   about, and turning the setting on must not buy it. **V.120a.**
 - **Written per manager, through a temp file and renamed, and the temp name carries the pid.**
   A half-flushed listing read back is a *shorter* machine, and a shorter machine is a list of
-  things to remove. The rename is only atomic per writer: two runs sharing one temp path â€” a
-  shell prompt hook and a terminal â€” write into each other's file and rename the interleaving,
+  things to remove. The rename is only atomic per writer: two runs sharing one temp path — a
+  shell prompt hook and a terminal — write into each other's file and rename the interleaving,
   which is that same torn listing arrived at by the mechanism meant to prevent it.
 - **Every read failure is a miss, never an error.** Corrupt, unreadable, or a clock that moved
   backwards all mean "ask the manager", never "this machine is empty".
 
-**What could reverse it:** a cheap per-manager change token â€” `dpkg` status mtime, winget's
-own database timestamp â€” which would let a listing be validated rather than merely aged, and
+**What could reverse it:** a cheap per-manager change token — `dpkg` status mtime, winget's
+own database timestamp — which would let a listing be validated rather than merely aged, and
 would make an on-by-default cache defensible. Not built: it is one investigation per manager,
 and the TTL is the honest version of what is actually known today.
 
@@ -4966,19 +4966,19 @@ and the TTL is the honest version of what is actually known today.
 
 ## Y7
 
-**Status: ANSWERED â€” ruled 2026-08-03.** Raised by the owner: *"we need a way to declare all of
+**Status: ANSWERED — ruled 2026-08-03.** Raised by the owner: *"we need a way to declare all of
 winget's things."*
 
-**Y7 â€” How is a package name with a space in it written?** It was not. `winget list` answers
-with `ARP\Machine\X64\Mozilla Firefox` â€” the identifier `winget install` takes back â€” and the
+**Y7 — How is a package name with a space in it written?** It was not. `winget list` answers
+with `ARP\Machine\X64\Mozilla Firefox` — the identifier `winget install` takes back — and the
 grammar's *a package name is one word* refused it. `adopt` held such names back and said *"its
 manager reports a name no package line can hold"*, which was true and was a wall.
 
-**The measurement corrected the diagnosis twice.** The backslashes were already accepted â€”
+**The measurement corrected the diagnosis twice.** The backslashes were already accepted —
 `2c51968` had taught the grammar and the validator about them. On this machine the names Shall
 could not write were **161: six winget names, every one of them a name with a space, and 155
 `service:` names that are not a package-line question at all** (see below). The 185-backslash
-figure in `docs/archive/GRADE-2026-07-31.md` Â§5 G-2 describes a defect that no longer exists.
+figure in `docs/archive/GRADE-2026-07-31.md` §5 G-2 describes a defect that no longer exists.
 
 **RULED: quote it.** `winget:"ARP\Machine\X64\Mozilla Firefox"`. Rule in **II.19**, reason in
 **V.121**. After it, **zero** names winget reports on this machine are undeclarable, and the
@@ -4993,8 +4993,8 @@ manifest `adopt` writes parses.
 - **An `@` inside the quotes belongs to the name**; the options still open at the first `@`
   after the closing quote. `npm:@scope/pkg@version=1.2` is untouched.
 - **One function decides both whether a name can be written and how it is spelled**
-  (`grammar::declarable_line`). They were the same question asked in two places â€” a check that
-  round-tripped `backend:name` and a writer that rendered it by hand â€” which is exactly how the
+  (`grammar::declarable_line`). They were the same question asked in two places — a check that
+  round-tripped `backend:name` and a writer that rendered it by hand — which is exactly how the
   grammar could learn to quote while `adopt` went on emitting the unquoted form and producing a
   manifest that does not parse. That is `2c51968`'s bug in the other direction, closed before it
   could happen rather than after.
@@ -5006,20 +5006,20 @@ manifest `adopt` writes parses.
 `service:` lines, and the reason printed for them was wrong: `service:AppMgmt` parses perfectly.
 `is_declarable` accepted only `Statement::Package`, and `service:` is its own statement kind, so
 every service failed a test about package lines and was reported as an unwritable *name*. The
-grammar answers three ways now â€” `Declared::Package` / `Resource` / `Nothing` â€” and `adopt` gives
+grammar answers three ways now — `Declared::Package` / `Resource` / `Nothing` — and `adopt` gives
 each held-back name the reason that is true of it.
 
 **The question under it is `Y7a`, ruled below.**
 
-**What could reverse it:** nothing found. The alternative â€” taking everything after the colon
-as the name â€” was rejected: it re-opens VI.1, and it makes `@` unusable as the option separator
+**What could reverse it:** nothing found. The alternative — taking everything after the colon
+as the name — was rejected: it re-opens VI.1, and it makes `@` unusable as the option separator
 on the most common line in the language.
 
 ---
 
 ## Y7a
 
-**Status: ANSWERED â€” ruled 2026-08-03.** *Should `adopt` take Windows services at all?* Owner:
+**Status: ANSWERED — ruled 2026-08-03.** *Should `adopt` take Windows services at all?* Owner:
 *"services too get put in with no comment, just like packages. You can guard it, but you need
 not."*
 
@@ -5032,12 +5032,12 @@ not."*
   those words rather than in the word *uninstall*, which was true of every line before this.
 - **The owner's argument was the load-bearing one, and it is now written down as V.124.**
   `purge-unmanaged` builds its list from `list_installed`, which for `service` is every running
-  service â€” so all 155 were already sweep candidates, refused only because `protection_of` opened
+  service — so all 155 were already sweep candidates, refused only because `protection_of` opened
   with *could a package line hold this name?* and a service line is not a package line. Declaring
   them makes them managed, and the sweep only takes what is not. The guard need not carry them.
 - **It carries them anyway, on purpose.** A service started after an adopt is unmanaged again.
   `Protection::NotAPackage` refuses that by a rule about resources instead of by an accident about
-  package names â€” the accident being one honest tidy-up away from handing the sweep 155 services.
+  package names — the accident being one honest tidy-up away from handing the sweep 155 services.
 - **The line carries what was observed, and no more.** A bare `service:` line means *enable and
   start*, and enable on Windows rewrites the start type to automatic. The init reports only
   *running* services, so `status=running` is the whole of what was seen. `adoption_options` is the
@@ -5056,13 +5056,13 @@ to Q7's teardown rule and is the owner's, not this ruling's.
 
 ## Y8
 
-**Status: ANSWERED â€” ruled 2026-08-03.** Raised by the owner: *"identify why it did not
+**Status: ANSWERED — ruled 2026-08-03.** Raised by the owner: *"identify why it did not
 parallelize properly and fix that."*
 
-**Y8 â€” Why did a run with 33 child commands and 20 slots still go in waves?** Not because
+**Y8 — Why did a run with 33 child commands and 20 slots still go in waves?** Not because
 anything was slow. `check drift` on a 298-package config took **9.13 s** to do about 2.3 s of
-critical path, and the `--timings` breakdown named the reason directly: nine managers â€” gem,
-pip, emacs, luarocks, dotnet, dart, nimble, bun, service â€” **started at 5.4 s**, and nothing at
+critical path, and the `--timings` breakdown named the reason directly: nine managers — gem,
+pip, emacs, luarocks, dotnet, dart, nimble, bun, service — **started at 5.4 s**, and nothing at
 all was running for the second before they did. Y5 built the instrument that could say that; it
 is the first question here answered by reading Shall's own report rather than by guessing.
 
@@ -5071,7 +5071,7 @@ is the first question here answered by reading Shall's own report rather than by
 - **The report asks each manager when its section gets to it.** `check` plans drift, then crawls
   for unmanaged packages, then probes health. The crawl wants every manager on the machine; the
   plan wants the nine that are declared. So fifteen managers waited out a plan that had no
-  question for them â€” and every one was going to be asked before the command could answer.
+  question for them — and every one was going to be asked before the command could answer.
 - **The plan's fan-out is over specs, not managers.** A spec's answer comes from its manager's
   whole listing, so 256 winget declarations put 256 futures in a queue `max_parallel` slots
   wide, every one waiting on the same `winget list`, while scoop, choco and cargo went unasked
@@ -5089,22 +5089,22 @@ window instead of spread over 5.4 s, and the report identical line for line.**
   what changed is *when*, not *how many*: same 33 children, same answers.
 - **Only for commands that already ask everyone.** `warm_installed` is called by name at the two
   call sites that crawl the machine, never from `App::new`. A command that consults three
-  managers must still wake three â€” pinned by a test that fails if a plan touches a manager
+  managers must still wake three — pinned by a test that fails if a plan touches a manager
   nothing declares.
 - **A concurrency budget spent on duplicate questions is spent on nothing.** `max_parallel` was
   never the limit here; twenty slots holding twenty futures that want one answer is a width of
   one, and no knob the user can turn says so.
 - **Ordering, alongside.** The registry was a `HashMap`, so which managers got the first slots
-  was Rust's per-process hash seed â€” two `shall list` runs differed by 530 lines and sorted the
+  was Rust's per-process hash seed — two `shall list` runs differed by 530 lines and sorted the
   same. It is a `BTreeMap` now (**V.123**), which is also what makes any of these measurements
   reproducible.
 
-**Left standing, and measured rather than assumed:** two managers still start late â€” `npm
-prefix` and `pipx environment` at ~3.2 s â€” because their `info` needs a *second* question that
+**Left standing, and measured rather than assumed:** two managers still start late — `npm
+prefix` and `pipx environment` at ~3.2 s — because their `info` needs a *second* question that
 cannot be asked until their listing lands. That is a per-backend follow-up, not a wave, and it
 is what the remaining ratio is made of.
 
-**What could reverse it:** a machine where warming costs more than it saves â€” a manager whose
+**What could reverse it:** a machine where warming costs more than it saves — a manager whose
 listing is expensive and whose section is usually skipped. None of the two call sites has one:
 both end in a crawl of every manager.
 
@@ -5112,11 +5112,11 @@ both end in a crawl of every manager.
 
 ## Y9
 
-**Status: ANSWERED â€” built and ruled 2026-08-06.** Raised by
+**Status: ANSWERED — built and ruled 2026-08-06.** Raised by
 `lamdan/whole-repo-2026-08-05.md` as F-1, a speed finding. It is also an accuracy one, and that
 half is new.
 
-**Y9 â€” May Shall ask a manager what a package depends on, and act on the answer?** It did. The
+**Y9 — May Shall ask a manager what a package depends on, and act on the answer?** It did. The
 planner ran `get_dependencies` on every declared spec, added each returned name to the desired
 set as an install node of its own, and asked *those* nodes the same question. Seven backends
 answered for real: `apt-cache depends`-shaped queries from brew, dnf, flatpak, pacman, snap,
@@ -5129,13 +5129,13 @@ vscode and xbps.
 (`docker/integration/measure-batching.sh`). Six declared packages: **8 `pacman` invocations
 â†’ 2**, of which **6 â†’ 0** were dependency queries; summed child time **3.70 s â†’ 1.20 s**; wall
 clock **1.58 s â†’ 1.33 s**. The wall clock moves least because the six queries ran concurrently
-â€” Rust's fan-out was hiding the waste rather than avoiding it. A sync is now two commands: ask
+— Rust's fan-out was hiding the waste rather than avoiding it. A sync is now two commands: ask
 the manager what it has, install the difference in one line.
 
 **What the change binds:**
 
 - **An install node is a declaration or it does not exist.** `sync/mod.rs` writes one
-  `state.add` per install node, so a discovered dependency became a package Shall *manages* â€”
+  `state.add` per install node, so a discovered dependency became a package Shall *manages* —
   with `source: None`, an origin no user could be shown. II.7 says Shall removes
   what it manages and you stopped declaring, and nobody ever declared libfoo. They were shielded
   only by being re-derived identically each run, and `direct_dependencies` dropped a spec's
@@ -5143,14 +5143,14 @@ the manager what it has, install the difference in one line.
   state at once**, and the next plan was a mass removal held back by `max_removals` alone.
 - **`@requires` is unchanged and still splits the wave** (`Y1`). What the user wrote orders
   what the user wrote. Two co-declared packages that merely happen to be related now go on one
-  command line â€” which `Y1` measured at 3,161 ms against 31,901 ms, and `rebuild --backend apt`
+  command line — which `Y1` measured at 3,161 ms against 31,901 ms, and `rebuild --backend apt`
   maximises.
 - **`MetadataProvider` stays, and reporting is the feature.** `shall info <name>` prints
   dependencies; `shall why` searches them for reverse dependencies. Neither plans from them.
 - **The ledger row now has to say where it came from.** Confirming the ruling exposed that its
   own safety argument was unenforced: `sync/mod.rs` had two sites that stored whatever
   `__source` held, `None` included, where `verbs/plan.rs` supplied a fallback. Nothing reached
-  them â€” `model/resolve.rs` stamps `__source` on every resolved line â€” so the invariant was true
+  them — `model/resolve.rs` stamps `__source` on every resolved line — so the invariant was true
   and unpinned, which is the shape the next hand-built spec walks through. `ManagedPackage::source`
   is a `String` and `StateRegistry::add` takes a `&str`; an unattributable row does not compile,
   and one already on disk is refused with the `adopt` instruction rather than dropped. Found with
@@ -5161,7 +5161,7 @@ the manager what it has, install the difference in one line.
   comment, apt's
   carrying a test whose stated purpose was to stop the expansion being re-enabled). Every one of
   those was drawn around the backend under review; none reached the seven. The new gate is drawn
-  around the property â€” nothing that plans reads a `MetadataProvider` â€” so it holds for the
+  around the property — nothing that plans reads a `MetadataProvider` — so it holds for the
   backend nobody has written yet. apt's per-backend test was deleted in the same commit.
 
 **What the owner ruled, 2026-08-06.** Two things:
@@ -5171,19 +5171,19 @@ the manager what it has, install the difference in one line.
 2. **`@requires` keeps splitting the command line, and `Y1`'s clause stands unreversed.** The
    case for merging was that `apt install a b` orders a package dependency correctly by itself,
    so the split buys nothing. It buys the thing the user asked for. `@requires` is not Shall
-   inferring a package relation â€” it is an ordering the user asserted, and it can mean what no
+   inferring a package relation — it is an ordering the user asserted, and it can mean what no
    manager knows: a daemon that must be up before the next package's postinstall runs, a binary
    the other one shells out to at configure time. A manager orders its own dependencies; it does
    not order somebody else's reasons. Merging the two would discard the only explicit ordering
    guarantee in the language to save one subprocess, in the one case where the user typed the
-   edge on purpose. It fires nowhere else â€” unlike the native edges above, which appeared on
+   edge on purpose. It fires nowhere else — unlike the native edges above, which appeared on
    their own.
 
 **No migration, and none needed.** A machine carrying dependency rows from an earlier build
-would read them as drift and plan them for removal â€” under `max_removals` (20) it would act,
+would read them as drift and plan them for removal — under `max_removals` (20) it would act,
 which on a Debian box means `apt remove libssl3`. That hazard is real in shape and empty in
 fact: Shall has no users, so the only machine that could hold such rows is the builder's, and
-it does not. Its `registry.json` has 323 rows, 4 without a `source` â€” `cowsay` on pnpm, yarn,
+it does not. Its `registry.json` has 323 rows, 4 without a `source` — `cowsay` on pnpm, yarn,
 pipx and bun at one timestamp, a hand-test of one name across four managers, not a dependency
 closure. A load-time drop of origin-less rows was designed and **rejected as code guarding a
 machine that does not exist**; the rows are wrong data, not an old format, and this is a
@@ -5197,11 +5197,11 @@ dependencies declared, not discovered.
 
 ## Y10
 
-**Status: ANSWERED â€” built and ruled 2026-08-06.** Raised by
+**Status: ANSWERED — built and ruled 2026-08-06.** Raised by
 `lamdan/whole-repo-2026-08-05.md` as F-0, the top finding on the accuracy axis. Accurate on the
 gap; wrong about its shape in both directions, and the corrections are below.
 
-**Y10 â€” What does the write-ahead log cover, and what does a `dotfiles:` tree get?** Two
+**Y10 — What does the write-ahead log cover, and what does a `dotfiles:` tree get?** Two
 questions, and they turned out to be one: *what happens to a mutation Shall cannot recompute?*
 
 `JournalAction` had two variants, `Install` and `Remove`. All nine `apply/` modules contained
@@ -5220,10 +5220,10 @@ an `@undo=` shell command. Nothing records how far either got, their authors nev
 they were safe to run twice, and there is no declared end state to converge towards.
 
 **Recovery reports an interrupted script; it does not replay one.** A package is finished by
-installing it again â€” reaching a state twice is reaching it once. A script that got half way
+installing it again — reaching a state twice is reaching it once. A script that got half way
 has no recorded progress, so re-running it repeats the half that already ran. What `heal` owes
 it is the account nobody was given: which script, its content hash, and that the next sync will
-run it again from the top. Then the entry is resolved as **failed** â€” not completed, because it
+run it again from the top. Then the entry is resolved as **failed** — not completed, because it
 did not complete, and not left open, because an entry that can never be recovered but stays
 `InProgress` keeps `needs_recovery` true for ever, which is `Q33`'s 208 seconds.
 
@@ -5236,20 +5236,20 @@ retries it. Checked and cleared, not fixed.
 half and the review understated it. It described the gap as *"killed between the remove and the
 write"*. The gap was wider: **a run that completed successfully destroyed the user's file too.**
 
-`link:` has had the whole lifecycle since `T6` â€” back the target up to `<dest>.shall-backup`
-before taking the path over, restore it when the line goes away. `dotfiles:` â€” which
-`verbs/sync.rs` calls *"a pile of `link:` lines"* and applies in the same phase â€” had its own
+`link:` has had the whole lifecycle since `T6` — back the target up to `<dest>.shall-backup`
+before taking the path over, restore it when the line goes away. `dotfiles:` — which
+`verbs/sync.rs` calls *"a pile of `link:` lines"* and applies in the same phase — had its own
 placement loop that called `remove_file` and symlinked over the top. No backup. No ledger row.
 Therefore no teardown, no restore, and no removal guard. Deleting a file from a tree left a
 **dangling symlink** on the machine for ever, under a summary reading `already up to date`.
 
-**Four documents said the ledger row existed** â€” `model/dotfiles.rs`, `core/extras_lock.rs`,
+**Four documents said the ledger row existed** — `model/dotfiles.rs`, `core/extras_lock.rs`,
 `spec/history.md`, and `spec/plan.md`'s 7n, marked **DONE 2026-07-24**, whose stated exit
 condition is *"a file deleted from the tree has its link removed by the same `extras_lock`
 teardown every other extra uses."* No code wrote one. The tree was applied by a private loop
 that no document described, and the design everyone was reading was never built.
 
-So the tree now expands into the `link:` lines it stands for â€” one place, `Dotfiles::links` â€”
+So the tree now expands into the `link:` lines it stands for — one place, `Dotfiles::links` —
 and everything downstream is the machinery that already existed: the `link:` backend places
 them (backup, content short-circuit, cross-drive fallback), the extras ledger keys one row per
 placed file, and the shared teardown restores the original through the guard. **~40 lines added,
@@ -5258,15 +5258,15 @@ one placement loop deleted, four behaviours gained.**
 **The one consequence a user will see, stated rather than shipped quietly.** The shared teardown
 is guarded, so deleting a `dotfiles:` line with more than `max_removals` files (20 by default)
 is now **refused by name**, pointing at `[guard] max_removals`, where before it silently orphaned
-every one of them. That is the ceiling doing exactly what it is for â€” it is already what happens
+every one of them. That is the ceiling doing exactly what it is for — it is already what happens
 to twenty-one `link:` lines, and `also_removing` counts a tree's files against the same budget as
 the packages in the same plan. It is called out here because it is the one place this change
 makes a previously-silent operation stop, and because reversing it means exempting trees from the
 guard, which would be the second teardown all over again.
 
 **A sibling found while building it.** `Dotfiles::plan` answered *"did Shall put this here?"*
-with `is_symlink`. `link:` had already learned that is wrong â€” where the deploy falls back to a
-copy, a file Shall placed itself is not a symlink â€” and the tree's copy of the question never
+with `is_symlink`. `link:` had already learned that is wrong — where the deploy falls back to a
+copy, a file Shall placed itself is not a symlink — and the tree's copy of the question never
 heard. Under `is_symlink` alone the next sync called Shall's own copy a destination Shall did
 not create and refused to touch the tree. The ledger is the record of ownership and now answers
 it, in union with the old test so no destination becomes a fresh `U23` refusal on upgrade.
@@ -5275,12 +5275,12 @@ Rule in **II.2** (the `link:`/T6 section) and **II.19**, reason in **V.139** and
 `tests/dotfiles_tree_is_a_pile_of_links_tests.rs`, which runs `dotfiles:` and `link:` against
 the same bytes and asserts they answer the same, and by
 `tests/the_log_covers_what_cannot_be_recomputed_tests.rs`, whose first test has the script under
-test **read the journal while it is running** â€” the only witness that can tell a write-ahead
+test **read the journal while it is running** — the only witness that can tell a write-ahead
 record from a write-behind one.
 
 **Found under this, raised as `Q48`, and ruled the same day it was explained.**
 `LinkBackendCore::is_same_drive` compared `Component::Prefix`, and `canonicalize` returns a
-`\\?\C:` verbatim prefix where the target carries a plain `C:` â€” so **every `link:` on Windows
+`\\?\C:` verbatim prefix where the target carries a plain `C:` — so **every `link:` on Windows
 took the cross-drive COPY fallback, including same-drive ones.** The check is gone rather than
 repaired: see `Q48`.
 
@@ -5288,31 +5288,31 @@ repaired: see `Q48`.
 
 ## Q48
 
-**Status: ANSWERED â€” ruled 2026-08-06.** Raised the same day while building `Y10`.
+**Status: ANSWERED — ruled 2026-08-06.** Raised the same day while building `Y10`.
 
-**Q48 â€” Should `link:` symlink on Windows, or is the copy fallback now the behaviour?**
+**Q48 — Should `link:` symlink on Windows, or is the copy fallback now the behaviour?**
 `is_same_drive` (`backends/link.rs`) compared the `Component::Prefix` of `source.canonicalize()`
 against the raw target. `canonicalize` returns `\\?\C:\...`, whose prefix is `VerbatimDisk('C')`;
 the target's is `Disk('C')`. They never matched, so **every** `link:` on Windows logged
-*"Cross-drive fallback to COPY"* and copied â€” same drive or not. The dotfiles tree inherited it.
+*"Cross-drive fallback to COPY"* and copied — same drive or not. The dotfiles tree inherited it.
 
 **RULED: a `link:` links.** The drive check is deleted, not repaired, because the limitation it
 guarded does not exist: a Windows symlink stores its destination as a string and resolves it on
-open, so it spans volumes â€” that is the *hard* link's restriction, not the symlink's. Verified
+open, so it spans volumes — that is the *hard* link's restriction, not the symlink's. Verified
 before deleting, with a second drive letter from `subst` and an unelevated `symlink_file` from
 `C:` to `X:`: created, resolved, read through. Repairing the comparison would have kept a
 fallback guarding nothing and still copied for the case symlinks handle.
 
 **The privilege is the only thing that varies, so it is the only thing branched on.**
 `ERROR_PRIVILEGE_NOT_HELD` (1314) falls back to a copy; every other error propagates, so a real
-failure is no longer laundered into a silent copy. The fallback warns by name â€” the privilege,
+failure is no longer laundered into a silent copy. The fallback warns by name — the privilege,
 the remedy (Developer Mode or an elevated shell), and the consequence the user will actually
 meet, that edits stop propagating until the next sync. The third option, ruling the copy *is*
 the behaviour, was rejected: it would retire the one thing `link:` exists for on the one platform
 where the cure is a checkbox.
 
 **Why it was not shipped when found.** Turning copies into symlinks can fail a sync that works
-today â€” behaviour a user would notice, rule 2 of *asking while building*. The ownership predicate
+today — behaviour a user would notice, rule 2 of *asking while building*. The ownership predicate
 was fixed instead, which stopped a run backing up its own copy every sync under a summary reading
 `already up to date`, and made the bug wasteful rather than latent. `V.141`, `why.md`.
 
@@ -5320,12 +5320,12 @@ was fixed instead, which stopped a run backing up its own copy every sync under 
 
 ## Q49
 
-**Status: ANSWERED â€” ruled 2026-08-10.** Raised by the first CI run that ever executed.
+**Status: ANSWERED — ruled 2026-08-10.** Raised by the first CI run that ever executed.
 
-**Q49 â€” `pip:` does not work on a PEP 668 distro. What should Shall do about it?** Ubuntu,
+**Q49 — `pip:` does not work on a PEP 668 distro. What should Shall do about it?** Ubuntu,
 Debian, Alpine, openSUSE and Fedora ship an `EXTERNALLY-MANAGED` marker beside their Python,
 which tells pip the interpreter belongs to the distro's package manager. pip then refuses every
-install â€” `--user` included â€” and it is right to: two package managers writing one
+install — `--user` included — and it is right to: two package managers writing one
 site-packages is how a system python stops booting. What a user saw was pip's own wall of text,
 addressed to somebody typing `pip install` rather than to somebody who wrote a line in a
 manifest.
@@ -5337,7 +5337,7 @@ because the images had moved and pip could no longer complete a real install â�
 escape hatch.**
 
 1. **The default stays a refusal**, because the marker is right. Shall adds its own sentence to
-   pip's, naming the two things a *declaration* can do â€” neither of which pip's text mentions,
+   pip's, naming the two things a *declaration* can do — neither of which pip's text mentions,
    since pip does not know it is being driven by one.
 2. **`pipx:` is the answer pointed at.** Shall already drives it, it works on every one of those
    distros, and installing each application in its own environment is the thing it exists for.
@@ -5357,9 +5357,9 @@ The rule is in **II.49**; the reason is in **V.179**.
 
 ## Q50
 
-**Status: ANSWERED â€” ruled 2026-08-10.** Raised by the first CI run that ever executed.
+**Status: ANSWERED — ruled 2026-08-10.** Raised by the first CI run that ever executed.
 
-**Q50 â€” A killed run leaves the package manager's own lock behind, and every later run fails.
+**Q50 — A killed run leaves the package manager's own lock behind, and every later run fails.
 Should `heal` clear it?** The arch integration leg kills Shall mid-sync on purpose. pacman dies
 with it, `/var/lib/pacman/db.lck` stays on disk, and from that point every command on that
 machine fails:
@@ -5369,7 +5369,7 @@ error: failed to init transaction (unable to lock database)
 error: could not lock database: File exists
 ```
 
-Shall's diagnosis is already good â€” it relays pacman's advice and adds *"tried 4 times; the
+Shall's diagnosis is already good — it relays pacman's advice and adds *"tried 4 times; the
 failure did not change, so this is not the transient failure its output looks like"*. It simply
 could not act, and the same crash on a laptop leaves a user with a package manager that never
 works again until they find that sentence and act on it themselves.
@@ -5378,14 +5378,14 @@ works again until they find that sentence and act on it themselves.
 
 1. **`heal` only, never `sync`.** Deleting another package manager's file is a repair somebody
    asked for by name, not something a converge does on the way past.
-2. **Only locks whose *existence* is the lock** â€” pacman's `db.lck`, dnf's
+2. **Only locks whose *existence* is the lock** — pacman's `db.lck`, dnf's
    `metadata_lock.pid`, zypper's `/run/zypp.pid`. **apt and dpkg are excluded and the exclusion
    is data**, not an omission: those files exist permanently and are locked with `flock(2)`, the
    kernel drops the lock when the holder dies, and deleting one deletes what the next `apt`
    expects to lock.
 3. **Staleness is proved.** A lock carrying a pid is stale when that pid is not running; one
    carrying no pid is stale when no process of that manager is running at all. Not proved is not
-   stale â€” a half-written pid file is left alone.
+   stale — a half-written pid file is left alone.
 4. **Every removal is reported by name, with the reason.** A repair nobody sees is the silence
    P3 forbids, and this one deletes a file the user did not create.
 5. **A removal Shall cannot perform is still reported**, because a lock it could not clear is
@@ -5397,23 +5397,23 @@ The rule is in **II.50**; the reason is in **V.180**.
 
 ## Q51
 
-**Status: ANSWERED â€” ruled 2026-08-10.** Raised by the arch CI leg that `Q50` was meant to fix,
+**Status: ANSWERED — ruled 2026-08-10.** Raised by the arch CI leg that `Q50` was meant to fix,
 which failed again for a different reason.
 
-**Q51 â€” Another package manager is holding its own lock. Should Shall wait for it, or fail?**
+**Q51 — Another package manager is holding its own lock. Should Shall wait for it, or fail?**
 `Q50` taught `heal` to clear a lock nothing holds. This is the other half, and it is the common
 one: the lock is held by a `pacman` or an `apt` that is *running*, in another terminal, or on an
-unattended-upgrade timer, or â€” as CI found â€” orphaned by a killed Shall and still finishing the
+unattended-upgrade timer, or — as CI found — orphaned by a killed Shall and still finishing the
 transaction it was given.
 
 Shall retried four times over about three and a half seconds and then said:
 
-> tried 4 times; the failure did not change, so a further retry will not help â€” **this is not the
+> tried 4 times; the failure did not change, so a further retry will not help — **this is not the
 > transient failure its output looks like**
 
 Every clause of that is wrong here. It *is* the transient failure it looks like; a further retry
 is exactly what helps, once the holder is done. And Shall already knows how to do the right
-thing â€” it waits politely on *its own* data-directory lock, announcing the holder, for two
+thing — it waits politely on *its own* data-directory lock, announcing the holder, for two
 minutes. It would not extend the same courtesy to the package manager's.
 
 **RULED (owner, 2026-08-10): it should not fail there at all. Wait for it.**
@@ -5423,11 +5423,11 @@ minutes. It would not extend the same courtesy to the package manager's.
    wait, announcing the holder. *On disk with nothing holding it* â†’ fail at once and name `shall
    heal`, because waiting on a corpse never ends. *Free* â†’ the holder let go mid-retry, which is
    an ordinary race and gets the ordinary backoff.
-2. **Bounded, and the bound is one budget across the whole retry loop** â€” `manager_lock_wait_secs`,
+2. **Bounded, and the bound is one budget across the whole retry loop** — `manager_lock_wait_secs`,
    default 300. Sized for the *other* manager's transaction, not for Shall's patience: a `dnf
    upgrade` of a hundred packages legitimately runs that long. `0` opts out.
 3. **The wait announces itself the moment it starts.** A wait with no reason given is
-   indistinguishable from a hang, and a hang is what people kill â€” which is the interruption
+   indistinguishable from a hang, and a hang is what people kill — which is the interruption
    that leaves the wedged machine `Q50` is about.
 4. **Nothing is scanned unless the manager already said the word.** The `/proc` question is
    asked only after a failure whose text matched that manager's own phrasing for a taken lock,
@@ -5443,17 +5443,17 @@ The rule is in **II.51**; the reason is in **V.181**.
 
 ## Q52
 
-**Status: ANSWERED â€” ruled 2026-08-10.** Raised while fixing `Q51`, by asking what created the
+**Status: ANSWERED — ruled 2026-08-10.** Raised while fixing `Q51`, by asking what created the
 orphaned `pacman` in the first place.
 
-**Q52 â€” What does Shall own, of the processes it starts?** Two failures, in opposite directions,
+**Q52 — What does Shall own, of the processes it starts?** Two failures, in opposite directions,
 from the same missing idea.
 
 *It killed what it should have asked.* `kill_on_drop(true)` and `start_kill()` are **SIGKILL**,
-which cannot be caught â€” so a package manager Shall stopped on a timeout got no chance to roll
+which cannot be caught — so a package manager Shall stopped on a timeout got no chance to roll
 its transaction back or unlink its lock. Shall was manufacturing the wedged machine `Q50` exists
 to unwedge. Worse: Shall's child is usually `sudo`, and SIGKILL kills `sudo` alone, leaving the
-real manager running as root with its parent gone â€” which is precisely the orphan `Q51` had to
+real manager running as root with its parent gone — which is precisely the orphan `Q51` had to
 be taught to wait for.
 
 *It abandoned what it should have owned.* Awaiting `Command::output()` and dropping that future
@@ -5465,14 +5465,14 @@ Ten of the seventeen were found by the gate, not by reading.
 **RULED (owner, 2026-08-10): every process Shall starts belongs to Shall, and there are three
 doors.**
 
-1. **A child is asked to stop before it is killed** â€” SIGTERM, a grace period, then SIGKILL only
+1. **A child is asked to stop before it is killed** — SIGTERM, a grace period, then SIGKILL only
    for one that will not go. `sudo` forwards a SIGTERM; nothing forwards a SIGKILL.
 2. **Captured, bounded, owned** (`supervised_output`) for a tool nobody is watching.
    **Terminal handed over, unbounded, still owned** (`supervised_status`) for a program a person
-   is looking at â€” an editor at a prompt is not a hung command, but it must not outlive Shall.
+   is looking at — an editor at a prompt is not a hung command, but it must not outlive Shall.
 3. **A blocking `std::process::Command` goes through the third door** (`blocking::command_output`).
    Its hazard is the opposite one: it cannot be abandoned, so it holds a runtime worker until the
-   child exits. So do the human-facing waits â€” a confirm, a TUI â€” and the data-directory lock,
+   child exits. So do the human-facing waits — a confirm, a TUI — and the data-directory lock,
    which slept a worker for up to two minutes.
 4. **A gate, not a sweep.** `tests/a_spawned_child_has_an_owner_tests.rs` fails on a new
    `Command` that reaches `spawn`/`output`/`status` outside the executor, unless it is in an
@@ -5487,10 +5487,10 @@ The rule is in **II.52**; the reason is in **V.182**.
 
 **Status: ANSWERED** (owner, 2026-08-09). Raised by the readiness audit, 2026-08-03 (`AU12`).
 When raised it was not blocking, because nothing in the tree read it. Blocking for *distribution*, which is a different question and the one that
-matters â€” `scripts/install.sh` and `shall self-upgrade` both hand this program to other people.
+matters — `scripts/install.sh` and `shall self-upgrade` both hand this program to other people.
 
-**Z1 â€” Under what licence is Shall published?** There is no `LICENSE` file at the repo root and
-no `license` key in `Cargo.toml`. Under the Berne Convention that is not "free to use" â€” it is
+**Z1 — Under what licence is Shall published?** There is no `LICENSE` file at the repo root and
+no `license` key in `Cargo.toml`. Under the Berne Convention that is not "free to use" — it is
 *all rights reserved by default*, so a user who runs the install script has no licence to the
 copy they now hold, and `crates.io` will refuse the package outright.
 
@@ -5502,7 +5502,7 @@ needs every contributor's agreement.
 **What an answer has to say:** the licence, and whether `Cargo.toml` gains `license = "..."`
 (needed for a crates.io release) or `license-file`. The two conventional answers for a Rust CLI
 are `MIT OR Apache-2.0` (the Rust ecosystem default, permissive) and `GPL-3.0-or-later` (the
-package-manager tradition â€” dpkg, dnf, pacman). No recommendation is offered here, because a
+package-manager tradition — dpkg, dnf, pacman). No recommendation is offered here, because a
 recommendation on this one is a decision wearing a suggestion's clothes.
 
 **RULED (owner, 2026-08-09): `MIT OR Apache-2.0`.**
@@ -5510,14 +5510,14 @@ recommendation on this one is a decision wearing a suggestion's clothes.
 The Rust ecosystem's default pair, and the reason it is a pair rather than a preference: MIT is
 the shortest permissive licence anyone will actually read, and Apache-2.0 carries the explicit
 patent grant a company's lawyer looks for. A user takes whichever they can accept. The other
-answer on the table â€” `GPL-3.0-or-later`, the package-manager tradition â€” was not chosen; Shall
+answer on the table — `GPL-3.0-or-later`, the package-manager tradition — was not chosen; Shall
 is a tool people run rather than a library they link, and the copyleft it buys costs the
 easy-adoption story the install script exists for.
 
 **Shipped with the ruling:**
 
 - `LICENSE-MIT` and `LICENSE-APACHE` at the repo root, both stamped `2026 Shall Contributors`.
-- `license = "MIT OR Apache-2.0"` in `Cargo.toml`, and `publish = false` **deleted** â€” it was
+- `license = "MIT OR Apache-2.0"` in `Cargo.toml`, and `publish = false` **deleted** — it was
   there only because crates.io refuses a package with no `license` key, which was a statement of
   today's truth rather than a preference, and today's truth changed.
 - `deny.toml`'s `private = { ignore = true }` **deleted**. It existed so that gate would not
@@ -5533,30 +5533,30 @@ easy-adoption story the install script exists for.
 **Status: ANSWERED** (owner, 2026-08-03). Raised by the readiness audit the same day (`AU8`).
 Built in the same change.
 
-**Z2 â€” `lock` and `unlock` were not inverses, and the mis-pairing could move packages.**
+**Z2 — `lock` and `unlock` were not inverses, and the mis-pairing could move packages.**
 
 | command | what it touched |
 |---|---|
 | `lock` | `locks/versions.json`, and approved hooks and adapters at their current hash |
-| `unlock` | `locks/bare.HOST.toml` â€” which *manager* an unpinned bare name resolved to |
+| `unlock` | `locks/bare.HOST.toml` — which *manager* an unpinned bare name resolved to |
 
 Different files, unrelated jobs. Someone who ran `shall lock`, changed their mind and typed
 `shall unlock` did not undo the pin: they discarded the recorded backend resolution, and
-`unlock`'s own help stated the consequence â€” *"sync uninstalls the cargo copy, because two of
+`unlock`'s own help stated the consequence — *"sync uninstalls the cargo copy, because two of
 the same package is what this avoids."* So the obvious undo for a harmless command could
 uninstall software.
 
 **Reading the code to answer it found the surface was wider than the report.** There were not two
-things called "the lock" but *three* â€” version pins, backend resolutions, and the approval hashes
-for everything the config can execute â€” plus `hold`/`unhold`, which is a different question
+things called "the lock" but *three* — version pins, backend resolutions, and the approval hashes
+for everything the config can execute — plus `hold`/`unhold`, which is a different question
 (exemption from `upgrade`, not a freeze) and stays where it is. Only one of the three had an
 inverse at all: **version pins could not be released by any command**, only by hand-editing
 `locks/versions.json`. `sync --upgrade` is a per-run bypass, not an undo.
 
 **And a second defect, in the same family.** `locks/versions.json` is written by exactly two
-things â€” `lock`, and `heal`. Not by `sync`, not by `upgrade`. So `shall upgrade` moved a package
-from 7.81.0 to 8.0.1, the pin still said 7.81.0, and the next ordinary `sync` â€” which converges
-to the lock (U11) â€” read the old version back as `@version=`, found the installed one did not
+things — `lock`, and `heal`. Not by `sync`, not by `upgrade`. So `shall upgrade` moved a package
+from 7.81.0 to 8.0.1, the pin still said 7.81.0, and the next ordinary `sync` — which converges
+to the lock (U11) — read the old version back as `@version=`, found the installed one did not
 satisfy it (an unadorned version is an equality constraint), and planned the package straight
 back down. The upgrade did not stick. `sync --upgrade` had the same hole.
 
@@ -5565,35 +5565,35 @@ back down. The upgrade did not stick. `sync --upgrade` had the same hole.
 **Both verbs name the axis they act on**, as a positional value with `all` as the default:
 
 ```
-shall lock   [versions|backends|scripts|all] [NAMEâ€¦] [--list]
-shall unlock [versions|backends|scripts|all] [NAMEâ€¦] [--list]
+shall lock   [versions|backends|scripts|all] [NAME…] [--list]
+shall unlock [versions|backends|scripts|all] [NAME…] [--list]
 ```
 
-- `versions` â€” the pins in `locks/versions.json`. `lock versions` records what is installed;
+- `versions` — the pins in `locks/versions.json`. `lock versions` records what is installed;
   `unlock versions` drops the pins, which nothing could do before.
-- `backends` â€” `locks/bare.HOST.toml`. `unlock backends` is the old `unlock`, unchanged in
+- `backends` — `locks/bare.HOST.toml`. `unlock backends` is the old `unlock`, unchanged in
   behaviour and now unmistakable in name. `lock backends` records the resolutions explicitly,
   which previously only happened as a side effect of a sync.
-- `scripts` â€” `locks/hooks.toml`: hooks, event hooks, adapters, `exec:`, `generate:`,
+- `scripts` — `locks/hooks.toml`: hooks, event hooks, adapters, `exec:`, `generate:`,
   health-check commands and the `vars` provider. `lock scripts` is the old approval half of
   `lock`; `unlock scripts` withdraws approval, which nothing could do before.
 - **A bare `lock` or `unlock` means `all`** (owner ruling): a bare `lock` does what `lock` always
   did, plus recording backend resolutions, and a bare `unlock` releases all three. It is not
-  gated behind a confirmation â€” the axis is what a user types to be careful, and a prompt on a
+  gated behind a confirmation — the axis is what a user types to be careful, and a prompt on a
   command whose whole job is this would be the asking that II.15 already rejects.
 - `NAME` scopes any axis and matches the whole ledger key or its tail: `unlock versions curl` and
   `unlock versions apt:curl` both pick out `apt:curl`.
 - A name that picks nothing out **warns and changes nothing**, naming the ledger. It is not an
   error, matching what `unlock` already did for an unfrozen name.
 
-**And every path that deliberately moves a version forward re-records it** â€” `upgrade` in all its
+**And every path that deliberately moves a version forward re-records it** — `upgrade` in all its
 modes, and `sync --upgrade`. **Only entries already in the lock are refreshed.** A package nobody
 pinned has no stale record to fight, and pinning it would make every `upgrade` a silent `lock`.
 
 **What was rejected.** Renaming `unlock` to `forget-backend` and leaving `lock` without an
 inverse was the recommendation this entry carried, and the owner went the other way: the axis
 belongs in the grammar rather than in a verb name, because there were three ledgers rather than
-two and a per-ledger verb name would have needed six. `NO LEGACY` applies â€” there is no `unlock`
+two and a per-ledger verb name would have needed six. `NO LEGACY` applies — there is no `unlock`
 that takes a bare name any more, and a name where the axis goes is refused with the three axes
 listed rather than guessed at.
 
@@ -5601,13 +5601,13 @@ listed rather than guessed at.
 
 ## Q25
 
-**Status: ANSWERED â€” ruled 2026-08-03.** Raised in `docs/archive/DIRECTIONS-2026-08-03.md` as `Q-A`/`Q-B`/`Q-F`
+**Status: ANSWERED — ruled 2026-08-03.** Raised in `docs/archive/DIRECTIONS-2026-08-03.md` as `Q-A`/`Q-B`/`Q-F`
 before that file was rewritten; the letters are recorded here so the old references resolve.
 
-**Q25 â€” May ownership be derived from the config repo's git history?** `registry.json` records
+**Q25 — May ownership be derived from the config repo's git history?** `registry.json` records
 what Shall owns, and it is the only one of the three sources of truth nothing else can
 reconstruct: the config says what you want, the machine says what is there, and the ledger says
-what Shall put there. Six subsystems exist to serve it â€” `core/state.rs`, `core/datalock.rs`,
+what Shall put there. Six subsystems exist to serve it — `core/state.rs`, `core/datalock.rs`,
 `app/bundle.rs`, `app/snapshot_restore.rs`, `main.rs`'s `READ_ONLY_COMMANDS`, and much of
 `app/adopt.rs`. The proposal was to derive ownership from II.1's git history instead and demote
 the ledger to a deletable cache.
@@ -5616,7 +5616,7 @@ the ledger to a deletable cache.
 
 **The strong form makes git required for `sync`, not for `history`.** Git is optional today and
 that is deliberate: `core/git.rs` is a dependency-free shell-out (no `git2`, no `gix`, no
-libgit2 build cost), and its own refusal says *"install it to use Shall's manifest history â€”
+libgit2 build cost), and its own refusal says *"install it to use Shall's manifest history —
 `shall git`, `diff`, `rollback` and `bundle`. Everything else works without it."* X.5 gives a
 git-less machine `bundle` in place of history. Deriving ownership from history inverts that: the
 verb that touches the machine hardest becomes the one that stops working, and git is absent by
@@ -5626,19 +5626,19 @@ uninstall a package* is not a sentence this tool gets to say.
 **The weak form was designed out and then measured, which is what killed it.** Git as a
 corroborating second source: intersection governs removal, union governs reporting, three-valued
 so a machine that cannot answer abstains rather than voting "foreign". It is a coherent design.
-It also **misses AU4** â€” the most recent real instance of the failure it exists to catch â€” because
+It also **misses AU4** — the most recent real instance of the failure it exists to catch — because
 a fresh config sandbox with a stale data dir has no history to be authoritative with, so git
 abstains on all seven phantom removals. It misses the over-broad `adopt` case that `adopt.rs`'s
 own header warns about, because adopt writes its lines into the manifest and commits them, so git
-agrees with the wrong ledger. What remains is "a registry from another machine or another time" â€”
+agrees with the wrong ledger. What remains is "a registry from another machine or another time" —
 real, but narrow, against a four-condition abstention gate, a history walk on the removal path,
 and a reconcile mode. **`guard.rs` is already the general brake on a plan that removes too much,
 and it does not care why the registry is wrong.**
 
-**What survives.** Git as *enrichment* where it happens to be present â€” the commit, the date, the
+**What survives.** Git as *enrichment* where it happens to be present — the commit, the date, the
 message you wrote, in `shall why`. Nothing votes on ownership, nothing needs reconciling, and its
 absence costs a clause rather than a verb. That is the surviving half and it is tracked in
-`docs/archive/DIRECTIONS-2026-08-03.md` Â§4.
+`docs/archive/DIRECTIONS-2026-08-03.md` §4.
 
 `registry.json` remains the source of truth for ownership. No rule in Part II changes.
 
@@ -5646,41 +5646,41 @@ absence costs a clause rather than a verb. That is the surviving half and it is 
 
 ## Q26
 
-**Status: DEFERRED â€” 2026-08-03.**
+**Status: DEFERRED — 2026-08-03.**
 
-**Q26 â€” Is the plan a public versioned artifact?** Twenty-two backends have ever run against a
+**Q26 — Is the plan a public versioned artifact?** Twenty-two backends have ever run against a
 real package manager; **thirty never have.** But most of what a backend is comes down to "given
-`pipx:black`, what argv do you run" â€” a string, checkable with the manager absent. `plan` already
+`pipx:black`, what argv do you run" — a string, checkable with the manager absent. `plan` already
 computes those strings, which is why plan-smoking covers 45 backends while execution covers 22.
 
 **Two halves, ruled apart.**
 
 **The internal object: build it.** A stable, serializable plan the code passes around, with argv
-assertions per backend against it â€” all 52, any machine, milliseconds, nothing installed. This is
+assertions per backend against it — all 52, any machine, milliseconds, nothing installed. This is
 coverage for the thirty backends that will never get a container image, and it is the only
 verification strategy in sight that scales faster than one image at a time. It changes no
 user-visible behaviour and needs no further ruling.
 
 **The public schema: deferred.** A published format with a hard refusal on mismatch is a
-permanent compatibility surface under NO-LEGACY â€” there is no dual-reader when it changes. It
+permanent compatibility surface under NO-LEGACY — there is no dual-reader when it changes. It
 buys fleet deployment (compute here, apply there) and plan-diffs in code review, and neither has
 been asked for. Deferred rather than refused: the internal object is its precondition, so nothing
 is foreclosed by waiting.
 
 **Constraint this places on everything else:** `model::Resolver` must stay pure. It is the only
 component testable without a machine, and the argv assertions rest entirely on that. Merging it
-with `app::sync::StateResolver` â€” which the name similarity invites â€” would put I/O inside it and
+with `app::sync::StateResolver` — which the name similarity invites — would put I/O inside it and
 destroy this.
 
 ---
 
 ## Q27
 
-**Status: ANSWERED â€” ruled 2026-08-03.** Raised as `Q-E`.
+**Status: ANSWERED — ruled 2026-08-03.** Raised as `Q-E`.
 
-**Q27 â€” Does Part II gain a tier-1 / tier-2 distinction?** The proposal was to state in Part II
-that some declarations are ones Shall owns end to end and can undo exactly â€” `link:`,
-`dotfiles:`, `setting:`, `@bin` artifacts, `exec:` with `@undo=` â€” while every package backend,
+**Q27 — Does Part II gain a tier-1 / tier-2 distinction?** The proposal was to state in Part II
+that some declarations are ones Shall owns end to end and can undo exactly — `link:`,
+`dotfiles:`, `setting:`, `@bin` artifacts, `exec:` with `@undo=` — while every package backend,
 `service:`, `firewall:` and `repo:` delegate to a manager that mutates global state in place; and
 to print which tier each row is in during `plan`, since "this can be undone exactly" and "this is
 guarded and snapshotted but undoing it is a restore" are different promises printed identically
@@ -5697,11 +5697,11 @@ been asked and answered.
 
 ## Q28
 
-**Status: ANSWERED â€” ruled 2026-08-03.**
+**Status: ANSWERED — ruled 2026-08-03.**
 
-**Q28 â€” Is a command that reports success over a false picture of the machine a defect class?**
+**Q28 — Is a command that reports success over a false picture of the machine a defect class?**
 There are two ways this tool can be wrong: it can do the wrong thing, or it can do the right
-thing and tell you something false about it. **The second is worse** â€” after the first you can go
+thing and tell you something false about it. **The second is worse** — after the first you can go
 and look at your machine, and after the second you stop looking, because you were told it was
 fine.
 
@@ -5716,20 +5716,20 @@ Two instances, one session, neither a crash and both exit 0:
 
 The three sub-rules: *"nothing to do" is a claim about the world and has to be earned*; *every
 mutation states where, not just what*; *absence is reported like presence*. `Declined::reported`
-(`app/sync/planner.rs`) is the first of them already built for one path â€” its own comment says
+(`app/sync/planner.rs`) is the first of them already built for one path — its own comment says
 the type exists so that *"does the user hear about this?" cannot be answered by omission*, and an
 empty plan with a non-empty `skipped` is not `already up to date`. The rule generalises what that
 type does for removals to every path that reports.
 
-This is the standard the error messages already meet â€” file, line, what is wrong, what to do, and
-what the concept means â€” applied to success, to absence, and to history rather than only to
+This is the standard the error messages already meet — file, line, what is wrong, what to do, and
+what the concept means — applied to success, to absence, and to history rather than only to
 failure.
 
 ---
 
 ## Q29
 
-**Status: HALF RULED, 2026-08-04.** The resource-kind half is ruled **no â€” the set stays open**:
+**Status: HALF RULED, 2026-08-04.** The resource-kind half is ruled **no — the set stays open**:
 *"i dont think it is closed, no. we still might add."* The computation half is **still open** and
 is not implied by it; nobody has ruled on whether a fourth `vars` provider or another logic
 keyword may be added, and this register does not answer a question the owner did not answer.
@@ -5741,14 +5741,14 @@ block are both asserted against `KEYWORDS`, in both directions, grouped by `Keyw
 a prefix without documenting it fails the build.
 
 **The ruling was expensive to defer by exactly one prefix.** `generate:` shipped as U33, sits in
-`KEYWORDS`, has its own rule in Part II â€” and was missing from Part II's Statements table until
+`KEYWORDS`, has its own rule in Part II — and was missing from Part II's Statements table until
 2026-08-04, *directly beneath the paragraph warning that three earlier prefixes had gone missing
 the same way*. Four, not three. Prose does not fail a build.
 
-**Q29 â€” Is the statement set closed?** `config/grammar/statement.rs` is 3,406 lines, the largest
+**Q29 — Is the statement set closed?** `config/grammar/statement.rs` is 3,406 lines, the largest
 file in `src/`, and it has grown `when`, `param`, `vars` with three providers, `generate:`,
 `exec:` and user verbs. The proposal was to declare the config language **data**, freeze the
-keyword list, and route all future computation through `generate:` â€” a command whose stdout is
+keyword list, and route all future computation through `generate:` — a command whose stdout is
 declarations, written in a real language.
 
 **The question as posed has a hole in it.** `generate:` output is merged *"as if typed"*, so it
@@ -5759,49 +5759,49 @@ sound escape hatch and a weak policy for absorbing the future.
 
 **So it splits, and the halves want different answers:**
 
-- **Is computation closed** â€” no more logic keywords, no fourth `vars` provider, no `repl`?
+- **Is computation closed** — no more logic keywords, no fourth `vars` provider, no `repl`?
   `generate:` genuinely covers this. *Recommended: yes.*
-- **Is the resource-kind set closed** â€” never another `foo:` prefix? Nothing absorbs the twelfth
+- **Is the resource-kind set closed** — never another `foo:` prefix? Nothing absorbs the twelfth
   kind if that is wrong, and extensibility grades Aâˆ’ precisely because the backend mechanism is
   open. *Recommended: no.*
 
 **Either way, the motivation has a better cure than a ban.** Part II has three times failed to
-list a statement it shipped â€” `exec:`, `dotfiles:` and `firewall:` â€” and Q16 later had to refuse
+list a statement it shipped — `exec:`, `dotfiles:` and `firewall:` — and Q16 later had to refuse
 nine more bare keywords that fell through the same hole. `KEYWORDS` in `statement.rs` is already
 the single list (its comment records that three copies had drifted until
 `setting:HKCU\Software\Foo` was read as a set difference by the only one that had never heard of
 `setting:`). **A test asserting `KEYWORDS` matches Part II's statement table** makes the twelfth
 keyword impossible to ship undocumented, without closing anything. That is an afternoon and it is
-sequenced ahead of this ruling in `docs/archive/DIRECTIONS-2026-08-03.md` Â§6.
+sequenced ahead of this ruling in `docs/archive/DIRECTIONS-2026-08-03.md` §6.
 
 ## Q30
 
-**Status: ANSWERED â€” ruled 2026-08-04.** Filed inside `Q29`'s entry for its first three months,
-with no heading of its own â€” so the register could not count it, `decision-count.sh` never saw
+**Status: ANSWERED — ruled 2026-08-04.** Filed inside `Q29`'s entry for its first three months,
+with no heading of its own — so the register could not count it, `decision-count.sh` never saw
 it, and the status it inherited by position was `Q29`'s **HALF RULED** rather than its own. It
 had an index row the whole time, and `registry/mod.rs`, `backend_is_data_not_code_tests.rs` and
 `terminator_probe_tests.rs` all cite `Q30` by name. **A decision the code names and the register
 cannot count is the drift this file exists to end**, so it is promoted here rather than left
 where it was written (`J9`'s round).
 
-**Q30 â€” Is the `--` terminator a property of a label, and is the table keyed on the wrong thing?**
+**Q30 — Is the `--` terminator a property of a label, and is the table keyed on the wrong thing?**
 **RULED 2026-08-04: read the terminator off the tokens; keep one key per binary.**
 
 Two questions, one measured answer each.
 
 **The label.** `VersionPin` had three variants whose `apply` bodies were character-for-character
-identical â€” `Flag`, `TrailingPositional`, `RequiredFlag`. They built the same argv; only the
+identical — `Flag`, `TrailingPositional`, `RequiredFlag`. They built the same argv; only the
 variant *name* decided whether `push_names` was allowed to emit `--`, because a version spelled
 `-v 1.6` is an option and one spelled `1.6` is an operand. Three backends carry a bare operand
 version and were spread across two of the labels:
 
 | backend | pin args | labelled | terminator |
 |---|---|---|---|
-| `gem` | `["-v", "{version}"]` | `Flag` | dropped â€” correct, `-v` is an option |
-| `pub` | `["{version}"]` | `TrailingPositional` | kept â€” correct |
-| `luarocks` | `["{version}"]` | `Flag` | **dropped â€” wrong** |
-| `mix` | `["{version}"]` | `Flag` | **dropped â€” wrong** |
-| `asdf` | `["{version}"]` | `RequiredFlag` | dropped â€” right answer, wrong reason |
+| `gem` | `["-v", "{version}"]` | `Flag` | dropped — correct, `-v` is an option |
+| `pub` | `["{version}"]` | `TrailingPositional` | kept — correct |
+| `luarocks` | `["{version}"]` | `Flag` | **dropped — wrong** |
+| `mix` | `["{version}"]` | `Flag` | **dropped — wrong** |
+| `asdf` | `["{version}"]` | `RequiredFlag` | dropped — right answer, wrong reason |
 
 So `luarocks install -- jq` carried the terminator and `luarocks install jq 1.6` did not: same
 tool, same command, protection that came and went with whether the line named a version.
@@ -5809,8 +5809,8 @@ tool, same command, protection that came and went with whether the line named a 
 **The ruling is that nobody labels it.** An option starts with `-`; that is what "option" means
 to every argument parser ever written. The three variants collapse to one `After { args,
 unpinned }`, `Before` is the old `LeadingFlag`, and `emits_trailing_option()` looks at the first
-token. Exactly two argvs in the tree change â€” `luarocks` and `mix` gain their `--` on pinned
-installs â€” and both were measured before the change, not after.
+token. Exactly two argvs in the tree change — `luarocks` and `mix` gain their `--` on pinned
+installs — and both were measured before the change, not after.
 
 Measured in the `tools` image, 2026-08-04:
 
@@ -5819,21 +5819,21 @@ $ luarocks install --                       Error: missing argument 'rock'
                                             usage: luarocks install [...] <rock> [<version>]
 $ luarocks install -- <rock> <version>      identical to the same line without `--`
 $ mix archive.install hex --force -- <name> identical, both naming the operand
-$ dart pub global activate -- <pkg> <ver>   identical; usage `activate <package> [version-â€¦]`
+$ dart pub global activate -- <pkg> <ver>   identical; usage `activate <package> [version-…]`
 ```
 
 `asdf` keeps its answer and loses its excuse: its `latest` fallback is an operand too, so the
-pin no longer claims a trailing option â€” and `asdf` still gets no `--`, from the binary table,
+pin no longer claims a trailing option — and `asdf` still gets no `--`, from the binary table,
 which is the layer that measured it (`No such plugin: --`). Two layers, each honest, agreeing by
 accident no longer.
 
 **The key.** The proposal was to key the terminator table on `(binary, verb)` rather than on
-`binary`, on the theory that `gem`'s `--` breaks `install` but would be safe on `list` â€” which
+`binary`, on the theory that `gem`'s `--` breaks `install` but would be safe on `list` — which
 would give `gem` and `nimble` back the terminator on the paths that do not break. **Rejected: the
 theory is false.** Measured, same image, same day:
 
 ```text
-$ gem list -- <bogus>        lists EVERY gem â€” the filter is swallowed, a wrong answer not an error
+$ gem list -- <bogus>        lists EVERY gem — the filter is swallowed, a wrong answer not an error
 $ gem uninstall -- <bogus>   Please specify at least one gem name
 $ nimble -y uninstall -- x   Error: Unknown option: --
 $ nimble -y list -- x        Error: Unknown option: --
@@ -5843,13 +5843,13 @@ $ asdf list -- <bogus>       No such plugin: --
 ```
 
 All four blanket bans are correct on every verb tested, and `gem list` is the worst case in the
-set â€” it does not fail, it answers wrongly. A per-verb dimension would have shipped with zero
+set — it does not fail, it answers wrongly. A per-verb dimension would have shipped with zero
 true entries and one more table to keep honest. The premise was a guess; the guess was wrong.
 
 **What ships with the ruling.** One terminator table instead of two (the second was
 `#[cfg(test)]`, so half the production facts compiled only into tests), every row carrying the
 tool's own sentence or an admission that nobody asked, a ratchet on the admissions, and
-`tests/terminator_probe_tests.rs` â€” a differential probe that runs each manager's real argv with
+`tests/terminator_probe_tests.rs` — a differential probe that runs each manager's real argv with
 and without the terminator and compares exit code, operand echo and the presence of a bare `--`.
 It reads its argvs from the registry rather than a list, and CI points it at the `tools` image,
 where thirty managers live instead of a runner's eight. That gap is why `luarocks`, `mix` and
@@ -5859,13 +5859,13 @@ where thirty managers live instead of a runner's eight. That gap is why `luarock
 
 ## Q31
 
-**Status: ANSWERED â€” ruled 2026-08-05, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, and built the same day.**
 
 **Ruled: recommendation (1) plus (2). Two meanings, two words, and the verb is named after
-what it deletes.** `unmanaged` keeps E6's meaning â€” what `adopt` would take. The wider set,
+what it deletes.** `unmanaged` keeps E6's meaning — what `adopt` would take. The wider set,
 every installed package nothing declares, is **`undeclared`**, and it is the word on `check
 drift`, in the readme, in the JSON key, and in the command name: **`purge-unmanaged` is now
-`purge-undeclared`.** There is no alias for the old verb name â€” a compatibility spelling is
+`purge-undeclared`.** There is no alias for the old verb name — a compatibility spelling is
 exactly the second implementation this repo keeps deleting, and a user typing the old name gets
 clap's unknown-subcommand error rather than the delete they misread.
 
@@ -5875,8 +5875,8 @@ clap's unknown-subcommand error rather than the delete they misread.
 
 **Ruled in the same sitting: `Q47`, which shrinks this problem without solving it.** With
 OS-essential packages adopted as live lines, most of the 34 become declared and the two numbers
-converge on this machine. They do not converge in general â€” a backend that cannot attribute an
-install to a choice still answers the two questions differently â€” so the rename stands on its
+converge on this machine. They do not converge in general — a backend that cannot attribute an
+install to a choice still answers the two questions differently — so the rename stands on its
 own and is not made redundant by `Q47`.
 
 Rule in II.11; why in V.138. Below is why it was raised.
@@ -5886,7 +5886,7 @@ the same minute:
 
 ```
 shall check           ->  ok  unmanaged   everything you chose is managed
-shall check drift     ->  ? unmanaged â€” installed but not in your manifests (34):
+shall check drift     ->  ? unmanaged — installed but not in your manifests (34):
 shall check unmanaged ->  1 package(s) `shall adopt` would take
                           33 package(s) the OS reports as essential are left alone
 ```
@@ -5894,12 +5894,12 @@ shall check unmanaged ->  1 package(s) `shall adopt` would take
 Neither number is wrong. They answer different questions and **both questions have a command
 that acts on them**:
 
-- **what `adopt` would take** â€” `adopter().discover().adopt`. This is what `check unmanaged` and
+- **what `adopt` would take** — `adopter().discover().adopt`. This is what `check unmanaged` and
   the `check` rollup report, and `verbs/check.rs:3` records that it was *chosen* for the word:
   the section used to answer the other question, `unmanaged` and `adopt` disagreed by a factor of
   four, and E6 asked for this one.
-- **everything installed that nothing declares** â€” `installed_but_unmanaged()`. This is what
-  `check drift` lists, what `readme.md:670` defines the word as, and â€” the awkward part â€” what
+- **everything installed that nothing declares** — `installed_but_unmanaged()`. This is what
+  `check drift` lists, what `readme.md:670` defines the word as, and — the awkward part — what
   **`purge-unmanaged` deletes**.
 
 So the register chose one meaning for the word and the most destructive command in the program is
@@ -5909,7 +5909,7 @@ layer up, in the vocabulary rather than the code.
 
 **Why it is not the builder's.** Every way out renames something a user reads or types:
 
-1. **`check drift` stops using the word.** Cheapest. `? installed and not declared â€”
+1. **`check drift` stops using the word.** Cheapest. `? installed and not declared —
    `purge-unmanaged` would remove (34)`, and `readme.md:670` moves with it. But `purge-unmanaged`
    then names a set the word `unmanaged` no longer describes anywhere.
 2. **`purge-unmanaged` is renamed** to whatever the second meaning is called. Honest, and it is a
@@ -5917,31 +5917,31 @@ layer up, in the vocabulary rather than the code.
 3. **`check unmanaged` gives the word back** and becomes `check adoptable`. Reverses E6's choice,
    which was made on a measurement.
 
-**Recommendation: (1) plus (2)** â€” pick one word for "installed and nothing declares it", use it
+**Recommendation: (1) plus (2)** — pick one word for "installed and nothing declares it", use it
 on `check drift`, in the readme, and in the command name, and leave `unmanaged` meaning what E6
 ruled it means. Two meanings need two words; which two is the owner's call, because all three
 routes change what a user reads and one changes what they type.
 
 ## Q32
 
-**Status: ANSWERED â€” ruled 2026-08-05, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, and built the same day.**
 
 **Ruled: the bound covers the read.** The same silence clock keeps running over the output
-readers once the child has exited â€” same `command_idle_timeout_secs`, same `Permanent` class, no
-new dial â€” and a pipe that has produced nothing for the bound and still has not closed gets its
+readers once the child has exited — same `command_idle_timeout_secs`, same `Permanent` class, no
+new dial — and a pipe that has produced nothing for the bound and still has not closed gets its
 readers aborted and the command **fails by name**. That second half is the ruling that matters:
 before it the command exited 0 and the install was reported a success.
 
 Silence and not duration, so a command still printing is never cut off; the bound is not reached
-by a slow command, only by a quiet one. Killing the orphan itself â€” a Windows Job Object, a
-process group on Unix â€” is still **not** done here: it is platform-specific, it changes what
+by a slow command, only by a quiet one. Killing the orphan itself — a Windows Job Object, a
+process group on Unix — is still **not** done here: it is platform-specific, it changes what
 "kill" means, and it is a separate decision rather than a rider on this one.
 
 `a_detached_grandchild_cannot_hold_the_read_open_past_the_bound` is no longer `#[ignore]`d and
 now also asserts the failure, its wording and its retryability. Below is why it was raised.
 
 **Q24's bound watches the wrong half of the wait.** `RawExecutor::wait_watched` bounds
-`child.wait()` â€” the child's *exit*. The read of its output is outside that bound:
+`child.wait()` — the child's *exit*. The read of its output is outside that bound:
 
 ```rust
 let status = match idle { ... };     // bounded; kills on silence
@@ -5954,42 +5954,42 @@ stderr: joined(err_task.await)?,
 `child.wait()` has returned. So when a manager hands its stdout to a background process and
 exits, the direct child is gone, a grandchild still holds the write end, and Shall reads
 toward an EOF that never arrives. Nothing bounds it: not `command_idle_timeout_secs`, not the
-DAG timeout, not `kill_on_drop` â€” there is no child left to kill.
+DAG timeout, not `kill_on_drop` — there is no child left to kill.
 
 **Measured, twice.** In a real sweep, `shall -y install nimble:nimjson` sat at **zero CPU with
 no children at all** while three orphaned `nim.exe`/`nimble.exe` ran at `PPID 0`, outside
 Shall's process tree. Then reproduced deterministically with a fake manager that detaches:
-`command_idle_timeout_secs = 20`, a child holding stdout for 60s, **64s wall** â€” and
+`command_idle_timeout_secs = 20`, a child holding stdout for 60s, **64s wall** — and
 
 **it exited 0 and reported the install a SUCCESS**, timing the task at 60771ms.
 
 That second half is a separable defect and arguably the worse one: Q28 rules that a command
 reporting success while leaving a false picture is a defect class of its own.
 
-**Recommendation** â€” keep the same clock running over the readers once the child has exited:
+**Recommendation** — keep the same clock running over the readers once the child has exited:
 silence, not duration, the same 900, the same message, the same `Permanent` class, no new dial.
 A pipe that has produced nothing for the bound and still has not closed gets its readers
 aborted and the command fails **by name**. A bound a command can walk around is not a bound.
 
 **Not recommended now, and named so it is not silently skipped:** killing descendants with the
 child (a Windows Job Object, a process group on Unix). It is the deeper fix, it is
-platform-specific, and it changes what "kill" means â€” a separate decision, not a rider on this
+platform-specific, and it changes what "kill" means — a separate decision, not a rider on this
 one.
 
 ## Q33
 
-**Status: ANSWERED â€” ruled 2026-08-05, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, and built the same day.**
 
 **Ruled: recovery finishes interrupted work, and nothing else.** `heal` acts on `InProgress` and
 `Abandoned`. A `Failed` entry reached an outcome and reported it; the package is not installed
-and its line is still in the manifest, so the very next `sync` schedules it again â€” retrying it
+and its line is still in the manifest, so the very next `sync` schedules it again — retrying it
 in recovery was the same work twice, not extra coverage. The trigger and the work are now one
 predicate, which is what stopped one unrecoverable interrupted entry from running a full
 recovery of every past failure in front of every sync. `Failed` becomes terminal and ages out
 like `Completed`; `InProgress` is still never purged at any age.
 
 **And: recovery runs on the transaction engine.** The `for` loop with `install(from_ref(spec))`
-in it is deleted. Recovery builds a graph â€” dependency edges from the journal's own specs â€” and
+in it is deleted. Recovery builds a graph — dependency edges from the journal's own specs — and
 hands it to `Transaction`, which batches per manager and runs the waves in parallel. Two
 settings differ from a sync's and both follow from what recovery is: no rollback, and
 `continue_on_error`, so one entry nobody can finish does not leave the others unfinished. A node
@@ -5997,10 +5997,10 @@ whose dependency failed is reported as skipped, naming the one that stopped it. 
 in V.135.
 
 **Already shipped before the ruling, and kept:** 22 journal entries naming one operation are one
-recovery, not 22 â€” they are one operation attempted 22 times. Below is the original entry.
+recovery, not 22 — they are one operation attempted 22 times. Below is the original entry.
 
 **Ruled: 22 journal entries naming one operation are one recovery, not 22.** They are not 22
-operations â€” they are one operation attempted 22 times, because `record_start` mints a fresh id
+operations — they are one operation attempted 22 times, because `record_start` mints a fresh id
 per attempt. `heal` now collapses its unresolved entries by *what a recovery would do* (backend,
 name, and install-or-remove), acts once, and resolves every entry that named the same thing,
 because a single attempt decides all of them. Two interrupted installs of one spec are one
@@ -6019,10 +6019,10 @@ journal: **22 separate operations for a single `scoop:shall-no-such-pkg-zzz`**, 
 `heal` then reinstalls, each a real `scoop install` round trip.
 
 Two things are wrong and they compound. A declaration that fails on every sync grows the
-journal without bound, and `heal`'s cost grows with it â€” a machine that has failed one install
+journal without bound, and `heal`'s cost grows with it — a machine that has failed one install
 a hundred times has a `heal` that makes a hundred doomed calls.
 
-**Recommendation** â€” `heal` acts on **interrupted** work (`InProgress`, `Abandoned`). A
+**Recommendation** — `heal` acts on **interrupted** work (`InProgress`, `Abandoned`). A
 `Failed` entry is not interrupted: it is a completed attempt with a known outcome, and its
 recovery is what the failure message already told the user to do. Separately, an attempt at a
 spec that already has an unresolved entry should resolve that entry rather than add a
@@ -6034,18 +6034,18 @@ twenty-third.
 
 ## Q34
 
-**Status: ANSWERED â€” ruled 2026-08-05, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, and built the same day.**
 
 **Ruled: no change to the model; change what the failure says.** `install X` still converges the
-whole configuration â€” that is what declarative means, and converging only X would let your files
+whole configuration — that is what declarative means, and converging only X would let your files
 and your machine disagree with no command noticing. What changes is the reporting:
 
-- a failure now names **the declaration it happened for, and its file and line** â€” appended to
+- a failure now names **the declaration it happened for, and its file and line** — appended to
   the message and to nothing else, because `retry` and `absent_name` are what decide whether a
   line is withdrawn and a wrapper that loses them turns a withdrawable line into a wedge;
 - `install` says outright when what failed is not what you asked for;
-- and it no longer advises taking back the line you just wrote. `WhyKept::NameAbsentElsewhere` â€”
-  the branch whose own name says the missing package belongs to a *different* declaration â€” was
+- and it no longer advises taking back the line you just wrote. `WhyKept::NameAbsentElsewhere` —
+  the branch whose own name says the missing package belongs to a *different* declaration — was
   telling users to `shall unmanage` the one line that was fine. Found while building the check
   above. The withdrawal logic itself was already careful and says why; the advice beside it was
   not.
@@ -6062,31 +6062,31 @@ Planned changes:
 ```
 
 The scoop member cannot resolve, the transaction fails, and the caller is told that
-`bun:sort-package-json` failed. In one sweep this produced **seven** false defect verdicts â€”
-bun, dotnet, github, nimble, pnpm, pub, winget â€” none of which had anything wrong with them.
+`bun:sort-package-json` failed. In one sweep this produced **seven** false defect verdicts —
+bun, dotnet, github, nimble, pnpm, pub, winget — none of which had anything wrong with them.
 
 This is not obviously a bug: Shall is declarative, `install` adds a line and converges, and
 converging everything is the model working as designed. But the consequence is that **a single
 bad line blocks every future install until someone unmanages it by hand**, and the error names
 the innocent package.
 
-**Recommendation** â€” no change to the model; change what the failure says and what it blocks.
+**Recommendation** — no change to the model; change what the failure says and what it blocks.
 A member that fails for a reason unrelated to the requested spec should not make the requested
 spec's install report failure, and the message must name the declaration that actually failed.
-The alternative â€” `install X` converges only X â€” is a much larger ruling and is not
+The alternative — `install X` converges only X — is a much larger ruling and is not
 recommended.
 
 **Most of this is a symptom of a bug, not of the model.** The leftover is only in the manifest
 because `scoop`'s failure was classified `unknown`, and it was classified `unknown` because
-`register_scoop`, `register_winget` and `register_choco` never call `with_manager_policy` â€” the
+`register_scoop`, `register_winget` and `register_choco` never call `with_manager_policy` — the
 three main Windows backends run with `ExitPolicy::default()`. Q1 (2026-07-27) already rules that
 a permanent failure withdraws the line, so that half needs no ruling and is a straight fix; see
-`docs/archive/FINDINGS-2026-08-05.md` Â§1a. What is left for this entry is only the message naming the
+`docs/archive/FINDINGS-2026-08-05.md` §1a. What is left for this entry is only the message naming the
 innocent package.
 
 ## Q35
 
-**Status: ANSWERED â€” ruled 2026-08-05, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, and built the same day.**
 
 **Ruled: U40's reason does not reach Windows, so neither does its rule.** `RawExecutor::mutator`
 gives a Windows mutation `ChildStdin::Closed`; Unix keeps U40 exactly as written, because that is
@@ -6094,13 +6094,13 @@ where `sudo` is inserted and where the password prompt it exists for can happen.
 change is that a Windows manager which asks a question now fails fast with its own prompt
 captured, instead of going silent for the whole bound and failing anyway.
 
-Below is why it was raised â€” including that it was proposed as the cause of a stall and refuted
+Below is why it was raised — including that it was proposed as the cause of a stall and refuted
 by measurement, which is why it stayed in this register instead of being fixed as a diagnosis.
 
 **U40's reason does not reach Windows, but its rule does.** U40 (RULED 2026-07-27) says stdin
 is the one stream a child may share and only a mutation may share it, because *"`sudo` asks for
-a password on the terminal it was started from"*. On Windows `sudo` is never inserted â€”
-`executor.rs:834` reads `if sudo && !cfg!(windows) && !Self::is_root()` â€” so no Windows
+a password on the terminal it was started from"*. On Windows `sudo` is never inserted —
+`executor.rs:834` reads `if sudo && !cfg!(windows) && !Self::is_root()` — so no Windows
 mutation has anything to ask, while the sharing stays and costs the full
 `command_idle_timeout_secs` whenever a manager asks something else.
 
@@ -6108,29 +6108,29 @@ mutation has anything to ask, while the sharing stays and costs the full
 
 | Shall's stdin | result |
 |---|---|
-| not a terminal | **48ms** â€” child gets `Stdio::null`, reads EOF, done |
-| a real console | **21.9s** â€” the whole bound elapsing, at the shipped 900 a 15-minute silence |
+| not a terminal | **48ms** — child gets `Stdio::null`, reads EOF, done |
+| a real console | **21.9s** — the whole bound elapsing, at the shipped 900 a 15-minute silence |
 
 **This was a wrong theory of the observed stall and is recorded anyway.** It was proposed as
-the cause, and the capture refuted it â€” the wedged process had no child at all (Q32 is the
+the cause, and the capture refuted it — the wedged process had no child at all (Q32 is the
 cause). It is kept because the hazard is real and measured, and because the next person to see
 an idle `shall` should find both shapes here rather than rediscover this one.
 
-**Recommendation** â€” on Windows the mutating layer uses `ChildStdin::Closed`. Unix keeps U40
+**Recommendation** — on Windows the mutating layer uses `ChildStdin::Closed`. Unix keeps U40
 exactly as ruled. The visible change is that a Windows manager which asks a question fails
 fast with its own prompt captured, instead of going silent for fifteen minutes and failing
 anyway.
 
 ## Q36
 
-**Status: ANSWERED â€” ruled 2026-08-05, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, and built the same day.**
 
 **Ruled: adoption declares only what the manager can put back.** `adopt` drives winget from
-`winget export` â€” the manager's own restorable set â€” instead of `winget list`. On the measured
+`winget export` — the manager's own restorable set — instead of `winget list`. On the measured
 host that is **78 declarations instead of 280 rows**, and the 186 that are gone are the ones
 `winget install` refuses. Where entries are dropped, adoption says how many, why, and names
 some. The seam is `ManualListing::ExportFile`, not a winget branch, because the rule is about
-managers whose listing outruns what they can reinstall â€” the rule is in `target-state.md`
+managers whose listing outruns what they can reinstall — the rule is in `target-state.md`
 (II.10, adoption table) and the evidence in `why.md`.
 
 **The recommendation below was wrong and the machine said so.** It proposed skipping identifiers
@@ -6138,7 +6138,7 @@ by prefix, on the theory that `MSIX\` carries a version and `ARP\` does not. Ado
 `ARP\Machine\X86\ILST_30_2_1` and `PHSP_27_2`, so the prefix rule keeps 119 decaying entries
 while dropping 66. And the version churn turned out to be the *visible* fault, not the fault:
 **none of the 186 was ever installable**, versioned or not. `winget show` refuses every one.
-Recovering a real name by searching the catalogue does not rescue them either â€” 176 of 186 have
+Recovering a real name by searching the catalogue does not rescue them either — 176 of 186 have
 no match, 7 are ambiguous, 3 resolve.
 
 Kept below as raised, because the reasoning that was refuted is the reason the rule is stated as
@@ -6155,32 +6155,32 @@ adopted:       MSIX\Microsoft.Winget.Source_2026.805.1050.50_neutral__8wekyb3d8b
 installed now: MSIX\Microsoft.Winget.Source_2026.805.1206.6_neutral__8wekyb3d8bbwe
 ```
 
-10:50 to 12:06 on the same day â€” winget's own source index updates constantly. The declared
+10:50 to 12:06 on the same day — winget's own source index updates constantly. The declared
 name is now a package that does not exist, so Shall believes it is missing, tries to install it,
 and cannot. It became two of the seven permanently-open journal operations in the run.
 
 **This is not a harness artifact.** Any machine that runs `adopt` on Windows plants these, and
-each one that updates becomes a line that can never converge â€” which then feeds Q34: one
+each one that updates becomes a line that can never converge — which then feeds Q34: one
 unconvergeable declaration makes every later `install` fail.
 
 The pseudo-ids are deliberately supported as *names* (`adopt.rs`, `guard.rs`,
 `config/grammar/mod.rs` all carry tests). Supporting them as names is not the same as adopting
 them as declarations.
 
-**Recommendation** â€” `adopt` does not declare a package whose identity carries its own version,
+**Recommendation** — `adopt` does not declare a package whose identity carries its own version,
 because such a declaration is false the moment the package updates. The narrow form: skip
 `MSIX\` and `ARP\` pseudo-ids at adoption and say how many were skipped and why.
 
 ## Q46
 
-**Status: ANSWERED â€” ruled 2026-08-05, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, and built the same day.**
 
 **`upgrade` re-installed one package per command.** A manager with no upgrade-all verb upgrades
-by re-installing what it has â€” `dart pub global activate <name>`, `npm install -g <name>` â€” and
+by re-installing what it has — `dart pub global activate <name>`, `npm install -g <name>` — and
 `GenericUpgradable::upgrade` looped that over the installed set. Forty global npm packages meant
 forty resolutions and forty registry conversations. It affects npm, pnpm, yarn, cargo and
-pubdart, and it lives in `generic`, so `Q45`'s framing â€” *hand-written backends that never picked
-up the generic batching* â€” did not cover it.
+pubdart, and it lives in `generic`, so `Q45`'s framing — *hand-written backends that never picked
+up the generic batching* — did not cover it.
 
 **Batching alone would have been a regression, and that is the point of the entry.** The loop
 carried a deliberate comment: *"Deliberately not `?`: one package that will not reinstall must
@@ -6200,28 +6200,28 @@ single name, and whether any caller loops it:
 
 | verb | verdict |
 |---|---|
-| `install`, `remove` | per-item in five hand-written backends â€” `Q45` |
-| `upgrade` | per-item in `generic` â€” this entry |
+| `install`, `remove` | per-item in five hand-written backends — `Q45` |
+| `upgrade` | per-item in `generic` — this entry |
 | `info` | looped, and correct: it is answered from the once-per-run listing memo, so N calls are **one** manager invocation |
 | `lookup` | the N+1 behind `Q44`; batched wherever the manager has an outdated verb |
-| `add_repo`, `remove_repo`, `get_dependencies` | not looped â€” `get_dependencies` reads as looped to a grep only because `handle_info` prints properties in a loop just above it |
+| `add_repo`, `remove_repo`, `get_dependencies` | not looped — `get_dependencies` reads as looped to a grep only because `handle_info` prints properties in a loop just above it |
 
 That table is the deliverable, not the fix. Two of the six were wrong, and neither was found by
-looking harder at the code that had already been examined â€” they were found by writing down every
+looking harder at the code that had already been examined — they were found by writing down every
 verb and going through them.
 
 **And then the same enumeration one layer out**, over every `for` loop in the tree whose own body
-spawns a command (brace-matched, so a loop that merely *builds* an argv does not count â€” the
+spawns a command (brace-matched, so a loop that merely *builds* an argv does not count — the
 mistake that made `Q45`'s first sweep name thirteen backends instead of five). Thirty-four
 survive, and the triage is:
 
-- **`emacs` â€” fixed here.** Each install spawned a whole `emacs --batch` *and* a
+- **`emacs` — fixed here.** Each install spawned a whole `emacs --batch` *and* a
   `package-refresh-contents`, which is a network fetch of the package archive. Ten packages meant
   ten startups and ten refreshes of an archive that had not changed. One `--batch` with a
   `dolist` does all of it, verified against GNU Emacs 29.3 in a container. **The names are
-  interpolated into evaluated Lisp**, so every one is validated before any of them runs â€”
+  interpolated into evaluated Lisp**, so every one is validated before any of them runs —
   a batch has to be refused whole, not part-way through, and that is pinned by a test.
-- **`go` â€” must not be batched, and now there is a reason on file rather than a hunch.**
+- **`go` — must not be batched, and now there is a reason on file rather than a hunch.**
   `go install a@latest b@latest` answers *"All packages must be provided by the same module"*.
   Its per-item loop is correct.
 - **Inherent, not deferred:** `btrfs`, `storage` (zfs/lvm), `setting`, `service`, `web`,
@@ -6234,11 +6234,11 @@ survive, and the triage is:
 
 ## Q44
 
-**Status: ANSWERED â€” ruled 2026-08-05, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, and built the same day.**
 
 **Ruled: ask the manager once.** `Searchable::outdated_all` is the manager's own answer to the
 whole question, wired for winget, scoop, choco, npm, pnpm, pip and gem. A manager without such
-a verb keeps the per-package path â€” but concurrently, bounded by `max_parallel`, rather than one
+a verb keeps the per-package path — but concurrently, bounded by `max_parallel`, rather than one
 after another. **771.4s to 25.6s on the same host, a 30x cut**, and `cargo` (which has no
 outdated check at all) is the honest exception that still pays.
 
@@ -6247,8 +6247,8 @@ asked and nothing is out of date. Conflating those would report a manager's whol
 the moment its verb was missing.
 
 Where the manager answers, Shall does **not** re-compare the versions itself. The manager has
-already decided; a second opinion from a version grammar it does not use is how `> 3.13.5` â€”
-which is what winget really prints for `Python.Launcher` â€” becomes a wrong answer.
+already decided; a second opinion from a version grammar it does not use is how `> 3.13.5` —
+which is what winget really prints for `Python.Launcher` — becomes a wrong answer.
 
 Wired for **thirteen** managers, and every parser but one is written against output captured
 from the real tool rather than from documentation:
@@ -6269,11 +6269,11 @@ from the real tool rather than from documentation:
 | brew | `brew outdated --json=v2` | shape from docs; **banner behaviour** measured |
 
 **brew is the one exception and it earned a defence.** Nothing was outdated in the container, so
-the JSON shape comes from brew's documentation â€” but the container did show brew printing
+the JSON shape comes from brew's documentation — but the container did show brew printing
 `==> Auto-updating Homebrew...` ahead of the payload, which a strict parse would choke on. So the
 parser locates the JSON rather than assuming the whole output is JSON, and that behaviour *is*
 measured. `flatpak` is left unwired, and now for a measured reason rather than caution. It does support
-`remote-ls --updates --columns=application,version`, and the column exists â€” but run against
+`remote-ls --updates --columns=application,version`, and the column exists — but run against
 flathub in a container, the version column comes back **empty**:
 
 ```
@@ -6284,22 +6284,22 @@ ai.lmstudio.lm-studio$
 
 The `$` sits straight after the id: no tab, no version. Most flathub apps carry no version in the
 remote listing, so flatpak can say *that* something has an update and not *to what*. An `Outdated`
-row needs both, so flatpak keeps the per-package path. `cargo` is the other honest exception â€” no
+row needs both, so flatpak keeps the per-package path. `cargo` is the other honest exception — no
 outdated check exists at all.
 
 **The sweep is now complete rather than opportunistic, and that distinction was a real gap.** The
 first pass wired the managers there happened to be fixtures for and was written up as though it
 had covered the field. Every remaining backend was then asked the same question, and most of the
-answers are *no such verb* â€” which is information, not an omission:
+answers are *no such verb* — which is information, not an omission:
 
 | manager | answer | how it was settled |
 |---|---|---|
-| **composer** | `global outdated --format=json` â€” **wired** | container, with a real global package |
+| **composer** | `global outdated --format=json` — **wired** | container, with a real global package |
 | bun | `bun outdated` reports a *workspace's* dependencies; Shall manages bun **globals** | container |
 | yarn | `yarn global outdated` â†’ `error Invalid subcommand` | container |
 | uv | no such verb (`upgrade --dry-run` does not exist) | container |
-| pipx | `upgrade` / `upgrade-all` only â€” nothing that *lists* | container |
-| pixi | `global update` only â€” nothing that lists | container |
+| pipx | `upgrade` / `upgrade-all` only — nothing that *lists* | container |
+| pixi | `global update` only — nothing that lists | container |
 | flatpak | has the verb; the version column comes back **empty** | container |
 | cargo | none | documented |
 | dotnet | no outdated verb for tools | this host |
@@ -6307,21 +6307,21 @@ answers are *no such verb* â€” which is information, not an omission:
 **Unprobed, and named rather than left implied:** `mas` and `macports` (macOS), `pkg`,
 `pkg_add`, `pkgin` (BSD), `emerge`, `eopkg`, `guix`, `slackpkg` (distro-specific), and
 `asdf`, `krew`, `luarocks`, `mix`, `nimble`, `pubdart`, `spack`. Several of those plainly do have
-one â€” `port outdated`, `mas outdated`, `eopkg list-upgrades`, `mix hex.outdated` â€” but no host or
+one — `port outdated`, `mas outdated`, `eopkg list-upgrades`, `mix hex.outdated` — but no host or
 container here runs them, and this session's standing rule is that a parser ships against
 captured output or not at all. They stay on the per-package path, which is slower and correct.
 
 Custom backends get the same field (`outdated_args`), because U2's claim is that a custom backend
 is a first-class peer of a built-in, and a capability built-ins have and definitions cannot
 declare makes that claim false. **And it works with the verb and without it:** no `outdated_args`
-means `None`, so the caller asks per package. A gap found while testing that â€” `Searchable` was
+means `None`, so the caller asks per package. A gap found while testing that — `Searchable` was
 attached only when `search_args` was set, so a definition declaring an outdated verb and no search
 got no capability at all and its updates were silently unreportable. The gate now admits either,
 and `search` refuses by name when it was never configured rather than answering "no results".
 
 **`list --outdated` asks per package what every manager will answer in one call.**
 `compute_outdated` is a serial `for` loop over installed packages calling `s.lookup(&p.name)`
-once each â€” many of those are network round trips to a registry.
+once each — many of those are network round trips to a registry.
 
 Measured on this host, same machine, same minute:
 
@@ -6330,13 +6330,13 @@ shall list --outdated : 771.4s
 shall list            :   2.9s
 ```
 
-**266x**, and the 771s is not parallelism lost â€” it is the wrong question asked N times. Nearly
+**266x**, and the 771s is not parallelism lost — it is the wrong question asked N times. Nearly
 every manager has a one-call answer:
 
 | manager | one call |
 |---|---|
 | apt | `apt list --upgradable` |
-| dnf | `dnf check-update` (exit 100 means "there are some" â€” a benign exit) |
+| dnf | `dnf check-update` (exit 100 means "there are some" — a benign exit) |
 | pacman | `pacman -Qu` |
 | winget | `winget upgrade` |
 | choco | `choco outdated` |
@@ -6349,15 +6349,15 @@ every manager has a one-call answer:
 
 Two separate wins, and they compose: **batch** turns N registry lookups into one manager call,
 and **parallel** runs the remaining ~10 manager calls at once instead of in sequence. The
-2026-08-02 ruling â€” *as parallel as possible, as efficient as possible, as fast as possible;
-restructure if it takes that* â€” covers the second; the first is not parallelism at all.
+2026-08-02 ruling — *as parallel as possible, as efficient as possible, as fast as possible;
+restructure if it takes that* — covers the second; the first is not parallelism at all.
 
 `cargo` is the honest exception: it has no built-in outdated check, so its packages stay on the
 per-package path or go unreported, and that should be said rather than papered over.
 
 ## Q45
 
-**Status: ANSWERED â€” ruled 2026-08-05, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, and built the same day.**
 
 **Ruled: one command for the batch.** Built for all five, and three of them verified by running
 the real tool in a container rather than by asserting the argv Shall builds:
@@ -6387,7 +6387,7 @@ not name. Modern nix reports no indices at all, so the batched by-name path is t
 
 
 **Five backends run one command per package where the manager takes a list.** The generic
-backend is correct â€” `install_group` builds one argv with every name, with deliberate exceptions
+backend is correct — `install_group` builds one argv with every name, with deliberate exceptions
 for per-line version pins and signature opt-outs. Five hand-written ones never got it:
 
 ```rust
@@ -6405,17 +6405,17 @@ because it is `run_exclusive`, N serialised lock acquisitions.
 | **brew** | `brew install a b c` / `brew uninstall a b c`; one resolve, one lock |
 | **nix** | `nix profile install` takes several installables |
 | **mise** | `mise use -g a@1 b@2` |
-| **vscode** | `code --install-extension a --install-extension b` â€” a repeated flag, one process |
+| **vscode** | `code --install-extension a --install-extension b` — a repeated flag, one process |
 | **snap** | `snap install a b`, `snap remove a b` |
 
 **Not on the list, and not a to-do:** `btrfs`, `setting`, `storage`, `web`, `github` are not
-package managers â€” one subvolume is one subvolume, one download is one download. `emacs` and
+package managers — one subvolume is one subvolume, one download is one download. `emacs` and
 `go` are maybes with real caveats (`go install` constrains multiple `@version` arguments) and
 are left alone rather than guessed at.
 
 **The first sweep of this said thirteen backends and named `dnf` and `pacman` among them. That
 was wrong.** The detector matched a `for` loop followed anywhere in the function by a `run(`
-call â€” and `dnf`'s loop is `for name in &names { args.push(name) }`, which *builds* the batched
+call — and `dnf`'s loop is `for name in &names { args.push(name) }`, which *builds* the batched
 argv. Both dnf and pacman batch correctly. Re-run with brace matching so a loop counts only when
 the invocation is inside its own body. Recorded because the wrong version of this entry existed
 for an hour and the correction is the useful part: a per-item loop and a loop that assembles one
@@ -6424,11 +6424,11 @@ command look identical to a grep.
 
 ## Q40
 
-**Status: ANSWERED â€” ruled 2026-08-05, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, and built the same day.**
 
 **Ruled: a read that exits non-zero having said nothing on either stream is a failure, not an
 empty result.**
-`run_output` deliberately ignored exit status â€” reads tolerate a non-zero exit because "no such
+`run_output` deliberately ignored exit status — reads tolerate a non-zero exit because "no such
 package" and "no results" are legitimate non-zero replies. But it tolerated the *silent* ones
 too, and those are not replies at all.
 
@@ -6442,14 +6442,14 @@ round 1 : rows min=0 max=280   EMPTY_LISTINGS=1/16
         rc=0  ms=2285  rows=0   <-- `shall list --backend winget`, on a machine with 280
 ```
 
-So a transient winget hiccup did not make Shall report an error â€” it made Shall believe the
+So a transient winget hiccup did not make Shall report an error — it made Shall believe the
 machine was empty, at exit 0. The flaky `info` test that started this (`info winget:7zip.7zip`
 denying a row `list` had just printed) is the mildest symptom of it; `check drift` seeing nothing
 installed is not.
 
 The rule is narrow on purpose, and the first attempt was one notch too wide. Keying on an empty
-*stdout* alone made `Get-ComputerRestorePoint` fatal â€” unelevated it exits 1 with `Access
-denied` on stderr and nothing on stdout â€” and that failed a whole `sync` which had no business
+*stdout* alone made `Get-ComputerRestorePoint` fatal — unelevated it exits 1 with `Access
+denied` on stderr and nothing on stdout — and that failed a whole `sync` which had no business
 caring. The suite caught it within the hour. A command that **said** something has described
 its own situation and its caller may have a reading for it; silence on *both* streams is the
 one case with no second reading, because nothing expresses "you have none of these" by saying
@@ -6459,24 +6459,24 @@ nothing at all and failing.
 everything as a defect.** `search_output` already refused a non-zero exit that complained on
 stderr, and `run_output` does not. A search that complains has failed to consult its index, and
 an empty result read as "this manager does not have it" hands a bare name to a lower-priority
-manager (V.7c) â€” the emptiness *is* the answer there, so it has to be trustworthy. A listing's
+manager (V.7c) — the emptiness *is* the answer there, so it has to be trustworthy. A listing's
 caller may have somewhere else to go: the snapshot check that asked for restore points and was
 denied does not need them. If those two ever want the same rule, it should be `search_output`'s,
-reached by fixing the callers that currently rely on tolerance â€” not by loosening the search. Fixed in `run_output` for every read, and in
+reached by fixing the callers that currently rely on tolerance — not by loosening the search. Fixed in `run_output` for every read, and in
 the three callers that were separately turning an error into a negative: `info` (which printed
 "is not installed on this machine"), `list` (which dropped the manager's rows), and
 `hook-reconcile` (which recorded nothing). `planner::installed_sets` was checked and is
-**correct as it stands** â€” it treats an unqueryable backend as "assume installed" so removals are
+**correct as it stands** — it treats an unqueryable backend as "assume installed" so removals are
 still scheduled, which is the documented safe direction.
 
 ## Q41
 
-**Status: ANSWERED â€” ruled 2026-08-05, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, and built the same day.**
 
 **Ruled: classify retryability by exit code as well as by output text, and retry a read that is
 classified transient.**
 
-`ExitPolicy` matched *text* â€” transient markers, permanent markers, absent markers â€” against a
+`ExitPolicy` matched *text* — transient markers, permanent markers, absent markers — against a
 haystack built from both streams. The failure above writes nothing to either, so the haystack is
 empty, every list misses, and `retryability` returns `Unknown`. The one signal that existed, the
 exit code, was read by nothing but `is_benign`. **The classifier was looking at the wrong axis
@@ -6486,7 +6486,7 @@ What a manager *says* still outranks what it returns: `retryability_of` consults
 when the text classified nothing, because a command that named its problem has described it
 better than a number can.
 
-**Retry is for reads only, and that is not a convenience.** A read is idempotent â€” asking a
+**Retry is for reads only, and that is not a convenience.** A read is idempotent — asking a
 manager what it has, twice, costs a second. A mutation retried on a guess installs something
 twice. The measured failure is a cold-start collision that a warm winget does not reproduce (3 of
 16 on the first burst, 0 of 32 on the next two), so the second attempt is usually the entire fix.
@@ -6494,11 +6494,11 @@ twice. The measured failure is a cold-start collision that a warm winget does no
 
 Only `0x8A150001` is listed as transient, because it is the only one measured. Winget documents
 many more codes and guessing which of them a retry could help would be inventing policy from a
-header file â€” an over-eager entry costs real seconds on every failure that will never pass.
+header file — an over-eager entry costs real seconds on every failure that will never pass.
 
 ## Q42
 
-**Status: ANSWERED â€” ruled 2026-08-05, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, and built the same day.**
 
 **Ruled: reads get their own bound on silence.** `query_idle_timeout_secs`, default **120**, `0`
 disables, and it is capped by `command_idle_timeout_secs` because the outer bound fires first
@@ -6506,31 +6506,31 @@ anyway.
 
 One number was doing two jobs. `command_idle_timeout_secs` is 900 and the comment beside it names
 why: `Checkpoint-Computer` is silent for its entire run, so a mutation needs that much rope. A
-read does not â€” `winget list` takes 1.5s here, 2.6s under sixteen-way contention, and `apt list
+read does not — `winget list` takes 1.5s here, 2.6s under sixteen-way contention, and `apt list
 --installed` under a second. Fifteen minutes of rope for a one-second question means a wedged
 listing costs fifteen minutes to learn what two could have told you. The 25-minute `winget list`
 recorded under `cargo test` on 2026-07-31 is the case: it *did* eventually return, and waiting
 was still the wrong trade.
 
-120 is ~46x the slowest read measured on this host â€” wide enough that a fat machine on a slow
+120 is ~46x the slowest read measured on this host — wide enough that a fat machine on a slow
 disk is never cut off, narrow enough that a hang is a two-minute wait. It is a key rather than a
 constant because a CI runner and a laptop have different answers, exactly as the bound above it
 does.
 
 ## Q43
 
-**Status: ANSWERED â€” ruled 2026-08-05, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, and built the same day.**
 
 **Ruled: negotiate once, per backend, per run.** Ask for the machine-readable listing; if the
-manager refuses, read the text listing and say so at `debug`. Built for all three â€” pixi
+manager refuses, read the text listing and say so at `debug`. Built for all three — pixi
 (`global list --json`), dotnet (`tool list --format json`), scoop (`export`). The listing memo
 makes "once per run" free: a run asks each manager for its listing exactly once either way.
 
 The negotiation needed its own primitive. `probe_output` is the only reader that treats a
-non-zero exit as a failure regardless of what was printed â€” because here the failure *is* the
+non-zero exit as a failure regardless of what was printed — because here the failure *is* the
 answer being sought, and every other reader deliberately hands a complaint back as an empty
 result (`Q40`). Each JSON parser is a separate function from its text sibling, never one parser
-made lenient, and each is pinned by a test asserting the two agree about the same machine â€”
+made lenient, and each is pinned by a test asserting the two agree about the same machine —
 including about the rows that are not packages, which is where scoop's old scar was.
 
 **Three backends parse a human table where the tool offers a machine format, and Shall cannot
@@ -6539,7 +6539,7 @@ verified on this host:
 
 | backend | Shall parses today | available instead | shape |
 |---|---|---|---|
-| **pixi** | `global list` | `global list --json` | box-drawing tree (`â””â”€â”€ ripgrep: 15.2.0`) to JSON |
+| **pixi** | `global list` | `global list --json` | box-drawing tree (`└── ripgrep: 15.2.0`) to JSON |
 | **dotnet** | `tool list --global` | `tool list --format json` | fixed-width columns to JSON |
 | **scoop** | `list` | `scoop export` | fixed-width columns to JSON |
 
@@ -6549,21 +6549,21 @@ pip, pipx, composer (JSON); choco (`list -r`, `name|version`), apt (`dpkg-query 
 there is no machine format:** gem, cargo (`install --list`; its `--message-format json` is for
 diagnostics, not for the listing), uv, yarn, mas, and `winget list` itself.
 
-**Why this is not simply a config edit.** Every one of the three is a *version-dependent flag* â€”
+**Why this is not simply a config edit.** Every one of the three is a *version-dependent flag* —
 `--format json` needs dotnet SDK 10, `--json` a recent pixi, and scoop's export only emits JSON in
-current builds â€” and **Shall has no capability probe.** There is no version gate, no
+current builds — and **Shall has no capability probe.** There is no version gate, no
 `supports_flag`, nothing. Passing an unsupported flag to an older tool makes the command fail with
 a usage message on stderr and nothing on stdout, and `Q40` deliberately leaves *that* shape alone:
 a read that complained is handed to its caller as an empty result. So shipping any of these three
-blind would reproduce the exact defect `Q40` was raised to fix â€” a manager silently reporting an
-empty machine â€” on a different axis, and only for users on older tooling, who are the least likely
+blind would reproduce the exact defect `Q40` was raised to fix — a manager silently reporting an
+empty machine — on a different axis, and only for users on older tooling, who are the least likely
 to be reading release notes.
 
-**Recommendation â€” negotiate once, per backend, per run.** Ask for the machine format; if the
+**Recommendation — negotiate once, per backend, per run.** Ask for the machine format; if the
 command *fails* (a status-aware read, not `run_output`), fall back to the text form and remember
 that answer for the rest of the run. It costs one extra failed invocation on old tooling and
 nothing at all on current, needs no version table to go stale, and is testable from both sides. It
-is a second code path per backend, which this repo is right to be suspicious of â€” but the
+is a second code path per backend, which this repo is right to be suspicious of — but the
 alternatives are a version table nobody will maintain, pinning minimum versions of tools Shall
 does not control, or never improving a parser again.
 
@@ -6571,11 +6571,11 @@ does not control, or never improving a parser again.
 exact class. `scoop list` leaves Version and Source empty for a failed install and keeps the row
 forever; read by whitespace-splitting it became a package named `jq` at version `2026-07-21`, and
 `adopt` wrote it into a manifest for software that was never on PATH. The fix was to slice by
-header offsets â€” correct, and still parsing a table drawn for a human when the same tool will hand
+header offsets — correct, and still parsing a table drawn for a human when the same tool will hand
 over JSON on request.
 
 **Not found: a second member of the `Q36` family.** winget is the only backend that merges a
-*foreign inventory* into its listing â€” the ARP and MSIX rows it synthesises from the registry.
+*foreign inventory* into its listing — the ARP and MSIX rows it synthesises from the registry.
 Every other manager lists what it installed and can reinstall it. `choco export` exists and adds
 nothing over `choco list -r`. The `ManualListing::ExportFile` seam stays because `brew bundle
 dump` is the likely second member and there is no macOS host here to check it on.
@@ -6583,50 +6583,50 @@ dump` is the likely second member and there is no macOS host here to check it on
 
 ## Q37
 
-**Status: ANSWERED â€” ruled 2026-08-05, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, and built the same day.**
 
 **Ruled: check the destination before spending the network.** The refusal is a pure function of
-the destination, so it is asked before the first byte in all three download backends â€”
-`github:`, `web:` and `appimage:` â€” through one `ensure_deployable`, which `deploy_executable`
+the destination, so it is asked before the first byte in all three download backends —
+`github:`, `web:` and `appimage:` — through one `ensure_deployable`, which `deploy_executable`
 also calls so the two can never ask different questions.
 
 One case still pays: a `github:` release resolving to *several* deployable artifacts names each
 one after the program inside it, which no metadata can answer before the archive is open. A
-single-artifact release â€” which is what `github:sharkdp/fd` is, and what the 180 seconds were
-spent on â€” is answered from the repo name alone.
+single-artifact release — which is what `github:sharkdp/fd` is, and what the 180 seconds were
+spent on — is answered from the repo name alone.
 
 `tests/deploy_refusal_precedes_the_download_tests.rs` scans the three backends for the ordering,
 because the defect is an ordering and a missing line and neither is visible inside the function
 that refuses. Below is why it was raised.
 
 **The `github:` backend downloads the artifact, then refuses to deploy it.**
-`deploy_executable` takes an already-downloaded, already-extracted `src`, and its refusal â€”
-`is_ours(dest, owned_root, recorded)` â€” reads only the *destination*. It needs zero downloaded
+`deploy_executable` takes an already-downloaded, already-extracted `src`, and its refusal —
+`is_ours(dest, owned_root, recorded)` — reads only the *destination*. It needs zero downloaded
 bytes, and it runs after the download.
 
 Measured inside one `heal`: **60.9s and 119.1s**, back to back, both ending in
 
 ```
-could not recover github:sharkdp/fd â€” refusing to deploy `fd.exe`:
+could not recover github:sharkdp/fd — refusing to deploy `fd.exe`:
     C:\Users\Administrator\.local\bin\fd.exe already exists and Shall did not create it.
 ```
 
 **180 of that `heal`'s 201 seconds were spent fetching a file it was always going to reject.**
-It is silent for all of it, at zero CPU with no child process â€” an in-process `reqwest`
+It is silent for all of it, at zero CPU with no child process — an in-process `reqwest`
 download, which is why it looks exactly like a wedge and why three earlier stalls were
 misdiagnosed. `core/http.rs` gives downloads no whole-request timeout, correctly: a big download
 must not be capped by wall clock. But that makes an avoidable download unbounded *and* silent.
 
-**Recommendation** â€” check the destination before spending the network. The ownership test is
+**Recommendation** — check the destination before spending the network. The ownership test is
 already a pure function of `dest`; hoist it above the fetch. Every download backend that
 deploys onto a shared bin directory has the same ordering.
 
 ## Q38
 
-**Status: ANSWERED â€” ruled 2026-08-05, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, and built the same day.**
 
 **Ruled: a failed reconcile is a non-zero exit, on `watch` as everywhere.** `watch --once` returns
-the reconcile's error. The looping form still warns and carries on â€” one failed tick is not a
+the reconcile's error. The looping form still warns and carries on — one failed tick is not a
 reason to stop reconciling, and it has no exit code anyone reads.
 
 The sibling one line up, `watch: git pull failed`, stays a warning on purpose: the reconcile after
@@ -6641,20 +6641,20 @@ WARN watch: reconcile failed: `scoop` failed (exit 1): Couldn't find manifest fo
 
 and **exited 0**.
 
-A scheduled `watch` is the least-watched surface in the program â€” that is its purpose â€” so an
+A scheduled `watch` is the least-watched surface in the program — that is its purpose — so an
 exit code that says "fine" after a failed reconcile is the Q28 defect class at the one place
 nobody is reading the output.
 
-**Recommendation** â€” a failed reconcile is a non-zero exit, on `watch` as everywhere else.
+**Recommendation** — a failed reconcile is a non-zero exit, on `watch` as everywhere else.
 
 
 ## Q39
 
-**Status: ANSWERED â€” ruled 2026-08-05, both halves, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, both halves, and built the same day.**
 
 **The second half, ruled: a bare `adopt` does not take a machine's services.** The rule it needed
-already existed â€” `adopt` refuses a backend that cannot separate a user's choices from its
-dependency closure â€” and this is that question one step along: not *can you tell a dependency
+already existed — `adopt` refuses a backend that cannot separate a user's choices from its
+dependency closure — and this is that question one step along: not *can you tell a dependency
 from a decision*, but *is being on the machine evidence of a decision at all*. The service
 backend answered "yes I can" while its own `manual_source` read *"no init records which you
 chose"*.
@@ -6669,7 +6669,7 @@ shall adopt service --enabled-only   113
 ```
 
 `--enabled-only` reads the machine's own record of what it starts at boot, in one command rather
-than one per service. It drops the 36 demand-start services â€” `smphost` among them â€” and does
+than one per service. It drops the 36 demand-start services — `smphost` among them — and does
 **not** drop `gpsvc`, which Windows marks `Automatic` and stops anyway when it idles. That is
 Windows disagreeing with itself, and it is recorded rather than papered over: the filter narrows
 the guess, it does not turn the list into a record of anybody's decision. V.134.
@@ -6680,11 +6680,11 @@ the guess, it does not turn the list into a record of anybody's decision. V.134.
 Two changes, and the first is the one that mattered:
 
 1. **`in_effect` learned `service:`.** A `service:` line was `unverifiable`, and unverifiable
-   *places* â€” so every adopted service was applied on the first sync whatever the machine looked
+   *places* — so every adopted service was applied on the first sync whatever the machine looked
    like. It now asks the init, off the listing this run already has: `@status=running` is in
    effect when the init reports the service, `@status=stopped` when it does not. `@status=restarted`
    is a transition no listing records and `@enabled=` is a second axis no shipped init reports,
-   so both stay unverifiable â€” a line that declares either is still applied.
+   so both stay unverifiable — a line that declares either is still applied.
 2. **The service backend forgives the codes that mean "already there".** `sc start` on a running
    service returns **1056** and `sc stop` on a stopped one **1062**; both are declared per verb in
    `init_providers.toml`, because each is an ordinary failure on the other verb. The other four
@@ -6698,15 +6698,15 @@ plan  ->  150 resource(s) to place     (before)
 plan  ->    2 resource(s) to place     (after)
 ```
 
-The two are real drift â€” `gpsvc` and `smphost`, trigger-start services that Windows had idled out
+The two are real drift — `gpsvc` and `smphost`, trigger-start services that Windows had idled out
 in the twenty minutes since `adopt` ran. Which is the best argument yet for the half below.
 
 **Aligned with it, and found by it:** `Extras::changes` short-circuited on "never applied" and
-placed without probing, while `Dependents::apply` has never consulted the ledger at all â€” so
+placed without probing, while `Dependents::apply` has never consulted the ledger at all — so
 `plan` promised 150 placements `sync` would not have made. The probe now comes first in both, and
 the ledger answers only what the probe cannot.
 
-**Still open â€” and it is a real ruling, because it changes what `adopt` means on Windows:** should
+**Still open — and it is a real ruling, because it changes what `adopt` means on Windows:** should
 `adopt` take every running service in the first place? 150 of them, none chosen by anyone, two of
 them transient by design. Combined with Q36's version-bearing pseudo-ids it is most of what
 `adopt` produces on this machine. Below is the original entry.
@@ -6721,8 +6721,8 @@ them transient by design. Combined with Q36's version-bearing pseudo-ids it is m
 ```
 
 Converging a `service:X@status=running` line runs the `windows-sc` provider's
-`start = [["sc", "start", "{name}"]]`. On a service that is **already running** â€” which all 150
-are, because that is why `adopt` adopted them â€” `sc` returns **1056**:
+`start = [["sc", "start", "{name}"]]`. On a service that is **already running** — which all 150
+are, because that is why `adopt` adopted them — `sc` returns **1056**:
 
 ```
 Error: `sc` failed (exit 1056): [SC] StartService FAILED 1056:
@@ -6731,13 +6731,13 @@ An instance of the service is already running.
 
 `1056` is `ERROR_SERVICE_ALREADY_RUNNING`. **It is the desired state.** For a declarative
 converger it is the definition of success, and it appears nowhere in the codebase. There is a
-`benign_exits` mechanism â€” `msiexec` uses `1605/1614/1618/1641/3010`, `winget` its negative codes
-â€” and `for_manager` has no `"service"` arm at all, so the service backend runs on
+`benign_exits` mechanism — `msiexec` uses `1605/1614/1618/1641/3010`, `winget` its negative codes
+— and `for_manager` has no `"service"` arm at all, so the service backend runs on
 `ExitPolicy::default()` with `benign_exits` empty.
 
 Then Q34 does the rest: `install X` converges the whole manifest, one member fails, the
 transaction fails, and the user is told that **X** failed. Observed on `bun`, `dotnet`, `pnpm`,
-`winget` and `yarn` in one run â€” none of which had anything wrong with them.
+`winget` and `yarn` in one run — none of which had anything wrong with them.
 
 **This is what remained after the exit-policy gap was fixed**, and it is the larger of the two
 cascade sources. The first run's failures were attributed to the scoop leftover; the confirmation
@@ -6748,27 +6748,27 @@ run shows that was only part of it.
 - `sc start` on a running service â†’ `1056`, desired state.
 - `sc stop` on a stopped service â†’ `1062` (`ERROR_SERVICE_NOT_ACTIVE`), also the desired state, and
   `stop = [["sc", "stop", "{name}"]]` has the same shape.
-- Unelevated, the same convergence returns `5` (access denied) instead â€” measured here on
+- Unelevated, the same convergence returns `5` (access denied) instead — measured here on
   `Spooler`. That one is a real failure and should stay one, but it means an unelevated `adopt`
   produces a manifest that cannot converge either.
 
-**Recommendation** â€” two parts, and the first needs no ruling in spirit because it is what
+**Recommendation** — two parts, and the first needs no ruling in spirit because it is what
 convergence *means*:
 
 1. Give the service backend an exit policy whose `benign_exits` carry `1056` for start and `1062`
    for stop. Already being in the declared state is success.
 2. **`adopt` should not adopt every running service.** 150 of them, none chosen by the user, is
-   not a manifest anyone wrote â€” and combined with Q36's 180 decaying pseudo-ids it means 64% of
+   not a manifest anyone wrote — and combined with Q36's 180 decaying pseudo-ids it means 64% of
    what `adopt` produced on this machine cannot converge. This half is a real ruling: it changes
    what `adopt` means on Windows.
 
 ## Q47
 
-**Status: ANSWERED â€” ruled 2026-08-05, and built the same day.**
+**Status: ANSWERED — ruled 2026-08-05, and built the same day.**
 
 **Ruled: `adopt` takes OS-essential packages as live lines.** The commented-out second section
 of `modules/adopted.txt` is gone. What the OS calls essential is declared like anything else,
-Shall keeps it, and the guard is what refuses to remove it â€” the same arrangement E7 already
+Shall keeps it, and the guard is what refuses to remove it — the same arrangement E7 already
 ruled for `protected_packages`, now applied to the branch four lines below it in the same `if`.
 
 The owner's framing was the ruling: *"it should be able to adopt OS-essential stuff, just that
@@ -6782,16 +6782,16 @@ only way past it is an explicit `unprotected_packages` entry. The comment was de
 a deletion the guard already blocks.
 
 **What it cost was not false.** A commented line is not a declaration, so Shall had no opinion
-about those 33 packages at all â€” no drift detection, nothing to heal, nothing to put back. The
+about those 33 packages at all — no drift detection, nothing to heal, nothing to put back. The
 packages most worth keeping were the only ones outside the model.
 
 **What changed, and what deliberately did not:**
 
 - The `os_essential` skip branch in `Adopter::discover_scoped` is deleted, and with it the
-  `guard::essential_names` call â€” one subprocess per backend per `adopt` run, asked for an
+  `guard::essential_names` call — one subprocess per backend per `adopt` run, asked for an
   answer nothing consults any more. The guard re-asks at removal time, where it matters.
 - The manifest header names the exception rather than hiding it: *"a package you protected, or
-  one the OS itself calls essential, is declared here so Shall keeps it â€” deleting its line
+  one the OS itself calls essential, is declared here so Shall keeps it — deleting its line
   stops Shall keeping it, and the guard still refuses to remove it."* The old header's flat
   promise that deleting a line uninstalls was already untrue for protected packages, which
   `adopt` has taken as live lines since E7.
@@ -6799,7 +6799,7 @@ packages most worth keeping were the only ones outside the model.
   Adoption changed; removal did not.
 
 **Sibling swept in the same change:** `check unmanaged` printed *"N package(s) the OS reports as
-essential are left alone"* using `found.skipped.len()` â€” the total of *every* skip reason,
+essential are left alone"* using `found.skipped.len()` — the total of *every* skip reason,
 including "you already declare it" and "its manager reports a name no line can hold". A count
 explained by a reason belonging to none of its inputs, which is the exact defect `by_reason`
 was written to fix inside `adopt` and which was never carried across to the reader beside it.
@@ -6812,15 +6812,15 @@ Rule in II.9; why in V.137. Related: `Q31`, which this shrinks and does not clos
 
 ## Y11
 
-**Status: ANSWERED â€” built and ruled 2026-08-06.** Raised by
+**Status: ANSWERED — built and ruled 2026-08-06.** Raised by
 `lamdan/whole-repo-2026-08-05.md` as F-5, ranked second on the quality axis. Accurate on the
 mechanism; one-directional about which path loses, and the review's proposed remedy is
 explicitly not what shipped.
 
-**Y11 â€” When one job has two implementations, which one is right?** Neither, reliably. The
+**Y11 — When one job has two implementations, which one is right?** Neither, reliably. The
 question is what makes the second one stop existing.
 
-A backend here is a `ManagerConfig` row â€” about 56 lines of table over shared machinery â€” or a
+A backend here is a `ManagerConfig` row — about 56 lines of table over shared machinery — or a
 hand-written module averaging 403. F-5's claim was that nine of the twenty-two exemptions are
 refuted by the code beside them, and it checked three: `dnf`, `pacman` and `xbps`. All three
 check out, and the three modules are gone: 1,223 lines of Rust for 272 of table.
@@ -6837,17 +6837,17 @@ That is the rule the ratchet's header already stated for the eight conversions o
 now binding. These three cost four fields, and all four are available to every backend
 including a user's own row in `adapters/backends.toml`:
 
-- **`CacheClean`** â€” how a manager empties its download cache, with its own binary, because
+- **`CacheClean`** — how a manager empties its download cache, with its own binary, because
   Void empties its cache with `xbps-remove` and apt with `apt-get`.
-- **`DependsProbe`** â€” the argv *and* the reader, because dnf prints one bare name per line,
+- **`DependsProbe`** — the argv *and* the reader, because dnf prints one bare name per line,
   pacman prints several on one labelled row, and apt prints one per labelled line. One parser
   lenient enough for all three is one parser that reads a malformed answer in one shape as a
   valid answer in another.
-- **`OutdatedProbe::silence_is_none`** â€” `pacman -Qu` exits non-zero with nothing on either
+- **`OutdatedProbe::silence_is_none`** — `pacman -Qu` exits non-zero with nothing on either
   stream to mean *nothing is out of date*, which is exactly the shape `Q40` calls a failed read.
   Translated back for the manager whose meaning is known, rather than by loosening the rule for
   every read in the program.
-- **`{name_component}`** â€” a repository name that becomes a path segment. Both hand-written
+- **`{name_component}`** — a repository name that becomes a path segment. Both hand-written
   modules validated it; the shared repo path did not, because until now no row put a name in a
   path. `../../etc/cron.d/x` is an ordinary argument and a directory escape.
 
@@ -6855,7 +6855,7 @@ including a user's own row in `adapters/backends.toml`:
 the answer.**
 
 This is the finding under the finding, and F-5 did not name it. `registry.rs`'s argv table
-drives every backend against a mock and records the argv it would have run â€” good instrument,
+drives every backend against a mock and records the argv it would have run — good instrument,
 one of the better ones here. It recorded `Runs("dnf install -y jq")` in the same list as
 `Runs("apt install -y -- jq")` and never asked `core::argv`, which is the one file that knows
 `dnf` ends its options at `--`. The gate held the defect as its own expectation. Every recorded
@@ -6880,7 +6880,7 @@ same class running the other way:
 The ratchet's only assertion about a reason was `why.len() > 60`. `pacman.rs` claimed the
 removal guard needed its essential data and had no `essential()` impl; `dnf.rs` described
 `ManualListing::Command { format: SameAsInstalled }` in prose; `xbps.rs` named three fields that
-exist. Each entry now carries a `proof` â€” text that must appear in the module â€” and the check is
+exist. Each entry now carries a `proof` — text that must appear in the module — and the check is
 self-tested against a planted falsehood before it is trusted (IV.1).
 
 **Deliberately not done.** F-5's proposed change was *"move the 40 rows into `onboarder.rs`'s
@@ -6901,11 +6901,11 @@ Rule in II.22 and II.12b; reason in V.142.
 
 ## Y12
 
-**Status: ANSWERED â€” built and ruled 2026-08-06.** Raised by
+**Status: ANSWERED — built and ruled 2026-08-06.** Raised by
 `lamdan/whole-repo-2026-08-05.md` as F-3, ranked second on the accuracy axis. Accurate on the
 site it named, and understated: it found one of four, and the one it missed is the worst.
 
-**Y12 â€” When a plan is asked what to remove, what is it comparing against?** Whatever the caller
+**Y12 — When a plan is asked what to remove, what is it comparing against?** Whatever the caller
 handed it, and until now the caller had no way to say what that was.
 
 `ChangePlanner::plan` computes removals as `managed âˆ’ desired`. The signature took
@@ -6916,26 +6916,26 @@ filter the desired set*, and *reap every backend on the box*. Five of the eight 
 `planner.rs:39` recorded the choice and its reason: *"Absence of a scope is `Option::None` rather
 than a variant: as an enum variant it was an implicit spare-everything switch that `matches!`
 early-returns skipped past, so adding a variant produced no compiler error."* The objection was
-real. The answer to it was not â€” an `Option` is a spare-everything switch too, and a quieter one,
+real. The answer to it was not — an `Option` is a spare-everything switch too, and a quieter one,
 because nothing about writing `None` looks like a decision.
 
 **What was live:**
 
-- **`app/shell/mod.rs:269` â€” the transient shell, and it is not the same bug as the other three.**
+- **`app/shell/mod.rs:269` — the transient shell, and it is not the same bug as the other three.**
   `provision_transient_env` builds a desired map holding **only the packages the shell was asked
   for**, then planned it as a whole-machine converge. Every other managed package on the box
-  became a `Remove` node, handed to `engine.sync(â€¦, GuardScope::Sync)`. `shall shell ripgrep`
+  became a `Remove` node, handed to `engine.sync(…, GuardScope::Sync)`. `shall shell ripgrep`
   proposed to uninstall the machine. `max_removals` was the only thing in the way, and a ceiling
   is not a rule. The planner's own comment four hundred lines below describes this exact
   combination as the thing that must never happen.
-- **`verbs/plan.rs:202` â€” `plan`/`apply`.** The frozen plan carried removals for every backend
+- **`verbs/plan.rs:202` — `plan`/`apply`.** The frozen plan carried removals for every backend
   `priority` does not name, and `apply` carried them out later, against a machine that had never
   agreed to Shall touching that manager. Its sibling three lines up in the same file had the fix
-  **and the comment explaining it** â€” *"`status` reports what a full `sync` would do, so it
-  scopes drift the same way"* â€” and did not get it.
-- **`verbs/setup.rs:569` â€” `upgrade --canary`.** The one command that promises to roll back was
+  **and the comment explaining it** — *"`status` reports what a full `sync` would do, so it
+  scopes drift the same way"* — and did not get it.
+- **`verbs/setup.rs:569` — `upgrade --canary`.** The one command that promises to roll back was
   the one most likely to need to.
-- **`app/profile.rs:462` â€” `activate`/`deactivate`/`profile save`,** the site the review named.
+- **`app/profile.rs:462` — `activate`/`deactivate`/`profile save`,** the site the review named.
   `sync` confined removals to the managers this host lists and `activate` did not, which made the
   narrower-sounding command the more destructive one.
 
@@ -6943,16 +6943,16 @@ because nothing about writing `None` looks like a decision.
 
 `PlanScope` replaces `Option<Scope>` with three cases a caller has to choose between:
 
-- **`Whole(HostBackends)`** â€” the machine's whole declaration set. Drift is real, bounded by the
+- **`Whole(HostBackends)`** — the machine's whole declaration set. Drift is real, bounded by the
   backends `priority` names.
-- **`Narrowed(Scope)`** â€” one profile or module. `desired` is filtered down to it, and nothing is
+- **`Narrowed(Scope)`** — one profile or module. `desired` is filtered down to it, and nothing is
   removed, because a package outside the scope is outside the question.
-- **`JustThese`** â€” a set of packages that is not the config at all. Installs only.
+- **`JustThese`** — a set of packages that is not the config at all. Installs only.
 
 **RULED, part two: the case that reaps cannot be written without the list that bounds it.**
 
 `HostBackends` is a newtype, and `StateResolver::host_backends` is the only thing in `src/` that
-mints one â€” gated by `planner_scope_enumeration_tests`, because the compiler cannot tell a list
+mints one — gated by `planner_scope_enumeration_tests`, because the compiler cannot tell a list
 that came from `priority` from one somebody assembled by hand. `priority`'s promise is written in
 the error a new user reads when the file is missing: *"Listed means Shall uses it. Not listed
 means Shall does not touch it at all."* Four commands broke it, and none of them had to hold the
@@ -6962,7 +6962,7 @@ list to do so.
 
 The gate found this hole in itself on its first run. `upgrade --canary` bound its scope to a
 variable above the call, so no `PlanScope::` literal appeared in the argument list and the scan
-passed over the site in silence â€” a clean report about a file it had not read. An unreadable site
+passed over the site in silence — a clean report about a file it had not read. An unreadable site
 now fails, and the canary names both of its variants at the call. This is the "check that cannot
 fail" family (F-2) caught in a check written to close it.
 
@@ -6983,13 +6983,13 @@ Rule in II.7; reason in V.143.
 
 ## Y13
 
-**Status: ANSWERED â€” built and ruled 2026-08-06.** Raised by
+**Status: ANSWERED — built and ruled 2026-08-06.** Raised by
 `lamdan/whole-repo-2026-08-05.md` as **"The `Converge` engine"**, ranked first on the quality
 axis and framed as the review's central structural finding. Accurate on both of its consequences
-â€” and understated on one of them, which was five copies and is seven. Its headline, the rename,
+— and understated on one of them, which was five copies and is seven. Its headline, the rename,
 is refused, with the evidence below.
 
-**Y13 â€” Is there one engine underneath the six things Shall converges, and if not, why not?**
+**Y13 — Is there one engine underneath the six things Shall converges, and if not, why not?**
 
 The review's claim is a causal chain: the product converges declared objects, the central trait is
 called `Installable`, *"there was no shared noun to hang an engine on, so each noun grew its own"*,
@@ -6999,34 +6999,34 @@ remedy. The consequences are real. The remedy is not the thing that caused them.
 **RULED, part one: a statement declares which phase of a sync its work happens in, and the order
 of the phases is a type.**
 
-`verbs/sync.rs` already carried the bill in its own words â€” *"every statement kind added since was
-missed by one of them: extras, then `exec:`, then `dotfiles:`, then `firewall:` â€” four times."*
+`verbs/sync.rs` already carried the bill in its own words — *"every statement kind added since was
+missed by one of them: extras, then `exec:`, then `dotfiles:`, then `firewall:` — four times."*
 That comment was written when the dry-run branch's duplicate phase list was folded into the real
 one. It diagnosed the duplicate list correctly and did not notice that **three more copies of the
 same fact were still standing**: `dependents()` spelled out `Shim | Service | Link | Setting` in a
 `matches!`, each `has_*` helper spelled out its own kind, and `has_non_package_work` was five
 `||`s naming five kinds. A fifth kind added to the grammar would have compiled against all four,
-and the review's own note â€” *"`resolve.rs:29`, seven `filter_map` accessors, and
-`has_non_package_work` as a hand-written `||` chain the compiler never checks"* â€” is exactly
+and the review's own note — *"`resolve.rs:29`, seven `filter_map` accessors, and
+`has_non_package_work` as a hand-written `||` chain the compiler never checks"* — is exactly
 right.
 
 `Statement::phase()` is an exhaustive match, the same move `Statement::key()` had already made for
 identity. A kind added to the grammar does not compile until somebody says where in a sync it
 belongs. `Phase`'s variants are declared in run order and `Ord` is that order, so
-`has_non_package_work` is `phase > Phase::Packages` â€” a comparison, extended by nobody. The
+`has_non_package_work` is `phase > Phase::Packages` — a comparison, extended by nobody. The
 dispatch in `apply_non_package_phases` matches exhaustively over the enum and iterates it, so the
 order is the type's rather than the order somebody typed the calls.
 
 The one exclusion that was deliberate is now *expressible*: `repo:` is not "work after the
-packages" because it is phase 1 and ran before the plan. It had in fact been forgotten â€” the exit's
-own comment said so and worked around it by counting placements separately â€” and the workaround is
+packages" because it is phase 1 and ran before the plan. It had in fact been forgotten — the exit's
+own comment said so and worked around it by counting placements separately — and the workaround is
 gone.
 
 **RULED, part two: K17 has one mechanism, and writing it again is a build failure.**
 
 The review counted five registries. There are **seven**: firewall adapters, init providers,
 settings stores, snapshot providers, prereq rows, bootstrap rows and secret providers. Seven row
-*types* is right and stays â€” one schema holding `allow`/`deny` and `start`/`stop` and
+*types* is right and stays — one schema holding `allow`/`deny` and `start`/`stop` and
 `read`/`write`/`reset` would be a struct of twenty optional fields. Seven copies of everything
 asked *about* rows is not, and **four of the five shared questions had already been answered
 differently**:
@@ -7036,12 +7036,12 @@ differently**:
 - **Three tables refused a duplicate name and three kept it silently.** In `[[secret]]`, which of
   two `vault` blocks answered was decided by file order, and nothing said so.
 - **The OS question had two spellings**, one reading `std::env::consts::OS` and one taking it as a
-  parameter â€” so the Windows arm of four tables could only ever be exercised on Windows.
+  parameter — so the Windows arm of four tables could only ever be exercised on Windows.
 - **The built-in snapshot rows did not clear the floor a user's row clears**, which is the K17/U1
   invariant written in that file's own header.
 
 `core/adapter.rs` is that mechanism. A row says what it is; the module answers everything else.
-And the gate is not a ledger of the seven tables â€” a ledger catches an eighth being *added*, and
+And the gate is not a ledger of the seven tables — a ledger catches an eighth being *added*, and
 what actually happened seven times was a table quietly growing its own copy while its author did
 something reasonable in the file in front of them. So the duplication itself fails the build.
 
@@ -7051,7 +7051,7 @@ The review's headline is *"the name is the mechanism"*. Checked, and it is not:
 
 - **The convergence decision is already shared, in exactly two places, and neither is in the four
   bodies the review read.** On the package path `ChangePlanner` computes `desired âˆ’ present` and
-  asks `is_drifted` â€” one comparison covering `@quota`, `@size`, `@mount`, `@mount_options`,
+  asks `is_drifted` — one comparison covering `@quota`, `@size`, `@mount`, `@mount_options`,
   `@channel` and `@classic` across zfs, lvm, btrfs and snap. A converged declaration never reaches
   the trait. On the dependent path `Dependents::apply` asks `extras::in_effect` and skips anything
   in force. The read inside `ZfsInstallable::install` is a **local idempotence guard behind a
@@ -7060,13 +7060,13 @@ The review's headline is *"the name is the mechanism"*. Checked, and it is not:
   produced into a `Package`, recorded in `StateRegistry.packages`, serialized into
   `registry.json`. Renaming the verb at 159 sites while the nouns stay package-shaped leaves two
   vocabularies where there was one and buys no property the compiler can check. Renaming the
-  nouns is a wire-format change to `registry.json` and `SavedPlan` â€” a compatibility decision, and
+  nouns is a wire-format change to `registry.json` and `SavedPlan` — a compatibility decision, and
   the owner's, not a refactor's.
 
 What made those four bodies *read* as orphan loops is that nothing said where the decision was
 made. The trait says so now, which is where somebody reading one of the four will be.
 
-**A gate shipped unable to fail, and a mutation caught it â€” the second time in two rulings.** The
+**A gate shipped unable to fail, and a mutation caught it — the second time in two rulings.** The
 phase-dispatch scan searched for `Phase::Execs =>` as a substring. Folding `Execs` into the ignored
 or-pattern deletes the dispatch and still contains that substring, so the check passed over the
 exact regression it existed for. That is F-2's family reproduced inside a check written for F-2's
@@ -7075,7 +7075,7 @@ read. Both were found by mutating the source and watching, not by review. **A ga
 until it has been watched to fail**, and both scans now carry their failure modes as controls.
 
 **Behaviour a user could notice: two, both narrowings, both in `adapters/secret.toml`.** A
-`[[secret]]` row may now name an `os` and is skipped elsewhere â€” a row that names none still
+`[[secret]]` row may now name an `os` and is skipped elsewhere — a row that names none still
 applies everywhere, so no existing file changes meaning. And a second `[[secret]]` block claiming
 a name is now refused out loud instead of silently kept; the first still wins, which is what the
 lookup already did, so the change is that it is said rather than that it is different.
@@ -7086,25 +7086,25 @@ Rules in II.1 and II.7; reasons in V.144, V.145 and V.146.
 
 ## Y14
 
-**Status: ANSWERED â€” built 2026-08-06, ruled 2026-08-06.** The two behaviours filed for a
+**Status: ANSWERED — built 2026-08-06, ruled 2026-08-06.** The two behaviours filed for a
 ruling were ruled in opposite directions, which is why they were filed separately: **item 1
-stands** (a package that fails fails the command), and **item 2 is reversed** by `Y15` â€” a plan
+stands** (a package that fails fails the command), and **item 2 is reversed** by `Y15` — a plan
 naming a manager this machine does not have is skipped, not failed. The reason given for filing
 item 2, *"the one case `sync` never meets, since a planner cannot schedule an absent backend"*,
 **was wrong**, and `Y15` records what the code actually did instead. Raised by
 `lamdan/whole-repo-2026-08-05.md` as **F-4**, ranked third on the accuracy axis. Accurate on the
 site it names and wrong about the size of it: *"`apply` is **the one** change path `heal` cannot
-recover"* â€” it was one of eight. The recommendation this implements is the review's own
+recover"* — it was one of eight. The recommendation this implements is the review's own
 (*"rebuild `SyncChanges` from the saved plan and hand it to `SyncEngine::sync`; the freeze
 survives and the WAL comes with it"*), and nobody ruled it, so it is here to be confirmed or
 reversed.
 
-**Y14 â€” Does a command that installs or removes have to record it, or only the engine?**
+**Y14 — Does a command that installs or removes have to record it, or only the engine?**
 
 `verbs/plan.rs` held zero references to `Transaction`, `journal` or `execute_with_telemetry`, and
 `handle_apply` walked `installs` and then `removals` in two serial loops calling the backend
-directly. So the `plan`/`apply` pair â€” the feature sold in `readme.md` as the reviewable,
-frozen, Terraform-shaped change â€” was the one change path with no write-ahead log, and
+directly. So the `plan`/`apply` pair — the feature sold in `readme.md` as the reviewable,
+frozen, Terraform-shaped change — was the one change path with no write-ahead log, and
 `shall heal`, which reads the journal, could not recover an interrupted `shall apply` because
 `apply` never wrote one.
 
@@ -7115,35 +7115,35 @@ restore, and the remediation install in `diagnostics.rs` all reached a package m
 nothing recording that they had. **One of them is `purge-undeclared`**, which this repo's own prose calls the most destructive command in the
 program. Nothing had ever decided that those paths did not need a record; the journal was
 written for the transaction engine, so it lived in the transaction engine, and *what the engine
-schedules is what gets journalled* became the rule by default. That is `F-2`'s mechanism â€” a
-gate drawn around the artifact that was under review â€” for the ninth time.
+schedules is what gets journalled* became the rule by default. That is `F-2`'s mechanism — a
+gate drawn around the artifact that was under review — for the ninth time.
 
 **BUILT, part one: `apply` executes its frozen plan through `SyncEngine::sync`.** The freeze
 survives because the engine does not plan: it takes a `SyncChanges` and runs it, and the graph
 here is the one rebuilt from the plan file and trimmed by the review screen. What arrives with
 it is the write-ahead log, the transaction, auto-rollback, the prior-state probe, the pre-sync
 snapshot, `@health=`, the per-package hooks, the events, and one manager command per wave
-instead of one per package â€” the ten-times cost `sync` stopped paying and `apply` did not. Two
+instead of one per package — the ten-times cost `sync` stopped paying and `apply` did not. Two
 hundred lines of scaffolding are gone with the loops, including the guard call `apply` was
 making for itself: the engine's first act is `guard::enforce` over the same graph under the same
 `GuardScope::Apply`, which is one call rather than two that can drift apart.
 
 **BUILT, part two: every other package mutation carries its own record.** `journalled` is the
-log without the ceremony â€” one entry per action, flushed before the mutation future is polled,
+log without the ceremony — one entry per action, flushed before the mutation future is polled,
 closed after. A whole transaction is the wrong shape for reclaiming an expired lease, and
 demanding one would have been the reason to keep doing nothing. A record that cannot be written
 aborts the mutation, which is what the engine already did to an unrecordable batch.
 
 **BUILT, part three: the gate is drawn around the property.**
 `tests/wal_enumeration_tests.rs` counts every package mutation in `src/` and requires each file
-to name what makes an interruption recoverable â€” `Transaction`, `Journalled`, or `Recomputed`
+to name what makes an interruption recoverable — `Transaction`, `Journalled`, or `Recomputed`
 under II.19's line. It is checked in both directions, a `Journalled` claim is checked against
 the file that must contain the call, and the scan is fed the exact lines it exists to catch
 before anything trusts it. It was written first and watched fail on all eight.
 
 **A sibling found while building, and it is the same family one layer down.** Rebuilding the
 graph from a saved plan called `add_node` in a loop and wired no edges, so a `@requires` a user
-wrote survived into the plan file â€” it is in the specs' own `requires` â€” and was read back as
+wrote survived into the plan file — it is in the specs' own `requires` — and was read back as
 nothing. `rebuild` had it too, with a worse spelling: it keyed its install map by the bare name
 while `requires` is written `backend:name`, so the lookup could never hit. Four hand-written
 copies of "add the nodes, wire the edges" existed; two had edges. There is one now.
@@ -7155,12 +7155,12 @@ detail:**
    `Applied plan: N installed, M removed` and exit 0 over a machine where half the plan had not
    happened. Through the engine a failed node fails the command, names the declaration it failed
    for, and rolls the transaction back. This is `sync`'s behaviour, and a frozen plan is one
-   change to one machine â€” but it is a real change to what a script wrapping `shall apply` sees,
+   change to one machine — but it is a real change to what a script wrapping `shall apply` sees,
    and reversing it is a one-line `continue_on_error`.
 2. ~~**A plan naming a backend this machine does not have now fails the command.**~~
    **Reversed by `Y15`, 2026-08-06.** It is skipped, reported, and the command succeeds. The
-   argument written here for failing â€” *"the only case `sync` never meets, since the planner
-   cannot schedule a backend that is not there"* â€” was false in both halves: the planner
+   argument written here for failing — *"the only case `sync` never meets, since the planner
+   cannot schedule a backend that is not there"* — was false in both halves: the planner
    scheduled nothing because `spec_is_missing` raised `BackendNotFound` from inside the fan-out
    and **failed the whole `sync`**, so `sync` met this case first and worse. See `Y15`.
 3. **`apply` now takes a pre-sync snapshot, runs the declared health checks, fires
@@ -7171,7 +7171,7 @@ detail:**
 4. **`apply` is faster**, by the same measure `Y1` ruled on: six packages went as six
    `apt install` processes and now go as one.
 5. **`heal` can now recover an interrupted `apply`, `upgrade`, `remove-orphans`,
-   `purge-undeclared`, lease sweep or shell restore** â€” which is the point, and means a crash
+   `purge-undeclared`, lease sweep or shell restore** — which is the point, and means a crash
    during one of those is now followed by a recovery that was previously silent.
 
 Rules in II.7 and II.19; reasons in V.147 and V.148.
@@ -7180,11 +7180,11 @@ Rules in II.7 and II.19; reasons in V.147 and V.148.
 
 ## Y15
 
-**Status: ANSWERED â€” ruled and built 2026-08-06.** Raised by the owner while reviewing `Y14`'s
+**Status: ANSWERED — ruled and built 2026-08-06.** Raised by the owner while reviewing `Y14`'s
 two filed-for-ruling behaviours, and it took one question to find that the premise under the
 second one was false.
 
-**Y15 â€” Is a manager this machine does not have a broken config, or a portable one?**
+**Y15 — Is a manager this machine does not have a broken config, or a portable one?**
 
 **Portable.** *"I think for all these it should warn, but legitimately not fail. I think that
 should be the rule, so that configs are super portable."* A line pinned to a manager this host
@@ -7197,20 +7197,20 @@ backend and a plan file can be carried between machines."* Asked why `sync` coul
 the manager is named in the config file, the answer was that it could, and worse:
 `ChangePlanner::spec_is_missing` turned `registry.get(&spec.backend) == None` into
 `Error::BackendNotFound` inside the install fan-out, so the `?` carried it out of `plan()`
-and **the whole sync failed having planned nothing** â€” twenty `winget:` lines dropped by one
+and **the whole sync failed having planned nothing** — twenty `winget:` lines dropped by one
 `apt:` line beside them. `apply` was not the odd one out; it was the one that had been merciful.
 
 **This is `Q9` clause 3 finishing its journey, not a new rule.** *"A real backend that cannot
-run here is a different answer... it is a fact about the machine â€” so it says that and exits
+run here is a different answer... it is a fact about the machine — so it says that and exits
 0"*, ruled 2026-07-28 about a backend named in a command **argument**. `shall install brew:jq`
 on a machine without brew has warned and exited 0 ever since, while `brew:jq` written in a
-**file** failed the whole sync â€” one question with two answers in one program, because the
+**file** failed the whole sync — one question with two answers in one program, because the
 ruling was applied to the surface under review when it was made. Nothing was added to `install`
 or `teleport` here: they were already right, and `Q9` is why.
 
 **RULED, and the rule is in II.7c.** Absence is skipped; failure still fails; `--keep-going` is
 the per-run opt-in for a caller that wants best-effort, with no file form. A name that is not a
-backend at all remains a grammar error â€” skipping is for names Shall knows, and a config that
+backend at all remains a grammar error — skipping is for names Shall knows, and a config that
 silently skipped its own typos would describe a machine nobody has.
 
 **One predicate, because the first cut of this fixed half of it.** `apt` on Windows is absent
@@ -7221,11 +7221,11 @@ Windows than on Linux, so a fix for one branch cannot pass while the other stays
 
 **What it touched, and what it deliberately did not.** Skipping is applied at the planner (per
 declaration, before anything is asked), at `apply` (per graph node, before the summary counts
-it), and in `SyncEngine::sync` as the backstop every path shares â€” a graph can arrive from a
+it), and in `SyncEngine::sync` as the backstop every path shares — a graph can arrive from a
 plan file another machine wrote or from this machine's journal. The silent siblings went with
 it: `upgrade`, `remove-orphans`, `purge-undeclared` and the expired-lease sweep each walked past
 an absent manager with a bare `continue` and reported the rest as the whole job. **`shall install
-apt:jq` typed at a Windows prompt still errors** â€” that is not a config travelling between
+apt:jq` typed at a Windows prompt still errors** — that is not a config travelling between
 machines, it is an instruction about this one.
 
 **V.15 was checked and is untouched.** *"An explicit `snap:foo` failing when snap isn't listed is
@@ -7239,26 +7239,26 @@ subset it has. V.15 governs what you declared; this rule governs what you have.
 
 ## Y16
 
-**Status: ANSWERED â€” ruled and built 2026-08-07.** Raised by the owner while reviewing three
+**Status: ANSWERED — ruled and built 2026-08-07.** Raised by the owner while reviewing three
 subsystems an audit had proposed deleting. All three were kept, and the third turned out to be
 broken in a way that reframed the whole question.
 
-**Y16 â€” `shall repl`, the ratatui screens, and the Lua hook arm: delete, or keep?**
+**Y16 — `shall repl`, the ratatui screens, and the Lua hook arm: delete, or keep?**
 
 The case for deletion was cost. `shall repl` is a second entry point onto answers `eval | jq`
 already gives; the two ratatui screens are 641 lines; and `mlua` vendors **28,687 lines of Lua
-5.4 C source**, rebuilt from scratch on every clean build â€” ten times per CI push across four
-release targets and six integration images â€” to serve one branch of one `if`, when `#rhai`
+5.4 C source**, rebuilt from scratch on every clean build — ten times per CI push across four
+release targets and six integration images — to serve one branch of one `if`, when `#rhai`
 already provides in-process scripting and `rhai` is independently justified by `vars.shall`.
 
 **RULED (owner, 2026-08-07): keep all three, and make them work.** *"Everything must work and it
 not working is not cause for deletion but fixing."*
 
-- **`shall repl` stays**, which `U34` had already ruled on 2026-07-26 (*"build it â€” if it is
+- **`shall repl` stays**, which `U34` had already ruled on 2026-07-26 (*"build it — if it is
   easy"*). Verified end to end rather than asserted: bare and prefixed names resolve, `when`
   evaluates against this host, `:vars`/`:eval` answer, EOF leaves. It is 148 lines over the one
   resolver and adds no dependency, which is the condition `U34` attached.
-- **Both ratatui screens stay.** The audit's framing â€” "641 lines of TUI" â€” described neither.
+- **Both ratatui screens stay.** The audit's framing — "641 lines of TUI" — described neither.
   `preview.rs` is the confirmation screen `sync` and `plan apply` show on a real terminal, and
   deselecting a package there is the only way to say *"these four, not that one"* without
   editing a manifest; a y/n prompt cannot express it, so deleting it is a rewrite that loses a
@@ -7266,14 +7266,14 @@ not working is not cause for deletion but fixing."*
   kept as the browsing half of an interface pair with `rollback <ref>`. **One real defect:** it
   had no terminal guard, so in a pipe or a cron job it entered raw mode and failed with an OS
   error rather than the sentence `sync` and `rollback` both print. Fixed, pointing at
-  `shall git log` â€” the command that actually exists.
+  `shall git log` — the command that actually exists.
 - **All three hook dialects stay** (as ruled 2026-07-20), **and the `#rhai` arm is fixed.** It
   had never run: the marker line was handed to the engine, `#` is reserved in Rhai, and every
   `#rhai` hook died with a syntax error on line 1. The one shipped example compounded it by
   calling `exec(...)`, which no engine here registers. **A dialect nothing tests is a dialect
   that does not run.** The marker is now stripped (blanked, so error line numbers still match),
   all three arms are handed the same four facts, and `#rhai` gets the same standard library
-  `vars.shall` has, from the same builder â€” because II.6b defines that file's trust *as* a
+  `vars.shall` has, from the same builder — because II.6b defines that file's trust *as* a
   hook's, so a hook cannot have less.
 
 **`mlua` stays too, and its cost stands as measured.** The vendored-C build time was not
@@ -7284,16 +7284,16 @@ II.12, reasons in V.150.**
 
 ## Y17
 
-**Status: ANSWERED â€” ruled and built 2026-08-07.** Raised out of `Y16`: fixing the `#rhai` arm
+**Status: ANSWERED — ruled and built 2026-08-07.** Raised out of `Y16`: fixing the `#rhai` arm
 put a real binary in front of all three dialects, and the third one did not run on this platform
 at all.
 
-**Y17 â€” a `#!` hook is dead on Windows. Refuse it there, or make it work?**
+**Y17 — a `#!` hook is dead on Windows. Refuse it there, or make it work?**
 
 Confirmed against the OS rather than reasoned: a script file handed to `CreateProcess` comes back
 *"The specified executable is not a valid application for this OS platform."* A Unix kernel reads
 the first line and launches what it names; **Windows has no such mechanism at any level**, so the
-failure is not fixable inside the hook. What the user saw was `Polyglot execution failed: â€¦ (os
+failure is not fixable inside the hook. What the user saw was `Polyglot execution failed: … (os
 error 193)`, which reads as *your script is broken* for a script that is fine.
 
 Three ways out were put to the owner:
@@ -7303,37 +7303,37 @@ Three ways out were put to the owner:
 2. **Route it through PowerShell.** Rejected in the asking: `#!/usr/bin/env python3` would then
    run under PowerShell, which treats the line that chose Python as a comment. That does not run
    the script, it runs a different one.
-3. **Read the shebang ourselves** â€” take the interpreter's name, find it on PATH, run
+3. **Read the shebang ourselves** — take the interpreter's name, find it on PATH, run
    `python3 <script>`.
 
 **RULED (owner, 2026-08-07): option 3, built robust.**
 
 The measurement that made it cheap: **the `#!` line does not have to be stripped.** Every language
-a shebang names treats it as a comment, so the file runs unmodified â€” the whole Windows arm is
+a shebang names treats it as a comment, so the file runs unmodified — the whole Windows arm is
 "resolve a name, put the script last". What the ruling shipped:
 
-- **The shebang is read on every platform, not just Windows**, in `model/script.rs` â€” the file
+- **The shebang is read on every platform, not just Windows**, in `model/script.rs` — the file
   whose stated job is this question and which had *three* callers using two different answers. An
   absolute interpreter that exists is used as written, so on Unix this launches the same binary
   the kernel would have. `/usr/bin/env` is dropped rather than launched, because the PATH search
   it stands for now happens here.
 - **`python3` finds a Windows `python`.** A shebang says `python3` because that is what Unix calls
   it; a Windows install is almost always `python`, with `py` there when neither is. The fallback
-  list is deliberately short â€” the same program under the name this OS gives it, never something
+  list is deliberately short — the same program under the name this OS gives it, never something
   similar.
 - **A missing interpreter is named, with every spelling that was tried.** `#!/bin/bash` on a
-  machine with no bash is still a refusal â€” it always will be â€” but it now says which program is
+  machine with no bash is still a refusal — it always will be — but it now says which program is
   missing instead of blaming the script.
 - **Environment assignments in a shebang (`env -S FOO=1 python3`) are refused**, because one of
   the three callers runs through an executor with no per-command environment and a form honoured
   by two callers out of three is worse than one refused by all three.
 - **`exec:` and Shall's own event hooks read the shebang too.** They shared the file and ignored
-  the first line on both platforms â€” `sh <script>` does not consult a shebang either â€” so a
+  the first line on both platforms — `sh <script>` does not consult a shebang either — so a
   `#!/usr/bin/env python3` event hook was already broken on Linux. One question, one answer, three
   callers.
 - **A `vars.<ext>` provider was the fourth site, with the same bug inverted.** It picks its
   interpreter by extension (IX.6, not by shebang, and that stays), but it named literally `python`
-  on Windows and literally `python3` everywhere else â€” so a Windows box with only `python3`, or a
+  on Windows and literally `python3` everywhere else — so a Windows box with only `python3`, or a
   Linux box with only `python`, had a `vars.py` it could not run. The extension table is kept; the
   *name* it produces now goes through the same lookup, so the fallbacks and the alias-avoidance
   reach it. **Not** given shebang parsing: IX.6 says a provider needs no shebang, and a second
@@ -7343,70 +7343,70 @@ a shebang names treats it as a comment, so the file runs unmodified â€” the
 
 ## Y18
 
-**Status: ANSWERED â€” raised 2026-08-07 by `LX-7`; three of the four ruled by the owner
+**Status: ANSWERED — raised 2026-08-07 by `LX-7`; three of the four ruled by the owner
 2026-08-08, the fourth ruled and built 2026-08-09.** Raised by pointing `named_commands_exist_tests` at `docs/`
 for the first time. `PART_II_LOOKS_WRONG` in that file is asserted exact and shrink-only, so a
 ruling shrinks it and nothing can be quietly added; it is down to one entry.
 
-**Y18 â€” Part II names three commands the program does not have. Which of them is the spec wrong
+**Y18 — Part II names three commands the program does not have. Which of them is the spec wrong
 about, and which is the program?**
 
 **Ruled 2026-08-08: the spec was wrong in every case where the code was checked.** Findings 1, 2
 and 4 are corrected in Part II in the same change. Finding 3 stays open, and the reason it does
-is the finding underneath it â€” see below.
+is the finding underneath it — see below.
 
 The gate's rule for `docs/` is weaker than the one for `src/` and `readme.md`, and deliberately:
 a record has to stay free to name a command on the day it was deleted. So the property is *a dead
 command named in `docs/` is a command the spec says is dead*, with `target-state.md` II.17 read as
 the register rather than restated. That reduced 62 raw hits to 10 and left these three.
 
-1. **The sync nudge â€” RULED, spec corrected.** Prescribed as *"3 packages are now orphaned; run
+1. **The sync nudge — RULED, spec corrected.** Prescribed as *"3 packages are now orphaned; run
    `shall clean`."* There is no `clean` verb; the live one is `remove-orphans`, and the rule now
-   says so â€” including the bare `clean` in the sentence above it, which named the same absent
+   says so — including the bare `clean` in the sentence above it, which named the same absent
    verb without the prefix that made it visible to the gate. (`run=clean` is a schedule action,
-   not a command â€” `model/schedule.rs:6` and `resolve.rs:1403` both carry it â€” and the rule now
+   not a command — `model/schedule.rs:6` and `resolve.rs:1403` both carry it — and the rule now
    says that out loud so the next reader does not correct it.)
-2. **The `adopt` output header â€” RULED, spec corrected.** Prescribed as *"`shall forget` is the
+2. **The `adopt` output header — RULED, spec corrected.** Prescribed as *"`shall forget` is the
    way out."* `app/adopt.rs:498` already writes `shall unmanage <backend>:<name>`, and
    `adopt.rs:979` asserts it. **The code was right and the rule was stale**, which is the
    direction worth naming: the checked artifact held and the prose did not.
-3. **II.17's register is incomplete â€” RULED 2026-08-09: make `@source=` work, and the row goes
+3. **II.17's register is incomplete — RULED 2026-08-09: make `@source=` work, and the row goes
    in.** II.16's own table records `shall shim jq --source cargo:jq` becoming the line
    `shim:jq@source=cargo:jq`, so the command was deleted; II.17 never gained the entry. It has
    one now, and `bugs.md`'s entry is closed rather than re-pointed.
 
-   **The bug did not die with the command.** `source` was a legal option on a `shim:` line â€”
+   **The bug did not die with the command.** `source` was a legal option on a `shim:` line —
    `config/grammar/statement.rs:1477` lists it in `SHIM_OPTION_KEYS` and `:2690` asserts it
-   parses â€” and no apply path read it: `app/apply/dependents.rs:73` called `create_shim(name)`
+   parses — and no apply path read it: `app/apply/dependents.rs:73` called `create_shim(name)`
    and nothing else. Accepted, documented, discarded, in the new spelling. The ruling was
    therefore not *deletion or loss* but **what `@source=` should mean**, and the owner took the
    answer that keeps the feature: the shim provisions and runs the provider the line names.
 
-   **Built. The record was never missing â€” only unread.** A shim is the shall binary under
+   **Built. The record was never missing — only unread.** A shim is the shall binary under
    another name and has nowhere to keep data, which is why every sketch of this started by
    inventing a sidecar store. It does not need one: the config that declared the shim is the
    config the shim process loads on its way in, and it still says `source=cargo:jq`.
    `Runner::shim_spec` reads it there (`app/run.rs`), so there is no second store to disagree
-   with the first. Absent, the bare name resolves through `priority` exactly as before â€” every
+   with the first. Absent, the bare name resolves through `priority` exactly as before — every
    existing `shim:` line behaves identically.
 
    **And the mechanism it belongs to had never run.** `exec_shim` had no test caller anywhere in
    the tree, and `Runner::run` spawned the shim's own name through `PATH` without excluding
-   `bin_dir` â€” the directory the shim was deployed into, ahead of the real binary, on purpose.
+   `bin_dir` — the directory the shim was deployed into, ahead of the real binary, on purpose.
    Read end to end there was nothing between the two: no depth counter, no marker, no exclusion.
    The runner now resolves every name it spawns through `PATH` **skipping any file that is this
-   binary under another name** â€” by identity, never by directory, because `web:`, `github:` and
+   binary under another name** — by identity, never by directory, because `web:`, `github:` and
    `appimage:` deploy real executables into that same `bin_dir` and excluding it would hide
    them. `tests::a_shim_on_path_is_never_what_the_runner_spawns` was watched failing on the old
    resolution, returning the shim. Reasons in `why.md`, under `V.152`.
    **And a fifth finding, produced by writing the ruling down.** Correcting finding 1 meant
    writing the sentence *"`shall clean`, where the verb is `remove-orphans`"* into four
    documents, and the gate reddened on all four: `clean` is a deleted command II.17 never
-   recorded, exactly as `shim` is. It is entered now â€” split into `remove-orphans` and
-   `clean-cache` (V.36) â€” because nothing hangs on it the way `@source=` hangs on `shim`. **The
+   recorded, exactly as `shim` is. It is entered now — split into `remove-orphans` and
+   `clean-cache` (V.36) — because nothing hangs on it the way `@source=` hangs on `shim`. **The
    register being incomplete is not a documentation problem; it is what makes a correction
    unwritable.**
-4. **The rule about the gate's own scope â€” RULED, spec corrected.** `target-state.md` read
+4. **The rule about the gate's own scope — RULED, spec corrected.** `target-state.md` read
    ***"`docs/` is out of scope, deliberately"*** while the gate was scanning `docs/`, so the
    canonical spec and the test disagreed about the scope of the same gate. The record argument is
    kept and is now stated as the reason for the weaker property rather than for an exemption:
@@ -7418,12 +7418,12 @@ the register rather than restated. That reduced 62 raw hits to 10 and left these
 - **`bugs.md`'s F4 justification was re-pointed.** A **CLOSED** owner ruling (2026-07-26, do not
   wire `--help` to the registry) rested on *"`doctor` already carries the live count"*. `S38`
   folded `doctor` into `check <section>`; the code was swept and the ruling was not, because
-  nothing read `docs/`. The live count is `verbs/check.rs:1012` â€” `check health`. **The ruling
+  nothing read `docs/`. The live count is `verbs/check.rs:1012` — `check health`. **The ruling
   stands**: its second reason, that help must not read config from disk, never depended on the
   first. Only the false clause moved.
 - **`why.md:708`** paraphrased a test's name with the binary at command position, where the repo's
   convention is that prose spells the product `Shall`. It now reads *"the shall binary survives an
-  uninstall attempt"* â€” the same fact, one word further from the start of a command. (This bullet
+  uninstall attempt"* — the same fact, one word further from the start of a command. (This bullet
   was itself caught by the gate on the run that wrote it, which is the shortest proof available
   that the scan reaches `docs/`.)
 - **`docs/archive/` stays out of scope.** Its own README says *"Nothing here is current"*, and a
@@ -7433,35 +7433,35 @@ the register rather than restated. That reduced 62 raw hits to 10 and left these
 property rather than the artifact and then drew the roots around `src/`-and-friends, which is the
 same mistake one level up: the gate was drawn around the code that was under review. The six
 defects in its header were shipped product; these three are shipped specification, and the
-mechanism that hid them was identical â€” one fact, several copies, a gate around one copy.
+mechanism that hid them was identical — one fact, several copies, a gate around one copy.
 
 ## Y19
 
-**Status: ANSWERED â€” built 2026-08-07 from `LX-1`, ruled 2026-08-10.** Not a new rule: Part II
+**Status: ANSWERED — built 2026-08-07 from `LX-1`, ruled 2026-08-10.** Not a new rule: Part II
 already made this ruling for one field and the parser layer had no type to express it with.
-Recorded here because the *visible* behaviour changed â€” a manager whose output a parser cannot
-read now stops the read instead of reporting an empty machine â€” and a user could notice that.
+Recorded here because the *visible* behaviour changed — a manager whose output a parser cannot
+read now stops the read instead of reporting an empty machine — and a user could notice that.
 
 **RULED (owner, 2026-08-10): yes, keep it.** A hard failure where there used to be a clean-looking
 empty result is the right trade, and the asymmetry below is the whole argument: a manager that
 fails is safe, and a manager that succeeds with a changed format silently reports the whole
 machine as drifted and adopts nothing. The louder answer is the correct one.
 
-**Y19 â€” `parse_installed` could not say "I read four hundred bytes and recognised nothing".**
+**Y19 — `parse_installed` could not say "I read four hundred bytes and recognised nothing".**
 
 `4d4a890` (2026-08-05) diagnosed the whole chain and fixed four links of it:
 
 > *"Through Shall that became `Ok("")` â†’ **a parser finding nothing** â†’ `list_installed`
 > answering `Ok(vec![])`. Nothing in the chain believed anything had failed."*
 
-`run_output`, `info`, `list` and `hook-reconcile` were fixed. **The parser â€” the link the commit
-named itself â€” was not**, because the fix needed a type change and nothing recorded that it had
+`run_output`, `info`, `list` and `hook-reconcile` were fixed. **The parser — the link the commit
+named itself — was not**, because the fix needed a type change and nothing recorded that it had
 been skipped. Eighty-one parser functions, and not one could express the difference between
 *this machine has no packages* and *I did not understand this*.
 
 **The consequence is asymmetric, and the wrong branch is the likely one.** A manager that
 *fails* raises, the backend drops out of `installed_sets`, `is_installed` answers true and
-removals stay scheduled â€” safe. A manager that *succeeds with a changed format* returns
+removals stay scheduled — safe. A manager that *succeeds with a changed format* returns
 present-and-empty: every declaration is planned as a fresh install, every drift removal is
 dropped, `check drift` reports the whole machine as drifted, `adopt` adopts nothing, exit 0.
 Format drift is precisely the failure mode of the backends nobody has run.
@@ -7471,33 +7471,33 @@ Format drift is precisely the failure mode of the backends nobody has run.
 > ***"Absent means *this backend cannot answer that*, never *the answer is none*"***
 
 and again at `:1979`: *"an unsupported flag fails with a usage message, which every reader here
-hands back as an empty result â€” so assuming it would report an empty machine to exactly the users
+hands back as an empty result — so assuming it would report an empty machine to exactly the users
 on older tooling, which is `Q40` under a new name."* Both sentences are about this. Neither could
 be enforced, because below them sat a signature with no way to say it.
 
 **What shipped:** `parse_installed` returns `Result<Vec<Package>, Unrecognised>`; `Unrecognised`
 carries the manager, the count of lines nobody read, and the first of them, so a report becomes a
 fixture instead of a request to reproduce. It crosses into `Error::Unreadable`, classified
-`Permanent` â€” a manager prints the same bytes next time.
+`Permanent` — a manager prints the same bytes next time.
 
 **The judgement is made once**, in `or_unrecognised`: found nothing out of lines that carried
 something is the failure; found nothing out of nothing is an empty machine. Two parsers overrode
 it with their own, and both were required to: `asdf_list`, where a plugin added with no version
 installed is a real state that produces no packages out of two data lines, and `pixi_list`, which
 has no unread case at all because every unindented line resolves to a package, its own banner, or
-noise it names â€” its failure mode is junk, and there are fixtures for that.
+noise it names — its failure mode is junk, and there are fixtures for that.
 
 **The family, swept.** `MachineListing.parse` (the *more* exposed path, since it is a negotiated
-flag on a tool whose version Shall does not control), `ParserSpec` in the onboarder â€” where all
+flag on a tool whose version Shall does not control), `ParserSpec` in the onboarder — where all
 four arms had a way of spelling it, and the sharpest was a user's regex failing to compile into a
-warning nobody reads and a bare machine â€” `slice_fixed_table`, where a missing header row was the
+warning nobody reads and a bare machine — `slice_fixed_table`, where a missing header row was the
 same answer as an empty table, and both `_ => vec![]` dispatch arms, which answered *the machine
 is empty* for any backend name at all. `parse_search` is deliberately **not** fallible, and that
 asymmetry is asserted rather than left to be rediscovered: a search returning nothing is a fact
 the user asked for and can see; an installed listing returning nothing is a fact the planner acts
 on unseen.
 
-`registry.rs`'s `installed_fn: |_| vec![]` for `stack` â€” a manager with no listing verb â€” is now
+`registry.rs`'s `installed_fn: |_| vec![]` for `stack` — a manager with no listing verb — is now
 `CannotList("stack")`. It is inert, because such a manager gets no `Queryable`. It is written down
 because the next one will be added by someone reading that row.
 
@@ -7506,44 +7506,44 @@ now have their *installed* listings from real containers; before this they had c
 `outdated` output and nothing for the listing the planner acts on. `zypper`'s carries 52 lines of
 repository refresh and an expired-key warning before its table, because that is what it prints on
 a cold image. The instrument's self-test is the finding made concrete: `bsd::parse_pkg` fed apt's
-listing reads 7 of 92 lines, **every one of them wrong** â€” `libbz2-1.0` becomes `libbz2` at
-version `1.0` â€” silently, confidently, and naming packages that cannot be removed because they do
+listing reads 7 of 92 lines, **every one of them wrong** — `libbz2-1.0` becomes `libbz2` at
+version `1.0` — silently, confidently, and naming packages that cannot be removed because they do
 not exist. That is what `ecosystem.rs:633`'s rule is about, and no return type catches it.
 
 **Not addressed, and asserted so it cannot be mistaken for addressed:** junk. `apt::parse_list`
 reads apt's own `E: Could not open lock file` as a package named `E:` at that version. It is a
-different failure from emptiness â€” a wrong package rather than a missing one â€” and no return type
+different failure from emptiness — a wrong package rather than a missing one — and no return type
 distinguishes them. `junk_is_a_different_failure_from_emptiness_and_this_change_does_not_address_it`
 pins it.
 
 ## Y20
 
-**Status: ANSWERED â€” built 2026-08-07 from `LX-2`, the question inside it ruled by the owner
+**Status: ANSWERED — built 2026-08-07 from `LX-2`, the question inside it ruled by the owner
 2026-08-09.**
 
-**Y20 â€” every path that removes now carries proof it asked, and closing an undeclared port is one
+**Y20 — every path that removes now carries proof it asked, and closing an undeclared port is one
 of them. Should it count against `max_removals`?**
 
 `readme.md:358` promises that *every path that removes anything goes through one guard*, and the
-next sentence says the promise is checked by `removal_guard_enumeration_tests.rs` â€” *"it was
+next sentence says the promise is checked by `removal_guard_enumeration_tests.rs` — *"it was
 written because the sentence was false for the whole resource family until 2026-07-28."* The
 check implemented it as `is_removal_call`, a predicate matching `.remove(`/`.purge(` with `sudo`
 on the line, plus `.remove_repo(`, `.remove_shim(` and `.deprovision(`.
 
 **`apply/firewall.rs` closes every open port no `firewall:` line declares, using `deny_command`.
-It matches none of them.** The word `guard` appeared nowhere in that file â€” not an import, not a
-call, not a comment â€” and the file had zero tests. `max_removals` did not count those closures,
-`protected` could not name them, `--allow-mass-removal` was not consulted, and `enforce_extras` â€”
-which exists *precisely* because the extras teardown runs outside the transaction â€” was not
+It matches none of them.** The word `guard` appeared nowhere in that file — not an import, not a
+call, not a comment — and the file had zero tests. `max_removals` did not count those closures,
+`protected` could not name them, `--allow-mass-removal` was not consulted, and `enforce_extras` —
+which exists *precisely* because the extras teardown runs outside the transaction — was not
 called.
 
 **The fix for `G-1` replaced a stale list of paths with a stale list of verbs.** The staleness
-moved into a predicate, where nobody re-derives it, because it had a passing self-test â€” and that
+moved into a predicate, where nobody re-derives it, because it had a passing self-test — and that
 self-test fed it four lines already in the ledger, so it proved the scanner could see what it
 already knew about.
 
 **What shipped: `Reaped`.** A token with a private field, mintable only by `guard::enforce`,
-`enforce_extras` and `enforce_deliberate`, required by every effector that removes â€”
+`enforce_extras` and `enforce_deliberate`, required by every effector that removes —
 `Installable::remove`, `Installable::purge`, `RepoManager::remove_repo`,
 `ShimManager::remove_shim`, `SchedulerManager::deprovision`, and the firewall's `close_port`,
 which is split out of `run_firewall` so that the one call in that file which takes something away
@@ -7552,7 +7552,7 @@ now**, and effector six is covered by construction rather than by someone rememb
 This is what `PlanScope` did for planning, applied to removal.
 
 **Two things are honest about the shape rather than papered over.** `deny_command` returns argv
-rather than performing the removal, so the token sits on the call that runs it â€” not perfectly
+rather than performing the removal, so the token sits on the call that runs it — not perfectly
 uniform with the other five. And the executor's check is a *runtime* refusal: a graph carrying a
 removal that reaches `Transaction` without a token refuses rather than failing to compile, because
 making that a compile error means typing the graph by whether it contains a removal, which is a
@@ -7570,7 +7570,7 @@ conservative reading and the one that follows from wiring `enforce_extras`, and 
 user would meet immediately: **a machine with 40 ports open and one `firewall:22/tcp` line hits
 the default ceiling of 20 and refuses.**
 
-**RULED 2026-08-09 (owner): yes, it is a removal and yes, it counts â€” against its own ceiling.**
+**RULED 2026-08-09 (owner): yes, it is a removal and yes, it counts — against its own ceiling.**
 
 The reading that lost was "one number for everything", which is what `Q7` clause 2 said and what
 the code did. The owner's words: *"I think we should have different counts: counts of removed
@@ -7579,8 +7579,8 @@ packages that won't count them, and counts of changes."*
 What is binding:
 
 1. **`max_removals` is packages only**, default 20. Software leaving the machine.
-2. **`max_extra_removals` is new**, default 20, and covers every resource teardown â€”
-   `link:`, `service:`, `setting:`, `shim:`, `schedule:`, `repo:` â€” plus a port closed because
+2. **`max_extra_removals` is new**, default 20, and covers every resource teardown —
+   `link:`, `service:`, `setting:`, `shim:`, `schedule:`, `repo:` — plus a port closed because
    no `firewall:` line declares it. A `dotfiles:` tree's files are `link:` lines and go here too.
    *(Amended 2026-08-10 by `N8`: ports leave this budget for `max_port_closures`, and a
    `max_total_changes` sits over every ceiling here. The rest of this clause stands.)*
@@ -7605,9 +7605,9 @@ The mechanism is in `S55`; the rule is in **II.28**; the reason is in **V.159**.
 
 ## Y21
 
-**Status: ANSWERED â€” raised 2026-08-07 by `LX-6`, ruled by the owner 2026-08-08.**
+**Status: ANSWERED — raised 2026-08-07 by `LX-6`, ruled by the owner 2026-08-08.**
 
-**Y21 â€” 2.5 MB of specification was written under documentation economics and is read under
+**Y21 — 2.5 MB of specification was written under documentation economics and is read under
 context economics. Does the corpus get cut, and if so where?**
 
 **Ruled: cut it. Distil the record into a short list of lessons and put that where an agent will
@@ -7621,14 +7621,14 @@ readiness reviews and session logs, whose own README said nothing inside it was 
 not-done-with-the-reason). **17,900 lines, about 1.4 MB.**
 
 What stayed, and why each: `target-state.md` is the rule, `why.md` is the reason `CLAUDE.md`
-makes mandatory reading before changing a rule, `decisions.md` is the ruling â€” *an event outside
-the tree, with a person and a date on it* â€” and that is the one artifact git cannot reconstruct,
+makes mandatory reading before changing a rule, `decisions.md` is the ruling — *an event outside
+the tree, with a person and a date on it* — and that is the one artifact git cannot reconstruct,
 so it is kept at full fidelity rather than compressed to a status line. `plan.md`, `bugs.md`,
 `principles.md`, `readme.md` and `SPEC.md` are the map and the trackers. `BUILDER.md` and
 `GRADER.md` stayed where they are: they are briefs a person still hands to an agent, which makes
 them tools rather than records, and the cut was about records.
 
-**`docs/attic/lessons.md` is the distillate** â€” thirty-one things, each one the residue of at
+**`docs/attic/lessons.md` is the distillate** — thirty-one things, each one the residue of at
 least one shipped defect, under a header telling agents not to read it. That header is the point
 of the ruling and not a joke: the lessons are for a person, once. An agent that reads them is
 paying the context cost the cut exists to stop, for advice that is already enforced by the gates
@@ -7639,11 +7639,11 @@ in `tests/`.
 are all in `bugs.md` and the register, which is where the disposition discipline had already put
 them.
 
-**The 53 unattached `why.md` entries** â€” the third part of the question â€” are not retired here.
+**The 53 unattached `why.md` entries** — the third part of the question — are not retired here.
 `why_entries_are_attached_to_something_tests.rs` ratchets the count down and every citation
 resolves; attaching the remainder is work, not a ruling.
 
-429,405 words across `docs/`. ~570k tokens â€” more than half a 1M context before a line of the
+429,405 words across `docs/`. ~570k tokens — more than half a 1M context before a line of the
 119,388 lines of Rust. And it is written *for an agent*: `BUILDER.md:1` is `# YOU ARE THE BUILDER`,
 and `history.md`'s organising unit is the **Session** (94 headings against 36 commit dates). A
 human maintainer does not have sessions. A context window does.
@@ -7654,7 +7654,7 @@ multiplication, and the finding is right that nobody did.
 
 **The evidence is inside the corpus and is not an opinion.** `SPEC.md`'s readiness paragraph said
 macOS *"has never been run"* and its job *"has not yet gone green"* for **eleven days and 228
-commits** after `history.md` recorded the green run â€” four lines under a sentence about exactly
+commits** after `history.md` recorded the green run — four lines under a sentence about exactly
 that failure. The `62` beside it was right the whole time, because a test asserts it. *Where this
 corpus is checked it is true, and where it is prose it is not.* (That paragraph is corrected as of
 this entry; the pattern it demonstrates is what `Y21` is about.)
@@ -7663,18 +7663,18 @@ this entry; the pattern it demonstrates is what `Y21` is about.)
 
 - `tests/why_entries_are_attached_to_something_tests.rs`. `CLAUDE.md` makes reading a rule's
   `why.md` entry **mandatory** before changing the rule, and 53 of 155 entries were cited by no
-  Part II rule and quoted by no test â€” a third of a mandatory gate explaining nothing. The gate
+  Part II rule and quoted by no test — a third of a mandatory gate explaining nothing. The gate
   asserts every citation resolves (zero failures, both directions) and ratchets the unattached
   count down from 53.
 - `named_commands_exist_tests` now scans `docs/` (`Y18`), which is the other half of the same
   problem: 2,538 KB of spec that no gate had ever read.
 
 **What is the owner's, and is not built:** the cut itself. `LX-6` proposes four files and ~5,200
-lines â€” `readme.md`, `target-state.md`, `principles.md` unchanged, `decisions.md` rewritten to
+lines — `readme.md`, `target-state.md`, `principles.md` unchanged, `decisions.md` rewritten to
 status + ruling + date + who ruled, `archive/` and `proposals/` deleted, `BUILDER.md`/`GRADER.md`
 moved to `.claude/agents/`. Its argument that nothing is lost is that 98% of `history.md`'s
 content-word tokens already appear in commit messages, and that the one artifact git cannot
-reconstruct â€” **a ruling, an event outside the tree with a person's name and a date on it** â€” is
+reconstruct — **a ruling, an event outside the tree with a person's name and a date on it** — is
 exactly the file the cut keeps at full fidelity.
 
 **That argument is strong and it is still not the builder's to act on.** It deletes the reasoning
@@ -7684,34 +7684,34 @@ wants this repository to be. A builder who answers it by deleting has answered i
 
 **What an answer has to say:** whether the cut happens; if so, whether `history.md` goes entirely
 or is thinned to the entries whose commit message does not already carry them; and where the 53
-unattached `why.md` entries land â€” cited from the rule they explain, moved into the doc comment of
+unattached `why.md` entries land — cited from the rule they explain, moved into the doc comment of
 the test that enforces them, or retired.
 
 ---
 
 ## Y22
 
-**Status: ANSWERED â€” raised 2026-08-07 by `LX-4`, ruled by the owner 2026-08-08.**
+**Status: ANSWERED — raised 2026-08-07 by `LX-4`, ruled by the owner 2026-08-08.**
 
-**Y22 â€” `flatpak`'s scope is a boolean where the data path needs a value. Rename the key?**
+**Y22 — `flatpak`'s scope is a boolean where the data path needs a value. Rename the key?**
 
 **Ruled: answer 1, and there are no legacy users to migrate.** `[backend_settings.flatpak]` takes
 `scope = "user" | "system"`, defaulting to `system`, which is what flatpak itself does with
-neither flag. `user` is deleted, and **refused by name** â€” a config that still sets it gets a
+neither flag. `user` is deleted, and **refused by name** — a config that still sets it gets a
 message naming `scope` rather than an install that silently goes machine-wide. That refusal is
 not a compatibility shim: it reads the key in order to reject it, and never to honour it.
 
-The scope is parsed once, at registration, into the existing `model::scope::Scope` â€” the same
+The scope is parsed once, at registration, into the existing `model::scope::Scope` — the same
 type and the same vocabulary as `@scope=` on `setting:`, `link:` and `shim:` (V.69), so there is
 one answer to "what does `user` mean" rather than a second one living in a backend. A value
 neither word is refused rather than defaulted, because falling back to `system` on a typo is the
 one outcome that installs for every account under a line asking for the opposite. Two call sites
-used to read the raw map and compare it to `"true"` separately â€” `scope_args` and `needs_root` â€”
+used to read the raw map and compare it to `"true"` separately — `scope_args` and `needs_root` —
 which is two chances to disagree about a string; there is now one field of type `Scope`.
 
 **This does not by itself convert flatpak, and the exemption stays.** What remains is `@channel`:
 `install_ref` builds the flatpak ref `name//channel`, and `ManagerConfig` has `VersionPin` for
-`@version` and no equivalent for `@channel`. The shape is identical â€” a `ChannelPin` with the
+`@version` and no equivalent for `@channel`. The shape is identical — a `ChannelPin` with the
 same `Inline` / flag split would carry both flatpak's `name//branch` and snap's `--channel=`, and
 `get_dependencies`' `runtime=` read already fits `DependsProbe`'s `NameReader`. **The exemption's
 "optional remote" half was checked and is not a blocker**: no path in `flatpak.rs` passes a
@@ -7720,7 +7720,7 @@ remote to `install`, so nothing in the code needs the name slot to hold one.
 The three answers as they were put, kept because the second one is the trap:
 
 `ManagerConfig` rows can now carry `{setting.KEY|DEFAULT}`, substituted at registration from
-`[backend_settings.<backend>]` â€” which is what took `conda` from 319 lines of hand-written Rust to
+`[backend_settings.<backend>]` — which is what took `conda` from 319 lines of hand-written Rust to
 a row, argv byte-identical. `flatpak` was exempted for the same reason and is the next one, except
 for the spelling.
 
@@ -7734,7 +7734,7 @@ template language in argv rows is how a data path stops being data.
    refusing the old key by name.
 2. **Keep `user`, give the placeholder a conditional form.** Cheap today, and it is the first line
    of a template language nobody designed.
-3. **Leave flatpak hand-written.** Still true for now, for the `@channel` reason above â€” but that
+3. **Leave flatpak hand-written.** Still true for now, for the `@channel` reason above — but that
    is a mechanism to build, not a property of flatpak.
 
 The exemption in `backend_is_data_not_code_tests.rs` names `Y22` so the entry and the gate cannot
@@ -7744,13 +7744,13 @@ drift apart; it now names `@channel` as the one blocker left.
 
 ## Y23
 
-**Status: ANSWERED â€” raised and ruled 2026-08-09, built in the same change.**
+**Status: ANSWERED — raised and ruled 2026-08-09, built in the same change.**
 
-**Y23 â€” flatpak's channel drift is invisible, and the backend it would drift on has no switch.**
+**Y23 — flatpak's channel drift is invisible, and the backend it would drift on has no switch.**
 
 **RULED (owner, 2026-08-09): make it visible and make the repair real.** Read the branch, treat a
-changed `@channel` as drift like D13 says, and repair it with what flatpak actually offers â€”
-install the declared ref, then `make-current` â€” leaving any other installed branch alone. **Built
+changed `@channel` as drift like D13 says, and repair it with what flatpak actually offers —
+install the declared ref, then `make-current` — leaving any other installed branch alone. **Built
 in the same change.**
 
 **The finding.** `@channel` on flatpak is not decoration: `install_ref` builds the ref
@@ -7761,7 +7761,7 @@ edit therefore applied once, at first install, and did nothing for ever after. B
 silent, and the honoured-once half is what made it look finished.
 
 **Why this needed a ruling and not a column.** D13 was ruled and built against snap, which has
-`snap refresh --channel=`. flatpak has no switch at all â€” branches install side by side and the
+`snap refresh --channel=`. flatpak has no switch at all — branches install side by side and the
 launcher keeps running the one it ran yesterday. Adding the column alone would have routed the
 drift into `flatpak install`, which **calls an already-installed ref an error and exits
 non-zero** (`Error: %s%s%s already installed`, in the shipped binary). A channel that did nothing
@@ -7794,7 +7794,7 @@ Rules in II.2, reasons in `why.md` under `V.151`. `capability::HAS_CHANNELS` is
 
 ## Q53
 
-**Status: ANSWERED â€” raised and ruled 2026-08-10. `S85` is the bug; this was the choice.**
+**Status: ANSWERED — raised and ruled 2026-08-10. `S85` is the bug; this was the choice.**
 
 **The question in plain words.** Shall lets a line pin a version (`brew:tokei@version=14.0.0`),
 and `shall lock` writes those pins by itself from what it finds installed. Most package managers
@@ -7802,7 +7802,7 @@ can install an exact version. Several cannot. Shall has never decided what it ow
 that second case, so it does two different wrong things depending on which manager it is.
 
 **What actually happens today, measured on the macOS nightly leg.** A sync installs `brew:tokei`.
-`lock` records `14.0.0` â€” correctly; that is tokei's version. Every later sync reads it back as
+`lock` records `14.0.0` — correctly; that is tokei's version. Every later sync reads it back as
 `@version=14.0.0`, `brew.rs` builds `tokei@14.0.0`, and brew answers *No available formula with
 the name "tokei@14.0.0"*. The sync dies, and it dies for ever, on a pin the user never typed.
 Homebrew's `name@version` is a **different formula's name**, not a version selector: versioned
@@ -7810,7 +7810,7 @@ formulae exist for a handful of packages and carry a series (`python@3.12`, `ope
 full semver.
 
 On fourteen other backends the same declaration is dropped and the install reports success at
-whatever version the manager picked. Ten of those cannot do otherwise â€” `pacman`, `yay`, `paru`,
+whatever version the manager picked. Ten of those cannot do otherwise — `pacman`, `yay`, `paru`,
 `scoop`, `mas`, `macports`, `krew`, `slackpkg`, `eopkg`, `emerge` have no mechanism to ask for a
 version. **Four could and simply were not built**: `xbps`, `pkgin`, `pkg` and `pkg_add` all take a
 `name-version` operand. That second group is the lie class: a command that did not do what it was
@@ -7818,8 +7818,8 @@ asked and said nothing.
 
 **The chiluk that makes this tractable.** A lockfile has two jobs, and they are not the same job:
 
-1. **Reproduce** â€” put this exact version back on another machine.
-2. **Detect drift** â€” notice that this machine has moved off what was recorded.
+1. **Reproduce** — put this exact version back on another machine.
+2. **Detect drift** — notice that this machine has moved off what was recorded.
 
 Job 2 works on every manager, because it only needs to *read* a version. Job 1 needs the manager
 to *accept* one. Conflating them is precisely what killed the macOS run: a record kept for job 2
@@ -7833,8 +7833,8 @@ was fed back as an install argument for job 1.
   an install argument only for a manager that can accept one. Nothing is removed and nothing is
   refused.
 - **A hand-written pin that cannot be honoured is refused at plan time, by name, before anything
-  runs** â€” not dropped, not attempted. `shall sync` says *"`pkgin` cannot install an exact
-  version, so `jq@version=1.2.3` cannot be met â€” â€¦"*, skips that package and continues; under
+  runs** — not dropped, not attempted. `shall sync` says *"`pkgin` cannot install an exact
+  version, so `jq@version=1.2.3` cannot be met — …"*, skips that package and continues; under
   `--locked` the same fact is fatal, because a run whose whole purpose is to reproduce a machine
   must not report success over a package it resolved freely. A pin the user typed is a decision;
   silently installing something else is the one outcome that is worse than either honouring it
@@ -7843,13 +7843,13 @@ was fed back as an install argument for job 1.
   Homebrew publishes versioned formulae only as a *series* (`python@3.12`), never as a full
   semver, so there was no honest version of "use a versioned formula when one exists" to build.
 
-**What the ruling is built out of.** The provenance question â€” did a person type this pin, or did
-`lock` record it? â€” needed no flag in the end, and that is the part worth keeping. `apply_locks`
+**What the ruling is built out of.** The provenance question — did a person type this pin, or did
+`lock` record it? — needed no flag in the end, and that is the part worth keeping. `apply_locks`
 stops injecting a recorded version into a spec whose backend cannot replay one, so **a version
 that survives to the planner on such a backend can only have come from a line somebody wrote.**
 The refusal is correct by construction rather than by a field that could be set wrong.
 
-`Installable::pins_version` answers *whether*, defaulting to `false` â€” a new backend that says
+`Installable::pins_version` answers *whether*, defaulting to `false` — a new backend that says
 nothing refuses a pin it might have honoured, which is a message, where the other default installs
 the wrong version and reports success, which is not. `capability::CANNOT_PIN_VERSION` answers
 *why*, and the refusal quotes it. The two are checked against each other rather than derived from
@@ -7858,12 +7858,12 @@ one another, so a backend that starts pinning and leaves its row behind is caugh
 **Three things it turned up on the way**, all of them the same shape as the bug:
 
 - **The exemption ledger did not cover the hand-written backends at all.** It scanned
-  `registry.rs`'s registrars and `builtin_backends.toml`'s rows â€” and `brew` is neither, so the
+  `registry.rs`'s registrars and `builtin_backends.toml`'s rows — and `brew` is neither, so the
   gate named *"every backend pins a version or says why"* was structurally blind to the one
   backend that did not merely drop a pin but invented one. Eleven more sat in the same blind spot.
 - **`xbps` moved to the permanent side rather than being built.** `xbps-install name-1.2.3_1`
   needs the package's *revision* suffix, which `@version=` does not carry, so `name-1.2.3` names
-  a package that does not exist â€” building a name and hoping, which is exactly what `brew` was
+  a package that does not exist — building a name and hoping, which is exactly what `brew` was
   doing. `pkgin`, `pkg` and `pkg_add` take a plain `name-version` and were built; the unbuilt
   ceiling went from four to **zero**.
 - **A recorded version on a cannot-pin manager is still worth writing**, and `shall lock --list`
@@ -7874,33 +7874,33 @@ one another, so a backend that starts pinning and leaves its row behind is caugh
 so a backend can be unable to pin but cannot be *silently* unable to pin, and so the four that
 could pin and simply were not built (`helm`, and the `name-version` forms of `pkgin`, `pkg`,
 `pkg_add`, `xbps`) are visible as a ratchet rather than invisible as a default. The registry walk
-cannot be the instrument â€” registration is `cfg!(target_os)`-shaped, which is exactly how `dnf`
+cannot be the instrument — registration is `cfg!(target_os)`-shaped, which is exactly how `dnf`
 went unaudited in `S83`.
 
 ---
 
 ## Q54
 
-**Status: ANSWERED â€” raised and ruled 2026-08-11. `S87` is the bug; this was the choice.**
+**Status: ANSWERED — raised and ruled 2026-08-11. `S87` is the bug; this was the choice.**
 
 **The question in plain words.** `shall uninstall xbps:pv` deleted the declaration, ran a sync,
-printed `already up to date`, exited 0 â€” and left `pv` on PATH. It was not a special case: it is
+printed `already up to date`, exited 0 — and left `pv` on PATH. It was not a special case: it is
 what `uninstall` does whenever Shall has no ownership record for the package it names.
 
 **Why the command can do nothing and still report success.** `uninstall` is not a separate
 removal path. It deletes the line and lets the ordinary sync take the package away as *drift*,
-which is V.34's whole point â€” one converge, not a second engine with the install half amputated.
+which is V.34's whole point — one converge, not a second engine with the install half amputated.
 But drift is defined as *a package Shall manages that nothing declares any more*. A package on
 the machine that Shall does not manage is not drift; it is the user's own software, and leaving
 it alone is correct. So when the ownership record is missing the plan is empty, and an empty plan
 is `already up to date`.
 
-`absent:` is the one thing Shall removes without owning (II.2, V.7) â€” "because you named it".
+`absent:` is the one thing Shall removes without owning (II.2, V.7) — "because you named it".
 `uninstall` names it just as plainly and did not get the same treatment.
 
 **How the ownership record goes missing.** `S87`: the registry is written once at the end of a
 run, so a run killed before that leaves the package installed and owned by nobody. That is the
-bug, and II.56's first half fixes it. This question is about the second half â€” what the command
+bug, and II.56's first half fixes it. This question is about the second half — what the command
 should say in every case where the ownership record is genuinely absent, including the ones no
 repair can reach (a package undeclared by hand before the uninstall, a package the user told
 Shall to forget).
@@ -7909,13 +7909,13 @@ Shall to forget).
 not own it."** Rule in **II.56**, reason in **V.186**.
 
 - The command **fails** rather than warning. The failure this closes is precisely that a script
-  could not see it â€” `shall uninstall x && rm -rf ~/.config/x` proceeded over a package that was
+  could not see it — `shall uninstall x && rm -rf ~/.config/x` proceeded over a package that was
   still installed. A sentence on stderr under exit 0 is the same bug with more text.
 - It names the package, says Shall has no record of installing it, and names `adopt` as the way
-  to take ownership â€” or the manager, for a user who wants it gone without Shall involved.
+  to take ownership — or the manager, for a user who wants it gone without Shall involved.
 - The preview says the same thing, or the two halves of one command describe different machines.
 - **Asked only of names the registry did not carry when the command started**, so an ordinary
-  uninstall â€” the overwhelming majority â€” asks no manager anything. A bare name that any manager
+  uninstall — the overwhelming majority — asks no manager anything. A bare name that any manager
   already owns is settled from the registry alone, because `uninstall jq` means *the jq I have*.
 
 **The half left open, and its ruling.** Whether `uninstall` should remove a package Shall does not
@@ -7925,14 +7925,14 @@ installed.
 
 **RULED (owner, 2026-08-11): behind a flag, and the flag writes an `absent:` line.**
 `shall uninstall PKG --absent` undeclares the package, declares it `absent:`, and lets the
-ordinary converge remove it â€” no ownership consulted, because `absent:` is already the one
+ordinary converge remove it — no ownership consulted, because `absent:` is already the one
 declaration that reaches outside what Shall manages (II.2, V.7). Default `uninstall` is
 unchanged: it still fails, and now names `--absent` alongside `adopt` as the two ways past it.
 
 Settled with it, as implementation rather than rule:
 
 - **`--absent` conflicts with `--temp`.** One says bring it back, the other says keep it gone.
-- **A bare name resolves to the manager that holds it**, by listing â€” not the way `install`
+- **A bare name resolves to the manager that holds it**, by listing — not the way `install`
   resolves a bare name, which answers *who could supply this* and would write a permanent line
   naming a manager that never had the package. Every holder is named, because `uninstall jq`
   means the jq I have. A bare name no manager holds is refused, not guessed at.
@@ -7947,11 +7947,11 @@ Settled with it, as implementation rather than rule:
 
 ## Q55
 
-**Status: ANSWERED â€” raised and ruled 2026-08-11, on the back of `Q54`.**
+**Status: ANSWERED — raised and ruled 2026-08-11, on the back of `Q54`.**
 
 **The question in plain words.** The `S87` repair rebuilt the lost ownership record by replaying
 the write-ahead log, which records every install per operation. Should it read the **manifest**
-instead â€” is a package this machine declares and already has Shall's, whether or not Shall put
+instead — is a package this machine declares and already has Shall's, whether or not Shall put
 it there?
 
 **Why it was raised rather than built.** Reading the manifest looked like a strictly simpler
@@ -7961,14 +7961,14 @@ one is the one with teeth:
 - **Lost:** a package undeclared by hand and *then* uninstalled has no declaration left to prove
   it was ever managed, so nothing can recognise it.
 - **Gained:** a package installed by hand and declared afterwards becomes Shall's. Nothing
-  registers those today â€” an already-present package schedules no install, so `state.add` never
-  runs â€” which is exactly why `adopt` exists. Under a manifest-derived repair, the day that
+  registers those today — an already-present package schedules no install, so `state.add` never
+  runs — which is exactly why `adopt` exists. Under a manifest-derived repair, the day that
   declaration moves or goes, Shall removes software it never installed.
 
 That second one is the blast-radius axis `Q54` had just put behind an explicit flag, and this
 would have granted it by default and invisibly.
 
-**RULED (owner, 2026-08-11): yes â€” declaring a package you already had makes it Shall's.**
+**RULED (owner, 2026-08-11): yes — declaring a package you already had makes it Shall's.**
 Rule in **II.56**, reasoning in **V.186**.
 
 - Ownership is read from the resolved declaration set, not the log. There is no expiry: the
@@ -7978,7 +7978,7 @@ Rule in **II.56**, reasoning in **V.186**.
   something on the user's behalf without saying so.
 - **Declared is the whole of it.** An undeclared package on the machine is never claimed,
   however it got there. An installed set is not a manifest.
-- Only `present` declarations count â€” an `absent:` line says the package must not be here.
+- Only `present` declarations count — an `absent:` line says the package must not be here.
 - The lost case is covered by `Q54`'s `--absent`, which removes regardless of ownership.
 - `completed_installs` and `unmanage`'s log-clearing were **deleted**, not left beside the new
   reader. `unmanage` drops the manifest line, which is now the whole of the forgetting.
@@ -7987,7 +7987,7 @@ Rule in **II.56**, reasoning in **V.186**.
 
 ## G1
 
-**Status: ANSWERED â€” confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B1.**
+**Status: ANSWERED — confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B1.**
 
 **Does `--keep-going` change the exit code?** It did. Without the flag a failed sync exits 1;
 with it, the identical failure exited **0** under `Status: SUCCESS`, and `--keep-going --quiet`
@@ -7996,7 +7996,7 @@ per-run opt-in for a fleet rollout that would rather take what it can get", and 
 is exactly where the exit code is the only thing anybody reads.
 
 **BUILT: no. "Continue past a failure" is not "report success".** A partial run persists what
-succeeded, prints its summary and fires its hooks â€” all of that is real and must survive â€” and
+succeeded, prints its summary and fires its hooks — all of that is real and must survive — and
 *then* exits non-zero naming what did not. The three defects underneath it went with it:
 `Metrics.errors` and its uncalled writer were deleted in favour of the per-operation `success`
 the collector already recorded, so `DEGRADED` and `--quiet` became reachable; and the summary's
@@ -8005,40 +8005,40 @@ counters are now the achieved work rather than the size of the plan.
 **And batching, which contradicted the flag outright.** One name no repository carries failed the
 whole `apt install` and took the installable packages beside it down with it, so the flag
 promised more than the default and delivered less. Under `--keep-going` a batch is one package,
-which costs invocations â€” the thing this flag is explicitly willing to spend.
+which costs invocations — the thing this flag is explicitly willing to spend.
 
 ## G2
 
-**Status: ANSWERED â€” confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B0b.**
+**Status: ANSWERED — confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B0b.**
 
 **Is "Shall cannot read back" an `ok` row in `check`?** It was, and `ok` is also what decides the
-exit code â€” so a dotfile no program could open printed as a green row at exit 0, repeatedly.
+exit code — so a dotfile no program could open printed as a green row at exit 0, repeatedly.
 
 **BUILT: no.** The sentence was always honest; the marker was not. Absence and unavailability are
 different answers and only one of them is knowable, and filing the unknowable one under the word
 for a good answer throws that distinction away at the last step.
 
 *The cost, stated because it is the reason this is a decision and not a fix:* a machine carrying
-a `setting:` or a `@decrypt`ed `link:` â€” kinds nothing can read back by construction â€” now
+a `setting:` or a `@decrypt`ed `link:` — kinds nothing can read back by construction — now
 reports `check` as needing attention permanently, and there is no command that clears it. If that
 is noise rather than honesty, this is the entry to reverse.
 
 ## G3
 
-**Status: ANSWERED â€” confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B0b.**
+**Status: ANSWERED — confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B0b.**
 
 **What happens to a `link:` whose source file is not there?** A symlink was written to it. The
 result exists, satisfies an `-L` test, and cannot be opened by anything.
 
 **BUILT: refuse it, at plan time and at install time.** `dotfiles:` has always refused its
-missing tree in the same position â€” *"is not a directory"* â€” on the identical string, so this is
+missing tree in the same position — *"is not a directory"* — on the identical string, so this is
 one idea being answered the same way twice instead of two ways. The relative-source resolution
 was unified with it in the same change: a relative source is read from the config repo, which is
 what `dotfiles:` always did and `link:` never did.
 
 ## G4
 
-**Status: ANSWERED â€” confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B8.**
+**Status: ANSWERED — confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B8.**
 
 **Is an empty `priority` file an answer?** It was accepted without a word, while a *missing* one
 produced the best error in the program. Empty does not mean "no backends" either: an empty
@@ -8050,13 +8050,13 @@ state as no file, and the premise the fallback rested on is now true.
 
 ## G5
 
-**Status: ANSWERED â€” confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B9. The one here most
+**Status: ANSWERED — confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B9. The one here most
 likely to be reversed.**
 
 **What does a hold mean under a bulk `upgrade`?** Nothing. `upgrade` filters its own plan against
 the holds, correctly, and then hands the whole-system path to each manager's native upgrade-all,
 which never sees the filtered plan. `--help` claimed `apt-mark hold` / `dnf versionlock` parity,
-and both of those hold across a bulk upgrade â€” that is the entire reason they exist.
+and both of those hold across a bulk upgrade — that is the entire reason they exist.
 
 **BUILT: refuse the native whole-system upgrade while anything is held, and add `--ignore-holds`
 as the opt-in.** The parity claim is gone from the help. Every scoped form of the verb honours
@@ -8065,32 +8065,32 @@ holds and needs no flag.
 *The two roads not taken, because this is the entry to argue with:* defaulting `upgrade` to
 per-package would bind the holds and silently narrow the verb from "upgrade this machine" to
 "upgrade what Shall manages", which is a feature removal wearing a bugfix. Pushing the hold down
-into the manager â€” `apt-mark hold` before the run, released after â€” is real parity and the right
+into the manager — `apt-mark hold` before the run, released after — is real parity and the right
 answer eventually; it needs a native-hold adapter per backend and makes Shall the owner of
 manager state it does not currently touch.
 
 ## G6
 
-**Status: ANSWERED â€” confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B5.**
+**Status: ANSWERED — confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B5.**
 
 **May a package name begin with `-`?** It could. `PACKAGE_NAME_REGEX` admitted a leading hyphen,
-so `composer:--version` passed every check and reached composer's argv as a flag â€” on a manager
+so `composer:--version` passed every check and reached composer's argv as a flag — on a manager
 Shall believed `--` would protect and which ignores it.
 
 **BUILT: no, for every backend including the path-oriented ones.** No manager has a package
 called `-rf`. The terminator table is the mechanism and stays; it is fifty booleans measured on
 one image, and a guard that depends on all fifty being right is a guard with fifty ways to be
-wrong. The composer row this shipped with has since been reversed on measurement â€” see `G6a`.
+wrong. The composer row this shipped with has since been reversed on measurement — see `G6a`.
 
 ## G6a
 
-**Status: ANSWERED â€” confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-14, from the nightly this entry's own change turned red.**
+**Status: ANSWERED — confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-14, from the nightly this entry's own change turned red.**
 
 **Does composer honour `--`?** `G6` said no and set the row to non-terminating, citing three
 consecutive nightlies of the differential probe. **None of those runs could have decided it.**
 The probe believes a tool honours the terminator when the two runs agree, and composer answers a
 bogus operand with the same "could not find a matching version" whether it read `--` or dropped
-it. On two of the three hosts it never even got that far â€” `composer global search` answered `[]`
+it. On two of the three hosts it never even got that far — `composer global search` answered `[]`
 both ways, and on ubuntu-latest composer failed at `No composer.json present in the current
 directory` before reaching the operand at all. Agreement between two runs that never resolved
 anything is not evidence about a parser.
@@ -8101,7 +8101,7 @@ different things:
 
 | argv | answer |
 | --- | --- |
-| `composer global search --format=json --version` | `Composer version 2.10.2` â€” parsed as a flag |
+| `composer global search --format=json --version` | `Composer version 2.10.2` — parsed as a flag |
 | `composer global search --format=json -- --version` | searches packagist for `--version`, returns `sebastian/version` |
 
 `global require` and `global remove` flip the same way: with the terminator `--version` is a
@@ -8111,9 +8111,9 @@ package name they fail to resolve, without it they print the version banner and 
 **What ships with it, because the row is the smaller half.** The probe now has three verdicts
 rather than two: a pair of runs that agree is `Inconclusive` unless the run *without* the
 terminator named the operand, which is the premise that makes agreement mean anything.
-`tests/terminator_probe_tests.rs` had described this exact failure in prose â€” "a run that cannot
+`tests/terminator_probe_tests.rs` had described this exact failure in prose — "a run that cannot
 get there fails with the same exit code, never names the operand, and is indistinguishable to all
-three signals from a parser that ate it" â€” and then defended only against a spurious
+three signals from a parser that ate it" — and then defended only against a spurious
 *difference*.
 
 Note which way the old bug could err. A vacuous agreement can only ever move a row **into** the
@@ -8122,7 +8122,7 @@ terminate". It cost this row two wrong values in three days, in both directions.
 
 ## G7
 
-**Status: ANSWERED â€” confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B2.**
+**Status: ANSWERED — confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B2.**
 
 **Is `pkg@version=1.6 @hold` two options or one?** One, silently: the lexer splits on the first
 `@` and separates options on commas, so everything after a space was absorbed into the previous
@@ -8130,21 +8130,21 @@ option's *value*. `@sha256=abc @nosuchkey` produced a checksum that could not ma
 written that way was inert. The same text was refused in first position and accepted in second.
 
 **BUILT: refuse it, in the lexer.** Seven of the ten option grammars accepted it outright and the
-three that refused were saved only by a downstream type check on a date, a count and an enum â€”
+three that refused were saved only by a downstream type check on a date, a count and an enum —
 incidental protection that one free-form option would reopen. An `@` inside a value stays legal
 (`@requires=@angular/cli`, `@source=github:owner/repo@v2`); whitespace immediately before one
 does not, because nothing writes that on purpose.
 
 ## G8
 
-**Status: ANSWERED â€” confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B3 and B4.**
+**Status: ANSWERED — confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B3 and B4.**
 
 **May a read verb print a clean bill built from a question that failed?** Two did. `shall hold`
 answered `No packages are held.` at exit 0 over a manifest it could not resolve; `check drift`
 printed *"System matches your manifests"* over managers that never answered, having dropped both
 failures with `unwrap_or_default()`.
 
-**BUILT: no â€” and the machine-readable contract carries it too.** `check drift --json` had a
+**BUILT: no — and the machine-readable contract carries it too.** `check drift --json` had a
 `resources_unverifiable` key and no packages equivalent, so the distinction survived into the
 contract for one half of the model and was lost for the other. There is a `packages_unverifiable`
 now. `upgrade` keeps its tolerance of an unresolvable manifest deliberately: acting on the holds
@@ -8152,10 +8152,10 @@ it can see beats acting on none, and that is a different question from reporting
 
 ## G9
 
-**Status: ANSWERED â€” confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B7.**
+**Status: ANSWERED — confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` B7.**
 
 **Do the flags whose help says "(requires --dry-run)" require it?** Three of the four did not
-enforce it â€” `shall sync --json` printed the human summary or nothing at all and exited 0, so a
+enforce it — `shall sync --json` printed the human summary or nothing at all and exited 0, so a
 script that forgot the pair got a success code and no document.
 
 **BUILT: enforced for `sync`, `install` and `uninstall`; the sentence deleted from `upgrade`.**
@@ -8165,21 +8165,21 @@ help string true.
 
 *Enforced in `dispatch`, not by clap.* `requires = "dry_run"` resolves against the subcommand's
 own arguments and `--dry-run` is global, so the constraint compiles, never fires for the case it
-is meant to catch, and turns the documented working combination into a usage error â€” measured.
+is meant to catch, and turns the documented working combination into a usage error — measured.
 ## G10
 
-**Status: ANSWERED â€” confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` W4/P1. The widest
+**Status: ANSWERED — confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-12, from `docs/GRADE-2026-08-12.md` W4/P1. The widest
 behaviour change in the `G` round.**
 
 **Does `priority` gate anything except resolution?** It did not. A declaration naming an unlisted
-backend was refused â€” and that was the whole of it. Detection walked PATH for all fifty-two
+backend was refused — and that was the whole of it. Detection walked PATH for all fifty-two
 backends' binaries before it knew what had been asked, and every fan-out went to whatever happened
 to be installed. Measured with `strace`: `shall list -b apt` cost **3,156** failed `statx` against
 `shall list`'s 3,338, so naming one backend cost 99% of asking about all of them, and `priority`
 bought nothing at all.
 
 Invisible on an ordinary filesystem, where the whole run is 578 ms. The dominant cost the moment
-PATH is long or slow â€” WSL inheriting 56 `/mnt/c` entries over 9p made `shall list -b apt` take
+PATH is long or slow — WSL inheriting 56 `/mnt/c` entries over 9p made `shall list -b apt` take
 12.4 s, of which the `dpkg-query` it actually wanted took 0.02 s.
 
 **BUILT: the file's own sentence is now true of detection and querying, not only of resolution.**
@@ -8197,10 +8197,10 @@ off rather than a property of wherever the old method happened to be called.
 **Two verbs see past `priority`, and both had to earn it:**
 
 - **`init`** writes the priority file *from* what it detects. Gating detection here would read a
-  file that does not exist yet, or gate the answer on the very list it is about to produce â€”
+  file that does not exist yet, or gate the answer on the very list it is about to produce —
   either way an empty priority file and a repo that can do nothing.
 - **`check health`** reports on managers that are **absent**, which the usable set cannot contain
-  by definition. And an absent manager that `priority` names is not absent, it is *broken* â€” the
+  by definition. And an absent manager that `priority` names is not absent, it is *broken* — the
   one place the whole registry and the priority list are both needed at once.
 
 **Everything else asks for the usable set**, including the four that delete: `remove-orphans`,
@@ -8215,7 +8215,7 @@ If a user's mental model was "priority orders the managers, it does not hide the
 entry to reverse.
 
 **And the failure mode it closes, which is the same one as `G4`.** `App::priority_backends()`
-ended in `.unwrap_or_default()`, so a `priority` that would not resolve became an *empty list* â€”
+ended in `.unwrap_or_default()`, so a `priority` that would not resolve became an *empty list* —
 and `UniversalSearch` read an empty enabled set as *every available backend*, on the stated
 premise that only a missing file could produce one. Two swallowed answers composing into the
 exact inversion of the rule. `Backends` carries the resolution failure instead of an empty set,
@@ -8223,25 +8223,25 @@ and refuses where the question is asked.
 
 ## H1
 
-**Status: ANSWERED â€” 2026-08-13, from `docs/GRADE-2026-08-13.md` F13 (raised there as Q-C).**
+**Status: ANSWERED — 2026-08-13, from `docs/GRADE-2026-08-13.md` F13 (raised there as Q-C).**
 
 **Is a declaration Shall could not act on a failure, or a declaration that does not apply here?**
 `sudo`'s stock `secure_path` is `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin`,
-which does not contain `~/.cargo/bin`, `~/.bun/bin` or `~/.local/bin` â€” so `cargo`, `bun` and `uv`
+which does not contain `~/.cargo/bin`, `~/.bun/bin` or `~/.local/bin` — so `cargo`, `bun` and `uv`
 are invisible to anything run through `sudo`, installed exactly where their own installers put
 them. Measured in a stock Ubuntu container: `sync --yes` with three declarations warned three
-times, installed nothing, printed no transaction summary, and exited **0** â€” the code named
+times, installed nothing, printed no transaction summary, and exited **0** — the code named
 `Exit::Converged`. `shall check`, on the same unchanged state one line later, reported drift and
 exited 2. Alternating the two commands repeated it: 0, 2, 0, 2.
 
 **RULED: a failure.** The underlying distinction was already ruled one command over.
-`target-state.md` Â§Q2 defines **critical** as *"it is installed, or `priority` names it, and it
-cannot work"* â€” so a `priority`-named manager that cannot be reached is a fact about a broken
+`target-state.md` §Q2 defines **critical** as *"it is installed, or `priority` names it, and it
+cannot work"* — so a `priority`-named manager that cannot be reached is a fact about a broken
 machine, not an inapplicable line. `check` was told that. `sync` was not.
 
 **Exit 1, not 2, and the table decides it.** `U21` reserves 2 for *a read-only command that
 looked and found work to do*; `sync` is not read-only. 1 is *Shall could not carry the command
-out*, which is what happened, and it is the code a failed install already returns â€” a declaration
+out*, which is what happened, and it is the code a failed install already returns — a declaration
 that never reached its manager and one whose manager refused it are the same fact about the run.
 
 **A partial skip is the case that matters.** Three of three is the container reproduction; three
@@ -8251,13 +8251,13 @@ boolean.
 
 **What made this expressible at all.** F4's `SkipKind` split: `SyncChanges::skipped` carried
 declined removals and skipped installs in one list, and a declined removal must **not** make a
-sync fail â€” it is the guard working, and it is the ordinary state of every adopted machine.
+sync fail — it is the guard working, and it is the ordinary state of every adopted machine.
 Without the two kinds distinguished in the type, this ruling would have to be inferred from a
 sentence.
 
 ## H2
 
-**Status: ANSWERED â€” 2026-08-13, from `docs/GRADE-2026-08-13.md` (raised there as Q-A).**
+**Status: ANSWERED — 2026-08-13, from `docs/GRADE-2026-08-13.md` (raised there as Q-A).**
 
 **Should a read-only command that finds work exit 2?** `target-state.md` says exit 2 *"means a
 read-only command found work to do"*, and only `check` ever built `Error::Differences`. Measured:
@@ -8270,7 +8270,7 @@ drift reaches for `plan` and is told the machine has converged, every time. A li
 different in kind: its subject is inventory rather than a verdict, and a listing that exited
 non-zero for having contents would surprise every script that has ever piped one.
 
-`plan`'s condition is `check`'s condition â€” the same quantities in the same combination â€” because
+`plan`'s condition is `check`'s condition — the same quantities in the same combination — because
 the rule this repository keeps paying for is that two readings of one machine disagree.
 
 `U21` settled the table before these commands existed; this is the first command it did not
@@ -8278,27 +8278,27 @@ cover, and it is an addition to that table rather than a change to it.
 
 ## H3
 
-**Status: ANSWERED â€” 2026-08-13, from `docs/GRADE-2026-08-13.md` F7 (raised there as Q-B).**
+**Status: ANSWERED — 2026-08-13, from `docs/GRADE-2026-08-13.md` F7 (raised there as Q-B).**
 
 **`outdated`: remove the name, or add the subcommand?** `Class::of` classified `"outdated"` as
-`EveryBackend`. There is no `outdated` subcommand â€” it is `shall list --outdated`, a flag â€” so the
+`EveryBackend`. There is no `outdated` subcommand — it is `shall list --outdated`, a flag — so the
 arm was dead.
 
 **RULED: remove the name. The flag stays a flag.** Promoting it would be a user-visible addition
 nobody asked for, and `list --outdated` is the spelling every existing script uses.
 
 **The dead arm was never the defect, and this is the half worth writing down.** `Class::of`'s own
-doc said *"the list is asserted against `--help` by `tests/latency_budget_tests.rs` â€” a name that
+doc said *"the list is asserted against `--help` by `tests/latency_budget_tests.rs` — a name that
 stops existing fails that test rather than sitting here forever, which is the mistake `undo` made
 in two harness exemption lists."* That test did not read the table. It read a `NAMED` array of
-twenty-four hand-typed strings beside it, and the array omitted `outdated` â€” so **the failure the
+twenty-four hand-typed strings beside it, and the array omitted `outdated` — so **the failure the
 gate guarded against was the failure it demonstrated.** A `match` gives a test nothing to
 iterate, which is *why* the copy existed; the table is data now (`CLASSIFIED`), exposed as
 `classified_names()`, and the gate reads it.
 
 ## H4
 
-**Status: ANSWERED â€” 2026-08-13, from `docs/GRADE-2026-08-13.md` F10/F11. Ruled against the
+**Status: ANSWERED — 2026-08-13, from `docs/GRADE-2026-08-13.md` F10/F11. Ruled against the
 recommendation that was put to the owner, on the principle he gave instead of an answer.**
 
 **Should `sandbox.fallback_allowed` default to `false`?** On any Linux host without `bwrap`,
@@ -8319,19 +8319,19 @@ what changes is that it can no longer be taken silently.
   this proceed"*. `run`, `shell` and `wrap` each answered it separately before, which is how the
   one user-visible `warn!` in `run.rs` became unreachable: its condition (`can_sandbox == false`
   and `fallback_allowed == true`) was already folded into the predicate in front of it, because
-  `Sandbox::is_available` returned `bwrap_available() || fallback_allowed` â€” a constant `true`
+  `Sandbox::is_available` returned `bwrap_available() || fallback_allowed` — a constant `true`
   under the default. It did not answer *"is a sandbox available"*; it answered *"is a sandbox
   available, or are we permitted to skip it"*, and every caller read it as the first.
 - `Confinement` is returned beside the command rather than inferred from it. An unconfined
-  fallback and a real `bwrap` invocation are the same type â€” `Command` â€” so a caller that wants
+  fallback and a real `bwrap` invocation are the same type — `Command` — so a caller that wants
   to claim a boundary now has to hold the variant that grants one.
 - **`require_bwrap` is wired**, and outranks `fallback_allowed`. It was declared, documented
   (*"On Linux, if true, Shall will fail if 'bwrap' is missing"*), defaulted and serialised, and
-  **read by nothing** â€” while its Windows twin `windows_require_sandbox` was checked. An
+  **read by nothing** — while its Windows twin `windows_require_sandbox` was checked. An
   administrator who read the configuration reference, decided silent unconfined execution was
   unacceptable on their fleet, and wrote the setting got byte-for-byte the same unconfined run.
   That is what makes this ruling safe to make: the knob that closes the hole is now a knob.
-- The sentence *"Falling back to PATH isolation"* is deleted. There was no PATH isolation â€” it
+- The sentence *"Falling back to PATH isolation"* is deleted. There was no PATH isolation — it
   returned `Command::new(cmd).args(args)` with an unmodified environment. `hooks.rs` records
   having caught this exact shape once already: *"It was called `setup_lua_sandbox`, which claimed
   a boundary this does not build."*
@@ -8342,7 +8342,7 @@ not a sandbox, so naming it one would be the claim the type exists to stop.
 
 ## H5
 
-**Status: ANSWERED â€” 2026-08-13, from `docs/GRADE-2026-08-13.md` axis 3. Deferred twice before
+**Status: ANSWERED — 2026-08-13, from `docs/GRADE-2026-08-13.md` axis 3. Deferred twice before
 this; the grade doc's condition was that it be *measured and decided*, not deferred a third
 time.**
 
@@ -8358,12 +8358,12 @@ are visible from their names alone:
 | construction | 5 | `new`, `upgrading`, `with_vars`, `as_if_active`, `recording_locks` |
 | priority / host facts | 4 | `priority`, `priority_body`, `priority_for_host`, `host_backends` |
 | variables | 7 | the `resolve_vars*` family, `vars_at_last_sync`, `vars_provider`, `vars_vocabulary` |
-| model expansion | 9 | `parse_everything`, `resolve_model`, `expand_generators`, `expand_regexes`, `match_catalogue`, `probe_bare_names`, `apply_locks`, â€¦ |
-| single-spec resolution | 10 | `resolve_spec`, `parse_and_probe_spec`, `validate_line`, `ask`, `ask_the_chain`, `satisfies_constraint`, â€¦ |
+| model expansion | 9 | `parse_everything`, `resolve_model`, `expand_generators`, `expand_regexes`, `match_catalogue`, `probe_bare_names`, `apply_locks`, … |
+| single-spec resolution | 10 | `resolve_spec`, `parse_and_probe_spec`, `validate_line`, `ask`, `ask_the_chain`, `satisfies_constraint`, … |
 
 **RULED: not split, and the variables group is the one that would go if it ever is.**
 
-The four groups are not four responsibilities held by accident â€” they are one pipeline with four
+The four groups are not four responsibilities held by accident — they are one pipeline with four
 stages, and every stage reads the same three fields (`config`, `registry`, `layout`) plus the same
 two caches. Splitting them produces types that call each other while threading the identical
 state, which is the shape `cfg ad22d` has already paid for once: *"the god object dissolved, and
@@ -8374,15 +8374,15 @@ resolver.
 **The variables group is the exception and is named here so the next reader does not re-derive
 it.** It is the only cluster with its own cache, its own vocabulary, and callers outside the
 resolution pipeline (`vars_provider`, `vars_at_last_sync`). If this type is ever cut, that is the
-seam â€” 7 methods out, one field of shared state, no back-edges. It is not cut now because the cut
+seam — 7 methods out, one field of shared state, no back-edges. It is not cut now because the cut
 is worth doing when something needs it, and nothing does.
 
 **The three `Skipped` structs: also not collapsed, and the reason is that they are three
-records rather than three implementations.** `planner::Skipped` now carries `SkipKind` â€” two
+records rather than three implementations.** `planner::Skipped` now carries `SkipKind` — two
 *opposite* meanings that one list held, which is `F4` and is fixed. `rebuild::Skipped` answers a
 third question ("left out of this rebuild"), and `adopt::Skipped` carries a whole `Package`
-because it writes a manifest rather than a report. A single generic record â€” `Skipped<K>` over a
-per-domain kind â€” is the shape that would unify them, and it unifies three fields and no
+because it writes a manifest rather than a report. A single generic record — `Skipped<K>` over a
+per-domain kind — is the shape that would unify them, and it unifies three fields and no
 behaviour. The repo's rule is against a *second implementation of one thing*; this is one struct
 shape appearing in three domains, which is what a struct shape does.
 
@@ -8391,20 +8391,20 @@ for whether deferring was ever the real answer. It was not; deciding was.*
 
 ## H6
 
-**Status: ANSWERED â€” 2026-08-13, owner ruling, built in the same commit. Raised OPEN the same
-day off three grading documents (`GRADE-2026-08-11` Â§competitive, `-08-12`, `-08-13` axis 5),
+**Status: ANSWERED — 2026-08-13, owner ruling, built in the same commit. Raised OPEN the same
+day off three grading documents (`GRADE-2026-08-11` §competitive, `-08-12`, `-08-13` axis 5),
 which had carried it as prose and entered it here in none of them.** A gap recorded only in a
 review is a gap nobody is accountable for.
 
-**RULED: yes, and opted into per step.** `@on=` on an `exec:` line names the verb that runs it â€”
+**RULED: yes, and opted into per step.** `@on=` on an `exec:` line names the verb that runs it —
 `sync` (the default), `upgrade`, or `both`. `upgrade` now runs the steps that name it, after the
 packages, through the same approval gate, ledger and journal `sync` uses. A manifest that says
 nothing means exactly what it meant yesterday.
 
 **Why not simply run every `exec:` from `upgrade`.** The approval ledger records *what content
 may run here*; it has never recorded *which verb may run it*. A blanket widening therefore takes
-every `exec:` line in every manifest that already exists â€” approved by people consenting to
-`sync` running them â€” and hands it to a verb that has never executed a user script. The approval
+every `exec:` line in every manifest that already exists — approved by people consenting to
+`sync` running them — and hands it to a verb that has never executed a user script. The approval
 on file would still be valid, and would be answering a question nobody had asked.
 
 **Three values rather than a comma-separated list**, because options are themselves separated by
@@ -8412,7 +8412,7 @@ commas: `@on=sync,upgrade` parses as `on=sync` plus a second option named `upgra
 `F3`'s boundary confusion invited in through the value grammar. Rule in `target-state.md`,
 reasoning in `why.md`.
 
-*The test for this was watched failing â€” and the first version of it did not fail, which is the
+*The test for this was watched failing — and the first version of it did not fail, which is the
 part worth keeping. Both `exec:` lines needed `@runs=always`: with the default run-once ceiling
 the plain script's count stays 1 whether or not `upgrade` reached for it, so the assertion that
 `upgrade` leaves other scripts alone passed against the exact widening it exists to reject.*
@@ -8426,12 +8426,12 @@ competitor does something Shall cannot. `upgrade` is also the verb where a user 
 tool will expect parity without reading anything.
 
 **Why it is a ruling and not a fix.** Every item on that list is a command Shall would run
-against a machine on the user's behalf, chosen by Shall rather than declared by the user â€” which
+against a machine on the user's behalf, chosen by Shall rather than declared by the user — which
 is the opposite of how everything else here works. `sync` acts on declarations; a `topgrade`-style
 upgrade acts on *discovery*. That is a change in what the program is, not an addition to what it
 does, and it is exactly the kind of thing this register exists to keep out of a commit message.
 
-**Recommendation, offered as one:** build it as declarations rather than as discovery â€” an
+**Recommendation, offered as one:** build it as declarations rather than as discovery — an
 `upgrade:` surface where each non-package step is a declared line with its own adapter, so the
 machinery that already exists (the guard, the journal, `--dry-run`, hooks) applies unchanged and
 nothing runs that a user did not write down. That keeps the parity claim honest without Shall
@@ -8448,7 +8448,7 @@ too, and the recommendation above is half built already.**
   what an `upgrade:` surface would need underneath it, and none of it has to be built.
 - **`upgrade` does not run extras at all.** `src/verbs/upgrade.rs` names them nowhere, and a
   fixture confirms it: an always-run `exec:` fires under `sync -y` and not under `upgrade`. So a
-  user who runs `shall upgrade` weekly â€” the verb a `topgrade` user reaches for â€” never runs their
+  user who runs `shall upgrade` weekly — the verb a `topgrade` user reaches for — never runs their
   firmware step, however correctly they declared it.
 - **What is left is therefore two questions, not a subsystem.** *(a)* Should `upgrade` also run
   always-run declared steps? *(b)* Should Shall ship adapters for the common ones (`fwupd`,
@@ -8457,8 +8457,8 @@ too, and the recommendation above is half built already.**
 **(a) is the ruling, and it is not a small one despite being a small change.** It makes a verb
 that has never executed user scripts start executing them. The approval gate covers *what* runs;
 it says nothing about *which verb* runs it, and somebody who approved a script for `sync` did not
-thereby approve it for `upgrade`. Recommended **yes, gated on the step opting in** â€” a step that
-wants to run on upgrade says so on its own line â€” so the widening is written down per step
+thereby approve it for `upgrade`. Recommended **yes, gated on the step opting in** — a step that
+wants to run on upgrade says so on its own line — so the widening is written down per step
 rather than inherited by every `exec:` already in every manifest.
 
 *(b) is `H8`, and it is an entry rather than a sentence here for the reason this whole pair
@@ -8466,7 +8466,7 @@ exists: a question left inside an answered entry is a question nobody owes an an
 
 ## H7
 
-**Status: ANSWERED â€” 2026-08-13, by measurement, and the answer is that the premise was false.**
+**Status: ANSWERED — 2026-08-13, by measurement, and the answer is that the premise was false.**
 Raised OPEN earlier the same day off three grading documents; closed the same day by building the
 fixture instead of trusting the sentence.
 
@@ -8481,7 +8481,7 @@ after tampering:    ->  drift  0 to install, 0 to remove, 1 to place, 0 to undo
 ```
 
 **Why the code reading said otherwise.** `link` registers no `Queryable`, and
-`ChangePlanner::spec_is_missing` returns `Ok(true)` for a backend without one â€” so reading the
+`ChangePlanner::spec_is_missing` returns `Ok(true)` for a backend without one — so reading the
 planner alone says every `link:` line is pending for ever. It never reaches the planner. A `link:`
 is an **extra**, not a package, and `Extras::changes` probes it through `in_effect`, which
 compares inline `@content=` byte for byte, compares a symlink's target against the resolved
@@ -8491,11 +8491,11 @@ later reviews without being re-run.
 
 **What is deliberately still `None` there, with the reason in the code:** a rendered template and
 a decrypted secret are not their source, and comparing them would mean running the transform. They
-report `unverifiable`, which places â€” and `F12` gave `unverifiable` a count on the drift row, so
+report `unverifiable`, which places — and `F12` gave `unverifiable` a count on the drift row, so
 the one thing `check` cannot verify is now the one thing it says it cannot verify.
 
 **What the finding did leave, and it is fixed in the same commit as this entry.** The `config` row
-counted `state.total_present()` â€” packages â€” so a dotfiles-only manifest read `0 package(s)
+counted `state.total_present()` — packages — so a dotfiles-only manifest read `0 package(s)
 declared` while declaring plenty. True, and the sentence a user reads to confirm their file was
 understood at all. It now counts resources beside packages, and says nothing about them when there
 are none.
@@ -8506,10 +8506,10 @@ gap and stays written down. Three reviews carried this one; the fixture took fou
 
 ## H8
 
-**Status: ANSWERED â€” 2026-08-13, owner ruling, built in the same commit. Split out of `H6`
+**Status: ANSWERED — 2026-08-13, owner ruling, built in the same commit. Split out of `H6`
 earlier the same day and open for about an hour.** The ruling, in the owner's words: *"basically
 you are describing having aliases come defined in a text file and shipped. so yes."* Which is
-what it is â€” `exec:step/rustup` is an alias for a command, and the aliases ship as data.
+what it is — `exec:step/rustup` is an alias for a command, and the aliases ship as data.
 
 **RULED: build it, as rows compiled into the binary.**
 
@@ -8523,7 +8523,7 @@ what it is â€” `exec:step/rustup` is an alias for a command, and the aliase
   header: *"this file is compiled into the binary, so there is no II.12 question to ask about
   it."* A script the user writes still needs `shall lock`. You approve what you wrote; you
   approved the binary by installing it. Had a catalogued step needed approving too, the
-  catalogue would buy nothing â€” the user would still have to go and look at something before it
+  catalogue would buy nothing — the user would still have to go and look at something before it
   ran, which is the friction it exists to remove.
 - **Rows, never shipped scripts.** A `.sh` in a release is code travelling to machines, which is
   the supply-chain question the approval gate exists to ask. A row is a fact about a tool:
@@ -8536,22 +8536,22 @@ what it is â€” `exec:step/rustup` is an alias for a command, and the aliase
   has `rustup` and the server does not, and the server has nothing to do rather than something to
   report.
 
-**Three rows to start â€” `fwupd`, `rustup`, `gcloud` â€” and one of them is deliberately partial.**
+**Three rows to start — `fwupd`, `rustup`, `gcloud` — and one of them is deliberately partial.**
 `fwupdmgr update` writes firmware, and a text file that flashes a laptop's BIOS unattended on a
 weekly `shall upgrade` is not a convenience. The shipped row is `fwupdmgr refresh`, which fetches
 metadata so a human can be told what is available and decide. Somebody who genuinely wants
-unattended flashing writes their own `exec:` line and approves it â€” exactly the friction that
+unattended flashing writes their own `exec:` line and approves it — exactly the friction that
 decision deserves.
 
-**And the second question answered itself.** *"Does declaring one imply running it?"* â€” yes, and
+**And the second question answered itself.** *"Does declaring one imply running it?"* — yes, and
 it needed no new statement to say so: a catalogued step is an `exec:` line, so there is one
 verb-shaped statement in the grammar and not two. The `Planned` enum in `app/apply/execs.rs` is
-where the two arms meet, and everything after it â€” the ceiling, the ledger, the write-ahead
-record, the dry-run note â€” is shared.
+where the two arms meet, and everything after it — the ceiling, the ledger, the write-ahead
+record, the dry-run note — is shared.
 
 *Original entry follows.*
 
-**Status when raised: OPEN â€” 2026-08-13, split out of `H6` when that was ruled.** `H6` answered *should
+**Status when raised: OPEN — 2026-08-13, split out of `H6` when that was ruled.** `H6` answered *should
 `upgrade` run declared steps* (yes, opted into per step, built). This is its second half, and it
 is here rather than in `H6`'s prose because an unanswered question inside an ANSWERED entry is
 exactly the shape that left the competitor gaps unowned for three grading rounds.
@@ -8565,7 +8565,7 @@ plugin managers and thirty more, and running it is one word. Parity is *possible
 
 **The shape it would take is already in this repo, and it is not a pile of shipped scripts.**
 `firewall_adapters.toml`, `setting_stores.toml` and `init_providers.toml` are declarative rows
-describing how to drive a tool â€” detection, the command, the arguments â€” loaded through
+describing how to drive a tool — detection, the command, the arguments — loaded through
 `read_approved_definitions`. An upgrade-step catalogue is the same thing with a different
 surface, and that matters for the reason a shipped `.sh` would be a supply-chain question and a
 TOML row naming `fwupd refresh` is a fact about `fwupd`.
@@ -8573,7 +8573,7 @@ TOML row naming `fwupd refresh` is a fact about `fwupd`.
 **What still has to be decided, and why it is not a detail:**
 
 - **Does a catalogued step still need approving?** A hand-written `exec:` does, because it is
-  the user's code. A row that says `rustup update` is Shall's, reviewed in this repository â€” and
+  the user's code. A row that says `rustup update` is Shall's, reviewed in this repository — and
   if it needs `shall lock` anyway, the convenience the catalogue exists for is mostly gone.
 - **Does declaring one imply running it?** `upgrade:rustup` reads like a declaration; the thing
   it declares is a *verb*, which is the bend `exec:` already makes in the model (see
@@ -8581,13 +8581,13 @@ TOML row naming `fwupd refresh` is a fact about `fwupd`.
   case, and the repo's rule is to have one.
 
 **Recommendation, offered as one:** build it as `@on=`-carrying `exec:` lines sourced from an
-adapter file rather than as a new statement â€” one verb-shaped statement, not two â€” and require
+adapter file rather than as a new statement — one verb-shaped statement, not two — and require
 approval once per catalogue *version* rather than per line, so a user vouches for the catalogue
 they are on instead of for thirty rows they did not write.
 
 ## J1
 
-**Status: ANSWERED â€” confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-14, owner ruling by delegation, from the nightly.**
+**Status: ANSWERED — confirmed 2026-08-14, owner ruling by delegation. Built 2026-08-14, owner ruling by delegation, from the nightly.**
 
 **What should guard `purge-undeclared` on a machine where the ratio is the only thing guarding
 it?** Raised after the macOS nightly ran an unrefused sweep of 276 packages. Two findings, one
@@ -8595,29 +8595,29 @@ question:
 
 - **The ratio silently got weaker and nobody chose that.** II.11 refuses below `managed /
   about-to-delete = 0.1`. `d1b3618` correctly stopped the undeclared crawl surveying `service:`
-  and `link:` â€” a sweep must never propose to delete every running service â€” and that same list
+  and `link:` — a sweep must never propose to delete every running service — and that same list
   is the ratio's denominator. Several hundred entries left it on every host. The rule did not
   change; the population it measures did. Measured: macOS 43/276 = 0.156, cleared the bar,
   proceeded. A Windows box after `adopt`: 133/340 = 0.391, exits 0 and sweeps 340.
 - **Outside Linux the protected list matched nothing.** It read `windows`, `win32`, `kernel32`,
-  `ntdll.dll` / `darwin`, `xnu` â€” the operating system's vocabulary, not any package manager's.
+  `ntdll.dll` / `darwin`, `xnu` — the operating system's vocabulary, not any package manager's.
   No manager has ever reported a package called `kernel32`. The effective set was the three
   shared names, `sudo`/`bash`/`shall`.
 
 **The owner's ruling, in his words: *"do what you think, but make sure it favors power users who
 will not shoot themselves, and if it might be unsafe, just make it configurable"*,** and on the
-second: *"i dont think it is deliberate â€” do what you want."*
+second: *"i dont think it is deliberate — do what you want."*
 
 **BUILT, both to that principle.**
 
 - **`[guard] purge_ratio`, defaulting to the same 0.1.** No behaviour changes by default. The
   threshold stops being a `const` because what it measures moved underneath it once already, and
   a number that an unrelated fix can silently re-scale is one its owner should be able to reach.
-  `0.0` turns it off, written down and tested rather than left to fall out of the arithmetic â€”
+  `0.0` turns it off, written down and tested rather than left to fall out of the arithmetic —
   someone who purges on purpose and often should say so once in a file, not remember a flag.
 - **The platform lists name packages the managers name.** Deliberately narrow, because a name
   here is friction for whoever genuinely manages that package. Windows gets the VC++
-  redistributables, the .NET runtimes and `git` â€” Windows ships none of them itself, and Shall
+  redistributables, the .NET runtimes and `git` — Windows ships none of them itself, and Shall
   keeps the config repo's history in git, so removing it leaves the machine fine and the undo
   gone. macOS gets only `ca-certificates` and `openssl*`: brew's `git` and `curl` are a
   preference, since macOS ships its own in `/usr/bin`, and protecting them would be friction
@@ -8625,12 +8625,12 @@ second: *"i dont think it is deliberate â€” do what you want."*
 
 **Not built: making the ratio machine-wide.** It was the obvious repair for the first finding and
 it is the wrong one. A user who has narrowed `priority` to one manager would be weighed against
-every package on the machine and refused a purge that is entirely correct â€” a rule that punishes
+every package on the machine and refused a purge that is entirely correct — a rule that punishes
 precisely the person who configured Shall most deliberately.
 
 ## J2
 
-**Status: ANSWERED â€” 2026-08-16. Owner: *"yes, of course. this is a bug."* Built in the same
+**Status: ANSWERED — 2026-08-16. Owner: *"yes, of course. this is a bug."* Built in the same
 commit; the caveat below shipped with it.**
 
 **A `setting:` is never read back, so a sync that changes one reports that it changed nothing.**
@@ -8644,7 +8644,7 @@ one declaration:
 | C | `@value=beta` | **`beta`** | `already up to date` |
 
 C is the finding: the machine changed and the report says it did not. `plan` is worse, because it
-contradicts itself in two consecutive lines â€” *"system already matches desired state (no
+contradicts itself in two consecutive lines — *"system already matches desired state (no
 changes)"*, then *"the plan written to shall-plan.json is not empty"*, exit 2.
 
 **Why.** `apply::extras::in_effect` answers `None` for `ResourceKind::Setting`, and `None` means
@@ -8661,38 +8661,38 @@ installer already uses.
 
 **Three things follow from the same `None`,** which is why this is one question and not three: the
 change is invisible in the summary; the value is re-written on every sync for ever; and `check`
-can never come clean on a machine with a `setting:` line â€” which is the cost `G2` recorded when it
+can never come clean on a machine with a `setting:` line — which is the cost `G2` recorded when it
 ruled that *"Shall cannot read back"* may not be an `ok` row.
 
 **The question, and the ruling.** Should `in_effect` answer for `setting:` by running the store's
-`read` and comparing with `already_set` â€” the same pair `K::Link` above it was already given?
+`read` and comparing with `already_set` — the same pair `K::Link` above it was already given?
 **Yes.** `check` goes clean where it never could before, and a converged sync stops touching the
 store.
 
-**What was built.** `SettingBackendCore::holds` is the one question â€” split the name, pick the
-adapter, resolve the scope, read, compare â€” and both halves ask it: `in_effect` for the report
+**What was built.** `SettingBackendCore::holds` is the one question — split the name, pick the
+adapter, resolve the scope, read, compare — and both halves ask it: `in_effect` for the report
 and `SettingInstallable::install` for the write. Two answers to *is this key already right* is
 how the reporting half came to say **nothing to do** about a key the other half was rewriting, so
 the fix is one function rather than a second copy of the comparison.
 
 **The caveat shipped with the ruling.** `read` fails for reasons that are not "the value differs"
-â€” a schema `gsettings` does not know, a registry hive the user cannot open, a `@scope=system`
+— a schema `gsettings` does not know, a registry hive the user cannot open, a `@scope=system`
 line against a store with no machine-wide commands. Those stay `None`, never `Some(false)`: a
 failed read reported as *not in effect* would make every sync rewrite the key it cannot see,
 which is the old behaviour wearing a confident face. So the read must **exit clean** to count,
-which is `probe_output`'s contract and not `run_output`'s â€” the latter hands back `Ok("")` for a
+which is `probe_output`'s contract and not `run_output`'s — the latter hands back `Ok("")` for a
 command that failed but explained itself, and an empty reading compares unequal to every value
 there is. That distinction is one of the four tests.
 
-**What it does not close.** A store whose read fails on an *unset* key â€” `reg query` on a value
-that is not there â€” is still unanswerable rather than absent, so it is placed. That is exactly
+**What it does not close.** A store whose read fails on an *unset* key — `reg query` on a value
+that is not there — is still unanswerable rather than absent, so it is placed. That is exactly
 what it did before, and `gsettings`, which returns the schema default for an unset key, answers
 properly. Distinguishing "unset" from "unreadable" needs a per-store rule no adapter row carries.
 
 ## J3
 
-**Status: ANSWERED â€” 2026-08-16. Owner: *"i dont get this so much, but do what a user would want
-â€” make it intuitive, easy, flexible and powerful."* The winner is no longer one answer: it is
+**Status: ANSWERED — 2026-08-16. Owner: *"i dont get this so much, but do what a user would want
+— make it intuitive, easy, flexible and powerful."* The winner is no longer one answer: it is
 the owner for a repository package and the helper for a foreign one, built in the same commit.**
 
 **Three backends over one package database made every Arch machine unconvergeable.** `pacman`,
@@ -8705,18 +8705,18 @@ What that cost, in the order it happened:
 
 | step | what Shall did |
 |---|---|
-| `install jq` | wrote one line, `jq`, resolving to `pacman` â€” correct |
+| `install jq` | wrote one line, `jq`, resolving to `pacman` — correct |
 | `adopt` | skipped `pacman:jq` as already declared, then wrote `paru:jq` **and** `yay:jq` |
 | `uninstall jq` | planned `install 0 remove 3`, backends `pacman, paru, yay` |
 | the removal | pacman removed jq; paru and yay were then asked to remove a package that was gone |
 
 The second and third removals returned `error: `paru` failed (exit 1): error: target not found:
 jq`, which failed the sync. Every later section of the harness failed against the same two
-declarations â€” 40 of 45 checks in one run, none of them about the thing being tested.
+declarations — 40 of 45 checks in one run, none of them about the thing being tested.
 
 **The same shape, three more places.** `shall list` printed 203 packages as 609 rows. The
-undeclared crawl â€” which `purge-undeclared` deletes from and whose ratio is the guard on that
-deletion â€” counted every package three times. And `shall uninstall jq --absent` asks which
+undeclared crawl — which `purge-undeclared` deletes from and whose ratio is the guard on that
+deletion — counted every package three times. And `shall uninstall jq --absent` asks which
 managers hold jq and writes an `absent:` line per holder, so it wrote three; an `absent:` line is
 permanent, so that machine would have failed *every* subsequent sync, for ever, with no line to
 delete that would fix it.
@@ -8731,29 +8731,29 @@ already-declared filter, not after, because that filter is what let the clients 
 clients were asked.
 
 **The rule for what belongs in that table: a shared *installed* database, not similar software.**
-`npm` and `pnpm` have their own global prefixes and `pip` and `pipx` their own directories â€” two
+`npm` and `pnpm` have their own global prefixes and `pip` and `pipx` their own directories — two
 installs of one name, where removing one leaves the other. Those are not this relation and a
 `npm:jq` row survives beside a `pacman:jq` row.
 
 **The reversible part.** Where a client and the owner both hold a package, the **owner** wins the
-row. That is what makes the surviving row actionable â€” `pacman -Rs` removes an AUR package that
+row. That is what makes the surviving row actionable — `pacman -Rs` removes an AUR package that
 `yay` installed, and a row naming `yay` would be a removal the user cannot repeat with the manager
 printed next to it. Where no owner answered (`shall list --backend yay`), the first client stands,
 so filtering to a client never returns an empty listing.
 
-**The ruling, and what a user wants.** A declaration is a thing you can delete and put back â€”
+**The ruling, and what a user wants.** A declaration is a thing you can delete and put back —
 that is what a manifest *is*. `pacman:<aur package>` fails that test in one direction: pacman
 removes it and cannot reinstall it, because it is in no sync repository. So the winner is not a
 constant. It is **the owner for a package the repositories supply and the helper for one they do
 not**, which is the `pacman -Qm` foreign set the previous entry named as the alternative.
 
-**What was built.** `Queryable::foreign_to_repositories` â€” `None` from every manager that draws
-no such distinction, `pacman -Qmq` for the one that does â€” and `ForeignSets`, which asks it once
+**What was built.** `Queryable::foreign_to_repositories` — `None` from every manager that draws
+no such distinction, `pacman -Qmq` for the one that does — and `ForeignSets`, which asks it once
 per run and only on a machine where an owner *and* one of its clients are both present. Both
 collapses consult it: the cross-backend listing (`list`, the undeclared crawl) and the holder
 list (`--absent`), so the two cannot answer one question differently. `adopt` stands the owner
 aside on the foreign set, and its already-declared check moved to the **database** rather than
-the client â€” otherwise a `pacman:jq` written by an earlier run would let `yay:jq` in beside it,
+the client — otherwise a `pacman:jq` written by an earlier run would let `yay:jq` in beside it,
 which is the duplicate this whole relation exists to stop.
 
 **Three bounds, stated rather than left to be found.**
@@ -8762,7 +8762,7 @@ which is the duplicate this whole relation exists to stop.
   with no helper installed, `pacman:<aur package>` is still the best row there is; losing it
   would drop the package from the listing entirely.
 - **The manager-level collapse is untouched.** `check health` refreshes managers, not packages,
-  and there is no package there to ask about â€” so `pacman -Sy` still stands for all three.
+  and there is no package there to ask about — so `pacman -Sy` still stands for all three.
 - **A probe that fails leaves the owner speaking for everything**, which is the behaviour this
   replaced. It is read through `probe_output`, so a refused flag is *unknown* rather than
   *nothing is foreign*: an empty answer read out of a failure would attribute every AUR package
@@ -8774,7 +8774,7 @@ registry. It is `backends/shared_database.rs`.
 
 ## J4
 
-**Status: HALF RULED 2026-08-16.** The owner ruled the substance â€” selective pinning, a config
+**Status: HALF RULED 2026-08-16.** The owner ruled the substance — selective pinning, a config
 switch for each part, an error that explains itself, and selective upgrade. **The remaining half
 is one question: does a bare `shall lock` keep freezing all three axes?** It does today and it
 still does; `[lock] axes` is how a machine narrows it. See *What was ruled* below.
@@ -8787,16 +8787,16 @@ The chain, and every step of it is measured:
 
 | | what runs | what it does |
 |---|---|---|
-| 1 | `shall lock` â€” the harness runs it to **approve an `exec:`** | `Lock: pinned 106 package version(s) to locks/versions.json`, including `"apt:libudev1": "255.4-1ubuntu8.17"` |
+| 1 | `shall lock` — the harness runs it to **approve an `exec:`** | `Lock: pinned 106 package version(s) to locks/versions.json`, including `"apt:libudev1": "255.4-1ubuntu8.17"` |
 | 2 | anything upgrades those packages, or the archive rolls | the recorded version is no longer in the index |
-| 3 | `shall sync --yes` â€” **no `--locked` anywhere** | `StateResolver::prefer_locks` defaults to `true`, so `apply_locks` injects the recorded version |
-| 4 | `apt` | `E: Version 'â€¦' for 'libudev1' was not found`, exit 100, sync exits 1 |
+| 3 | `shall sync --yes` — **no `--locked` anywhere** | `StateResolver::prefer_locks` defaults to `true`, so `apply_locks` injects the recorded version |
+| 4 | `apt` | `E: Version '…' for 'libudev1' was not found`, exit 100, sync exits 1 |
 
 The reproduction prints the storage leg's message verbatim, down to the manifest line numbers
 (113 for `libsystemd0`, 116 for `libudev1`).
 
 **Three mechanisms were ruled out before this one, and they are recorded so nobody re-walks
-them.** The adoption manifest carries no version â€” `adoption_options` is implemented by exactly
+them.** The adoption manifest carries no version — `adoption_options` is implemented by exactly
 one backend (`service.rs`, which contributes `@status=`), so `apt:libudev1` is written bare. The
 state registry records `"version": null` for these packages. And `adopt` followed by `sync` never
 creates `locks/versions.json` at all: only `lock`, `plan` and `sync` write it, which is what made
@@ -8817,19 +8817,19 @@ the archive?** Today the answer is a failed sync with a manager's error and no s
 is no path back that does not involve the user finding `--upgrade` or deleting a file they did not
 know they had.
 
-**Recommendation, offered as one and not built.** Keep the pin â€” a recorded version is the point
-of recording it â€” and fix the two edges: `lock` should record versions only when asked to (or say
+**Recommendation, offered as one and not built.** Keep the pin — a recorded version is the point
+of recording it — and fix the two edges: `lock` should record versions only when asked to (or say
 loudly that it did), and a sync that cannot satisfy a *recorded* pin (as opposed to a typed one)
 should report the drift and name `--upgrade`, rather than handing the user apt's exit 100. A
 version somebody typed stays fatal, on the reasoning `pins.rs` already gives: *"a version you
 typed is a decision"*. A version Shall recorded on their behalf is not.
 
-**Raised rather than built because every option changes what a user sees** â€” which sync fails,
+**Raised rather than built because every option changes what a user sees** — which sync fails,
 which command records what, and what a machine does the morning after a security update.
 
 ### What was ruled, 2026-08-16
 
-**Half of what this entry asked for already existed, and saying so is part of the ruling** â€” the
+**Half of what this entry asked for already existed, and saying so is part of the ruling** — the
 gap was never "Shall cannot scope a pin", it was that the scope had no name for a whole manager
 and no home in the config. `shall lock versions curl` pinned one package before this change;
 `shall lock scripts` approved an `exec:` without pinning anything, and would have prevented the
@@ -8840,7 +8840,7 @@ Four things were built:
 
 1. **`--backend` on `lock` and `unlock`.** A class is a manager, and it goes on a flag rather
    than being inferred from a bare word, because `apt:apt` is a real package on every Debian
-   machine â€” `shall lock versions apt` has to keep meaning the package called `apt`. Names and a
+   machine — `shall lock versions apt` has to keep meaning the package called `apt`. Names and a
    class intersect: `--backend apt curl` is apt's curl and not cargo's. The flag needs the
    `versions` axis and is **refused** on the others rather than silently matching nothing, since
    a backend lock's keys are bare names and a script id's prefix (`after_install:`) is a ledger
@@ -8849,7 +8849,7 @@ Four things were built:
 2. **A `[lock]` table in `preferences.toml`, three keys, every default the shipped behaviour.**
    `axes` narrows what a bare `lock` freezes; `versions` names which managers get pins (`["*"]`
    by default); `replay` is whether an ordinary `sync` installs recorded versions. That third
-   key is the root of the reproduction above and had no name at all before â€” `prefer_locks` was
+   key is the root of the reproduction above and had no name at all before — `prefer_locks` was
    hardcoded `true`, so the only way to decline it was `--upgrade` on every sync for ever.
    `replay = false` keeps the file as a drift record, which `check` still reads and `sync
    --locked` still reproduces from, without a recorded version becoming an install argument.
@@ -8863,19 +8863,19 @@ Four things were built:
    Advice is withheld when the manager's complaint does not quote the pin, so a dead mirror or a
    full disk is never blamed on a lockfile.
 
-4. **`[lock] versions` is enforced in `build_and_write_locks`, not in the `lock` command** â€”
+4. **`[lock] versions` is enforced in `build_and_write_locks`, not in the `lock` command** —
    `heal` reconciles the same file, and a class filter on one writer would have `heal` quietly
    put back every pin `lock` was configured not to write.
 
 **What was deliberately not changed.** A version somebody *typed* still fails hard, on the
 reasoning `pins.rs` already gives: a version you typed is a decision. Only the recorded kind gets
 the explanation. And `refresh_version_locks` still moves an existing pin even for a manager
-`[lock] versions` now excludes â€” the pin exists, and refusing to move it would freeze it at a
+`[lock] versions` now excludes — the pin exists, and refusing to move it would freeze it at a
 stale version, which is the Z2 bug the function was written to prevent.
 
 ## J5
 
-**Status: ANSWERED â€” 2026-08-16. Four questions put to the owner and four answers, all in one
+**Status: ANSWERED — 2026-08-16. Four questions put to the owner and four answers, all in one
 sitting. Build order and the coverage bound are below; nothing here was built before it was
 ruled.**
 
@@ -8886,8 +8886,8 @@ condition this tool exists to remove, so Shall on NixOS should write the **syste
 and let NixOS execute it.
 
 **Before any of it: the published binary could not start on NixOS at all.** Measured 2026-08-16
-by mounting Ubuntu's own `/bin/echo` into `nixos/nix` â€” exit 127, *"cannot execute: required
-file not found"* â€” because a `-gnu` target hard-codes `/lib64/ld-linux-x86-64.so.2` and NixOS has
+by mounting Ubuntu's own `/bin/echo` into `nixos/nix` — exit 127, *"cannot execute: required
+file not found"* — because a `-gnu` target hard-codes `/lib64/ld-linux-x86-64.so.2` and NixOS has
 no such file. **Alpine fails identically and is in the integration matrix**, so this was a
 supported platform whose binary could never have run. A static `x86_64-unknown-linux-musl` build
 fixes both: one artifact, measured to report `shall 0.8.0` from `nixos/nix`, `alpine:3.20` and
@@ -8895,7 +8895,7 @@ fixes both: one artifact, measured to report `shall 0.8.0` from `nixos/nix`, `al
 
 ### The four rulings
 
-1. **Does Shall edit `configuration.nix`?** â€” **A setting decides.** Shall owns
+1. **Does Shall edit `configuration.nix`?** — **A setting decides.** Shall owns
    `/etc/nixos/shall-packages.nix` completely and regenerates it; whether it also adds the one
    `imports = [ ./shall-packages.nix ];` line to `configuration.nix` is a `preferences.toml` key.
 
@@ -8903,14 +8903,14 @@ fixes both: one artifact, measured to report `shall 0.8.0` from `nixos/nix`, `al
    first of three defects a real NixOS found.** That backend appends one `Include =` line and
    never rewrites the body, which works because `pacman.conf` is line-oriented. Nix is an
    expression language: a line appended after the closing brace lands *outside* the attribute
-   set, and nix refuses the entire file â€”
+   set, and nix refuses the entire file —
 
    ```text
    error: syntax error, unexpected '=', expecting end of file
        7| imports = [ ./shall-packages.nix ];
    ```
 
-   â€” which breaks the machine's boot configuration rather than Shall. The import is inserted
+   — which breaks the machine's boot configuration rather than Shall. The import is inserted
    *inside* the set instead, in one of two recognised shapes (an existing `imports = [` list, or
    the `{` that opens the body after the argument pattern), and any other shape is refused by
    name. Shall still never parses a hand-edited Nix expression in the sense that matters: it
@@ -8921,7 +8921,7 @@ fixes both: one artifact, measured to report `shall 0.8.0` from `nixos/nix`, `al
    until that line exists, so proceeding would rebuild the machine as it already was and report
    an install.
 
-2. **Does `sync` run `nixos-rebuild switch`?** â€” **Yes, itself.** Consistent with the standing
+2. **Does `sync` run `nixos-rebuild switch`?** — **Yes, itself.** Consistent with the standing
    ruling that if a thing is the command's job it happens automatically rather than being
    prompted for. It needs root and takes minutes, which is a cost to state, not a reason to ask.
 
@@ -8934,32 +8934,32 @@ fixes both: one artifact, measured to report `shall 0.8.0` from `nixos/nix`, `al
    an untouched machine is the worst shape a failure takes.
 
    **The third defect was in how the file is written.** `/etc/nixos` is root-owned and
-   `std::fs::write` knows nothing about sudo â€” `needs_root()` governs the commands the executor
-   runs, not a direct filesystem call â€” so an ordinary `shall sync` died with
+   `std::fs::write` knows nothing about sudo — `needs_root()` governs the commands the executor
+   runs, not a direct filesystem call — so an ordinary `shall sync` died with
    `I/O error: Permission denied (os error 13)`, naming neither the file nor the reason. The
    generated file is staged to a temporary path and moved with the executor now, which is the
    shape `pacman`'s drop-in uses: the privileged step is a command, not a syscall. The rollback
    goes the same way, or it would silently no-op on the one directory it exists to protect.
 
-3. **One name or two?** â€” **Two.** `nix:` keeps meaning `nix profile` on every host, including
-   NixOS; `nixos:` means the system configuration. A NixOS user may legitimately want both â€” a
-   package for every account and a scratch tool for one â€” and two names is the only spelling that
+3. **One name or two?** — **Two.** `nix:` keeps meaning `nix profile` on every host, including
+   NixOS; `nixos:` means the system configuration. A NixOS user may legitimately want both — a
+   package for every account and a scratch tool for one — and two names is the only spelling that
    can say so. It also keeps a shared config file meaning the same thing on every machine, which
    one name could not: `nix:ripgrep` would silently be a different mechanism per host.
 
-4. **How far does it go?** â€” **Everything.** Not packages alone: `service:` and `firewall:` are
+4. **How far does it go?** — **Everything.** Not packages alone: `service:` and `firewall:` are
    `configuration.nix` concerns on NixOS too, and are generated into the same file.
 
    **Built 2026-08-16, in the round after the prefix landed, and the delay is worth recording.**
    The renderer took `services` and `ports` from its first commit and nothing ever passed it
-   any â€” packages arrive through `Installable`, and a `service:` line does not: it is applied by
+   any — packages arrive through `Installable`, and a `service:` line does not: it is applied by
    `Dependents` through the `service` backend and a `firewall:` line by `Firewall::apply` through
    an adapter. So the half of the ruling that shipped first was the half whose interface already
    fitted, and the ruling read as built because the renderer's signature said it was.
 
    What the missing half cost on that OS: `systemctl enable` writes into a tree
-   `nixos-rebuild switch` regenerates â€” including the rebuild Shall itself runs one line later
-   for a `nixos:` package â€” and `ufw` is not on a NixOS box at all, so a machine declaring
+   `nixos-rebuild switch` regenerates — including the rebuild Shall itself runs one line later
+   for a `nixos:` package — and `ufw` is not on a NixOS box at all, so a machine declaring
    `firewall:22/tcp` failed its whole sync on a missing adapter. Both are attributes now, written
    by one function into one file and applied by one rebuild. **State is declared and a transition
    is performed**: `@status=restarted` still goes to the init, with the enablement trimmed out.
@@ -8969,19 +8969,19 @@ fixes both: one artifact, measured to report `shall 0.8.0` from `nixos/nix`, `al
 `requirements.txt`, `package.json` and Aptfile; a NixOS fragment is the same idea and falls out
 of the generator this decision creates.
 
-### The coverage bound â€” written before the code, and then found to be wrong
+### The coverage bound — written before the code, and then found to be wrong
 
-**What was written here first:** *"no container available is NixOSâ€¦ `nixos-rebuild switch`
+**What was written here first:** *"no container available is NixOS… `nixos-rebuild switch`
 against a real NixOS is argv-checked and not executed. It wants a VM or a real host, and until
 one exists that row is inference."* That was recorded in this entry and in two spec files and
 treated as settled.
 
 **It was one command away from being false.** `wsl --install --from-file nixos.wsl` imports
-NixOS-WSL, and NixOS 26.05 was running here within the hour â€” with `/etc/NIXOS`,
+NixOS-WSL, and NixOS 26.05 was running here within the hour — with `/etc/NIXOS`,
 `/run/current-system`, `nixos-rebuild`, systemd and passwordless sudo. The limitation was the
 author's, not the environment's, and writing it down confidently is what stopped the search.
 
-**Driving it found three defects that every hermetic layer had passed** â€” 11 unit tests, a real
+**Driving it found three defects that every hermetic layer had passed** — 11 unit tests, a real
 Nix parser over every generated shape, clippy, fmt, and a Linux compile check. The three are
 recorded against the rulings above. The one worth naming twice is that the gate existed and
 pointed the wrong way: `nix-instantiate --parse` validated the file Shall *generates* while the
@@ -8995,31 +8995,31 @@ base: measured, it has `/nix/store` and `nix` 2.35.2 and it does **not** have `/
 
 - the generator's output is proven by hermetic Rust tests;
 - **that the output is valid Nix** is proven in `nixos/nix` by `nix-instantiate --parse`, which
-  is the risk that matters â€” Shall would be emitting text in another language, and a file nix
+  is the risk that matters — Shall would be emitting text in another language, and a file nix
   cannot parse breaks the user's whole system configuration rather than just Shall. Measured
   non-vacuous: a well-formed module parses, and a deliberately unbalanced one is refused with
   `error: syntax error, unexpected '}'`;
 - the `nix:` profile path is already driven for real in the `tools` image;
-- **`nixos-rebuild switch` against a real NixOS was driven by hand on 2026-08-16** â€” the sentence
-  that used to stand here said it was "argv-checked and not executedâ€¦ until a real host exists
+- **`nixos-rebuild switch` against a real NixOS was driven by hand on 2026-08-16** — the sentence
+  that used to stand here said it was "argv-checked and not executed… until a real host exists
   that row is inference", and it was one `wsl --install --from-file nixos.wsl` from being false.
   It is not inference; it is four defects, listed above. What remains true is narrower and is the
   row to close: **no automated gate reaches it**, and the configuration driven there carried
-  packages only â€” the services and ports of ruling 4 have never been through a real
+  packages only — the services and ports of ruling 4 have never been through a real
   `nixos-rebuild`. The price is a NixOS CI leg, and `proving.rs` holds the receipt.
 
 
 ## J6
 
-**Status: ANSWERED â€” 2026-08-16. Owner: *"do the durable fix. feature rich and configurable, for
+**Status: ANSWERED — 2026-08-16. Owner: *"do the durable fix. feature rich and configurable, for
 power users."* Built in the same commit.**
 
-**`schedule:` reported nothing to do about a schedule it was about to rewrite** â€” `J2`'s sibling,
+**`schedule:` reported nothing to do about a schedule it was about to rewrite** — `J2`'s sibling,
 named in `J2`'s own entry and left open there because it looked like three adapters and a design.
 It was three adapters and a design.
 
-`@cron=` and `@run=` are not in a schedule's ledger key, so editing when a job runs â€” or what it
-runs â€” produced the same key, was found in the applied-extras ledger, and was reported as
+`@cron=` and `@run=` are not in a schedule's ledger key, so editing when a job runs — or what it
+runs — produced the same key, was found in the applied-extras ledger, and was reported as
 *nothing to do* by the very sync that re-provisioned it underneath. Provisioning is idempotent, so
 the machine always converged; what it could not do was say it had changed anything. `plan` filed
 it under *Shall cannot read back* rather than under work.
@@ -9028,23 +9028,23 @@ it under *Shall cannot read back* rather than under work.
 by putting the discriminating option into the key (`setting:x@scope=system`). A `setting:`'s scope
 makes two genuinely different subjects, so the old key's teardown resets a different value. A
 schedule's name **is** its identity at the OS scheduler: `schedule:nightly@cron=old` and
-`@cron=new` are one cron entry, so `reconcile` â€” which runs after the apply phase â€” would
+`@cron=new` are one cron entry, so `reconcile` — which runs after the apply phase — would
 deprovision by name the entry that phase had just written. Editing a schedule would silently
 delete it.
 
 **So the machine is asked.** systemd and launchd keep files, so the comparison is the whole unit
-Shall would write against the whole unit on disk â€” exact, and covering every option those
+Shall would write against the whole unit on disk — exact, and covering every option those
 schedulers can express without anyone maintaining a list. Task Scheduler keeps no file, so both
 sides are canonicalised: the declaration from the `/SC` arguments, the machine from the trigger
 XML, with the trigger shapes captured from real tasks on a Windows 11 box rather than imagined.
-**A shape the reader does not understand is `unverifiable`, never drift** â€” V.188's rule on a
+**A shape the reader does not understand is `unverifiable`, never drift** — V.188's rule on a
 third store.
 
 **The feature-rich half.** Four options, which are the four settings the three schedulers between
 them actually have: `enabled` (provision it and leave it silent), `persistent` (run a firing the
 machine was switched off for), `jitter` (spread a fleet around the scheduled moment), `elevated`
 (run at the highest privilege the account holds). **No scheduler has all four**, so each
-provisioner expresses what it can and **refuses the rest by name**, before it writes anything â€”
+provisioner expresses what it can and **refuses the rest by name**, before it writes anything —
 accepting an option and dropping it is the same failure as the cron that was silently widened into
 `DAILY`. An option nobody wrote is never refused and never changes what the schedule does, which
 is why each arrives as an `Option` rather than as a default. A table test asserts the whole matrix;
@@ -9054,7 +9054,7 @@ to miss).
 **Two defects found on the way, both of the class the read-back was built to expose.** Rendering
 the systemd unit once instead of twice showed the `@reboot` shape was produced by *overwriting* the
 file the ordinary shape had just written, and the replacement carried no `StandardOutput=` at all
-â€” the one kind of job nobody watches run was writing its output nowhere. Its sibling:
+— the one kind of job nobody watches run was writing its output nowhere. Its sibling:
 `is_task_active` asked only about the timer, so `remove_task`'s end-state assertion was vacuous for
 every boot job. launchd and Windows were checked for the same pair and have neither.
 
@@ -9064,10 +9064,10 @@ schedules. Same row as the NixOS rebuild, named rather than implied. Rule: `II.2
 
 ## J7
 
-**Status: ANSWERED â€” 2026-08-16. Three release questions, three answers in one sitting.**
+**Status: ANSWERED — 2026-08-16. Three release questions, three answers in one sitting.**
 
-**The version stays `0.8.0`** (owner: *"v.08 â€” may as well"*). The entry had grown well past its
-title â€” *"the first published binaries"* â€” so the title is rewritten to cover what the release
+**The version stays `0.8.0`** (owner: *"v.08 — may as well"*). The entry had grown well past its
+title — *"the first published binaries"* — so the title is rewritten to cover what the release
 holds rather than the number being moved to excuse it.
 
 **`nixos:` ships in it** (owner: *"ship with nixos"*), which is why the backend ceiling was raised
@@ -9083,7 +9083,7 @@ command that has one, which is the duplication this rewrite exists to remove.
 
 ## J8
 
-**Status: ANSWERED â€” ruled 2026-08-17, and built in the same commit.** The owner took the
+**Status: ANSWERED — ruled 2026-08-17, and built in the same commit.** The owner took the
 recommendation below as written: a backend may declare that its names are qualified; on one, a
 bare name matching exactly one atom resolves and **the plan names the atom**, and a bare name
 matching more than one is **refused, listing them**. The rule is [Part II](target-state.md)'s
@@ -9100,7 +9100,7 @@ a second sync cannot plan `emerge:jq` off a lock written by the first.
 
 **The finding, and it is not the one the failure looks like.** `shall install jq` on Gentoo
 answers *"no package manager this line accepts has `jq`"* while `emerge --search jq` is printing
-three packages called jq. `Searchable::lookup` â€” the question the resolver asks â€” is
+three packages called jq. `Searchable::lookup` — the question the resolver asks — is
 `search(name).find(|p| p.name == name)`, and `emerge`'s search parser returns Portage's atoms:
 `app-misc/jq`, `dev-python/jq`, `app-emacs/jq-mode`. The string being compared is the one the
 user typed, so on that backend the comparison can never be true. Every line that does not spell
@@ -9115,7 +9115,7 @@ line:
     > READY backends: appimage emerge github link service web
 
 `gentoo/stage3` shipped a Rust toolchain, so the **`cargo` backend was ready on the Gentoo
-image** â€” and `jq` is a crate. The leg named for `emerge` was resolving its canary from
+image** — and `jq` is a crate. The leg named for `emerge` was resolving its canary from
 crates.io. The 2026-08-17 change that stopped the image depending on a rolling toolchain removed
 the accidental answerer, and the defect it had been covering became visible the same day. This is
 the same shape as the guix leg that measured Debian's `apt` because `metacall/guix` is
@@ -9123,13 +9123,13 @@ Debian-based, and it is why a canary must be resolved by the manager the leg is 
 
 **The family, enumerated rather than assumed.** Of the twenty search readers in
 `parsers::named::search`, exactly one returns a qualified name: `ecosystem::emerge_search`.
-`pacman::parse_search_for` takes the other road and strips the repository â€” `core/bash` is read
-as `bash` â€” and the rest print bare names. So this is one backend, and the question is which of
+`pacman::parse_search_for` takes the other road and strips the repository — `core/bash` is read
+as `bash` — and the rest print bare names. So this is one backend, and the question is which of
 those two roads is right rather than how many callers to patch.
 
 **Stripping the category, pacman-style, is the wrong road here, and the reason is specific.**
 Portage refuses a bare `emerge jq` itself, as ambiguous between `app-misc/jq` and `dev-python/jq`
-â€” so a stripped name would resolve and then fail at the manager. Worse, `emerge`'s *installed*
+— so a stripped name would resolve and then fail at the manager. Worse, `emerge`'s *installed*
 listing is `qlist -I`, which prints atoms and is not going to stop: a declaration reading `jq`
 against an installed `app-misc/jq` never matches, so every sync would re-install a package that
 is already there.
@@ -9137,20 +9137,20 @@ is already there.
 **Recommendation.** A manager may declare that its names are qualified. On one, a bare name that
 matches exactly **one** atom resolves to it and the plan names the atom, so what reaches Portage
 and what comes back from `qlist -I` are the same string; a bare name matching more than one is
-**refused, listing them** â€” which is what Portage does, and it is a better answer than picking
+**refused, listing them** — which is what Portage does, and it is a better answer than picking
 the first. The owner decides; this is not built.
 
 **The gentoo leg was held red rather than made green by editing the canary to `app-misc/jq`**,
-on the precedent `lvm:`'s `@size` set â€” that leg failed by name every run until `Q18` ruled the
+on the precedent `lvm:`'s `@size` set — that leg failed by name every run until `Q18` ruled the
 table wrong. It is green now because the product resolves the name, not because the check stopped
 asking.
 
 ## J9
 
-**Status: ANSWERED â€” ruled 2026-08-17, and built in the same commit.** The owner agreed to the
+**Status: ANSWERED — ruled 2026-08-17, and built in the same commit.** The owner agreed to the
 recommendation as put: **the line names the flag the run actually passed, and the refusal names
-both flags for the one ceiling either of them answers.** No run's outcome changes â€” the same
-commands proceed and the same commands are refused â€” only the words do.
+both flags for the one ceiling either of them answers.** No run's outcome changes — the same
+commands proceed and the same commands are refused — only the words do.
 
 **Two guard messages named `--allow-mass-removal` whatever the caller typed.** `max_total_changes`
 counts everything one command does, so **either** mass flag answers it (`N8`), and both surfaces
@@ -9167,12 +9167,12 @@ their installs through was to authorize mass deletion. Some fraction of people s
 
 **Both halves came from the wrong place, and one of them already had a rule against it.**
 `counted_as` exists precisely so a sentence and the `[guard]` key it names cannot describe
-different things, and its own doc says so â€” but `announcement` took its noun from the *caller*
+different things, and its own doc says so — but `announcement` took its noun from the *caller*
 and its flag from a literal. It now reads the ceiling off each objection's `setting` and the
 flags off the config, so the two things a reader acts on are both facts of the run:
 
 ```text
-'sync' makes 62 changes in total, over the limit of 50 ([guard] max_total_changes) â€” allowed by --allow-mass-install.
+'sync' makes 62 changes in total, over the limit of 50 ([guard] max_total_changes) — allowed by --allow-mass-install.
 ```
 
 The count clause is spelled the way the *refusal* spells the same fact, so one ceiling reads
@@ -9184,16 +9184,16 @@ was load-bearing is not answerable for the one ceiling either answers: either on
 
 **Two other surfaces were already right, and that is what settles the direction.** `shall
 protected`'s help has printed *"Either flag answers `max_total_changes`; neither answers a
-protected name"* since the ceiling shipped, and the README says *"either answers the total â€” a
+protected name"* since the ceiling shipped, and the README says *"either answers the total — a
 total is made of both"*. The guard's own two messages were the only places contradicting the
-documentation of the thing they implement, so this is not a new rule being chosen â€” it is two
+documentation of the thing they implement, so this is not a new rule being chosen — it is two
 surfaces being made to say what the other two already said. **Where one surface already states
 the rule, the others are wrong rather than different**, and finding the sibling that reads
 correctly is worth doing before treating a discrepancy as an open design question.
 
 **What was checked and deliberately left alone.**
 
-- **The per-kind refusals** â€” `max_removals`, `max_extra_removals`, `max_port_closures` â€” keep
+- **The per-kind refusals** — `max_removals`, `max_extra_removals`, `max_port_closures` — keep
   offering `--allow-mass-removal` alone. Those ceilings answer to that flag and no other (`Y20`),
   so adding the install flag there would print advice that does not work.
 - **The install ceiling's own line** (`the install count for 'sync' (62) was allowed by
@@ -9206,7 +9206,7 @@ Rule in [Part II](target-state.md) II.28, reasoning in **V.159**.
 
 ## L1
 
-**Status: ANSWERED â€” 2026-08-18, owner ruling, built in the same commit.**
+**Status: ANSWERED — 2026-08-18, owner ruling, built in the same commit.**
 
 **L1 - Does `record_success` flush per package, or once per wave?** Every `record_start` /
 `record_success` / `record_failure` was one physical `sync_data`, under the journal mutex, on a
@@ -9241,7 +9241,7 @@ writes from. `journalled` now opens its actions with `record_starts` rather than
 
 ## L2
 
-**Status: ANSWERED â€” 2026-08-18, owner ruling, built in the same commit.**
+**Status: ANSWERED — 2026-08-18, owner ruling, built in the same commit.**
 
 **L2 - Are the `locks/` ledgers protected by the data lock, by writer scope, or by nothing?**
 `DataLock` guards `safe_data_dir()`. The six ledgers `core::ledger::LockFile` governs - the regex
@@ -9286,7 +9286,7 @@ wrote `locks/regex.toml` for real under no lock at all.
 
 ## L3
 
-**Status: ANSWERED â€” 2026-08-18, owner ruling, built in the same commit.**
+**Status: ANSWERED — 2026-08-18, owner ruling, built in the same commit.**
 
 **L3 - Do reader commands accept a torn cross-file view?** `LockScope::Reader` never takes the
 data lock, so a reader reads `registry.json`, `journal.jsonl` and the `locks/` ledgers as separate,
@@ -9322,7 +9322,7 @@ therefore every reader's exposure, not only the three-source ones.
 
 ## L4
 
-**Status: ANSWERED â€” 2026-08-18, owner ruling, built in the same commit.**
+**Status: ANSWERED — 2026-08-18, owner ruling, built in the same commit.**
 
 **L4 - Part II describes a locking model the code deliberately no longer has.** Raised rather than
 changed, because `CLAUDE.md` says *"Anything where Part II looks wrong. **Do not fix Part II
@@ -9356,11 +9356,11 @@ to V.192 pointed at either. The Portage entry is now V.193 and its citations fol
 
 ## M1
 
-**Status: ANSWERED â€” 2026-08-21, owner ruling, built in the same commit.**
+**Status: ANSWERED — 2026-08-21, owner ruling, built in the same commit.**
 
-**M1 â€” An upstream ecosystem broke. Whose problem is that, and what absorbs it?** On 2026-08-21
+**M1 — An upstream ecosystem broke. Whose problem is that, and what absorbs it?** On 2026-08-21
 Hackage published root.json version 8, whose root role takes three signatures from six keys that
-the cabal-install Ubuntu 24.04 ships â€” 3.8.1.0, and no HTTPS transport either â€” does not have.
+the cabal-install Ubuntu 24.04 ships — 3.8.1.0, and no HTTPS transport either — does not have.
 `cabal update` answered `<repo>/root.json does not have enough signatures signed with the
 appropriate keys`, the `tools` image shipped with no Hackage index, and forty minutes into the
 nightly `cabal install hello` failed. The harness scored it `defect`, correctly by its own rules,
@@ -9368,7 +9368,7 @@ and the terminator probe went red behind it because no cabal verb could resolve 
 
 **The first answer written down was that this was ecosystem variance and the image's problem.**
 The owner's tayneh killed it in one line: *if Shall can't deal with ecosystem drift, it's a Shall
-problem.* And the measurement was worse than the one backend â€” **16 of 23 declarative backends
+problem.* And the measurement was worse than the one backend — **16 of 23 declarative backends
 had no `ExitPolicy` at all**, so every failure any of them ever produced classified as `unknown`,
 which is Shall saying *nobody looked*. The harness was not guessing wrong; it was the only thing
 in the chain still willing to have an opinion.
@@ -9377,7 +9377,7 @@ in the chain still willing to have an opinion.
 
 1. **A failure Shall cannot name is a defect in Shall, not variance in the ecosystem.** A
    repository or index that cannot be verified or reached classifies **transient**, so
-   `falsify_transience` retries it, gets the same answer and reports `Exhausted` â€” somebody
+   `falsify_transience` retries it, gets the same answer and reports `Exhausted` — somebody
    tested the claim and it did not clear. `Permanent` would promise the package can never
    install, which is false the moment the trust anchor is repaired.
 2. **An excuse has an expiry date.** The harnesses may excuse an unmeasurable lifecycle only
@@ -9395,19 +9395,19 @@ in the chain still willing to have an opinion.
 **A third pass was added mid-flight, and it overturned part of the second.** `mix` answers from
 a stale cache when Hex is unreachable, in identical words, with only `Failed to fetch record`
 above it to say so. `dart pub` refuses a hyphenated name before it asks pub.dev at all, so the
-capture first taken for it was a fact about the string. And `luarocks` â€” which sat on the
-cannot-report list as a *decision*, with a note asking for exactly the offline measurement â€” was
+capture first taken for it was a fact about the string. And `luarocks` — which sat on the
+cannot-report list as a *decision*, with a note asking for exactly the offline measurement — was
 given an absent marker on the strength of that measurement and then had it taken straight back
 out, because a real rock at an impossible version prints the same summary with no warning above
 it. The register now records the general form: **a name, an index and a version are three things
 an install resolves, and a marker is only safe once all three have been asked.**
 
 **Addendum, later the same day: the sweep was scoped to the wrong thing, and finishing it found
-a shipped bug.** The probe list came from `builtin_backends.toml` â€” the *declarative* backends,
-one table of two â€” so every Rust-implemented backend was invisible to it, six of them sitting in
+a shipped bug.** The probe list came from `builtin_backends.toml` — the *declarative* backends,
+one table of two — so every Rust-implemented backend was invisible to it, six of them sitting in
 the image already built. Completing it from the registry instead took absent-name coverage from
 12 to **25 of 49**: `pip`, `bun`, `dotnet`, `mise` and `nix` joined, and `conda` earned a written
-reason to stay out â€” one sentence for two facts, like `luarocks`.
+reason to stay out — one sentence for two facts, like `luarocks`.
 
 And it found that **`pipx`'s marker had been wrong since `N-1`**. `no matching distribution found
 for` is what pip says about a bad VERSION as well as a bad name, so `pipx:black@version=99.99.99`
@@ -9416,15 +9416,15 @@ withdrew the declaration for a real package. `(from versions: none)` is the disc
 capture trimmed to the line being asserted on.
 
 A last one came off real hardware rather than a container. On a NixOS-WSL box a
-`nixos-rebuild switch` builds the system and then cannot activate it â€” no session bus, which is
-true of every NixOS-WSL install and every container â€” and Shall answered `unknown` to the one
+`nixos-rebuild switch` builds the system and then cannot activate it — no session bus, which is
+true of every NixOS-WSL install and every container — and Shall answered `unknown` to the one
 failure that machine reliably produces. `nixos` now classes it `Permanent`, because it is a fact
 about the environment and no retry changes it. The same run confirmed the rollback path on a
 real machine: `shall-packages.nix` and `configuration.nix` went back byte-identical, and the
 system rebuilt to the same store path as the control taken before any of it ran.
 
 **And the image, which is still repaired, for a different reason than the one first given.** Not
-*not our bug* â€” a test rig whose cabal cannot reach Hackage measures nothing. It seeds Hackage's
+*not our bug* — a test rig whose cabal cannot reach Hackage measures nothing. It seeds Hackage's
 current root as the local trust anchor before `cabal update`, fetched per build so the next
 rotation is a no-op, and the three index steps that were `|| true` no longer are. That silence
 is what let an image ship broken and report it as a backend defect forty minutes later.
@@ -9433,20 +9433,20 @@ is what let an image ship broken and report it as a backend defect forty minutes
 
 ## M2
 
-**Status: ANSWERED â€” 2026-08-21, owner ruling, built in the same commit.**
+**Status: ANSWERED — 2026-08-21, owner ruling, built in the same commit.**
 
-**M2 â€” A drifted ecosystem stopped the whole sync. Should it?** `M1` fixed the half of this that
+**M2 — A drifted ecosystem stopped the whole sync. Should it?** `M1` fixed the half of this that
 lives in CI. The half that lives on a user's machine is worse: `TransactionConfig::patient()` set
 `continue_on_error: false`, so the first failed node ended the transaction and everything the
 planner had not yet dispatched was never attempted. One `cabal:` line among two hundred
 declarations, a signing key rotated in a registry the user does not control, and the machine
-stops converging â€” for everything, not just for Haskell. The way out was `--keep-going`, a flag
+stops converging — for everything, not just for Haskell. The way out was `--keep-going`, a flag
 you have to already know exists.
 
 **`Y15` is this ruling's own argument, one category short.** That entry (2026-08-06) came from
 `spec_is_missing` raising `BackendNotFound` inside the planner's fan-out, so one `apt:` line
 dropped the twenty `winget:` lines beside it. It ruled: *that is a portable config, not a broken
-one* â€” skipped, reported, and the command succeeds; a package that genuinely fails still fails,
+one* — skipped, reported, and the command succeeds; a package that genuinely fails still fails,
 with `--keep-going` as the per-run opt-in. It drew that line with two categories available,
 because in August every failure of the third kind arrived as `Retryability::Unknown` and there
 was nothing to key on. `M1` is what created the third: a rotated registry key or an index that
@@ -9460,35 +9460,35 @@ flag the user has to already know about is that job half done.
 
 **Why this may have a file form when `--keep-going` deliberately may not.** The flag's own doc
 says a machine-wide setting that silently downgrades every future failure to a warning is the
-destructive default nobody typed, and that is still true â€” it is just not what this is. Nothing
+destructive default nobody typed, and that is still true — it is just not what this is. Nothing
 is downgraded: the exit code is unchanged, the summary names what failed, and the only thing
 decided here is whether the declarations *behind* the failed one are attempted before the run
 fails. `G1` already settled that continuing is not succeeding.
 
 **What keeps it from becoming `--keep-going` for everybody.** The mode reads the classification,
-not merely its own name. `Permanent`, `Refused` and `Unknown` all still end the run â€” `Permanent`
+not merely its own name. `Permanent`, `Refused` and `Unknown` all still end the run — `Permanent`
 says the request is wrong and you want to know before more of the plan runs on it, and `Unknown`
 means nobody looked, which is not a licence to continue. A round of failures carries on only if
 **every** failure in it was classified passing, so one `Permanent` among the transients stops the
 transaction. That cell has its own test, and without it the mode would be a rename.
 
 **Three things that did NOT change, each for a stated reason.** The flag outranks the key rather
-than combining with it â€” somebody at a keyboard said `--keep-going`, and the key is what the
+than combining with it — somebody at a keyboard said `--keep-going`, and the key is what the
 machine does when nobody said. Batching stays at `MAX_BATCH` under the new mode, because `G1`'s
 argument for one-package-per-command is about a bad NAME, which is a fact about one member of a
 batch, while the failures this mode carries on past are facts about the MANAGER and true of every
-member equally. And `TransactionConfig::patient()` â€” the library default that recovery and every
-hand-built transaction start from â€” stays all-or-nothing; only `from_config` reads the key.
+member equally. And `TransactionConfig::patient()` — the library default that recovery and every
+hand-built transaction start from — stays all-or-nothing; only `from_config` reads the key.
 
 ---
 
 ## M3
 
-**Status: ANSWERED â€” 2026-08-21, owner ruling, built in the same commit.**
+**Status: ANSWERED — 2026-08-21, owner ruling, built in the same commit.**
 
-**M3 â€” `M2` wrote its own limitation down. Should the limitation stand?** Packages heading for
+**M3 — `M2` wrote its own limitation down. Should the limitation stand?** Packages heading for
 one manager in one wave share a command line (II.19), and a manager fails a command line as a
-unit â€” so `M2` rescued every OTHER manager's packages and none of the failed batch's own. The
+unit — so `M2` rescued every OTHER manager's packages and none of the failed batch's own. The
 first test written for `M2` proved it by failing: two packages on one mock manager, one command
 line, and the good one went down with the doomed one. It was pinned as a documented cost.
 
@@ -9496,49 +9496,49 @@ line, and the good one went down with the doomed one. It was pinned as a documen
 batch_recovery`, a kind rather than a switch because the strategies differ in cost by an order
 of magnitude:
 
-- **`bisect` (default)** â€” halve the failed batch, ask about each half, recurse only into a half
+- **`bisect` (default)** — halve the failed batch, ask about each half, recurse only into a half
   that failed.
-- **`off`** â€” one command, as before.
-- **`every`** â€” one command per member, whatever the halves would have said.
+- **`off`** — one command, as before.
+- **`every`** — one command per member, whatever the halves would have said.
 
 **The number that chose bisection over splitting flat** is on `execute_batch_with_retry` and was
 measured on Ubuntu: `apt install <8 packages>` as one command is **3,161 ms**, and those same
-eight one at a time are **31,901 ms**. Ten times, and superlinear â€” each invocation re-reads the
+eight one at a time are **31,901 ms**. Ten times, and superlinear — each invocation re-reads the
 cache, re-takes the dpkg lock and re-resolves a graph the batch resolves once. Splitting flat
 throws that amortisation away; bisection keeps it, because every question it asks is still a
 batch.
 
 **The stopping rule is the part worth reading.** One bad member can only be in ONE half, so two
-halves that both fail is not a member â€” it is the manager, its index or its lock, and every
+halves that both fail is not a member — it is the manager, its index or its lock, and every
 further question gets the same answer. Narrowing stops dead there. That is the case `M2` is
 named after: a rotated signing key fails every package equally, and it now costs **two** extra
 commands rather than thirty. Measured as a command log in
 `two_failing_halves_is_the_manager_and_narrowing_stops_dead`.
 
-**Where it does not fire, and why each is deliberate.** Not on a `Permanent` failure â€” the
+**Where it does not fire, and why each is deliberate.** Not on a `Permanent` failure — the
 transaction is ending over it, so the pieces would be asked and thrown away. Not when the run is
-configured all-or-nothing â€” that owner asked for a plan that either lands or does not, and
+configured all-or-nothing — that owner asked for a plan that either lands or does not, and
 narrowing would install the good members anyway. And not under `--keep-going`, which `G1`
 already caps at one package per command, so there is never a batch to narrow.
 
 **What it cost to build.** The retry loop moved out of `execute_batch_with_retry` into
 `run_one_command`, so a narrowing can re-ask the manager without re-opening a WAL entry or
-firing `before_install` twice â€” a narrowing is a retry with a shorter command line, and a retry
+firing `before_install` twice — a narrowing is a retry with a shorter command line, and a retry
 never did either. The journal writes, the `after_install` hooks and the `TaskResult`s were three
 copies of the same block on three exits from that function; they are one block over one vector
 of per-member verdicts now, which is what made per-member answers expressible at all.
 
 ## M4
 
-**Status: ANSWERED â€” 2026-08-21, owner delegated the call, built in the same commit.**
+**Status: ANSWERED — 2026-08-21, owner delegated the call, built in the same commit.**
 
-**M4 â€” `--keep-going` over a refusal reports it as a failure, not as a refusal. Should it?**
+**M4 — `--keep-going` over a refusal reports it as a failure, not as a refusal. Should it?**
 
 `U21` gave this program an exit vocabulary so a script can tell the three apart: 1 is a failure,
 2 is "there are differences", **3 is "Shall refused"**. A script that retries on 1 must not retry
 a 3, because a refusal is a decision and it will be made again.
 
-`--keep-going` carries a run past any failure, refusals included â€” that part is what the flag is
+`--keep-going` carries a run past any failure, refusals included — that part is what the flag is
 for and is not in question. What is in question is the exit code afterwards. The run ends by
 raising a *summary* of what it carried past, and a summary is a `CommandFailed`, so:
 
@@ -9548,17 +9548,17 @@ raising a *summary* of what it carried past, and a summary is a `CommandFailed`,
 | `shall sync --keep-going` | **1** (the summary) |
 
 **Measured**, not argued: a `web:` line over plain HTTP under `--keep-going` printed
-`shall-failure-class: permanent`, and printing that line at all is the proof â€” `print_failure_class`
+`shall-failure-class: permanent`, and printing that line at all is the proof — `print_failure_class`
 sits on the arm *after* the refusal arm has returned, so a run reaching it was not treated as a
 refusal.
 
-**This is the same shape as `VI.11`** â€” an aggregate that loses a property of its members â€” and it
+**This is the same shape as `VI.11`** — an aggregate that loses a property of its members — and it
 was found by fixing that one. It is recorded rather than fixed because it changes an exit code,
 which is behaviour a user notices, and this repo's rule is that such a change is the owner's.
 
 **RULED (owner delegated, 2026-08-21): fix it, on the "every member" test.** When *every*
 operation a run carried past was refused, the summary is `Error::Refused` and the exit stays 3.
-One member that genuinely failed and it stays 1 â€” something did fail, and reporting that run as a
+One member that genuinely failed and it stays 1 — something did fail, and reporting that run as a
 refusal would hide it behind the refusal. The rule is `II.60` and its reason is `V.199`, both of
 which it shares with `VI.11`: this is the same defect one field over, an aggregate dropping a
 property of its members, and it is now one function (`summarise`) that `sync` and `heal` both go
@@ -9567,26 +9567,26 @@ through.
 **The frequency is small and the effect is total.** A fleet script that retries exit 1 will retry
 a refusal for ever, and `B1` names `--keep-going` as the flag fleet rollouts use.
 
-**Pinned as a comparison, not a constant** â€” `keeping_going_past_a_refusal_still_reports_a_refusal`
+**Pinned as a comparison, not a constant** — `keeping_going_past_a_refusal_still_reports_a_refusal`
 asserts the flagged and unflagged runs exit the same, and self-checks that the probe is still
 being refused at all, since a probe that stopped being a refusal would leave the test comparing
 two ordinary failures.
 
 ## M5
 
-**Status: ANSWERED â€” 2026-08-23, delegated ruling (audit fix shapes approved by the owner), built in the same commit.**
+**Status: ANSWERED — 2026-08-23, delegated ruling (audit fix shapes approved by the owner), built in the same commit.**
 
-**M5 â€” a failed OS-essential query disarms the rail for the whole run. Should it refuse instead?**
+**M5 — a failed OS-essential query disarms the rail for the whole run. Should it refuse instead?**
 
 The 2026-08-23 audit found `essential_names` turning a failed query into an empty set, which to
 the guard reads exactly like "nothing here is essential". One manager having a bad day therefore
-silently removed the OS-essential protection from every removal in the run â€” `purge-undeclared`
+silently removed the OS-essential protection from every removal in the run — `purge-undeclared`
 included, the command that sweeps widest exactly when nobody is reading its list. The rail's own
 comment said so: *"a backend that cannot answer contributes nothing and never blocks the guard."*
 
 **RULED (delegated, 2026-08-23): fail closed, scoped to exactly the blind spot.** A manager that
 is here and whose essential query fails has its removals refused for that run
-(`Objection::UnverifiedEssentials`) â€” protection-class: no mass flag clears it, and `--yes`
+(`Objection::UnverifiedEssentials`) — protection-class: no mass flag clears it, and `--yes`
 never could. A backend not on this machine stays out of scope (II.7c): nothing here went through
 it, so there is no question to ask. Leases, rebuild narrowing, rollback compensation and
 `shall protected` all answer from the same query, so an inspector cannot report clean over an
@@ -9599,18 +9599,18 @@ The rule is II.10's table (the OS-essential row now says so) and the reason is V
 
 ## R1
 
-**Status: ANSWERED â€” 2026-08-23, delegated (audit fix shapes approved by the owner), built same commit.**
+**Status: ANSWERED — 2026-08-23, delegated (audit fix shapes approved by the owner), built same commit.**
 
-**R1 â€” the guard asks twice over one shared budget: who spends?**
+**R1 — the guard asks twice over one shared budget: who spends?**
 
 `remove-orphans` and `purge-undeclared` asked the guard's question before their confirmation
 prompt through `enforce`/`enforce_deliberate`, which record into the ledger on success. The
 engine asked again over the same pairs through the same `Arc`, measured `N + N` against the
-ceiling, and refused a set the user had already confirmed â€” eleven orphans passed the prompt,
+ceiling, and refused a set the user had already confirmed — eleven orphans passed the prompt,
 refused 22/20 after it.
 
 **RESOLVED:** two asks, one rule, one spend. The decision lives in `guard::vet` /
-`guard::vet_deliberate` â€” refuse or permit, record nothing. `enforce_kind` and
+`guard::vet_deliberate` — refuse or permit, record nothing. `enforce_kind` and
 `enforce_deliberate` are vet + record. A reader can hold both facts in one sentence, which is
 the test the old arrangement failed.
 
@@ -9619,11 +9619,11 @@ The rule is II.10 ("Two asks, one spend") and the reason is V.201.
 
 ## R2
 
-**Status: ANSWERED â€” 2026-08-23, delegated, built same commit.**
+**Status: ANSWERED — 2026-08-23, delegated, built same commit.**
 
-**R2 â€” an `@undo=` is a shell command nothing can inspect. Is it outside invariant 2?**
+**R2 — an `@undo=` is a shell command nothing can inspect. Is it outside invariant 2?**
 
-It was: no ceiling, no flag, no consultation â€” a config dropping forty `exec:` lines ran forty
+It was: no ceiling, no flag, no consultation — a config dropping forty `exec:` lines ran forty
 arbitrary teardowns past every gate.
 
 **RESOLVED:** charged, not exempt. `guard::charge_unmodelled` answers the batch to
@@ -9637,9 +9637,9 @@ The rule is II.10 ("Mutations the model cannot name are charged").
 
 ## R3
 
-**Status: ANSWERED â€” 2026-08-23, delegated, built same commit.**
+**Status: ANSWERED — 2026-08-23, delegated, built same commit.**
 
-**R3 â€” what does a transaction killed part-way owe the truth?**
+**R3 — what does a transaction killed part-way owe the truth?**
 
 Three lies at once: the WAL entries of aborted batches closed as Failed (Q33 says Failed means an
 outcome was reached, so heal walked past installs that may have half-run); purge reported
@@ -9655,41 +9655,44 @@ The rules are II.10 ("A failed run reports what it did") and V.202.
 
 ## R4
 
-**Status: ANSWERED â€” owner ruling 2026-08-23, built 2026-08-24.**
+**Status: ANSWERED — owner ruling 2026-08-23, built 2026-08-24.**
 
-**R4 â€” where does unattended bootstrap consent live?**
+**R4 — where does unattended bootstrap consent live?**
 
 `-y` answered the bootstrap confirmation, so `--yes sync` executed vendor installer scripts
 (`curl | sh`) under a header promising "Ask, then do", and scheduled syncs inherited it.
 
 **RULED:** `--yes` never answers the bootstrap prompt by itself. The consent that does lives in
-preferences.toml â€” `[config] bootstrap_auto_yes = true`, default off â€” written by a human beside
+preferences.toml — `[config] bootstrap_auto_yes = true`, default off — written by a human beside
 the repo it trusts. Built in `app/apply/bootstrap.rs`; the warning names the setting when it
 fires.
 
 
 ## R5
 
-**Status: ANSWERED â€” owner ruling 2026-08-23, built 2026-08-24.**
+**Status: ANSWERED — owner ruling 2026-08-23, built 2026-08-24.**
 
-**R5 â€” non-interactive `apply`: apply or refuse?**
+**R5 — non-interactive `apply`: apply or refuse?**
 
 With neither `--yes` nor a terminal, `sync` refused and `apply` fell through its review and
 applied. Opposite postures in the two most destructive commands.
 
-**RULED:** apply refuses like sync â€” same sentence shape, `--yes` answers it, exit 3.
+**RULED:** apply refuses like sync — same sentence shape, `--yes` answers it, exit 3.
 Built in `verbs/plan.rs`.
 
 
 ## R6
 
-**Status: DEFERRED â€” build pending.**
-
-**R6 â€” executable-content config has no permission gate; pins end at install.**
-
-Two section-6 findings with owner rulings in principle from the opening Q&A: the exec-content
-gate becomes config-selectable strictness (owner-writable-only / world-writable-only /
-warn-only), and pins are honored everywhere with only commands explicitly meant to remove pins
-escaping them. Both are feature-sized changes; they are recorded here rather than rushed
-half-built at the end of the fix round. Neither may be quietly dropped â€” this entry is the
-thing that says they are owed.
+**Status: HALF RULED 2026-08-24.** The owner ruled the substance — config-selectable
+strictness for the exec gate, pins honored everywhere with only explicit unpin commands
+escaping. **The built half is the permission gate:** `[exec] trust` in `preferences.toml`
+selects which write bits disqualify a script the config names before its bytes are hashed or
+run — `owner-only`, `not-world-writable` (the default: it closes the file-drop hole while
+accepting the umask most real checkouts have), or `warn`. The gate sits in the one
+resolution the preview and the run share, refuses as `Error::Refused` (exit 3), and on
+platforms with no mode word the same enforcement point runs and accepts. Rule `II.61`,
+rationale `V.204`. **The remaining half is build work, not a ruling:** `version_pin` is
+consumed only in `install_group`; upgrade paths float past pins and reinstall rebuilds specs
+that discard versions. Feature-sized; recorded here rather than rushed half-built at the end
+of the fix round. Neither half may be quietly dropped — this entry is the thing that says
+what remains owed.

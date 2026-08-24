@@ -70,6 +70,16 @@ impl Execs<'_> {
         } else {
             self.config.config_root().join(declared)
         };
+        // The permission gate (R6) runs before the content is even read: a script whose mode
+        // word fails the `[exec] trust` setting is refused on its permissions alone, in the
+        // preview as well as the run, because both go through this one resolution.
+        match permission_verdict(&path, self.config.exec.trust)? {
+            PermVerdict::Accept => {}
+            PermVerdict::Warn(why) => warn!("exec:{} — {}", script, why),
+            PermVerdict::Refuse(why) => {
+                return Err(Error::Refused(format!("exec:{} — {}", script, why)))
+            }
+        }
         let body = std::fs::read_to_string(&path).map_err(|e| {
             Error::Validation(format!(
                 "`exec:{}` — cannot read the script at {} ({}). An `exec:` names a file the \
@@ -536,6 +546,110 @@ impl Execs<'_> {
     }
 }
 
+/// What the mode word of an `exec:` script means under the configured trust level.
+pub(crate) enum PermVerdict {
+    Accept,
+    /// Reported and survived, under `trust = "warn"`.
+    Warn(String),
+    /// The run stops here. `Error::Refused`, so exit 3 and no retry policy retries it.
+    Refuse(String),
+}
+
+/// Pure over the POSIX mode bits so every platform's suite tests it; only reading the bits
+/// out of a file is unix-only.
+pub(crate) fn judge_script_perms(mode: u32, trust: crate::config::ExecTrust) -> PermVerdict {
+    use crate::config::ExecTrust;
+    let group_w = mode & 0o020 != 0;
+    let world_w = mode & 0o002 != 0;
+    let describe = |bits: &str| {
+        format!(
+            "the script is writable by {} (`{:o}`), which `trust = \"{}\"` does not allow",
+            bits,
+            mode & 0o777,
+            match trust {
+                ExecTrust::OwnerOnly => "owner-only",
+                ExecTrust::NotWorldWritable => "not-world-writable",
+                ExecTrust::Warn => "warn",
+            }
+        )
+    };
+    let warn = if group_w || world_w {
+        Some(format!(
+            "writable by {} — running it anyway under `trust = \"warn\"`",
+            if group_w && world_w {
+                "group and others"
+            } else if group_w {
+                "group"
+            } else {
+                "others"
+            }
+        ))
+    } else {
+        None
+    };
+    match trust {
+        ExecTrust::Warn => match warn {
+            Some(msg) => PermVerdict::Warn(msg),
+            None => PermVerdict::Accept,
+        },
+        ExecTrust::NotWorldWritable => {
+            if world_w {
+                PermVerdict::Refuse(describe("others"))
+            } else {
+                PermVerdict::Accept
+            }
+        }
+        ExecTrust::OwnerOnly => {
+            if group_w || world_w {
+                let who = if group_w && world_w {
+                    "group or others"
+                } else if group_w {
+                    "group"
+                } else {
+                    "others"
+                };
+                PermVerdict::Refuse(describe(who))
+            } else {
+                PermVerdict::Accept
+            }
+        }
+    }
+}
+
+/// Read the mode word and judge it. `None` from [`script_mode`] means "no answer here" —
+/// no mode word on this platform, or the file is absent and the reader that follows owns
+/// that error — and accepts.
+fn permission_verdict(
+    path: &std::path::Path,
+    trust: crate::config::ExecTrust,
+) -> Result<PermVerdict> {
+    match script_mode(path)? {
+        Some(mode) => Ok(judge_script_perms(mode, trust)),
+        None => Ok(PermVerdict::Accept),
+    }
+}
+
+#[cfg(unix)]
+fn script_mode(path: &std::path::Path) -> Result<Option<u32>> {
+    use std::os::unix::fs::PermissionsExt;
+    match std::fs::metadata(path) {
+        Ok(meta) => Ok(Some(meta.permissions().mode())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(Error::Validation(format!(
+            "cannot read the permissions of `exec:` script {}: {}",
+            path.display(),
+            e
+        ))),
+    }
+}
+
+/// There is no mode word to read on Windows without an ACL walk std cannot do; the gate is
+/// unix-shaped by design, and this arm exists so the *same* enforcement point runs everywhere.
+#[cfg(not(unix))]
+fn script_mode(_path: &std::path::Path) -> Result<Option<u32>> {
+    Ok(None)
+}
+
 #[cfg(test)]
 mod exec_guard_tests {
     use super::*;
@@ -594,5 +708,93 @@ mod exec_guard_tests {
             msg.contains("departed.sh"),
             "the error names the file: {msg}"
         );
+    }
+
+    use crate::app::apply::execs::judge_script_perms;
+    use crate::config::ExecTrust;
+
+    /// The table of mode bits × trust levels. Every platform runs this, because the judge is
+    /// pure; only the file-reading half is unix-gated.
+    #[test]
+    fn the_trust_levels_judge_the_same_bits_differently() {
+        use PermVerdict::*;
+        let plain = 0o100_600;
+        for mode in [plain, 0o100_400, 0o100_700] {
+            for trust in [
+                ExecTrust::OwnerOnly,
+                ExecTrust::NotWorldWritable,
+                ExecTrust::Warn,
+            ] {
+                assert!(
+                    matches!(judge_script_perms(mode, trust), Accept),
+                    "{trust:?} must accept {mode:o}"
+                );
+            }
+        }
+        // Group write: tolerated at the default level, refused by `owner-only`, warned under
+        // `warn`.
+        assert!(matches!(
+            judge_script_perms(0o100_660, ExecTrust::OwnerOnly),
+            Refuse(_)
+        ));
+        assert!(matches!(
+            judge_script_perms(0o100_660, ExecTrust::NotWorldWritable),
+            Accept
+        ));
+        assert!(matches!(
+            judge_script_perms(0o100_660, ExecTrust::Warn),
+            Warn(_)
+        ));
+        // World write: refused everywhere but `warn`.
+        for trust in [ExecTrust::OwnerOnly, ExecTrust::NotWorldWritable] {
+            assert!(
+                matches!(judge_script_perms(0o100_666, trust), Refuse(_)),
+                "{trust:?} must refuse a world-writable script"
+            );
+        }
+        assert!(matches!(
+            judge_script_perms(0o100_666, ExecTrust::Warn),
+            Warn(_)
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_gate_reads_real_files() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let script = tmp.path().join("drop.sh");
+        std::fs::write(&script, "#!/bin/sh\ntrue\n").unwrap();
+        // The default level accepts an ordinary private checkout and refuses the dropped-in
+        // world-writable one.
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(matches!(
+            permission_verdict(&script, ExecTrust::default()).unwrap(),
+            PermVerdict::Accept
+        ));
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o666)).unwrap();
+        match permission_verdict(&script, ExecTrust::default()).unwrap() {
+            PermVerdict::Refuse(msg) => {
+                assert!(msg.contains("not-world-writable"), "{msg}");
+            }
+            other => panic!("world-write must refuse under the default, got {other:?}"),
+        }
+        // A missing file is the reader's error to give, not this gate's.
+        assert!(matches!(
+            permission_verdict(&tmp.path().join("nope.sh"), ExecTrust::default()).unwrap(),
+            PermVerdict::Accept
+        ));
+    }
+
+    #[test]
+    fn the_exec_table_parses_and_defaults_to_not_world_writable() {
+        let c: crate::config::Config = toml::from_str("[exec]\ntrust = \"owner-only\"\n").unwrap();
+        assert_eq!(c.exec.trust, ExecTrust::OwnerOnly);
+        let c: crate::config::Config = toml::from_str("").unwrap();
+        assert_eq!(c.exec.trust, ExecTrust::NotWorldWritable);
+        let err = toml::from_str::<crate::config::Config>("[exec]\ntrust = \"yolo\"\n")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("yolo"), "{err}");
     }
 }
