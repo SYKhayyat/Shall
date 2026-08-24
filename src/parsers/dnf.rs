@@ -64,52 +64,70 @@ fn strip_rpm_arch(name: &str) -> &str {
 /// could not read one.
 pub fn parse_zypper_search(output: &str) -> ParseResult {
     let clean = sanitize(output);
-    let candidates: Vec<&str> = clean
-        .lines()
-        // The rule under the header is skipped where it appears, rather than used as the
-        // gate that starts reading. `skip_while(|l| !l.contains("---"))` consumed the WHOLE
-        // output when zypper printed no rule — and this parser is wired as zypper's
-        // installed lister as well as its search, so "no rule" meant "nothing is installed",
-        // which is not a bad search result but a mass-removal input.
-        .filter(|l| {
-            !l.trim_start().starts_with("---")
-                && !l.trim().is_empty()
-                && !crate::parsers::is_prose_line(l)
-        })
-        .collect();
-    let found = candidates
-        .iter()
-        .filter_map(|line| {
-            // Table format: S | Name | Summary | Type
-            let parts: Vec<&str> = line.split('|').collect();
-            if parts.len() >= 3 {
-                let status = parts[0].trim();
-                let name = parts[1].trim();
-                let summary = parts[2].trim();
-                // The header row names its own columns; without the rule to skip past, it
-                // would otherwise become a package called `Name`.
-                if name.is_empty() || name == "Name" {
-                    return None;
-                }
+    let mut found: Vec<Package> = Vec::new();
+    let mut candidates: Vec<&str> = Vec::new();
+    // **The header is known by its position, not its words.** It is the table line directly
+    // ABOVE the dashed rule zypper draws under itself — in ANY language. The old guard
+    // dropped a row whose name cell read `Name`, so on a localized box (`S | Nom | Résumé …`)
+    // the header sailed through as a phantom installed package named `Nom`, minted fresh on
+    // every run.
+    let lines: Vec<&str> = clean.lines().collect();
+    let next_meaningful_is_rule = |i: usize| -> bool {
+        lines[i + 1..]
+            .iter()
+            .find(|l| !l.trim().is_empty())
+            .is_some_and(|l| l.trim_start().starts_with("---"))
+    };
+    for (i, raw) in lines.iter().enumerate() {
+        let trimmed = raw.trim_start();
+        if trimmed.starts_with("---") || trimmed.trim().is_empty() {
+            continue;
+        }
+        if crate::parsers::is_prose_line(raw) {
+            continue;
+        }
+        // The header: whatever sits directly above the rule. The lexical guard below stays
+        // for the rule-less shape, where position cannot answer.
+        let is_header =
+            next_meaningful_is_rule(i) || matches!(parts_name(raw), Some(n) if n == "Name");
+        if is_header {
+            continue;
+        }
+        candidates.push(raw);
+        // Table format: S | Name | Summary | Type
+        let Some(name) = parts_name(raw) else {
+            continue;
+        };
+        let parts: Vec<&str> = raw.split('|').collect();
+        if parts.len() < 3 || name.is_empty() {
+            continue;
+        }
+        let status = parts[0].trim();
+        let summary = parts[2].trim();
 
-                let mut p = Package::new(name, "zypper");
-                p.properties
-                    .insert("summary".to_string(), summary.to_string());
-                p.properties
-                    .insert("status_raw".to_string(), status.to_string());
+        let mut p = Package::new(name, "zypper");
+        p.properties
+            .insert("summary".to_string(), summary.to_string());
+        p.properties
+            .insert("status_raw".to_string(), status.to_string());
 
-                // If status contains 'i', it's already installed
-                if status.contains('i') {
-                    p.properties.insert("installed".to_string(), "true".into());
-                }
+        // If status contains 'i', it's already installed
+        if status.contains('i') {
+            p.properties.insert("installed".to_string(), "true".into());
+        }
 
-                Some(p)
-            } else {
-                None
-            }
-        })
-        .collect();
+        found.push(p);
+    }
     or_unrecognised("zypper", found, &candidates)
+}
+
+/// The cell between the first and second `|` of a zypper table row, trimmed.
+fn parts_name(line: &str) -> Option<&str> {
+    let parts: Vec<&str> = line.split('|').collect();
+    if parts.len() < 2 {
+        return None;
+    }
+    Some(parts[1].trim())
 }
 
 #[cfg(test)]

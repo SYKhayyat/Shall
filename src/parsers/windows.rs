@@ -99,6 +99,63 @@ fn parse_winget_table(output: &str, columns_wanted: &[&str]) -> Option<Vec<Vec<S
 /// printed a usage message, or printed a shape this no longer recognises, arrived at the caller
 /// as a machine with no packages installed. `Some(vec![])` is the real empty table: the header
 /// was found and no rows followed it.
+/// Terminal cells a char occupies. winget aligns its tables by display width, and a CJK
+/// display name takes two cells per char — so column edges located by `chars().count()` land
+/// mid-name for any localized row, and the Id/Version sliced out of it are fragments no
+/// declaration can match. The ranges below are the standard wcwidth wide/fullwidth set; the
+/// rest is one cell, controls zero.
+fn char_cells(c: char) -> usize {
+    let cp = c as u32;
+    const WIDE: &[(u32, u32)] = &[
+        (0x1100, 0x115F),
+        (0x2E80, 0x303E),
+        (0x3041, 0x33FF),
+        (0x3400, 0x4DBF),
+        (0x4E00, 0x9FFF),
+        (0xA000, 0xA4CF),
+        (0xAC00, 0xD7A3),
+        (0xF900, 0xFAFF),
+        (0xFE10, 0xFE19),
+        (0xFE30, 0xFE4F),
+        (0xFF00, 0xFF60),
+        (0xFFE0, 0xFFE6),
+        (0x1F300, 0x1F64F),
+        (0x1F900, 0x1F9FF),
+        (0x20000, 0x3FFFD),
+    ];
+    if c.is_control() {
+        0
+    } else if WIDE.iter().any(|&(a, b)| cp >= a && cp <= b) {
+        2
+    } else {
+        1
+    }
+}
+
+fn str_cells(s: &str) -> usize {
+    s.chars().map(char_cells).sum()
+}
+
+/// The chars of `line` whose cell ranges fall in `[start, end)` — slicing by the columns the
+/// header's *display* geometry defines, not by character count.
+fn slice_by_cells(line: &str, start: usize, end: Option<usize>) -> String {
+    let mut out = String::new();
+    let mut cell = 0usize;
+    for c in line.chars() {
+        let w = char_cells(c);
+        if cell + w > start && (end.is_none_or(|e| cell < e)) {
+            out.push(c);
+        }
+        cell += w;
+        if let Some(e) = end {
+            if cell >= e && !out.is_empty() {
+                break;
+            }
+        }
+    }
+    out.trim().to_string()
+}
+
 fn slice_fixed_table(
     output: &str,
     known: &[&str],
@@ -113,14 +170,11 @@ fn slice_fixed_table(
         .position(|l| header_matches(strip_cr_spinner(l)))?;
 
     let header = strip_cr_spinner(lines[hdr_idx]);
-    // Locate every known column by its char-offset start in the cleaned header.
+    // Locate every known column by its CELL offset in the cleaned header — the geometry the
+    // manager aligned by, which for a CJK name is not the char count.
     let mut cols: Vec<(usize, &str)> = known
         .iter()
-        .filter_map(|name| {
-            header
-                .find(name)
-                .map(|b| (header[..b].chars().count(), *name))
-        })
+        .filter_map(|name| header.find(name).map(|b| (str_cells(&header[..b]), *name)))
         .collect();
     cols.sort_by_key(|c| c.0);
 
@@ -135,19 +189,12 @@ fn slice_fixed_table(
         if line.trim().is_empty() || is_separator(line) {
             continue;
         }
-        let chars: Vec<char> = strip_cr_spinner(line).chars().collect();
+        let text = strip_cr_spinner(line);
         let values: Vec<String> = columns_wanted
             .iter()
             .map(|want| match col_range(want) {
-                Some((start, end)) if start < chars.len() => {
-                    let e = end.unwrap_or(chars.len()).min(chars.len()).max(start);
-                    chars[start..e]
-                        .iter()
-                        .collect::<String>()
-                        .trim()
-                        .to_string()
-                }
-                _ => String::new(),
+                Some((start, end)) => slice_by_cells(text, start, end),
+                None => String::new(),
             })
             .collect();
         if values.iter().all(|v| v.is_empty()) {
@@ -162,6 +209,7 @@ fn slice_fixed_table(
 /// The Id is the canonical identity used by `winget install`, so prefer it (falling
 /// back to the display Name for rows that lack an Id).
 fn parse_winget_list(output: &str) -> Option<Vec<Package>> {
+    let mut seen = std::collections::HashSet::new();
     Some(
         parse_winget_table(output, &["Id", "Name", "Version"])?
             .into_iter()
@@ -176,6 +224,11 @@ fn parse_winget_list(output: &str) -> Option<Vec<Package>> {
                 }
                 Some(p)
             })
+            // One Id per row of the answer: winget lists a runtime once per architecture
+            // (`Microsoft.WindowsAppRuntime.1.8` arrived four times on the host the export
+            // dedup was measured on), and a manifest cannot hold one declaration four
+            // times. Same policy as `parse_winget_export`, which is where it was learned.
+            .filter(|p| seen.insert(p.name.clone()))
             .collect(),
     )
 }

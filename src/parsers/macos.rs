@@ -14,12 +14,27 @@ pub fn parse_mas_list(output: &str) -> ParseResult {
             let (id_name, ver_part) = line.rsplit_once(' ')?;
             let (id, name) = id_name.split_once(' ')?;
 
-            // The bracket rule is `parsers::utils`'s, not a second copy of it. Falling back to
-            // the bare token keeps a mas that stops printing parentheses reporting a slightly
-            // wrong version rather than no package at all — a missing package is a removal.
-            let version = crate::parsers::utils::extract_version_bracketed(ver_part)
-                .unwrap_or_else(|| ver_part.trim().to_string());
-            let mut p = Package::with_version(id.trim(), &version, "mas");
+            // The bracket rule is `parsers::utils`'s, not a second copy of it.
+            let bracketed = crate::parsers::utils::extract_version_bracketed(ver_part);
+            // **The no-parentheses fallback records only what looks like a version.** The
+            // bare tail used to be taken whole, so `497799835 Xcode Free` reported the
+            // version `Free` — and a wrong version is permanent pin-mismatch drift, every
+            // sync after it reinstalling to chase a number nobody printed. A tail that does
+            // not open with a digit is part of the name; the package reports version-less
+            // instead of wrong.
+            let version = match bracketed {
+                Some(v) => Some(v),
+                None => ver_part
+                    .trim()
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_digit())
+                    .then(|| ver_part.trim().to_string()),
+            };
+            let mut p = match &version {
+                Some(v) => Package::with_version(id.trim(), v, "mas"),
+                None => Package::new(id.trim(), "mas"),
+            };
 
             // Store the human-readable name in properties as 'mas' packages
             // are primary identified by their numeric ID.

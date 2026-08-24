@@ -19,7 +19,14 @@ use serde_json::Value;
 /// rest fall through to the line-counting rule below.
 pub fn parse_installed(backend: &str, output: &str) -> ParseResult {
     let clean = sanitize(output);
-    if clean.is_empty() {
+    // **Who owns the empty answer, decided by backend rather than for all nine.** The JSON
+    // readers enforce "empty is an error" through `or_unrecognised_json` — a crashed manager
+    // that answered with zero bytes is not a machine with nothing installed — so empty input
+    // reaches them and is refused there. The line readers keep the early answer: bun, cargo,
+    // gem are legitimately silent on a machine with nothing installed, and yarn's
+    // chrome means it never is.
+    let json_style = matches!(backend, "npm" | "pnpm" | "pip" | "pipx" | "composer");
+    if clean.is_empty() && !json_style {
         return Ok(vec![]);
     }
 
@@ -29,7 +36,20 @@ pub fn parse_installed(backend: &str, output: &str) -> ParseResult {
         // rows), NOT npm's `--json` object — routing it through the JSON parser
         // silently returned nothing, which broke list AND made `info`/`remove`
         // no-ops (remove is gated on `info`), leaving stale manifest entries.
-        "bun" => parse_bun_list(&clean),
+        "bun" => {
+            // The header carries the truth about zero: `/root/.bun/… node_modules (0)` with
+            // no rows under it is an EMPTY machine, and without reading that count the
+            // candidate list (the header itself) outnumbers zero rows and `or_unrecognised`
+            // refuses — every empty bun machine read as unreadable instead of empty.
+            if bun_header_count_is_zero(&clean) {
+                return Ok(vec![]);
+            }
+            return or_unrecognised(
+                backend,
+                parse_bun_list(&clean),
+                &crate::parsers::data_lines(&clean),
+            );
+        }
         "pip" => return parse_pip_json(&clean),
         "pipx" => return parse_pipx_json(&clean),
         "cargo" => parse_cargo_list(&clean),
@@ -56,7 +76,6 @@ pub fn parse_installed(backend: &str, output: &str) -> ParseResult {
         }
         "gem" => parse_gem_list(&clean),
         "composer" => return parse_composer_json(&clean),
-        "go" => parse_go_list(&clean),
         other => {
             return Err(Unrecognised {
                 backend: other.to_string(),
@@ -319,6 +338,22 @@ fn parse_yarn_list(output: &str) -> Vec<Package> {
 /// A row indented past the first column is a dependency of the one above it — `bun pm ls -g
 /// --all` prints four levels — and it is not globally installed. One flag away from forty
 /// invented packages, which is `pixi global list`'s `exposes:` row in another tool.
+/// The `(N)` at the end of bun's header path line, when the line is there at all.
+///
+/// `/root/.bun/install/global node_modules (2)` — npm-style count of what the listing holds.
+fn bun_header_count_is_zero(output: &str) -> bool {
+    output
+        .lines()
+        .filter_map(|l| l.trim_end().rsplit_once('('))
+        .any(|(before, tail)| {
+            before.trim_end().ends_with("node_modules")
+                && match tail.strip_suffix(')') {
+                    Some(n) => n.trim().parse::<u64>().ok() == Some(0),
+                    None => false,
+                }
+        })
+}
+
 fn parse_bun_list(output: &str) -> Vec<Package> {
     output
         .lines()
@@ -374,9 +409,14 @@ fn parse_composer_json(output: &str) -> ParseResult {
     let mut res = vec![];
     for pkg in installed.into_iter().flatten() {
         let name = pkg.get("name").and_then(|n| n.as_str()).unwrap_or("");
-        let version = pkg.get("version").and_then(|v| v.as_str()).unwrap_or("");
-        if !name.is_empty() {
-            res.push(Package::with_version(name, version, "composer"));
+        if name.is_empty() {
+            continue;
+        }
+        // A missing version is version-less, never `Some("")` — which poisons plan
+        // comparison (apt.rs documents the shape).
+        match pkg.get("version").and_then(|v| v.as_str()) {
+            Some(ver) => res.push(Package::with_version(name, ver, "composer")),
+            None => res.push(Package::new(name, "composer")),
         }
     }
     crate::parsers::or_unrecognised_json(
@@ -386,15 +426,6 @@ fn parse_composer_json(output: &str) -> ParseResult {
         "JSON with no `installed` array",
         output,
     )
-}
-
-/// Parses simple binary names from Go-related outputs.
-fn parse_go_list(output: &str) -> Vec<Package> {
-    output
-        .lines()
-        .filter(|l| !l.is_empty())
-        .map(|l| Package::new(l.trim(), "go"))
-        .collect()
 }
 
 /// Specialized parser for `cargo search`.

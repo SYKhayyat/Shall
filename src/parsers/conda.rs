@@ -62,8 +62,12 @@ pub fn parse_conda_list(output: &str) -> ParseResult {
         .flatten()
         .filter_map(|p| {
             let name = p.get("name")?.as_str()?;
-            let ver = p.get("version").and_then(|v| v.as_str()).unwrap_or("");
-            Some(Package::with_version(name, ver, "conda"))
+            // A missing version key is not an empty-string version: `Some("")` poisons plan
+            // comparison (apt.rs documents the shape). Version-less is the honest reading.
+            match p.get("version").and_then(|v| v.as_str()) {
+                Some(ver) => Some(Package::with_version(name, ver, "conda")),
+                None => Some(Package::new(name, "conda")),
+            }
         })
         .collect();
     or_unrecognised_json(
@@ -91,11 +95,15 @@ pub fn parse_conda_search(output: &str) -> Vec<Package> {
     obj.iter()
         .map(|(name, builds)| {
             let newest = builds.as_array().and_then(|a| a.last());
-            let ver = newest
+            // Same rule as the list reader: no version found is version-less, never
+            // `Some("")` — which poisons plan comparison (apt.rs documents the shape).
+            match newest
                 .and_then(|b| b.get("version"))
                 .and_then(|v| v.as_str())
-                .unwrap_or("");
-            Package::with_version(name, ver, "conda")
+            {
+                Some(ver) => Package::with_version(name, ver, "conda"),
+                None => Package::new(name, "conda"),
+            }
         })
         .collect()
 }

@@ -28,8 +28,13 @@ fn parse_tool_table(output: &str) -> ParseResult {
         .filter_map(|trimmed| {
             let mut cols = trimmed.split_whitespace();
             let id = cols.next()?;
-            let version = cols.next().unwrap_or("");
-            Some(Package::with_version(id, version, "dotnet"))
+            // No version column is not an empty-string version: `Some("")` poisons plan
+            // comparison (apt.rs documents the shape), while a version-less package is the
+            // honest answer to a row that has none.
+            match cols.next() {
+                Some(ver) => Some(Package::with_version(id, ver, "dotnet")),
+                None => Some(Package::new(id, "dotnet")),
+            }
         })
         .collect();
     or_unrecognised("dotnet", found, &candidates)

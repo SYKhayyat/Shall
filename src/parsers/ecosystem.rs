@@ -10,19 +10,33 @@
 // `or_unrecognised` is where the two are told apart. See `parsers::Unrecognised`.
 
 use crate::core::Package;
-use crate::parsers::{or_unrecognised, ParseResult};
+use crate::parsers::{or_unrecognised, ParseResult, Unrecognised};
 use crate::utils::text::sanitize;
 
 /// Header tokens that commonly lead a table's first column and must not be mistaken for a
 /// package name.
+///
+/// **An explicit list, not an all-caps guess.** The old second arm deleted ANY all-caps word
+/// of two or more letters, and Hackage ships packages literally named `HTTP`, `GLUT` and
+/// `ALUT` — every listing dropped them as headers and every sync reinstalled them for ever.
+/// Unknown localized headers are the row-level check in [`is_noise_line`]'s doc, which sees
+/// the whole line before deciding.
 fn is_header_token(tok: &str) -> bool {
     matches!(
         tok,
-        "NAME" | "Name" | "PLUGIN" | "Plugin" | "Package" | "PACKAGE" | "Repository"
-            | "Bucket" | "Source" | "Version" | "VERSION" | "Global"
-    ) ||
-    // All-caps alphabetic word of length >= 2 (e.g. "STATUS") — table headers are usually caps.
-    (tok.len() >= 2 && tok.chars().all(|c| c.is_ascii_uppercase()))
+        "NAME"
+            | "Name"
+            | "PLUGIN"
+            | "Plugin"
+            | "Package"
+            | "PACKAGE"
+            | "Repository"
+            | "Bucket"
+            | "Source"
+            | "Version"
+            | "VERSION"
+            | "Global"
+    )
 }
 
 /// True for a decorative / non-data line: empty, a tree connector, a dashed separator, a
@@ -34,10 +48,33 @@ fn is_header_token(tok: &str) -> bool {
 /// `helm plugin list` on a cluster with no plugins — which prints exactly
 /// `NAME\tVERSION\tDESCRIPTION` and nothing else — was refused as unreadable rather than
 /// answered as empty, and every verb that needs the installed set refused with it.
+///
+/// **The row-level header test is structural, not lexical.** A line whose first token is
+/// ALL-CAPS reads as a header only when no other column opens with a digit: header rows carry
+/// column labels (`NAME VERSION`), data rows carry versions (`HTTP 2000.0.8`, `GLUT 2.7.0`),
+/// and a version starts with a digit in every ecosystem this family reads. That one shape test
+/// separates the two without knowing any manager's language.
 fn is_noise_line(line: &str) -> bool {
     let t = line.trim();
+    let mut toks = t.split_whitespace();
+    let caps_header = match (toks.next(), toks.next()) {
+        (Some(first), Some(second))
+            if first.len() >= 2 && first.chars().all(|c| c.is_ascii_uppercase()) =>
+        {
+            // No digit-leading column anywhere in the rest of the row → labels, not data.
+            !t.split_whitespace()
+                .skip(1)
+                .any(|c| c.starts_with(|ch: char| ch.is_ascii_digit()))
+                && second
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_uppercase())
+        }
+        _ => false,
+    };
     t.is_empty()
         || t.split_whitespace().next().is_some_and(is_header_token)
+        || caps_header
         || t.starts_with('#')
         || t.chars()
             .all(|c| matches!(c, '-' | '=' | '─' | '│' | '├' | '└' | ' '))
@@ -137,7 +174,10 @@ pub fn ws_name_version(output: &str, backend: &str) -> ParseResult {
 /// with a digit is therefore not a version, and the line it is on is not a package.
 pub fn cabal_list(output: &str, backend: &str) -> ParseResult {
     let clean = sanitize(output);
-    let candidates: Vec<&str> = clean.lines().filter(|l| !is_noise_line(l)).collect();
+    let candidates: Vec<&str> = clean
+        .lines()
+        .filter(|l| !is_noise_line(l) && !is_cabal_self_banner(l))
+        .collect();
     let found = candidates
         .iter()
         .filter_map(|l| {
@@ -152,6 +192,26 @@ pub fn cabal_list(output: &str, backend: &str) -> ParseResult {
         })
         .collect();
     or_unrecognised(backend, found, &candidates)
+}
+
+/// The one line of chatter the digit-version rule cannot catch: cabal announcing itself.
+///
+/// First run with no config, cabal prints its own name and version — `Cabal 3.10.3.0` — in
+/// precisely the `name version` shape of a listing row, and PVP versions are dot-separated
+/// integers, so the shape test that dismisses its other three chatter lines accepts this one
+/// whole. It is the tool naming itself: name matches the program, the remainder is nothing but
+/// the version, and there is no third column — an installed-package row never ends at the
+/// version.
+fn is_cabal_self_banner(line: &str) -> bool {
+    let mut parts = line.split_whitespace();
+    match (parts.next(), parts.next(), parts.next()) {
+        (Some(name), Some(ver), None) => {
+            name.eq_ignore_ascii_case("cabal")
+                && ver.chars().next().is_some_and(|c| c.is_ascii_digit())
+                && ver.chars().all(|c| c.is_ascii_digit() || c == '.')
+        }
+        _ => false,
+    }
 }
 
 /// `uv tool list`, which is one `name vVERSION` line per tool followed by one `- executable`
@@ -453,6 +513,18 @@ pub fn emerge_search(output: &str, backend: &str) -> Vec<Package> {
 /// this parser has ever had is *junk*, not emptiness — `exposes: rg` reported as a tool — and
 /// there are captured fixtures for that. Forcing a made-up emptiness rule on it would redden a
 /// machine with pixi installed and nothing in it, which is the one case its banner covers.
+/// **Every unindented line must resolve to one of three things**: a package, pixi's own
+/// banner (a multi-word left side before the colon, which is what
+/// `Global environments as specified in 'C:\…'` is), or noise it already names. The failure mode
+/// this parser has ever had is *junk*, not emptiness — `exposes: rg` reported as a tool — and
+/// there are captured fixtures for that. Forcing a made-up emptiness rule on it would redden a
+/// machine with pixi installed and nothing in it, which is the one case its banner covers.
+///
+/// **And a line that resolves to NONE of those is an unread answer, said out loud.** This was
+/// the one reader in the family ending `Ok(found)` unconditionally — correct today, and
+/// structurally incapable of noticing the day pixi changes its format, because every byte of
+/// junk silently became nothing. The three-way classification makes the fourth case visible:
+/// junk is now a refusal naming its sample, not an empty listing wearing one.
 pub fn pixi_list(output: &str, backend: &str) -> ParseResult {
     let clean = sanitize(output);
     // Only the unindented rows are packages; the indented ones are an environment's properties.
@@ -460,44 +532,67 @@ pub fn pixi_list(output: &str, backend: &str) -> ParseResult {
     // The noise check belongs *after* the tree connectors are trimmed: a row reads
     // `└── ripgrep: 15.2.0`, so testing the raw line would drop every package pixi printed and
     // leave only the banner.
-    let found = clean
+    let mut found = Vec::new();
+    let mut unresolved: Option<&str> = None;
+    for l in clean
         .lines()
         .filter(|l| !l.starts_with(char::is_whitespace))
-        .filter_map(|l| {
-            let t = l
-                .trim()
-                .trim_start_matches(|c: char| {
-                    c.is_whitespace() || matches!(c, '├' | '└' | '│' | '─' | '-' | '*')
-                })
-                .trim();
-            if t.is_empty() || is_noise_line(t) {
-                return None;
+    {
+        let t = l
+            .trim()
+            .trim_start_matches(|c: char| {
+                c.is_whitespace() || matches!(c, '├' | '└' | '│' | '─' | '-' | '*')
+            })
+            .trim();
+        if t.is_empty() || is_noise_line(t) {
+            continue;
+        }
+        if let Some((left, right)) = t.split_once(':') {
+            let name = left.trim();
+            // A real package name is a single token; a multi-word left side is a banner
+            // like "Global environments at /path:" and must be skipped.
+            if name.is_empty() || name.contains(char::is_whitespace) || is_header_token(name) {
+                continue;
             }
-            if let Some((name, ver)) = t.split_once(':') {
-                let name = name.trim();
-                let ver = ver.trim();
-                // A real package name is a single token; a multi-word left side is a banner
-                // like "Global environments at /path:" and must be skipped.
-                if name.is_empty() || name.contains(char::is_whitespace) || is_header_token(name) {
-                    return None;
-                }
-                return if ver.is_empty() {
-                    Some(Package::new(name, backend))
-                } else {
-                    Some(Package::with_version(name, ver, backend))
-                };
+            let ver = right.trim();
+            if ver.is_empty() {
+                found.push(Package::new(name, backend));
+            } else {
+                found.push(Package::with_version(name, ver, backend));
             }
-            let mut parts = t.split_whitespace();
-            let name = parts.next()?;
-            if is_header_token(name) {
-                return None;
+            continue;
+        }
+        let mut parts = t.split_whitespace();
+        match (parts.next(), parts.next(), parts.next()) {
+            // One bare token: a package this pixi prints without a version.
+            (Some(name), None, _) if !is_header_token(name) => {
+                found.push(Package::new(name, backend));
             }
-            match parts.next() {
-                Some(ver) => Some(Package::with_version(name, ver, backend)),
-                None => Some(Package::new(name, backend)),
+            // `name 3.11.0` — the older shape, whose second column is a version.
+            (Some(name), Some(ver), rest)
+                if !is_header_token(name)
+                    && ver.starts_with(|c: char| c.is_ascii_digit())
+                    && rest.is_none() =>
+            {
+                found.push(Package::with_version(name, ver, backend));
             }
-        })
-        .collect();
+            _ => {
+                // Not a package, not a banner, not noise: the fourth thing this parser used
+                // to swallow. Said, once, with the line that said it.
+                unresolved.get_or_insert(t);
+            }
+        }
+    }
+    if let Some(sample) = unresolved {
+        return Err(Unrecognised {
+            backend: backend.to_string(),
+            data_lines: clean
+                .lines()
+                .filter(|l| !l.starts_with(char::is_whitespace) && !l.trim().is_empty())
+                .count(),
+            sample: sample.to_string(),
+        });
+    }
     Ok(found)
 }
 
@@ -548,6 +643,11 @@ mod tests {
 
     /// Real bytes, and the whole reason `cabal_list` exists: a container's first `cabal list`
     /// writes three lines of configuration chatter to **stdout** ahead of the packages.
+    ///
+    /// The fourth chatter line is cabal naming itself — `Cabal 3.10.3.0`, in exactly the
+    /// `name version` shape of a data row. This test once asserted the phantom as package
+    /// #1, which made `adopt` write it and `purge` offer to remove it on every fresh
+    /// container, forever.
     #[test]
     fn cabal_reads_past_the_chatter_of_a_first_run() {
         let out = "Config file path source is default config file.\n\
@@ -556,9 +656,26 @@ mod tests {
                    Cabal 3.10.3.0\n\
                    array 0.5.8.0\n";
         let pkgs = cabal_list(out, "cabal").expect("this is what haskell:9.6 printed");
-        assert_eq!(pkgs.len(), 2);
-        assert_eq!(pkgs[0].name, "Cabal");
-        assert_eq!(pkgs[1].version.as_deref(), Some("0.5.8.0"));
+        assert_eq!(
+            pkgs.len(),
+            1,
+            "the banner is the tool naming itself, not a package"
+        );
+        assert_eq!(pkgs[0].name, "array");
+        assert_eq!(pkgs[0].version.as_deref(), Some("0.5.8.0"));
+    }
+
+    /// The all-caps rule must not eat packages that are literally named in caps: Hackage
+    /// ships `HTTP`, `GLUT` and `ALUT`, and every one used to vanish from the listing —
+    /// permanent reinstall churn.
+    #[test]
+    fn hackage_packages_named_in_caps_are_data_not_headers() {
+        let out = "HTTP 4000.3.16\n\
+                   GLUT 2.7.0.15\n\
+                   array 0.5.8.0\n";
+        let pkgs = cabal_list(out, "cabal").expect("caps names are ordinary rows");
+        let names: Vec<&str> = pkgs.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, vec!["HTTP", "GLUT", "array"]);
     }
 
     /// The executables a uv tool exposes are indented under it and are not tools.

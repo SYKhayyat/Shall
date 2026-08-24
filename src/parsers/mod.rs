@@ -1,4 +1,4 @@
-pub mod apt;
+﻿pub mod apt;
 pub mod bsd;
 pub mod common;
 pub mod conda;
@@ -20,18 +20,18 @@ use crate::core::Package;
 /// **This is not the same fact as an empty list, and the planner acts on the two in opposite
 /// directions.** `Ok(vec![])` is the manager reporting an empty machine: every declaration
 /// becomes an install and every drift removal is silently dropped. `Err` is the manager
-/// answering in a shape this parser does not know — which is what a format change looks like
-/// from in here — and the safe reading of that is *stop*, not *the machine is bare*.
+/// answering in a shape this parser does not know â€” which is what a format change looks like
+/// from in here â€” and the safe reading of that is *stop*, not *the machine is bare*.
 ///
 /// `4d4a890` fixed this chain at four layers and named the fifth in its own diagnosis:
-/// *"`Ok("")` → a parser finding nothing → `list_installed` answering `Ok(vec![])`. Nothing in
+/// *"`Ok("")` â†’ a parser finding nothing â†’ `list_installed` answering `Ok(vec![])`. Nothing in
 /// the chain believed anything had failed."* The parser was the link that could not be fixed
 /// without changing a type. This is the type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Unrecognised {
     /// The manager whose output this was.
     pub backend: String,
-    /// How many lines carried something the parser had treated as a candidate — not blank, not
+    /// How many lines carried something the parser had treated as a candidate â€” not blank, not
     /// a separator, not a header it knows. This count is what makes the answer an error rather
     /// than an empty machine, and every parser already computed the set in order to skip it.
     pub data_lines: usize,
@@ -59,8 +59,8 @@ pub type ParseResult = std::result::Result<Vec<Package>, Unrecognised>;
 /// A line of the manager's *prose* rather than of its data.
 ///
 /// Two shapes, and both matter to the judgement above rather than to the packages. A heading
-/// that introduces the list — *"The following ports are currently installed:"* — and a manager
-/// saying it has none — *"No ports are installed."*, *"Nothing to list."* A package listing is
+/// that introduces the list â€” *"The following ports are currently installed:"* â€” and a manager
+/// saying it has none â€” *"No ports are installed."*, *"Nothing to list."* A package listing is
 /// tokens; it does not end in a colon and it is not a sentence.
 ///
 /// Getting this wrong is expensive in the direction nobody would notice: without it, every Mac
@@ -79,7 +79,7 @@ pub fn is_prose_line(line: &str) -> bool {
         return true;
     }
     // `choco list` ends with a count, and on a machine with nothing installed that count is
-    // `0 packages installed.` — a sentence, and the correct answer. A package line never opens
+    // `0 packages installed.` â€” a sentence, and the correct answer. A package line never opens
     // with a bare number, because a number is not a name.
     t.split_whitespace()
         .next()
@@ -92,18 +92,42 @@ pub fn is_prose_line(line: &str) -> bool {
 /// composer prints `Changed current directory to /root/.composer` ahead of every global
 /// command whenever a global config dir exists, which is every machine that has ever run
 /// `composer global`. Parsed from byte zero that is a syntax error, and a reader that answers
-/// `unwrap_or_default()` to a syntax error reports an empty machine — install everything, own
+/// `unwrap_or_default()` to a syntax error reports an empty machine â€” install everything, own
 /// nothing. The same shape reaches pip behind a proxy warning, yarn behind node's deprecation
 /// notice, and conda behind its own.
 ///
 /// Reading stops at the end of the first value, so a manager that prints a summary line *after*
 /// its document is read the same way: trailing bytes are not the reader's business.
+///
+/// **First value, unless it is merely a notice.** Some managers print a small JSON object
+/// ahead of their answer â€” `{"warning": â€¦}`, `{"message": â€¦}` â€” and answering with the FIRST
+/// value handed the reader a notice to search for packages in, which is one refusal per run
+/// on exactly the machines that had something to say. So the stream is read value by value
+/// and the first PAYLOAD-shaped one wins: an array, or an object that carries more than one
+/// key or nests anything. A lone `{}` or a bare scalar still answers when there is nothing
+/// else â€” the fallback is the old behaviour, not silence.
 pub fn json_document(output: &str) -> Option<serde_json::Value> {
     fn parse_from(text: &str) -> Option<serde_json::Value> {
-        serde_json::Deserializer::from_str(text)
-            .into_iter::<serde_json::Value>()
-            .next()?
-            .ok()
+        let mut first: Option<serde_json::Value> = None;
+        for value in serde_json::Deserializer::from_str(text).into_iter::<serde_json::Value>() {
+            let Ok(value) = value else {
+                break;
+            };
+            let payload = match &value {
+                serde_json::Value::Array(_) => true,
+                serde_json::Value::Object(map) => {
+                    map.len() > 1 || map.values().any(|v| v.is_array() || v.is_object())
+                }
+                _ => false,
+            };
+            if payload {
+                return Some(value);
+            }
+            if first.is_none() {
+                first = Some(value);
+            }
+        }
+        first
     }
     // The first bracket byte, which is where the document starts on every real banner seen so
     // far. Only if that fails does the first bracket-opening *line* get a turn: a later bracket
@@ -127,7 +151,7 @@ pub fn json_document(output: &str) -> Option<serde_json::Value> {
     None
 }
 
-/// The lines of a manager's output that could carry a package — the default candidate set.
+/// The lines of a manager's output that could carry a package â€” the default candidate set.
 ///
 /// Blank lines and the manager's own prose are excluded, because neither is evidence that
 /// anything went unread.
@@ -148,7 +172,7 @@ pub fn data_lines(clean: &str) -> Vec<&str> {
 /// prints only a header when it has nothing has told the truth, and a parser that called that
 /// drift would refuse to run on a clean box.
 ///
-/// **This is for text listings. A `--json` reader must use [`or_unrecognised_json`]** — counting
+/// **This is for text listings. A `--json` reader must use [`or_unrecognised_json`]** â€” counting
 /// lines of a structured answer asks the wrong question, and the arm that used to paper over
 /// that here made the answer *unconditionally* `Ok` for anything that parsed as JSON, which
 /// disabled the check for the five backends that reached it.
@@ -166,14 +190,14 @@ pub fn or_unrecognised(backend: &str, found: Vec<Package>, candidates: &[&str]) 
 /// The same judgement for a structured answer, where the question is the container and not the
 /// lines.
 ///
-/// `container` is how many entries the document offered this reader — `Some(n)` when the shape
+/// `container` is how many entries the document offered this reader â€” `Some(n)` when the shape
 /// was found, `None` when it was not there at all. The three answers it separates:
 ///
-/// - **`Some(0)`** — the manager says the machine has none. `pipx list --json` on an empty box
+/// - **`Some(0)`** â€” the manager says the machine has none. `pipx list --json` on an empty box
 ///   prints `{"pipx_spec_version": "0.1", "venvs": {}}`, and that is a true and common answer.
-/// - **`Some(n)` with nothing read** — `n` entries the reader could not get a name out of. That
+/// - **`Some(n)` with nothing read** â€” `n` entries the reader could not get a name out of. That
 ///   is a schema change: npm renaming `dependencies`, pip capitalising `name`. Refuse.
-/// - **`None`** — the document did not have the shape at all, which includes not being a
+/// - **`None`** â€” the document did not have the shape at all, which includes not being a
 ///   document. Refuse. This is the case a length alone cannot express, and the one that made
 ///   `Some(0)` too tempting to write as `0`.
 ///
@@ -193,7 +217,7 @@ pub fn or_unrecognised_json(
     Err(Unrecognised {
         backend: backend.to_string(),
         // A shape that was never found has no entry count, so fall back to the size of the
-        // answer — a refusal that says "0 lines" about a screenful of output reads as a bug in
+        // answer â€” a refusal that says "0 lines" about a screenful of output reads as a bug in
         // the refusal.
         data_lines: container
             .unwrap_or_else(|| output.lines().filter(|l| !l.trim().is_empty()).count()),
@@ -207,7 +231,7 @@ pub fn or_unrecognised_json(
 pub trait OutputParser: Send + Sync {
     /// What this manager reports as installed.
     ///
-    /// Fallible on purpose — see [`Unrecognised`]. `parse_search` below is deliberately **not**,
+    /// Fallible on purpose â€” see [`Unrecognised`]. `parse_search` below is deliberately **not**,
     /// and the asymmetry is the point rather than an oversight: a search that returns nothing is
     /// a fact the user asked for and can see, while an installed listing that returns nothing is
     /// a fact the *planner* acts on, invisibly, in the direction of installing everything and
@@ -216,7 +240,7 @@ pub trait OutputParser: Send + Sync {
 
     fn parse_search(&self, output: &str) -> Vec<Package>;
 
-    /// Parses a manager's listing of packages the OS itself treats as essential — the
+    /// Parses a manager's listing of packages the OS itself treats as essential â€” the
     /// ones removal must never touch, whatever a manifest says. Default: the manager
     /// exposes no such concept, so it reports none.
     fn parse_essential(&self, _output: &str) -> Vec<String> {
@@ -224,19 +248,19 @@ pub trait OutputParser: Send + Sync {
     }
 }
 
-/// Parses a listing of bare package names, one per line — the shape every manager that
+/// Parses a listing of bare package names, one per line â€” the shape every manager that
 /// can report its *explicit* set emits (`apt-mark showmanual`, `dnf repoquery
 /// --userinstalled`, `xbps-query --list-manual-pkgs`, apk's `/etc/apk/world`). Versions
 /// are absent by design; callers needing one reconcile against `list_installed`.
 ///
 /// A trailing version constraint (`busybox>=1.36`) and a repository tag (`nodejs@edge`)
-/// are stripped — apk's world file carries both. `!name` entries are conflict markers,
+/// are stripped â€” apk's world file carries both. `!name` entries are conflict markers,
 /// not installs, and are dropped.
 ///
 /// An architecture qualifier is also stripped: `apt-mark showmanual` prints `libc6:i386`
 /// on a multi-arch host, while `dpkg-query -W -f='${Package}'` prints the bare `libc6`.
 /// Keeping the suffix would record a managed package whose name matches nothing the
-/// installed-listing ever reports — permanent phantom drift, and a removal candidate that
+/// installed-listing ever reports â€” permanent phantom drift, and a removal candidate that
 /// can never be satisfied.
 pub fn parse_bare_names(output: &str, backend: &str) -> ParseResult {
     let clean = crate::utils::text::sanitize(output);
@@ -266,7 +290,7 @@ pub struct LambdaParser {
 /// The parser for a manager that has no listing verb at all.
 ///
 /// `stack` is the one: it installs and cannot enumerate. Before this existed the row read
-/// `installed_fn: |_| vec![]` — character for character the most dangerous return in the
+/// `installed_fn: |_| vec![]` â€” character for character the most dangerous return in the
 /// registry, because *"this machine has nothing"* is a fact the planner acts on and it was
 /// standing in for *"this question cannot be asked"*. Naming the case is what stops the two
 /// sharing a spelling; no compiler can help while both are a literal empty vector.
@@ -312,7 +336,7 @@ mod tests {
 
     /// The three answers a structured reader has to keep apart, asserted as three.
     ///
-    /// The arm this replaces lived inside `or_unrecognised` and returned `Ok(found)` — empty —
+    /// The arm this replaces lived inside `or_unrecognised` and returned `Ok(found)` â€” empty â€”
     /// for anything whose output held a parseable JSON document, whether or not the reader had
     /// got a single package out of it. That is `Some(n)` and `None` both collapsed into
     /// `Some(0)`, which is the collapse the whole `LX-1` type exists to prevent.
@@ -374,7 +398,7 @@ mod tests {
     }
 
     /// A banner that itself contains a brace. The first bracket byte fails, and the retry is
-    /// anchored to a line start rather than to the next brace along — because the next brace
+    /// anchored to a line start rather than to the next brace along â€” because the next brace
     /// along is inside the document, and parsing from there would answer confidently with one
     /// sub-object of the tree.
     #[test]
@@ -402,7 +426,7 @@ mod tests {
     }
     #[test]
     fn bare_names_parses_apt_mark_showmanual() {
-        // `apt-mark showmanual` prints bare names, no versions — which is why the normal
+        // `apt-mark showmanual` prints bare names, no versions â€” which is why the normal
         // apt list parser (which splits "name version") silently returned nothing.
         let pkgs = parse_bare_names("apt\nbase-files\njq\n", "apt").expect("this fixture parses");
         let names: Vec<&str> = pkgs.iter().map(|p| p.name.as_str()).collect();

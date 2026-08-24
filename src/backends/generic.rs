@@ -1698,7 +1698,29 @@ impl Searchable for GenericSearchable {
             .run_output_maybe_silent(bin, &args, false)
             .await?
         {
-            Some(output) => Ok(Some((probe.parse)(&output))),
+            Some(output) => {
+                let parsed = (probe.parse)(&output);
+                // **A failed parse must not look like a fact.** The reader type answers in
+                // `Vec`s, so an output the reader recognised nothing in comes back
+                // indistinguishable from "nothing is outdated" — which is how a localized
+                // winget, printing a header no English label matches, silenced every upgrade
+                // on the machine for ever. A substantial answer with zero packages read from
+                // it is refused, not believed; a real empty answer is one or two lines of
+                // header and passes.
+                if parsed.is_empty() {
+                    let lines = output.lines().filter(|l| !l.trim().is_empty()).count();
+                    if lines >= 3 {
+                        return Err(Error::command_failed_permanently(format!(
+                            "`{bin} {}` printed {lines} lines that its reader recognised \
+                             nothing in — that cannot be read as \"nothing is outdated\". The \
+                             manager's output may have changed format or language; run it by \
+                             hand to see what it prints now.",
+                            args.join(" ")
+                        )));
+                    }
+                }
+                Ok(Some(parsed))
+            }
             None if probe.silence_is_none => {
                 // Asked, and the manager's documented way of saying "none". `Some(vec![])` and
                 // not `None`: `None` would send the caller round the per-package path for an
