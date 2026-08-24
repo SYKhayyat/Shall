@@ -1,4 +1,5 @@
 use super::conflict::{reconcile, Declared};
+use super::cycle::{self, Hop};
 use super::dated::dating_of;
 use super::layout::Layout;
 use super::modules::{expand, expand_args, ModuleLoader};
@@ -474,7 +475,8 @@ impl<'a> Resolver<'a> {
             // intersection of two modules' packages is not a module (V.46). So it is
             // materialised here and its result joins `direct`.
             if r.does_set_math() {
-                let stmts = self.apply_set_math(&profiles, &mut loader, &r, &asked)?;
+                let stmts =
+                    self.apply_set_math(&profiles, &mut loader, &r, &asked, &mut Vec::new())?;
                 for (_, origin, _) in &stmts {
                     out.record(&origin.file, format!("profile:{}", name));
                     self.record_module_scope(&mut out, origin);
@@ -680,12 +682,25 @@ impl<'a> Resolver<'a> {
     /// each `intersect`, then everything subtracted is removed. **Subtraction always wins** —
     /// otherwise `use gaming` after `-steam` would quietly put steam back, and which line
     /// won would depend on the order you happened to write them in.
+    /// Apply a profile's set math to what it reaches (II.4).
+    ///
+    /// Order is fixed and stated in II.4: everything is gathered first, then narrowed by
+    /// each `intersect`, then everything subtracted is removed. **Subtraction always wins** —
+    /// otherwise `use gaming` after `-steam` would quietly put steam back, and which line
+    /// won would depend on the order you happened to write them in.
+    ///
+    /// `expr_seen` is the in-flight trail of Capitalized names whose set math is currently
+    /// being applied. The `use` trail inside [`ProfileLoader::resolve`] cannot see this
+    /// recursion: a set expression re-enters through *here*, after its profile has resolved
+    /// and popped itself off that trail, so `Work = (Work | editors)` would otherwise
+    /// resolve Work for ever — which it did, until the stack gave out with no diagnostic.
     fn apply_set_math(
         &self,
         profiles: &ProfileLoader<'_>,
         loader: &mut ModuleLoader<'a>,
         r: &super::profiles::Resolved,
         asked: &Origin,
+        expr_seen: &mut Vec<(String, Origin)>,
     ) -> Result<Vec<(Statement, Origin, Gates)>> {
         let mut base: Vec<(Statement, Origin, Gates)> = Vec::new();
         for m in &r.modules {
@@ -707,15 +722,15 @@ impl<'a> Resolver<'a> {
         for (op, origin) in &r.ops {
             match op {
                 SetOp::Expr(e) => {
-                    let found = self.eval_expression(profiles, loader, e, origin)?;
+                    let found = self.eval_expression(profiles, loader, e, origin, expr_seen)?;
                     base.extend(found);
                 }
                 SetOp::Intersect(reference) => {
-                    let other = self.atom(profiles, loader, reference.name(), origin)?;
+                    let other = self.atom(profiles, loader, reference.name(), origin, expr_seen)?;
                     intersects.push(other.iter().map(|(s, ..)| set_key(s)).collect());
                 }
                 SetOp::Exclude(reference) => {
-                    let other = self.atom(profiles, loader, reference.name(), origin)?;
+                    let other = self.atom(profiles, loader, reference.name(), origin, expr_seen)?;
                     subtract.extend(other.iter().map(|(s, ..)| set_key(s)));
                 }
                 SetOp::Subtract(pkg) => subtract.push(pkg.trim().to_string()),
@@ -757,12 +772,13 @@ impl<'a> Resolver<'a> {
         loader: &mut ModuleLoader<'a>,
         expr: &str,
         origin: &Origin,
+        expr_seen: &mut Vec<(String, Origin)>,
     ) -> Result<Vec<(Statement, Origin, Gates)>> {
         let mut table: HashMap<String, (Statement, Origin, Gates)> = HashMap::new();
         let mut failure: Option<GrammarError> = None;
 
         let keys = crate::app::profile_expr::evaluate(expr, &mut |atom| match self
-            .atom(profiles, loader, atom, origin)
+            .atom(profiles, loader, atom, origin, expr_seen)
         {
             Ok(stmts) => stmts
                 .into_iter()
@@ -801,12 +817,33 @@ impl<'a> Resolver<'a> {
         loader: &mut ModuleLoader<'a>,
         atom: &str,
         origin: &Origin,
+        expr_seen: &mut Vec<(String, Origin)>,
     ) -> Result<Vec<(Statement, Origin, Gates)>> {
         let capitalized = atom.chars().next().is_some_and(char::is_uppercase);
 
         if capitalized {
-            let r = profiles.resolve(atom, origin, &self.facts, &mut Vec::new(), &Vec::new())?;
-            return self.apply_set_math(profiles, loader, &r, origin);
+            // The set-math door re-enters here from `apply_set_math`, one level below the
+            // trail `ProfileLoader::resolve` keeps — so this trail is the only thing between
+            // `Work = (Work | editors)` and a stack overflow. Pushed around the whole
+            // handling (resolve *and* its ops), popped on every way out.
+            if let Some(start) = expr_seen.iter().position(|(n, _)| n == atom) {
+                let mut hops: Vec<Hop> = expr_seen[start + 1..]
+                    .iter()
+                    .map(|(n, o)| Hop::new(o.clone(), format!("set math over {}", n)))
+                    .collect();
+                hops.push(Hop::new(origin.clone(), format!("set math over {}", atom)));
+                return Err(GrammarError::new(
+                    origin.clone(),
+                    cycle::describe("profiles' set math refers to itself", &hops, atom),
+                )
+                .into());
+            }
+            expr_seen.push((atom.to_string(), origin.clone()));
+            let outcome = profiles
+                .resolve(atom, origin, &self.facts, &mut Vec::new(), &Vec::new())
+                .and_then(|r| self.apply_set_math(profiles, loader, &r, origin, expr_seen));
+            expr_seen.pop();
+            return outcome;
         }
 
         // A name that cannot be a module is not a broken module — it falls through to the
@@ -1285,6 +1322,68 @@ mod tests {
             .with_facts(facts())
             .at(parse_absolute("2026-07-16T12:00").unwrap())
             .resolve()
+    }
+
+    /// `Work = (Work | editors)` used to resolve Work for ever: set math re-enters the
+    /// resolver one level below the trail the profile loader keeps, so every pass saw a
+    /// fresh one, and the run died with a stack overflow (exit 0xC00000FD) and no
+    /// diagnostic. The expression trail is what stands between that line and the overflow.
+    #[test]
+    fn a_profile_whose_set_math_refers_to_itself_is_an_error_not_an_overflow() {
+        let f = fx(
+            "Work\n",
+            &[("Work", "(Work | editors)\n")],
+            &[("editors.txt", "apt:vim\n")],
+        );
+        let err = resolve(&f).expect_err("a self-referential set expression must refuse");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("set math"),
+            "the error must name the door it came through: {msg}"
+        );
+        assert!(msg.contains("Work"), "the error must name the loop: {msg}");
+    }
+
+    /// The loop does not have to be a profile talking to itself: two profiles whose set
+    /// math names each other overflow exactly the same way, through exactly the same door.
+    #[test]
+    fn two_profiles_whose_set_math_name_each_other_are_an_error_not_an_overflow() {
+        let f = fx(
+            "Work\n",
+            &[
+                ("Work", "(Gaming | editors)\n"),
+                ("Gaming", "(Work | tools)\n"),
+            ],
+            &[("editors.txt", "apt:vim\n"), ("tools.txt", "apt:htop\n")],
+        );
+        let err = resolve(&f).expect_err("mutually referential set expressions must refuse");
+        let msg = err.to_string();
+        assert!(msg.contains("set math"), "{msg}");
+        assert!(
+            msg.contains("Gaming"),
+            "the error names every member of the loop: {msg}"
+        );
+    }
+
+    /// The control, without which the two refusals above could be a trail that never
+    /// empties: ordinary set math over other profiles still resolves.
+    #[test]
+    fn set_math_over_other_profiles_still_resolves() {
+        let f = fx(
+            "Home\n",
+            &[("Home", "(Work | editors)\n"), ("Work", "use work\n")],
+            &[("work.txt", "apt:ripgrep\n"), ("editors.txt", "apt:vim\n")],
+        );
+        let out = resolve(&f).expect("non-circular set math is ordinary");
+        let apt: Vec<&str> = out
+            .packages
+            .get("apt")
+            .map(|v| v.iter().map(|s| s.name.as_str()).collect())
+            .unwrap_or_default();
+        assert!(
+            apt.contains(&"vim") && apt.contains(&"ripgrep"),
+            "the union carries both sides, got {apt:?}"
+        );
     }
 
     /// `profile show Work` asks "what would this profile give me", and the answer must not be
