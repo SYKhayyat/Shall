@@ -7251,3 +7251,38 @@ machine is a different fact (II.7c): nothing here went through it, there is no e
 ask for, and the planner already declines those removals upstream. Only *here-and-failing*
 blocks. The distinction is drawn inside `essential_names`, where both halves of it are visible,
 rather than at any caller that would have to re-derive it.
+
+## V.201 — Why the guard's ask and the guard's spend are two different functions. *(R1, R2; 2026-08-23)*
+
+`remove-orphans` asks the guard before its confirmation prompt so a refusal lands before the user
+wastes consent on it, and the engine asks again over the same pairs before carrying them out.
+One shared ledger answered both asks, and the first ask *recorded* — so eleven orphans passed
+the prompt as 11/20 and were refused after it as 22/20: a set the user had just approved,
+refused by arithmetic nobody intended. The decision now lives in `vet`/`vet_deliberate`
+(refuse or permit, write nothing) and `enforce_kind`/`enforce_deliberate` are vet + record;
+the same split gave `@undo=` batches — mutations nothing can inspect — their one ceiling via
+`charge_unmodelled`. The reason this is a rule and not a refactor: any future prompt-time ask
+that reaches for `enforce` re-creates the double spend, and the type system will not stop it.
+
+## V.202 — Why a failed run's WAL entries close as Abandoned, and why its summary counts what stayed gone. *(R3; 2026-08-23)*
+
+Q33 ruled Failed means *an outcome was reached*; heal reads InProgress+Abandoned as the
+interrupted set. Closing the entries of aborted batches as Failed therefore walked heal past
+installs that may have half-run — the one state recovery exists for — while purge reported
+"Removed 0; 576 failed" over a machine that had really lost some hundreds. Now:
+`Transaction::executed_removals` names what completed AND stayed removed (U41 decides), the
+engine charges those onto its metrics on the failure path, cleanup commands report from those
+counters, failed purges exit non-zero, and `journal::record_abandoned` is the only way an
+abandoned-by-us entry closes.
+
+## V.203 — Why a sandboxed child starts from an empty environment, and why shim identity outlives the binary that deployed it. *(2026-08-23)*
+
+Additive env (`--setenv` on top of inherited, `.env()` on top of inherited) meant every cloud
+token Shall itself held crossed into the "confined" process on all three platforms — confinement
+that leaks credentials is theatre with extra steps, so bwrap gets `--clearenv` and the other two
+get `env_clear` before anything is added. And shim identity by byte-equality against the running
+exe answered "is this THE CURRENT shall?" when the question was "was this deployed by Shall?" —
+after a self-upgrade every existing shim failed the test, `real_program` skipped it to the bare
+name, and the OS resolved the bare name back to the shim: an unbounded spawn chain. The stable
+in-binary marker (`SHIM_MARKER`) is the identity that survives upgrades; byte-equality remains
+only as a belt for binaries older than the marker.

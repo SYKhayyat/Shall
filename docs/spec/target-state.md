@@ -1731,6 +1731,24 @@ checks that do **not** carry over are OS-essential (no resource manager publishe
 and undeclarable (no extras key parses as a package line, so applying it would refuse every
 teardown forever).
 
+**Two asks, one spend** *(audit fix, 2026-08-23 — R1)*. A command may ask the guard's question
+before its confirmation prompt (`remove-orphans`, `purge-undeclared`) while the engine asks again
+over the same pairs before carrying them out. The prompt-time ask is **`vet`/`vet_deliberate`**:
+it refuses exactly what `enforce` would refuse and writes **nothing** to the ledger. The engine's
+ask is the one that records. A prompt-time ask that spent measured `N + N` against a ceiling of
+ten and refused a set the user had already confirmed.
+
+**Mutations the model cannot name are charged, not exempt** *(audit fix, 2026-08-23 — R2)*. An
+`@undo=` shell command can be inspected for nothing, which made it the one mutation family with no
+ceiling at all. Its batch answers `max_total_changes` as one charge before the first command runs,
+through `charge_unmodelled`; `--allow-mass-removal` is what clears that refusal.
+
+**A failed run reports what it did, not all-or-nothing** *(audit fix, 2026-08-23 — R3)*. When a
+transaction dies part-way, its completed removals that stayed removed (the U41 leave-removed rule)
+are counted onto the engine's metrics (`Transaction::executed_removals`), and their WAL entries
+close as **Abandoned**, not Failed (Q33: Failed means an outcome was reached) — so both the
+caller's summary and `heal` see exactly the work that never got an answer.
+
 ```
 Apply  RemoveOrphans  PurgeUnmanaged  Sync  Watch  Upgrade
 Canary  Remove  ShellExit  ExpirySweep  Heal  Rebuild
