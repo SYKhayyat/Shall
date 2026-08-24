@@ -549,6 +549,19 @@ impl ExecutionLayer for RawExecutor {
         let mut command = Command::new(cmd);
         command.args(args).envs(env);
 
+        // **Pinned off the directory Shall was invoked from.** A "global" install resolved
+        // against the caller's CWD inherits whatever project files live there: a `.npmrc`
+        // three directories up redirects the install, a `.cargo/config.toml` swaps the
+        // registry, and the manager answers for a machine nobody configured on purpose.
+        // Managers are invoked here in their machine-wide capacity or not at all, so they run
+        // from the neutral temp directory — no project above it to be discovered by accident.
+        {
+            let neutral = std::env::temp_dir();
+            if neutral.is_dir() {
+                command.current_dir(neutral);
+            }
+        }
+
         // A worker whose task is aborted — a failed node, the global timeout — drops this
         // future, and dropping a future does not kill the process it spawned. Without this an
         // `apt install` keeps running against the same dpkg lock the rollback is about to take,
@@ -560,7 +573,12 @@ impl ExecutionLayer for RawExecutor {
         #[cfg(windows)]
         command.kill_on_drop(true);
         #[cfg(unix)]
-        command.kill_on_drop(false);
+        {
+            command.kill_on_drop(false);
+            // Own process group: `Stopping` stops the tree, and a tree is only addressable if
+            // the child leads its own group (`sudo` above, manager below, wrappers between).
+            command.process_group(0);
+        }
 
         command.stdout(Stdio::piped()).stderr(Stdio::piped());
         let interactive = self.stdin == ChildStdin::Interactive;
@@ -1264,7 +1282,13 @@ impl CommandExecutor {
     /// that means failure or silence.
     async fn read_with_retry(&self, cmd: &str, args: &[&str], sudo: bool) -> Result<ReadOutcome> {
         let attempts = read_retry_attempts();
-        let mut backoff = std::time::Duration::from_millis(200);
+        let initial = std::time::Duration::from_millis(200);
+        // The same cap the mutation retry uses (`TransactionConfig::max_backoff`): a cap is
+        // not a mutation-only concern. Uncapped, ten attempts slept ~39s before the last
+        // try — for a read, where the whole justification is that a second attempt usually
+        // fixes it.
+        let max = std::time::Duration::from_secs(30);
+        let mut backoff = initial;
         for attempt in 1..=attempts {
             let output = self.read_raw(cmd, args, sudo).await?;
             let stdout = crate::utils::text::sanitize(&String::from_utf8_lossy(&output.stdout));
@@ -1293,7 +1317,7 @@ impl CommandExecutor {
                  asking again ({attempt}/{attempts})"
             );
             tokio::time::sleep(backoff).await;
-            backoff *= 3;
+            backoff = std::cmp::min(backoff * 3, max);
         }
         unreachable!("the loop returns on its last attempt")
     }
@@ -1328,7 +1352,7 @@ impl CommandExecutor {
             .code()
             .map(|c| c.to_string())
             .unwrap_or_else(|| "terminated by signal".to_string());
-        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stderr = crate::utils::text::sanitize(&String::from_utf8_lossy(&output.stderr));
         let said = stderr
             .trim()
             .lines()
@@ -1367,7 +1391,7 @@ impl CommandExecutor {
     /// ordinary empty result — so the fault is a non-zero exit *with* a complaint on stderr.
     pub async fn search_output(&self, cmd: &str, args: &[&str], sudo: bool) -> Result<String> {
         let output = self.read_raw(cmd, args, sudo).await?;
-        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stderr = crate::utils::text::sanitize(&String::from_utf8_lossy(&output.stderr));
         let complaint = stderr.trim();
         if !output.status.success() && !complaint.is_empty() {
             let first = complaint.lines().next().unwrap_or(complaint);

@@ -17,6 +17,17 @@
 use dashmap::DashMap;
 use std::path::{Path, PathBuf};
 
+/// Which round of answers is current. Bumped by every [`forget_path_lookups`].
+///
+/// **Clearing the map is not enough, because the scan is not what gets cleared.** A lookup in
+/// flight when the forget runs has already started its PATH walk; when the walk ends it wants
+/// to remember its answer, and an unguarded insert would land a PRE-install verdict in the
+/// map the forget just emptied — `shall init` would install a manager and keep answering from
+/// the lookup taken before the installer ran, exactly what the forget exists to stop. The
+/// stamp goes in the answer, the way `installed.rs`'s listing memo does it: an entry carrying
+/// anything but the current round is a leftover nobody trusts.
+static LOOKUP_ROUND: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 /// Where a program lives, answered once per name per process.
 ///
 /// `is_available()` on nearly every backend is a PATH lookup, `registry.available()` calls it
@@ -28,8 +39,12 @@ use std::path::{Path, PathBuf};
 /// One backend had already cached its own probe and the other forty-four had not; a memo here
 /// closes all of them at once and dedupes across backends that probe the same program (`krew`
 /// probes `kubectl`; `yay`/`paru`/`pacman` overlap).
-static PATH_LOOKUP: once_cell::sync::Lazy<DashMap<String, Option<PathBuf>>> =
+static PATH_LOOKUP: once_cell::sync::Lazy<DashMap<String, (u64, Option<PathBuf>)>> =
     once_cell::sync::Lazy::new(DashMap::new);
+
+fn current_round() -> u64 {
+    LOOKUP_ROUND.load(std::sync::atomic::Ordering::Acquire)
+}
 
 /// Resolve a program on PATH, from the memo.
 ///
@@ -37,11 +52,21 @@ static PATH_LOOKUP: once_cell::sync::Lazy<DashMap<String, Option<PathBuf>>> =
 /// external `which`/`where` program: minimal fedora/arch/alpine images do not ship `which`,
 /// which made every backend read as OFFLINE there.
 pub fn resolve_program(cmd: &str) -> Option<PathBuf> {
+    let round = current_round();
     if let Some(hit) = PATH_LOOKUP.get(cmd) {
-        return hit.clone();
+        if hit.0 == round {
+            return hit.1.clone();
+        }
+        // A survivor of a round that was forgotten mid-scan: worthless, so fall through and
+        // look again rather than answering from before the install.
     }
     let found = first_runnable(cmd);
-    PATH_LOOKUP.insert(cmd.to_string(), found.clone());
+    // Stamped with the round the *answer* was computed in. If a forget ran during the walk,
+    // the round moved and this answer predates the install — it is not remembered, and the
+    // next caller looks again.
+    if current_round() == round {
+        PATH_LOOKUP.insert(cmd.to_string(), (round, found.clone()));
+    }
     found
 }
 
@@ -81,6 +106,10 @@ pub fn program_exists(cmd: &str) -> bool {
 /// Without this, `shall init` would install a manager and then keep answering from the
 /// lookup it took before the installer ran.
 pub fn forget_path_lookups() {
+    // The bump is what actually invalidates — an in-flight scan stamps its answer with the
+    // round it started in, so anything computed before this point cannot be remembered into
+    // a later one. The clears free the memory.
+    LOOKUP_ROUND.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     PATH_LOOKUP.clear();
     #[cfg(windows)]
     LAUNCH_PATH.clear();
@@ -91,17 +120,25 @@ pub fn forget_path_lookups() {
 /// Resolving it means a PATH scan *and* a `.ps1` stat beside the resolved shim, and it ran on
 /// every single spawn — synchronously, inside an `async fn`, on the same task the planner's
 /// `buffer_unordered` relies on to interleave.
+///
+/// Same shape as [`PATH_LOOKUP`]: answers carry their round, and only the current round is
+/// trusted, for the same forget-mid-scan race.
 #[cfg(windows)]
-static LAUNCH_PATH: once_cell::sync::Lazy<DashMap<String, Option<PathBuf>>> =
+static LAUNCH_PATH: once_cell::sync::Lazy<DashMap<String, (u64, Option<PathBuf>)>> =
     once_cell::sync::Lazy::new(DashMap::new);
 
 #[cfg(windows)]
 fn launch_path(cmd: &str) -> Option<PathBuf> {
+    let round = current_round();
     if let Some(hit) = LAUNCH_PATH.get(cmd) {
-        return hit.clone();
+        if hit.0 == round {
+            return hit.1.clone();
+        }
     }
     let plan = resolve_program(cmd).map(|resolved| preferred_shim(&resolved));
-    LAUNCH_PATH.insert(cmd.to_string(), plan.clone());
+    if current_round() == round {
+        LAUNCH_PATH.insert(cmd.to_string(), (round, plan.clone()));
+    }
     plan
 }
 

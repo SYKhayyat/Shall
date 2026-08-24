@@ -453,6 +453,23 @@ impl Journal {
         self.flush_if_full()
     }
 
+    /// Close an entry as **abandoned**: started, outcome unknown, this process did it on
+    /// purpose and says so.
+    ///
+    /// This is the close for entries stranded when a run aborts its own in-flight batches —
+    /// not [`Self::record_failure`]. A *failed* attempt reached an outcome (Q33), and closing
+    /// an unanswered one as Failed walked it past `heal`, which reads exactly
+    /// [`ActionStatus::InProgress`] and [`ActionStatus::Abandoned`] as interrupted. An install
+    /// killed mid-command may have half-run; that is the definition of healable.
+    pub fn record_abandoned(&mut self, id: &str, why: &str) -> Result<()> {
+        if self.close(id, ActionStatus::Abandoned, Some(why)) {
+            debug!("Operation {} recorded as Abandoned in WAL: {}", id, why);
+        } else {
+            warn!("Attempted to abandon unknown operation {}.", id);
+        }
+        self.flush_if_full()
+    }
+
     /// Work that started, touched the system, and never reached an outcome — what `heal`
     /// finishes.
     ///

@@ -1,4 +1,4 @@
-﻿use super::batch::{narrow_batch, run_one_command, BatchRecovery, CommandOutcome};
+use super::batch::{narrow_batch, run_one_command, BatchRecovery, CommandOutcome};
 use crate::app::diagnostics::FailureDiagnosticEngine;
 use crate::app::LuaHooks;
 use crate::backends::BackendRegistry;
@@ -424,12 +424,17 @@ impl Transaction {
         }
         let reason = format!("abandoned when the run stopped: {}", why);
         warn!(
-            "{} operation(s) were still open when the run stopped; closing them as failed \
+            "{} operation(s) were still open when the run stopped; closing them as abandoned \
              rather than leaving them to read as a crash",
             stranded.len()
         );
         for id in stranded {
-            let _ = j.record_failure(&id, &reason);
+            // **Abandoned, not failed** (Q33). These entries never reached an outcome — the
+            // batch they belonged to was aborted before it joined — so closing them as Failed
+            // claimed an answer nobody has, and `heal`, which reads InProgress and Abandoned
+            // as the interrupted set, walked past installs that may have half-run. This is
+            // exactly the state the recovery sweep exists to finish.
+            let _ = j.record_abandoned(&id, &reason);
         }
     }
 
@@ -1691,6 +1696,15 @@ impl LockBudget {
         }
     }
 
+    /// The bound the setting promised, before any of it was spent.
+    ///
+    /// Read by the verdict so "the user set 0" and "the user set 300 and Shall spent it" can
+    /// be told apart — the old message said `manager_lock_wait_secs` is 0 to both, which to
+    /// someone who set 300 is a sentence about a decision they never made.
+    pub(super) fn total(&self) -> Duration {
+        self.total
+    }
+
     /// What is left to wait with. Saturating, because a wait that overran its share leaves
     /// nothing rather than a negative bound â€” and zero is the value `lock_wait_verdict` reads as
     /// "do not wait", which is the right answer once the budget is gone.
@@ -1715,7 +1729,8 @@ impl LockBudget {
 pub(super) fn lock_wait_verdict(
     last_error: &Option<Error>,
     backend: &str,
-    wait: Duration,
+    remaining: Duration,
+    budget_total: Duration,
     look: &dyn Fn(&str) -> crate::app::stale_lock::Held,
 ) -> LockWait {
     let Some(err) = last_error else {
@@ -1725,19 +1740,33 @@ pub(super) fn lock_wait_verdict(
         return LockWait::Backoff;
     }
     match look(backend) {
-        crate::app::stale_lock::Held::Live(who) if !wait.is_zero() => LockWait::Wait(who),
-        // Opted out of waiting. The message is still the true one rather than the old
-        // "a further retry will not help", because a further retry is exactly what would help,
-        // once the holder is done.
-        crate::app::stale_lock::Held::Live(who) => LockWait::Hopeless(Error::CommandFailed {
-            message: format!(
-                "`{backend}` cannot run: {who} holds the manager's lock, and \
-                 `manager_lock_wait_secs` is 0, so Shall did not wait for it. Raise that setting \
-                 or run this again once the other manager has finished."
-            ),
-            retry: Retryability::Exhausted,
-            absent_name: false,
-        }),
+        crate::app::stale_lock::Held::Live(who) if !remaining.is_zero() => LockWait::Wait(who),
+        // Opted out of waiting — either the setting is 0 or Shall spent every second of it.
+        // The message says which, because "is 0" to someone who set 300 is a sentence about a
+        // decision they never made. Both endings are still the true one rather than the old
+        // "a further retry will not help": a further retry is exactly what would help, once
+        // the holder is done.
+        crate::app::stale_lock::Held::Live(who) => {
+            let why = if budget_total.is_zero() {
+                "`manager_lock_wait_secs` is 0, so Shall did not wait for it. Raise that \
+                 setting or run this again once the other manager has finished."
+                    .to_string()
+            } else {
+                format!(
+                    "Shall waited its full {}s of `manager_lock_wait_secs` and the lock never \
+                     came free. Run this again once the other manager has finished, or raise \
+                     the setting.",
+                    budget_total.as_secs()
+                )
+            };
+            LockWait::Hopeless(Error::CommandFailed {
+                message: format!(
+                    "`{backend}` cannot run: {who} holds the manager's lock, and {why}"
+                ),
+                retry: Retryability::Exhausted,
+                absent_name: false,
+            })
+        }
         crate::app::stale_lock::Held::Stale(path) => LockWait::Hopeless(Error::CommandFailed {
             message: format!(
                 "`{backend}` cannot run: {} is on disk and nothing holds it â€” a run of this \
@@ -2015,6 +2044,7 @@ mod manager_lock_tests {
             &lock_failure(PACMAN_SAID),
             "pacman",
             Duration::from_secs(300),
+            Duration::from_secs(300),
             &|_| Held::Live("a `pacman`".into()),
         );
         assert!(
@@ -2030,6 +2060,7 @@ mod manager_lock_tests {
         let verdict = lock_wait_verdict(
             &lock_failure(PACMAN_SAID),
             "pacman",
+            Duration::from_secs(300),
             Duration::from_secs(300),
             &|_| Held::Stale("/var/lib/pacman/db.lck".into()),
         );
@@ -2050,6 +2081,7 @@ mod manager_lock_tests {
             &lock_failure(PACMAN_SAID),
             "pacman",
             Duration::from_secs(300),
+            Duration::from_secs(300),
             &|_| Held::Free,
         );
         assert!(matches!(verdict, LockWait::Backoff), "{verdict:?}");
@@ -2064,6 +2096,7 @@ mod manager_lock_tests {
         let verdict = lock_wait_verdict(
             &lock_failure("`pacman` failed (exit 1): error: target not found: qqqq"),
             "pacman",
+            Duration::from_secs(300),
             Duration::from_secs(300),
             &|_| {
                 asked.set(true);
@@ -2085,18 +2118,20 @@ mod manager_lock_tests {
             &lock_failure("`npm` failed: could not get lock"),
             "npm",
             Duration::from_secs(300),
+            Duration::from_secs(300),
             &|_| panic!("npm has no manager lock, so nothing should have been asked"),
         );
         assert!(matches!(verdict, LockWait::Backoff), "{verdict:?}");
     }
 
-    /// `manager_lock_wait_secs = 0` opts out of waiting â€” and still does not print the old
+    /// `manager_lock_wait_secs = 0` opts out of waiting — and still does not print the old
     /// sentence, because a further retry is exactly what *would* help once the holder is done.
     #[test]
     fn opting_out_of_the_wait_still_says_something_true() {
         let verdict = lock_wait_verdict(
             &lock_failure(PACMAN_SAID),
             "pacman",
+            Duration::ZERO,
             Duration::ZERO,
             &|_| Held::Live("a `pacman`".into()),
         );
@@ -2111,12 +2146,43 @@ mod manager_lock_tests {
         );
     }
 
+    /// A budget that was SPENT is not a setting of zero. The old message said
+    /// "`manager_lock_wait_secs` is 0" to someone who set 300 and watched Shall wait out all
+    /// 300 — a sentence about a decision they never made, and no hint that waiting longer was
+    /// even possible.
+    #[test]
+    fn an_exhausted_budget_does_not_claim_the_setting_was_zero() {
+        let verdict = lock_wait_verdict(
+            &lock_failure(PACMAN_SAID),
+            "pacman",
+            Duration::ZERO,
+            Duration::from_secs(300),
+            &|_| Held::Live("a `pacman`".into()),
+        );
+        let LockWait::Hopeless(err) = verdict else {
+            panic!("nothing left to wait with: {verdict:?}");
+        };
+        let said = err.to_string();
+        assert!(
+            said.contains("waited its full 300s"),
+            "the message must say Shall spent the budget: {said}"
+        );
+        assert!(
+            !said.contains("`manager_lock_wait_secs` is 0"),
+            "and must not claim the setting was zero: {said}"
+        );
+    }
+
     /// Nothing has failed yet on the first attempt, so there is nothing to classify.
     #[test]
     fn no_failure_yet_is_not_a_lock_failure() {
-        let verdict = lock_wait_verdict(&None, "pacman", Duration::from_secs(300), &|_| {
-            panic!("there is no error to have been about a lock")
-        });
+        let verdict = lock_wait_verdict(
+            &None,
+            "pacman",
+            Duration::from_secs(300),
+            Duration::from_secs(300),
+            &|_| panic!("there is no error to have been about a lock"),
+        );
         assert!(matches!(verdict, LockWait::Backoff), "{verdict:?}");
     }
 
@@ -2447,6 +2513,7 @@ mod wal_reason_tests {
 #[cfg(test)]
 mod batching_tests {
     use super::*;
+    use crate::core::journal::ActionStatus;
     use crate::core::manager::{BackendCapabilities, BackendCore, HealthReport, HealthStatus};
     use crate::core::{Installable, Package, Queryable};
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -2628,19 +2695,22 @@ mod batching_tests {
         }
     }
 
-    /// A run that outlives its own deadline closes the entries it opened.
+    /// A run that outlives its deadline closes the entries it opened **as abandoned**.
     ///
     /// The timeout drops the whole `JoinSet`, so the batches are killed inside the manager's
-    /// command and reach neither of the calls that close an entry. `close_stranded` is what
-    /// stands between that and a log full of operations that read as a crash.
+    /// command and reach neither of the calls that close an entry. What those entries may not
+    /// be closed as is *Failed*: a failed attempt reached an outcome (Q33), these reached
+    /// nothing, and only the interrupted set — InProgress and Abandoned — is what `heal`
+    /// finishes. An install killed mid-command may have half-run; that is exactly what heal
+    /// exists for.
     #[tokio::test]
-    async fn a_run_that_times_out_leaves_no_entry_open() {
+    async fn a_run_that_times_out_closes_its_entries_as_abandoned() {
         let mut graph = StableDiGraph::new();
         for name in ["jq", "ripgrep", "fd", "bat"] {
             graph.add_node(GraphAction::Install(spec("apt", name)));
         }
         // Each call takes far longer than the whole run is allowed, so the deadline lands
-        // while work is outstanding â€” which is the only way to reach the cancellation arm.
+        // while work is outstanding — which is the only way to reach the cancellation arm.
         let mut h = harness_with(
             graph,
             &["apt"],
@@ -2653,23 +2723,38 @@ mod batching_tests {
         let outcome = h.tx.execute().await;
         assert!(outcome.is_err(), "the deadline must end the run");
 
-        let open = h.journal.lock().await.interrupted_actions();
+        let j = h.journal.lock().await;
+        let interrupted = j.interrupted_actions();
+        let in_progress: Vec<_> = interrupted
+            .iter()
+            .filter(|e| e.status == ActionStatus::InProgress)
+            .collect();
         assert!(
-            open.is_empty(),
-            "a timeout is not a crash, and every entry it opened must be closed â€” {} left \
-             open: {:?}",
-            open.len(),
-            open.iter().map(|e| e.action.key()).collect::<Vec<_>>()
+            in_progress.is_empty(),
+            "nothing of this run's may read as a crash it did not have: {:?}",
+            in_progress
+                .iter()
+                .map(|e| e.action.key())
+                .collect::<Vec<_>>()
+        );
+        let abandoned = interrupted
+            .iter()
+            .filter(|e| e.status == ActionStatus::Abandoned)
+            .count();
+        assert!(
+            abandoned > 0,
+            "the run opened work that never got an answer, and heal must see it"
         );
     }
 
     /// The macOS nightly's own shape: one manager fails while another is mid-command.
     ///
     /// This is the path that actually stranded 22 operations. `continue_past` is `Nothing`, so
-    /// the first failure ends the run â€” and every batch still inside a manager's command is
-    /// killed where it stands, having opened its WAL entries and closed none.
+    /// the first failure ends the run — and every batch still inside a manager's command is
+    /// killed where it stands, having opened its WAL entries and closed none. Closed as
+    /// Abandoned, so `heal` finishes them rather than walking past on the Q33 rule.
     #[tokio::test]
-    async fn a_run_stopped_by_one_managers_failure_leaves_no_entry_open() {
+    async fn a_run_stopped_by_one_managers_failure_closes_its_entries_as_abandoned() {
         let mut graph = StableDiGraph::new();
         // The one that fails, and three the slow manager is still working through when it does.
         graph.add_node(GraphAction::Install(spec("gem", "logger")));
@@ -2687,13 +2772,15 @@ mod batching_tests {
 
         assert!(h.tx.execute().await.is_err(), "the failing manager ends it");
 
-        let open = h.journal.lock().await.interrupted_actions();
+        let j = h.journal.lock().await;
+        let statuses: Vec<_> = j
+            .interrupted_actions()
+            .iter()
+            .map(|e| (e.action.key(), e.status))
+            .collect();
         assert!(
-            open.is_empty(),
-            "Shall stopped these itself and knows it did â€” leaving them open makes `heal` hunt \
-             a crash that never happened. {} left open: {:?}",
-            open.len(),
-            open.iter().map(|e| e.action.key()).collect::<Vec<_>>()
+            statuses.iter().all(|(_, s)| *s == ActionStatus::Abandoned),
+            "every stranded entry is abandoned, which is what heal finishes: {statuses:?}"
         );
     }
 
@@ -2703,7 +2790,8 @@ mod batching_tests {
     /// from an earlier run is the record that a process died holding it, and it is the only
     /// thing that tells `heal` to look. A close-everything-still-open would have erased
     /// exactly the state this log exists to keep, and the harness assertion it was written to
-    /// satisfy would have gone green either way.
+    /// satisfy would have gone green either way. This run's own stranded entries close as
+    /// Abandoned beside it; only the ghost stays InProgress.
     #[tokio::test]
     async fn an_earlier_runs_open_entry_survives_this_runs_failure() {
         let mut graph = StableDiGraph::new();
@@ -2730,12 +2818,20 @@ mod batching_tests {
 
         assert!(h.tx.execute().await.is_err());
 
-        let open = h.journal.lock().await.interrupted_actions();
-        let ids: Vec<&str> = open.iter().map(|e| e.id.as_str()).collect();
-        assert_eq!(
-            ids,
-            vec![ghost.as_str()],
-            "the earlier run's entry, and only it, must still be open"
+        let j = h.journal.lock().await;
+        let interrupted = j.interrupted_actions();
+        assert!(
+            interrupted
+                .iter()
+                .any(|e| e.id == ghost && e.status == ActionStatus::InProgress),
+            "the earlier run's entry, still open exactly as the crash left it"
+        );
+        assert!(
+            interrupted
+                .iter()
+                .filter(|e| e.id != ghost)
+                .all(|e| e.status == ActionStatus::Abandoned),
+            "this run's own entries are abandoned, not left reading as crashes"
         );
     }
 

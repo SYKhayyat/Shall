@@ -47,10 +47,13 @@ impl Stopping {
         Self { child }
     }
 
-    /// SIGTERM, then wait, then SIGKILL only if it is still there.
+    /// SIGTERM to the tree, then wait, then SIGKILL to the tree if it is still there.
     ///
     /// The grace is the point: a manager that is cleaning up is doing the thing that keeps the
-    /// machine usable, and hurrying it undoes the whole exercise.
+    /// machine usable, and hurrying it undoes the whole exercise. The signal goes to the child's
+    /// whole *group*, not the child alone: what Shall spawns is usually `sudo`, and above that a
+    /// shell wrapper — killing `sudo` alone is how a nimble or pnpm orphan keeps running with its
+    /// parent gone, holding the very lock the next phase needs.
     pub(crate) async fn stop(&mut self) {
         #[cfg(unix)]
         {
@@ -61,39 +64,89 @@ impl Stopping {
             {
                 return;
             }
+            // Still there after the grace: asked, and it declined. The group kill reaches the
+            // whole tree; `start_kill` below covers the non-unix arms and any pid race.
+            if let Some(pid) = self.child.id() {
+                signal_tree(pid as libc::pid_t, libc::SIGKILL);
+            }
         }
         let _ = self.child.start_kill();
         let _ = self.child.wait().await;
     }
 
-    /// Send SIGTERM. `false` when there is nothing to send it to — the child has already exited,
-    /// or this is not Unix.
+    /// Send SIGTERM to the child's process group. `false` when there is nothing to send it to —
+    /// the child has already exited, or this is not Unix.
     #[cfg(unix)]
     fn request_stop(&mut self) -> bool {
         match self.child.id() {
             Some(pid) => {
                 // SAFETY: `kill(2)` with a pid tokio still owns. The child has not been reaped —
                 // this type owns it and no `wait` has returned — so the pid cannot have been
-                // reused by another process.
-                unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) == 0 }
+                // reused by another process. Negative pid = the whole group, which every child
+                // of this type leads (they are spawned with `process_group(0)`); the direct-pid
+                // fallback covers one spawned before that was in force.
+                let pgid = -(pid as libc::pid_t);
+                unsafe { libc::kill(pgid, libc::SIGTERM) == 0 }
+                || unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) == 0 }
             }
             None => false,
         }
     }
 }
 
+/// Signal a process group, falling back to the single process.
+///
+/// SAFETY at the call sites: the pid came from an un-reaped `Child` this process owns, so it
+/// cannot yet have been reused.
+#[cfg(unix)]
+fn signal_tree(pid: libc::pid_t, sig: i32) -> bool {
+    unsafe { libc::kill(-pid, sig) == 0 }
+    || unsafe { libc::kill(pid, sig) == 0 }
+}
+
+/// Is this pid still something on the machine? Best-effort liveness for a watcher that does not
+/// own the child and cannot reap it.
+#[cfg(unix)]
+fn tree_alive(pid: u32) -> bool {
+    // SAFETY: signal 0 exists to ask exactly this question.
+    let direct = unsafe { libc::kill(pid as libc::pid_t, 0) } == 0;
+    let group = unsafe { libc::kill(-(pid as libc::pid_t), 0) } == 0;
+    direct || group
+}
+
 /// The abort path — a worker whose task was cancelled, the global timeout — reaches the child
 /// only through `Drop`, which cannot wait for anything. It sends the signal that lets a manager
-/// clean up and does not stay to watch: a package manager finishing its own transaction after
-/// Shall has stopped caring is the *good* outcome, and the run after it now waits for that
-/// manager rather than failing on its lock.
+/// clean up, and it does not walk away blind: a watcher thread waits out the grace and kills the
+/// tree if the TERM is still being ignored. A package manager finishing its own transaction after
+/// Shall has stopped caring is the *good* outcome; one that ignored the signal holding its lock
+/// unobserved for ever is the failure this used to be.
 #[cfg(unix)]
 impl Drop for Stopping {
     fn drop(&mut self) {
         if self.child.try_wait().is_ok_and(|s| s.is_some()) {
             return;
         }
+        let pid = self.child.id();
         self.request_stop();
+        if let Some(pid) = pid {
+            std::thread::spawn(move || {
+                let deadline = std::time::Instant::now() + RawExecutor::TERMINATION_GRACE;
+                while std::time::Instant::now() < deadline {
+                    // Gone — reaped or exited, there is nothing to escalate to. Poll rather
+                    // than sleep once: a manager that honours the TERM usually beats the grace.
+                    if !tree_alive(pid) {
+                        return;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                }
+                // SAFETY: best-effort by contract here. The child may have been reaped between
+                // the last probe and now, and its pid reused in principle; both `kill` arms
+                // answer ESRCH on nothing, and the window is a fraction of the grace. The
+                // alternative — no escalation — is the bug: a TERM-ignoring child holds its
+                // lock unobserved for ever.
+                signal_tree(pid as libc::pid_t, libc::SIGKILL);
+            });
+        }
     }
 }
 
@@ -154,7 +207,12 @@ pub async fn supervised_status(
     #[cfg(windows)]
     command.kill_on_drop(true);
     #[cfg(unix)]
-    command.kill_on_drop(false);
+    {
+        command.kill_on_drop(false);
+        // Own process group: a stop has to reach the whole tree (`sudo` above, manager below),
+        // which is only addressable if the child leads one.
+        command.process_group(0);
+    }
     let child = command
         .spawn()
         .map_err(|e| Error::command_failed(format!("could not start {what}: {e}")))?;
@@ -183,7 +241,11 @@ async fn supervise(
     #[cfg(windows)]
     command.kill_on_drop(true);
     #[cfg(unix)]
-    command.kill_on_drop(false);
+    {
+        command.kill_on_drop(false);
+        // Own process group, for the same reason `supervised_status` sets one.
+        command.process_group(0);
+    }
     let mut child = command
         .spawn()
         .map_err(|e| Error::command_failed(format!("could not start {what}: {e}")))?;

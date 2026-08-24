@@ -146,7 +146,7 @@ pub(super) async fn run_one_command(
             // alive: a lock left behind by a killed run is reported at once, because waiting on
             // it would never end.
             let budget = lock_budget.remaining();
-            match lock_wait_verdict(&last_error, b_name, budget, &|b| {
+            match lock_wait_verdict(&last_error, b_name, budget, lock_budget.total(), &|b| {
                 crate::app::stale_lock::held_for_on_this_machine(b)
             }) {
                 LockWait::Wait(who) => {
