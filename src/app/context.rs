@@ -456,6 +456,7 @@ impl App {
             executor: &self.executor,
             registry: &self.registry,
             journal: &self.journal,
+            reaping: &self.reaping,
         }
     }
 

@@ -9,6 +9,7 @@ pub struct Execs<'a> {
     pub(crate) executor: &'a crate::core::CommandExecutor,
     pub(crate) registry: &'a std::sync::Arc<crate::backends::BackendRegistry>,
     pub(crate) journal: &'a std::sync::Arc<tokio::sync::Mutex<crate::core::Journal>>,
+    pub(crate) reaping: &'a std::sync::Arc<crate::app::sync::guard::Reaping>,
 }
 
 /// What one `exec:` line resolves to: a script the config carries, or a step Shall ships.
@@ -288,10 +289,37 @@ impl Execs<'_> {
         if declared.is_empty() && state.has_execs() {
             return Ok(0);
         }
-        let departed = runs.departed(&declared);
+        let departed: Vec<_> = runs
+            .departed(&declared)
+            .into_iter()
+            .filter(|(_, record)| {
+                // A script that declared no `@undo=` is simply forgotten: Shall cannot invent
+                // an inverse, and pretending to would be worse than saying nothing. `plan`
+                // says so in those words. It is not a mutation, so it is not charged.
+                record
+                    .undo
+                    .as_deref()
+                    .map(|u| !u.trim().is_empty())
+                    .unwrap_or(false)
+            })
+            .collect();
         if departed.is_empty() {
             return Ok(0);
         }
+
+        // An `@undo=` is an arbitrary shell command a human wrote, and nothing can inspect it
+        // for what it will remove — which is exactly why the total ceiling is the one gate it
+        // answers. Charged as one set, before the first command runs, like every other
+        // removal family; `--allow-mass-removal` is what answers a refusal here.
+        if !self.config.dry_run {
+            crate::app::sync::guard::charge_unmodelled(
+                self.config,
+                self.reaping,
+                departed.len(),
+                crate::app::sync::guard::GuardScope::Apply,
+            )?;
+        }
+
         let mut undone = 0usize;
         for (hash, record) in departed {
             let name = record.script.as_deref().unwrap_or(&hash);
@@ -476,14 +504,88 @@ impl Execs<'_> {
     }
 
     async fn run_exec_script(&self, path: &std::path::Path) -> Result<()> {
+        // A script that cannot be read is a refusal, not an empty body: `sh -c ""` exits 0,
+        // and a script deleted between the plan and this line would otherwise be recorded as
+        // a success against its old hash. The plan promised this file exists; if it does not,
+        // say so instead of succeeding at nothing.
+        let bytes = tokio::fs::read(path).await.map_err(|e| {
+            Error::Validation(format!(
+                "cannot read `exec:` script {}: {}",
+                path.display(),
+                e
+            ))
+        })?;
         // A script that is not UTF-8 has no first line this can read, and falls through to the
         // platform default — which is what every `exec:` script got before shebangs were read.
-        let contents = tokio::fs::read_to_string(path).await.unwrap_or_default();
+        // The text is used only to find that first line, so lossy replacement cannot corrupt
+        // what runs: the interpreter is handed the path, not these bytes.
+        let contents = String::from_utf8_lossy(&bytes);
         let launch = crate::model::script::launch_for(path, &contents)?;
         let refs: Vec<&str> = launch.args.iter().map(String::as_str).collect();
         self.executor
             .run(&launch.program, &refs, false)
             .await
             .map(|_| ())
+    }
+}
+
+#[cfg(test)]
+mod exec_guard_tests {
+    use super::*;
+
+    struct Fx {
+        _tmp: tempfile::TempDir,
+        execs: Execs<'static>,
+        _config: std::sync::Arc<crate::config::Config>,
+        _registry: std::sync::Arc<crate::backends::BackendRegistry>,
+        _journal: std::sync::Arc<tokio::sync::Mutex<crate::core::Journal>>,
+        _reaping: std::sync::Arc<crate::app::sync::guard::Reaping>,
+    }
+
+    fn fx() -> Fx {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = std::sync::Arc::new(crate::config::Config::default());
+        let executor = crate::core::CommandExecutor::new(true, false);
+        let registry = std::sync::Arc::new(crate::backends::BackendRegistry::new());
+        let journal = std::sync::Arc::new(tokio::sync::Mutex::new(
+            crate::core::Journal::at(tmp.path().join("journal.jsonl")).unwrap(),
+        ));
+        let reaping = std::sync::Arc::new(crate::app::sync::guard::Reaping::new());
+        // Leaked so the borrows outlive the struct; a test process does not care.
+        let execs: Execs<'static> = Execs {
+            config: Box::leak(Box::new(config.clone())),
+            executor: Box::leak(Box::new(executor)),
+            registry: Box::leak(Box::new(registry.clone())),
+            journal: Box::leak(Box::new(journal.clone())),
+            reaping: Box::leak(Box::new(reaping.clone())),
+        };
+        Fx {
+            _tmp: tmp,
+            execs,
+            _config: config,
+            _registry: registry,
+            _journal: journal,
+            _reaping: reaping,
+        }
+    }
+
+    /// A script the plan promised but the machine no longer has is a refusal, not an empty
+    /// body: `sh -c ""` exits 0, and the run would be recorded as a success against the old
+    /// hash with nothing having happened.
+    #[tokio::test]
+    async fn a_script_that_vanished_between_plan_and_apply_is_an_error_not_a_success() {
+        let f = fx();
+        let gone = f._tmp.path().join("departed.sh");
+        let err = f
+            .execs
+            .run_exec_script(&gone)
+            .await
+            .expect_err("a missing script must refuse");
+        let msg = err.to_string();
+        assert!(msg.contains("cannot read"), "{msg}");
+        assert!(
+            msg.contains("departed.sh"),
+            "the error names the file: {msg}"
+        );
     }
 }
