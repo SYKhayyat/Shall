@@ -798,11 +798,15 @@ impl Installable for GithubInstallable {
             // and locked, so a removal still deletes it and a re-download that differs is caught.
             if download_only {
                 let pkg_dir = self.core.install_dir.join(spec.name.replace('/', "_"));
-                if tokio::fs::try_exists(&pkg_dir).await.unwrap_or(false) {
-                    tokio::fs::remove_dir_all(&pkg_dir)
-                        .await
-                        .map_err(Error::from)?;
-                }
+                // Staged beside, then swapped: the old tree survives until the new one is in
+                // place, so a failed copy cannot strand the record over nothing on disk.
+                let stage = self.core.install_dir.join(format!(
+                    ".{}.stage-{}",
+                    spec.name.replace('/', "_"),
+                    std::process::id()
+                ));
+                let _ = tokio::fs::remove_dir_all(&stage).await;
+                crate::utils::file::ensure_dir_async(&stage).await?;
                 crate::utils::file::ensure_dir_async(&pkg_dir).await?;
 
                 let reason =
@@ -821,7 +825,7 @@ impl Installable for GithubInstallable {
                 let mut installed_artifacts: Vec<InstalledArtifact> = Vec::new();
                 let mut locks: Vec<ArtifactLock> = Vec::new();
                 for (pick, dl_path, sha) in &downloaded {
-                    let dest = pkg_dir.join(&pick.asset.name);
+                    let dest = stage.join(&pick.asset.name);
                     crate::utils::file::copy_over(dl_path, &dest).await?;
                     installed_artifacts.push(InstalledArtifact {
                         asset: pick.asset.name.clone(),
@@ -855,6 +859,8 @@ impl Installable for GithubInstallable {
                 );
                 recorded_locks.push((spec.name.clone(), locks.clone()));
                 ledger.record(spec.name.clone(), locks);
+                // Everything copied: the swap is the commit point.
+                crate::utils::file::swap_into_place(&stage, &pkg_dir).await?;
                 let record = GithubState {
                     repo: spec.name.clone(),
                     version: release.version,
@@ -868,11 +874,15 @@ impl Installable for GithubInstallable {
 
             let pkg_dir_name = spec.name.replace('/', "_");
             let pkg_dir = self.core.install_dir.join(&pkg_dir_name);
-            if tokio::fs::try_exists(&pkg_dir).await.unwrap_or(false) {
-                tokio::fs::remove_dir_all(&pkg_dir)
-                    .await
-                    .map_err(Error::from)?;
-            }
+            // Staged beside, then swapped in one rename once unpack+discovery is clean: the
+            // old tree survives until the new one answers at `pkg_dir`, so a torn archive
+            // cannot leave the record pointing at nothing.
+            let stage = self
+                .core
+                .install_dir
+                .join(format!(".{pkg_dir_name}.stage-{}", std::process::id()));
+            let _ = tokio::fs::remove_dir_all(&stage).await;
+            crate::utils::file::ensure_dir_async(&stage).await?;
             crate::utils::file::ensure_dir_async(&pkg_dir).await?;
 
             let repo_name = spec.name.split('/').next_back().unwrap_or(&spec.name);
@@ -915,7 +925,7 @@ impl Installable for GithubInstallable {
                 let (pick, dl_path, sha) = &downloaded[i];
                 // One subdirectory per artifact: two archives under one declaration can both
                 // contain `bin/`, and unpacking them over each other loses one of them.
-                let unpack_dir = pkg_dir.join(artifact_dir_name(&pick.asset.name));
+                let unpack_dir = stage.join(artifact_dir_name(&pick.asset.name));
                 crate::utils::file::ensure_dir_async(&unpack_dir).await?;
 
                 let dl_path_archive = dl_path.clone();
@@ -1042,6 +1052,21 @@ impl Installable for GithubInstallable {
                     system_package: Some(system_package),
                 });
             }
+
+            // The commit point: unpack, discovery and every refusal above only ever touched
+            // the staging tree. From here the new tree answers at `pkg_dir`, and discovery
+            // results are re-pointed at their post-swap locations.
+            crate::utils::file::swap_into_place(&stage, &pkg_dir).await?;
+            let resolved: Vec<_> = resolved
+                .into_iter()
+                .map(|(pick, sha, discovered, bin_dest)| {
+                    let tail = discovered
+                        .strip_prefix(&stage)
+                        .unwrap_or(discovered.as_path());
+                    let relocated = pkg_dir.join(tail);
+                    (pick, sha, relocated, bin_dest)
+                })
+                .collect();
 
             for (pick, sha, discovered, bin_dest) in &resolved {
                 crate::utils::deploy_executable(

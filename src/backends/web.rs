@@ -312,11 +312,14 @@ impl Installable for WebInstallable {
                 hex::encode(digest)[..32].to_string()
             };
             let dest_dir = self.core.install_dir.join(&id);
-            if dest_dir.exists() {
-                tokio::fs::remove_dir_all(&dest_dir)
-                    .await
-                    .map_err(Error::from)?;
-            }
+            // Staged beside, then swapped: the old tree survives until the new one answers at
+            // `dest_dir`, so a failed transfer cannot leave the record pointing at nothing.
+            let stage = self
+                .core
+                .install_dir
+                .join(format!(".{id}.stage-{}", std::process::id()));
+            let _ = tokio::fs::remove_dir_all(&stage).await;
+            crate::utils::file::ensure_dir_async(&stage).await?;
             crate::utils::file::ensure_dir_async(&dest_dir).await?;
 
             let filename = crate::utils::file::url_filename(&spec.name)?;
@@ -330,14 +333,14 @@ impl Installable for WebInstallable {
 
             if is_archive {
                 let dl_path_archive = dl_path.clone();
-                let dest_dir_archive = dest_dir.clone();
+                let dest_dir_archive = stage.clone();
                 tokio::task::spawn_blocking(move || {
                     extract_archive(&dl_path_archive, &dest_dir_archive)
                 })
                 .await
                 .map_err(|e| Error::Other(e.to_string()))??;
             } else {
-                crate::utils::file::copy_over(&dl_path, &dest_dir.join(&filename)).await?;
+                crate::utils::file::copy_over(&dl_path, &stage.join(&filename)).await?;
             }
 
             // D3b: `@download_only` fetches the file and stops. And a bare `web:` line that
@@ -363,7 +366,9 @@ impl Installable for WebInstallable {
                 let bin_dest =
                     crate::utils::bin_destination(&bin_dir, bin_name, self.core.confine_bin)?;
 
-                let dest_dir_discovery = dest_dir.clone();
+                // Discovery walks the STAGED tree; the swap below is the commit point, and
+                // the deploy that follows reads the file at its post-swap location.
+                let dest_dir_discovery = stage.clone();
                 let bin_name_str = bin_name.to_string();
 
                 let bin_src_result: Result<Option<PathBuf>> =
@@ -384,9 +389,14 @@ impl Installable for WebInstallable {
                     .await
                     .map_err(|e| Error::Other(e.to_string()))?;
 
-                if let Some(src_path) = bin_src_result? {
+                // Commit before anything touches PATH: the new tree answers at `dest_dir`
+                // from here on, old tree retired, discovery result re-pointed.
+                crate::utils::file::swap_into_place(&stage, &dest_dir).await?;
+                if let Some(src_path) = &bin_src_result? {
+                    let src_in_dest =
+                        dest_dir.join(src_path.strip_prefix(&stage).unwrap_or(src_path));
                     crate::utils::deploy_executable(
-                        &src_path,
+                        &src_in_dest,
                         &bin_dest,
                         &self.core.install_dir,
                         state.get(&spec.name).and_then(|s| s.bin_link.as_deref()),
@@ -395,6 +405,12 @@ impl Installable for WebInstallable {
 
                     final_bin_link = Some(bin_dest.to_string_lossy().to_string());
                 }
+            }
+
+            if !download_only {
+                // The non-deploy arm above swapped; this one (download-only) commits too,
+                // after the fact — nothing on PATH was touched, but the tree must answer.
+                crate::utils::file::swap_into_place(&stage, &dest_dir).await?;
             }
 
             let record = WebState {

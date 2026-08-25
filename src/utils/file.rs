@@ -1095,3 +1095,48 @@ pub async fn copy_over(from: &Path, to: &Path) -> Result<()> {
     })?;
     Ok(())
 }
+
+/// Move a fully-staged directory into `dest`, keeping the old tree until the new one is in
+/// place, and putting it back if the swap itself fails.
+///
+/// The reinstall paths used to `remove_dir_all(dest)` and only then unpack: one failed archive
+/// mid-way left no installation on disk while the state registry still recorded one — a machine
+/// Shall believed satisfied over a tool that no longer existed. Same-filesystem renames are
+/// atomic; the old tree is dropped only after the new one answers at `dest`.
+pub async fn swap_into_place(stage: &Path, dest: &Path) -> Result<()> {
+    let retired = dest.with_extension("retired");
+    let existed = tokio::fs::try_exists(dest).await.unwrap_or(false);
+    if existed {
+        let _ = tokio::fs::remove_dir_all(&retired).await;
+        tokio::fs::rename(dest, &retired).await.map_err(|e| {
+            Error::Io(format!(
+                "could not set aside the old {}: {}",
+                dest.display(),
+                e
+            ))
+        })?;
+    }
+    if let Err(e) = tokio::fs::rename(stage, dest).await {
+        if existed {
+            // Put the old tree back before reporting: a failed install must not be the run
+            // that destroyed the working copy.
+            let restore = tokio::fs::rename(&retired, dest).await;
+            if let Err(re) = restore {
+                return Err(Error::Io(format!(
+                    "swap of {} failed ({e}) AND the old tree could not be restored: {re}",
+                    stage.display()
+                )));
+            }
+        }
+        return Err(Error::Io(format!(
+            "could not move staged {} into place at {}: {}",
+            stage.display(),
+            dest.display(),
+            e
+        )));
+    }
+    if existed {
+        let _ = tokio::fs::remove_dir_all(&retired).await;
+    }
+    Ok(())
+}
