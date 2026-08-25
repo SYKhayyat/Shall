@@ -96,6 +96,33 @@ fetch_binary() {
   [ -s "$out" ] || return 1
   size=$(wc -c < "$out")
   [ "$size" -gt 1000000 ] || return 1
+
+  # **Same-origin checksum, when the release publishes one.** This catches transfer corruption
+  # and a truncated write; it cannot catch a compromised release, because the sums come from
+  # the same place the binary did — and it is checked only when present, so older releases
+  # keep installing. A caller that wants a hard guarantee pins SHALL_INSTALL_SHA256.
+  sums_url="${url%/*}/SHA256SUMS"
+  want=""
+  if [ -n "$SHALL_INSTALL_SHA256" ]; then
+    want="$SHALL_INSTALL_SHA256"
+  else
+    if command -v curl >/dev/null 2>&1; then
+      sums=$(curl -fsSL "$sums_url" 2>/dev/null) || sums=""
+    elif command -v wget >/dev/null 2>&1; then
+      sums=$(wget -qO- "$sums_url" 2>/dev/null) || sums=""
+    fi
+    want=$(printf '%s\n' "$sums" | awk -v f="$(basename "$out")" '$2=="*"f || $2==f {print $1}' | head -n1)
+  fi
+  if [ -n "$want" ]; then
+    got=$(sha256sum "$out" 2>/dev/null | awk '{print $1}') || got=""
+    if [ -z "$(command -v sha256sum)" ] || [ -z "$got" ]; then
+      echo "install: sha256sum unavailable; skipping the checksum check for $(basename "$out")" >&2
+    elif [ "$got" != "$want" ]; then
+      echo "install: checksum mismatch for $(basename "$out") (want $want, got $got)" >&2
+      rm -f "$out"
+      return 1
+    fi
+  fi
   chmod 755 "$out"
 
   # **And it has to RUN, which is the only question that was never asked.** Everything above

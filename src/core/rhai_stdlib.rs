@@ -19,6 +19,8 @@ use rhai::{Dynamic, Engine, EvalAltResult};
 /// than any variable computation or hook needs and far less than a wedged infinite loop reaches.
 /// It counts Rhai operations, not seconds — a hook whose `sh()` runs for ten minutes is one.
 const MAX_OPERATIONS: u64 = 10_000_000;
+const MAX_STRING_BYTES: usize = 64 * 1024 * 1024;
+const MAX_COLLECTION_ITEMS: usize = 1_000_000;
 
 /// The ceiling on a `http_get`. `vars` resolves once per invocation (IX.6) and a hook fires once
 /// per package, so this bounds how long one command can wait on an unresponsive host.
@@ -30,6 +32,13 @@ const HTTP_TIMEOUT_SECS: u64 = 30;
 pub fn engine(tag: &'static str) -> Engine {
     let mut engine = Engine::new();
     engine.set_max_operations(MAX_OPERATIONS);
+    // Operations bound *time*; these bound *space*. Without them an approved pulled script can
+    // grow one string or array into the gigabytes inside its operation budget and take the run
+    // — or the machine — down with it mid-plan. The limits are far above anything a variable
+    // interpolation or config transform legitimately builds.
+    engine.set_max_string_size(MAX_STRING_BYTES);
+    engine.set_max_array_size(MAX_COLLECTION_ITEMS);
+    engine.set_max_map_size(MAX_COLLECTION_ITEMS);
     engine.register_fn("print", move |msg: &str| {
         tracing::info!("[{}] {}", tag, msg)
     });

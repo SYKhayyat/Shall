@@ -50,6 +50,33 @@ function Get-PublishedBinary($destination, $tag) {
     if (-not (Test-Path $destination)) { return $false }
     if ((Get-Item $destination).Length -lt 1000000) { return $false }
 
+    # Same-origin checksum, matching install.sh: catches transfer corruption, cannot catch a
+    # compromised release (the sums come from the same place), skipped when absent. A caller
+    # wanting a hard guarantee pins SHALL_INSTALL_SHA256.
+    $want = $env:SHALL_INSTALL_SHA256
+    if (-not $want) {
+        try {
+            $sumsUrl = $url.Substring(0, $url.LastIndexOf('/')) + "/SHA256SUMS"
+            $sums = (Invoke-WebRequest -Uri $sumsUrl -UseBasicParsing -ErrorAction Stop).Content
+            $name = Split-Path $destination -Leaf
+            foreach ($line in ($sums -split "`n")) {
+                $parts = $line.Trim() -split '\s+', 2
+                if ($parts.Count -eq 2) {
+                    $f = $parts[1].Trim('*', ' ')
+                    if ($f -eq $name) { $want = $parts[0]; break }
+                }
+            }
+        } catch { $want = $null }
+    }
+    if ($want) {
+        $got = (Get-FileHash -Algorithm SHA256 -Path $destination).Hash.ToLower()
+        if ($got -ne $want.ToLower()) {
+            Write-Error "install: checksum mismatch for $(Split-Path $destination -Leaf)"
+            Remove-Item $destination -Force -ErrorAction SilentlyContinue
+            return $false
+        }
+    }
+
     # **And it has to RUN** — the twin of the rule `install.sh` gained in the same change, and
     # for a defect found on the other side. Every check above asks whether a file arrived; none
     # asks whether this machine can execute it. On Unix that is sharp: the `-gnu` binaries need

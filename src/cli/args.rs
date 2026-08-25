@@ -1126,8 +1126,15 @@ impl Commands {
             | Self::HookReconcile { .. }
             | Self::HookObserve { .. }
             | Self::Hold { .. }
-            | Self::Unhold { .. }
-            | Self::SelfUpgrade { .. } => Writer,
+            | Self::Unhold { .. } => Writer,
+
+            // **Deferred, because its duration is a compiler's, not ours.** `self-upgrade`
+            // writes nothing in the data dir — it shells to `cargo install`, which replaces
+            // the binary under `~/.cargo/bin`. Held for the run, an LTO compile kept the
+            // exclusive writer lock for minutes and every hook-driven writer waited out its
+            // 120-second budget and failed. Nothing here touches Shall's state, so there is
+            // no write to cover; if one ever appears, take the lock around *it*.
+            Self::SelfUpgrade { .. } => Deferred,
         }
     }
 

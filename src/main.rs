@@ -1757,7 +1757,7 @@ mod log_level_tests {
         );
 
         let expected_deferred: std::collections::BTreeSet<String> =
-            ["history", "run", "shell", "watch"]
+            ["history", "run", "self-upgrade", "shell", "watch"]
                 .iter()
                 .map(|s| s.to_string())
                 .collect();

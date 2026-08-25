@@ -67,8 +67,8 @@ Write-Host "-> cargo fmt -- --check"
 cargo fmt -- --check *> $null
 if ($LASTEXITCODE -eq 0) { Pass "cargo fmt -- --check (formatting clean)" } else { Fail "cargo fmt -- --check reports diffs - run ``cargo fmt``" }
 
-Write-Host "-> cargo clippy --all-targets --all-features -- -D warnings"
-cargo clippy --all-targets --all-features -- -D warnings
+Write-Host "-> cargo clippy --all-targets --all-features --locked -- -D warnings"
+cargo clippy --all-targets --all-features --locked -- -D warnings
 if ($LASTEXITCODE -eq 0) { Pass "clippy: no warnings" } else { Fail "clippy reported warnings/errors" }
 
 Write-Host "-> cargo test --release --no-fail-fast"

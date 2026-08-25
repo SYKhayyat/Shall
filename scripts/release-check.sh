@@ -40,7 +40,7 @@ if cargo fmt -- --check >/dev/null 2>&1; then pass "cargo fmt -- --check (format
 else fail "cargo fmt -- --check reports diffs — run \`cargo fmt\`"; fi
 
 echo "-> cargo clippy --all-targets --all-features -- -D warnings"
-if cargo clippy --all-targets --all-features -- -D warnings; then pass "clippy: no warnings"
+if cargo clippy --all-targets --all-features --locked -- -D warnings; then pass "clippy: no warnings"
 else fail "clippy reported warnings/errors"; fi
 
 echo "-> cargo test --release --no-fail-fast"

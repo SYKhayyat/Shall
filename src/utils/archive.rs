@@ -31,9 +31,49 @@ pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<()> {
                 ),
                 Codec::Plain => Box::new(file),
             };
-            tar::Archive::new(reader)
-                .unpack(dest_dir)
-                .map_err(Error::from)?;
+            // **Link targets are inside the archive too, and they are trusted by nobody.**
+            // `unpack` refuses entry *names* that escape the destination but follows link
+            // *targets* as given — so `ln -s /usr/bin/sh ./x` in a tarball plants a symlink
+            // the executable search happily walks straight through. Every entry's target is
+            // checked against the destination before anything is linked.
+            let mut archive = tar::Archive::new(reader);
+            let canonical_base =
+                fs::canonicalize(dest_dir).unwrap_or_else(|_| dest_dir.to_path_buf());
+            for entry in archive.entries().map_err(Error::from)? {
+                let mut entry = entry.map_err(Error::from)?;
+                if let Some(link) = entry.link_name().map_err(Error::from)? {
+                    let link_path = dest_dir
+                        .join(entry.path().map_err(Error::from)?)
+                        .parent()
+                        .unwrap_or(dest_dir)
+                        .join(&*link);
+                    // Resolvable now: it must land inside. Not resolvable yet (created later
+                    // in this same extraction, or a deliberate dangle): an absolute target
+                    // can only leave the destination, and a relative one is checked
+                    // textually for `../` escapes before its components exist.
+                    match fs::canonicalize(&link_path) {
+                        Ok(resolved) => {
+                            if !resolved.starts_with(&canonical_base) {
+                                return Err(Error::Other(format!(
+                                    "archive entry {:?} links to {:?}, which leaves the destination",
+                                    entry.path().map_err(Error::from)?,
+                                    link
+                                )));
+                            }
+                        }
+                        Err(_) => {
+                            if link.is_absolute() || !link_path.starts_with(&canonical_base) {
+                                return Err(Error::Other(format!(
+                                    "archive entry {:?} links to {:?}, which leaves the destination",
+                                    entry.path().map_err(Error::from)?,
+                                    link
+                                )));
+                            }
+                        }
+                    }
+                }
+                entry.unpack_in(dest_dir).map_err(Error::from)?;
+            }
         }
         Some(Opener::Zip) => {
             let mut archive = zip::ZipArchive::new(file)
@@ -217,5 +257,79 @@ mod tests {
         assert_eq!(fs::read(dest.join("ripgrep")).unwrap(), b"ELF");
         assert!(Format::opener_for("ripgrep").is_none());
         assert!(Format::opener_for("thing.deb").is_none());
+    }
+
+    /// A tarball whose symlink points OUT of the destination is refused, not unpacked: the
+    /// executable search that follows extraction would walk the link into whatever it names.
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_that_leaves_the_destination_is_refused() {
+        use std::io::Write;
+
+        let dir = tempfile::tempdir().unwrap();
+        let outside = dir.path().join("outside-target");
+        fs::write(&outside, b"owned").unwrap();
+
+        let mut tar_bytes = Vec::new();
+        {
+            let mut builder = tar::Builder::new(&mut tar_bytes);
+            let mut header = tar::Header::new_gnu();
+            header.set_size(0);
+            header.set_entry_type(tar::EntryType::Symlink);
+            header.set_mode(0o777);
+            builder.append_link(&mut header, "evil", &outside).unwrap();
+            builder.finish().unwrap();
+        }
+        let archive = dir.path().join("asset.tar.gz");
+        {
+            let mut e = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+            e.write_all(&tar_bytes).unwrap();
+            fs::write(&archive, e.finish().unwrap()).unwrap();
+        }
+
+        let dest = dir.path().join("out");
+        let err = extract_archive(&archive, &dest).unwrap_err().to_string();
+        assert!(
+            err.contains("leaves the destination"),
+            "an escaping symlink must be refused by name: {err}"
+        );
+    }
+
+    /// And an in-bounds link — the legitimate shape, a `bin/tool -> ../lib/tool` layout —
+    /// still extracts, so the refusal is aimed and not a ban on symlinks.
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_inside_the_destination_still_extracts() {
+        use std::io::Write;
+
+        let dir = tempfile::tempdir().unwrap();
+        let payload = b"real";
+
+        let mut tar_bytes = Vec::new();
+        {
+            let mut builder = tar::Builder::new(&mut tar_bytes);
+            let mut header = tar::Header::new_gnu();
+            header.set_size(payload.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            builder
+                .append_data(&mut header, "lib/real", &payload[..])
+                .unwrap();
+
+            let mut link_header = tar::Header::new_gnu();
+            link_header.set_size(0);
+            link_header.set_entry_type(tar::EntryType::Symlink);
+            link_header.set_mode(0o777);
+            builder
+                .append_link(&mut link_header, "bin/tool", "../lib/real")
+                .unwrap();
+            builder.finish().unwrap();
+        }
+        let archive = dir.path().join("asset.tar");
+        fs::write(&archive, &tar_bytes).unwrap();
+
+        let dest = dir.path().join("out");
+        extract_archive(&archive, &dest).unwrap();
+        assert_eq!(fs::read(dest.join("lib/real")).unwrap(), payload);
     }
 }

@@ -51,7 +51,11 @@ if ! command -v docker >/dev/null 2>&1; then
         here="$(wsl -- wslpath -a "$win" 2>/dev/null | tr -d "\r")"
         if [ -n "$here" ]; then
             say "no docker on this PATH; re-running inside WSL, where it lives"
-            exec wsl -- sh -c "cd '$here' && ./scripts/docker-restore.sh $*"
+            # DISTROS and CHECK_ONLY do not cross wsl.exe on their own: WSLENV is the only
+            # thing that carries an environment variable across. "$*" is quoted so a value
+            # with spaces stays one word instead of becoming several.
+            export WSLENV="${WSLENV:+$WSLENV:}DISTROS:CHECK_ONLY"
+            exec wsl -- sh -c "cd '$here' && ./scripts/docker-restore.sh \"$*\""
         fi
     fi
 fi

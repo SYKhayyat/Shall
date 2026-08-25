@@ -593,12 +593,26 @@ fn detect_zfs_root() -> String {
         return String::new();
     }
     let mut cmd = StdCommand::new("zfs");
-    cmd.args(["list", "-H", "-o", "name", "-r", "/"])
+    cmd.args(["list", "-H", "-o", "name,mountpoint", "-r", "/"])
         .stdin(std::process::Stdio::null());
+    // **The dataset whose MOUNTPOINT is `/`, not whichever line sorts first.** `zfs list -r`
+    // orders by name, so on a pool where the root dataset is not alphabetically first the old
+    // first-line read snapshotted — and declared Live — some unrelated descendant. `-H` gives
+    // tab-separated fields; mountpoint is the second.
     crate::core::blocking::command_output(&mut cmd)
         .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
-        .and_then(|s| s.lines().next().map(|l| l.trim().to_string()))
+        .and_then(|s| {
+            s.lines()
+                .filter_map(|l| {
+                    let mut f = l.split('\t');
+                    let name = f.next()?.trim();
+                    let mp = f.next()?.trim();
+                    Some((name, mp))
+                })
+                .find(|(_, mp)| *mp == "/")
+                .map(|(name, _)| name.to_string())
+        })
         .unwrap_or_default()
 }
 

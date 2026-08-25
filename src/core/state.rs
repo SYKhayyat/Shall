@@ -108,9 +108,16 @@ pub struct StateRegistry {
     /// Removed packages, kept as a record after uninstall.
     pub active_session_id: Option<String>,
     /// Packages temporarily uninstalled that are awaiting restoration.
+    ///
+    /// `#[serde(default)]` is the schema-evolution rule, not a legacy reader: a registry
+    /// written by a build that predated this field is *this* format arriving early, and the
+    /// alternative was every subcommand on the machine refusing until the file was moved by
+    /// hand. Absent means none, which is what the field's own default says.
+    #[serde(default)]
     pub suspensions: Vec<Suspension>,
     /// Packages the user has "held": never auto-upgraded until explicitly unheld. Entries are
     /// `backend:name` or a bare `name` (matching either form).
+    #[serde(default)]
     pub held: Vec<String>,
 }
 
@@ -705,12 +712,16 @@ mod tests {
     }
 
     #[test]
-    fn a_registry_missing_a_field_is_refused_rather_than_filled_in() {
-        // There is no old-format reader. A registry with no `suspensions` key is one this
-        // build did not write, and the honest answer is to say so — filling it with an empty
-        // list says "nothing is suspended", which is a claim about the machine nobody checked.
+    fn a_registry_from_before_a_field_existed_loads_with_the_field_empty() {
+        // Additive fields are schema evolution, not an old format: a registry with no
+        // `suspensions` key was written by a build where suspension did not exist, so
+        // *provably* nothing is suspended — filling it with empty is not a guess. (The
+        // reverse case, a file from a NEWER build carrying keys this one lacks, is silently
+        // ignored by serde either way; there was never a reader-side guard for that.)
         let missing = r#"{"packages":[],"active_session_id":null}"#;
-        assert!(serde_json::from_str::<StateRegistry>(missing).is_err());
+        let r: StateRegistry = serde_json::from_str(missing).expect("additive absence loads");
+        assert!(r.suspensions.is_empty());
+        assert!(r.held.is_empty());
     }
 
     #[test]
