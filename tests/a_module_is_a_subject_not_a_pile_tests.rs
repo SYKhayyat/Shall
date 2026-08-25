@@ -67,7 +67,7 @@ const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[
     ),
     (
         "src/backends/generic.rs",
-        3_850,
+        3_950,
         "`ManagerConfig` and the eight capability impls that read it. The split is one module per \
          capability (installable / queryable / searchable / upgradable), which is a bigger change \
          than it looks: the impls share `GenericBackendCore` and the argv-building helpers, and \

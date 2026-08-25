@@ -124,6 +124,15 @@ fn no_unbounded_command_holds_the_lock_for_its_whole_run() {
 /// of the whole-run lock set and simply never lock at all, which is not the fix, it is the
 /// other bug. Each deferred subcommand's name must appear in a `DataLock::for_one_step` call
 /// in `src/`.
+///
+/// **One exemption, with its reason where a future reader will trip over it.** `self-upgrade`
+/// writes nothing in Shall's data domain — it shells to `cargo install`, which replaces the
+/// binary under `~/.cargo/bin`. The data lock protects shall's registry against concurrent
+/// writers; holding it for an LTO compile was the finding (every hook-driven writer waited
+/// out its 120 s budget behind a compiler). A name here must be a command whose writes are
+/// provably outside the data dir.
+const NO_SHALL_WRITE: &[&str] = &["self-upgrade"];
+
 #[test]
 fn every_deferred_command_takes_the_lock_somewhere() {
     let deferred: Vec<String> = scopes()
@@ -160,6 +169,9 @@ fn every_deferred_command_takes_the_lock_somewhere() {
     let unlocked: Vec<&String> = deferred
         .iter()
         .filter(|d| {
+            if NO_SHALL_WRITE.contains(&d.as_str()) {
+                return false;
+            }
             !steps
                 .iter()
                 .any(|s| s == *d || s.starts_with(&format!("{d} ")))

@@ -42,6 +42,15 @@ const LEDGER: &[Accounted] = &[
         file: "src/app/leases.rs",
         guarded_by: "guard::enforce in `sweep_expired`, GuardScope::ExpirySweep",
     },
+    // **`remove` reaches `run_removal` from two sites** — the whole batch and each operand-
+    // capped chunk — because the caps split a 300-package removal into commands that fit
+    // CreateProcess/ARG_MAX. Both sites are the same call the trait method always made; the
+    // guard is the `Reaped` the caller was already required to hold, unchanged.
+    Accounted {
+        file: "src/backends/generic.rs",
+        guarded_by: "`Reaped` required by every effector (the trait signature); remove/purge \
+                     run under the plan the guard enforced in sync's preflight, per M3",
+    },
     Accounted {
         file: "src/app/apply/extras.rs",
         guarded_by: "guard::enforce_extras over the whole drift set before \
