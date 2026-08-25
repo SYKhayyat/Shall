@@ -1122,6 +1122,17 @@ impl GenericInstallable {
         }
         final_args.extend(leading);
 
+        // A pin that emits a trailing option (`gem install jq -v 1.6`) cannot share a
+        // command with a plain package: the option would constrain the wrong member.
+        // Like the leading-flag case above, one command per spec when any trailing pin
+        // is present.
+        if trailing_option && specs.len() > 1 {
+            for spec in specs {
+                Box::pin(self.install_group(std::slice::from_ref(spec), sudo)).await?;
+            }
+            return Ok(());
+        }
+
         // Before the terminator: behind `--` this is a package name.
         let opting_out = specs.iter().any(crate::core::download::is_unverified);
         if opting_out {
