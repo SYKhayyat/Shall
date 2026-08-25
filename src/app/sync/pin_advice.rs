@@ -40,10 +40,34 @@ fn recorded(config: &Config) -> serde_json::Map<String, serde_json::Value> {
 /// the pinned version — a package that failed because the mirror was down has nothing to do with
 /// the lockfile, and saying otherwise would send the reader to unpin something that was never
 /// the problem. That check is what stops this being advice bolted onto every failure.
+/// Whether `needle` appears in `haystack` as a whole token: the characters on both sides may
+/// not be name characters (`alnum`, `.`, `-`, `_`), so `1.2` matches ` 1.2 ` and `=1.2,` but
+/// not `11.23`.
+fn mentions_token(haystack: &str, needle: &str) -> bool {
+    let is_name_char = |c: char| c.is_alphanumeric() || c == '.' || c == '-' || c == '_';
+    let mut from = 0usize;
+    while let Some(pos) = haystack[from..].find(needle) {
+        let start = from + pos;
+        let end = start + needle.len();
+        let before = haystack[..start].chars().next_back();
+        let after = haystack[end..].chars().next();
+        if !before.is_some_and(is_name_char) && !after.is_some_and(is_name_char) {
+            return true;
+        }
+        from = start + 1;
+    }
+    false
+}
+
 pub fn on_install_failure(config: &Config, backend: &str, name: &str, err: &str) -> Option<String> {
     let key = format!("{}:{}", backend, name);
     let pinned = recorded(config).get(&key)?.as_str()?.to_string();
-    if !err.contains(&pinned) {
+    // **The version must appear as its own token, not as a substring.** `contains("1.2")`
+    // fired on any error that happened to mention 11.23 or a path segment — any coincidental
+    // digits blamed the lockfile and sent the reader off to unpin. Boundaries on both sides:
+    // the neighbours may not be another name character (`.` `-` `_` alnum).
+    let quoted = mentions_token(&err, &pinned);
+    if !quoted {
         return None;
     }
     Some(format!(
@@ -123,6 +147,25 @@ mod tests {
     fn a_package_that_is_not_pinned_is_never_blamed_on_a_pin() {
         let (_dir, config) = config_with(r#"{"locks":{"apt:libudev1":"255.4-1ubuntu8.17"}}"#);
         assert!(on_install_failure(&config, "apt", "curl", APT_SAID).is_none());
+
+        // And the token boundary: an error quoting a DIFFERENT version that merely contains
+        // the pinned one as a substring (11.23 contains 1.2) is not the lockfile's doing.
+        let (_dir, config) = config_with(r#"{"locks":{"apt:libudev1":"1.2"}}"#);
+        assert!(
+            on_install_failure(
+                &config,
+                "apt",
+                "libudev1",
+                "E: Version '11.23' was not found"
+            )
+            .is_none(),
+            "a substring hit blamed the pin"
+        );
+        assert!(
+            on_install_failure(&config, "apt", "libudev1", "E: Version '1.2' was not found")
+                .is_some(),
+            "the exact version, bounded by spaces, still gets advice"
+        );
         assert!(
             on_install_failure(&config, "cargo", "libudev1", APT_SAID).is_none(),
             "`cargo:libudev1` is not `apt:libudev1`, and only one of them is pinned"

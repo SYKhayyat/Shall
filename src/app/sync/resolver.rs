@@ -63,6 +63,13 @@ enum Verdict {
     /// typed — what it calls it (`J8`).
     Has(Option<String>),
     Lacks,
+    /// It has the NAME, but not at the version the line pins. Distinct from `Lacks` because
+    /// the two must not share a fate: falling through on this one resolves the line to a
+    /// DIFFERENT manager's package and freezes that choice into the bare-name lock — which is
+    /// exactly the unedited-line-changes-meaning the lock exists to prevent.
+    VersionMismatch {
+        found: String,
+    },
     CouldNotTell(String),
     /// It has more than one package by that name and declined to choose, so neither will Shall.
     /// Carries the sentence that lists them.
@@ -1127,6 +1134,32 @@ impl<'a> StateResolver<'a> {
                         break;
                     }
                     Verdict::Lacks => {}
+                    // **A name at the wrong version stops the chain.** Falling through would
+                    // resolve this bare line to the NEXT manager's package of that name and
+                    // freeze the choice into the lock — the manager becomes whatever the
+                    // day's catalogue said (`J8`'s cousin, one row down). The refusal names
+                    // who had it and at what version, so the reader can qualify the manager
+                    // or move the pin; it does not guess for them.
+                    Verdict::VersionMismatch { found } => {
+                        let want = question.constraint.as_deref().unwrap_or("(no constraint)");
+                        let grammar = GrammarError::new(
+                            origin,
+                            format!(
+                                "`{backend}` has `{name}`, but at version {found} — not the \
+                                 `{want}` the line pins.",
+                                backend = backend,
+                                name = name,
+                            ),
+                        )
+                        .with_hint(
+                            "write the manager into the line (`apt:jq@version=…`) to bind it, \
+                             or change `@version=`.",
+                        );
+                        return Err(Error::Unresolvable {
+                            message: grammar.to_string(),
+                            name,
+                        });
+                    }
                     Verdict::CouldNotTell(why) => silent.push(why),
                     // **Refused where it was found, rather than passed down the chain.** The
                     // candidate that cannot say which package it means is the one `priority`
@@ -1714,7 +1747,9 @@ impl<'a> StateResolver<'a> {
         // enforces the pin at install time; refusing here would send the name to a manager that
         // merely talks about versions more.
         match found.version.as_deref() {
-            Some(ver) if !self.satisfies_constraint(ver, req) => Verdict::Lacks,
+            Some(ver) if !self.satisfies_constraint(ver, req) => Verdict::VersionMismatch {
+                found: ver.to_string(),
+            },
             _ => Verdict::Has(qualified),
         }
     }

@@ -137,9 +137,15 @@ impl SnapshotRestore {
             })?;
 
         let path_str = canonical.to_string_lossy();
+        let path_path = std::path::Path::new(&*path_str);
 
+        // **Component-prefix, not substring.** `contains("/boot")` refused a legitimate
+        // snapper snapshot at `/.snapshots/boot42/registry.json` because the letters appear,
+        // while the allowlist beside this list matches by prefix. A forbidden entry means
+        // *this directory or anything under it*, which is exactly what `Path::starts_with`
+        // asks — and it stops `/.snapshots/etc-shadow-backup`-style false hits too.
         for forbidden in REGISTRY_READ_FORBIDDEN_PATHS {
-            if path_str.contains(forbidden) {
+            if path_path.starts_with(std::path::Path::new(forbidden)) {
                 return Err(Error::Refused(format!(
                     "refusing to read a snapshot registry from '{}': that path is not a place a \
                      Shall registry can legitimately live, and reading it as JSON is a way to \
