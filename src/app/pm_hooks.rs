@@ -301,12 +301,37 @@ pub fn extract_targets(argv: &[String]) -> Vec<String> {
         "rm",
         "autoremove",
     ];
-    argv.iter()
-        .skip(1)
-        .filter(|a| !a.starts_with('-'))
-        .filter(|a| !KEYWORDS.contains(&a.to_lowercase().as_str()))
-        .cloned()
-        .collect()
+    // Flags that take a value: the value is not a package. `apt-get install -t
+    // unstable curl` previously adopted `unstable` as a package before this.
+    const VALUE_FLAGS: &[&str] = &[
+        "-t",
+        "--target-release",
+        "-o",
+        "--option",
+        "-c",
+        "--config",
+        "--config-dir",
+    ];
+    let mut out = Vec::new();
+    let mut skip_next = false;
+    for arg in argv.iter().skip(1) {
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+        if VALUE_FLAGS.contains(&arg.as_str()) {
+            skip_next = true;
+            continue;
+        }
+        if arg.starts_with('-') {
+            continue;
+        }
+        if KEYWORDS.contains(&arg.to_lowercase().as_str()) {
+            continue;
+        }
+        out.push(arg.clone());
+    }
+    out
 }
 
 /// Diff two installed-package name lists (before vs after a transaction) into (added, removed).
@@ -516,6 +541,25 @@ mod tests {
         assert_eq!(
             extract_targets(&s(&["dnf", "remove", "--assumeyes", "nano"])),
             vec!["nano"]
+        );
+    }
+
+    #[test]
+    fn extract_targets_does_not_adopt_a_flag_s_value() {
+        // `apt-get install -t unstable curl` previously recorded `unstable` as a package.
+        assert_eq!(
+            extract_targets(&s(&["apt-get", "install", "-t", "unstable", "curl"])),
+            vec!["curl"]
+        );
+        assert_eq!(
+            extract_targets(&s(&[
+                "apt",
+                "install",
+                "--target-release",
+                "unstable",
+                "curl"
+            ])),
+            vec!["curl"]
         );
     }
 
