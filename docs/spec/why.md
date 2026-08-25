@@ -7298,3 +7298,16 @@ before the content is even opened, in the one resolution both the preview and th
 and `[exec] trust` selects which write bits disqualify: `owner-only`, the default
 `not-world-writable`, or `warn`. It refuses as `Error::Refused` (exit 3), because a script
 whose permissions are wrong is not a transient failure and no retry policy should retry it.
+
+**V.205 - Why the whole-system upgrade refuses while a manifest pin exists. *(R6; 2026-08-24)***
+
+The planner honours a typed `@version=` on every converge path, and a targeted upgrade
+re-resolves the line so its pin rides along - but `shall upgrade` with no scope hands each
+manager its own upgrade-all, which cannot be told to skip anything. That run moved what
+somebody froze, reported success, and left the next plain sync to drag the version back: two
+runs of churn around one ignored decision. It is the holds finding (B9) one row down the same
+table, and it gets the same answer rather than a note under exit 0: refuse, name the pins,
+and take `--ignore-pins` as the explicit opt-in. The resolver feeding the gate runs with
+`.upgrading()`, so lockfile records - observations this verb is allowed to move, and
+re-records afterwards - never masquerade as decisions; what survives that filter can only be
+a line somebody typed.

@@ -3796,3 +3796,12 @@ The gate lives in the one resolution the preview and the run share, so a plan ca
 script the sync would refuse. It refuses as `Error::Refused` - exit 3, never retried. On
 platforms with no mode word (Windows ACLs are not reachable through std) the same enforcement
 point runs and accepts: the gate's *shape* is universal even where its data is not.
+
+## II.62 A pin binds everywhere but the command meant to move it (`R6`, V.205)
+
+**A `@version=` typed on a manifest line is honoured by the planner on converge, by a
+targeted upgrade, and by install - and the native whole-system upgrade refuses while one
+exists**, naming each pinned package, with `--ignore-pins` as the explicit escape. A
+lockfile record is not a pin for this purpose: records are observations, the whole-system
+upgrade is exactly the command allowed to move them, and it re-records where things landed -
+so the gate reads only declarations, never injected records.

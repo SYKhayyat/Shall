@@ -24,10 +24,10 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **228** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **229** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
-| **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **3** |
+| **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
 
 **Three of these seven statuses now describe nothing, and they stay.** The categories are not
 decoration: *OPEN* emptied on 2026-08-17 with `J8` — raised the moment a nightly leg
@@ -112,7 +112,7 @@ other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.m
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
 is waiting now. All 234 are accounted
-for: **228 ANSWERED, 2 PARKED, 1 DEFERRED, 3 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+for: **229 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -498,7 +498,7 @@ deliberately no longer has.*
 | **R3** | A transaction killed part-way through 576 removals reported "Removed 0; 576 failed", and its WAL entries closed as Failed, which Q33 says heal walks past. What does a partial run owe the truth? — RESOLVED 2026-08-23 (delegated): completed removals that stayed removed are counted onto the engine's metrics and their entries close as **Abandoned**; both cleanup commands report real numbers and failed purges exit non-zero. (V.202) | 2026-08-23 |
 | **R4** | `-y` auto-executed a vendor's installer script under a header promising "**Ask, then do**", and scheduled syncs inherited the posture. Where does unattended bootstrap consent live? — RULED 2026-08-23: **`--yes` never answers the bootstrap prompt by itself.** The consent is a preference — `[config] bootstrap_auto_yes = true`, default off — written by a human beside the repo it trusts. BUILT 2026-08-24. | 2026-08-23 |
 | **R5** | Non-interactive `apply` with neither `--yes` nor a TTY applied, while identical conditions made `sync` refuse — opposite postures in the two most destructive commands. Which posture wins? — RULED 2026-08-23: **apply refuses like sync**; same sentence shape, `--yes` answers it, exit 3. BUILT 2026-08-24. | 2026-08-23 |
-| **R6** | Configuration that supplies executable content has no permission/ownership gate, and pins end at install. Both were ruled in principle ("fix everything actionable"; exec-content gate config-selectable between owner-writable-only / world-writable-only / warn-only; pins honored everywhere with only explicit unpin commands escaping). — **HALF RULED 2026-08-24:** the gate is BUILT as `[exec] trust` (`II.61`, `V.204`); pins honored everywhere remains build pending. | 2026-08-23 |
+| **R6** | Configuration that supplies executable content has no permission/ownership gate, and pins end at install. Both were ruled in principle ("fix everything actionable"; exec-content gate config-selectable between owner-writable-only / world-writable-only / warn-only; pins honored everywhere with only explicit unpin commands escaping). — **ANSWERED 2026-08-24, both halves built.** The gate: `[exec] trust` (`II.61`, `V.204`). Pins past install: the whole-system upgrade refuses while a manifest-typed pin exists, `--ignore-pins` escapes (`II.62`, `V.205`); targeted and planner paths already bound pins. | 2026-08-23 |
 
 ---
 
@@ -9683,16 +9683,24 @@ Built in `verbs/plan.rs`.
 
 ## R6
 
-**Status: HALF RULED 2026-08-24.** The owner ruled the substance — config-selectable
-strictness for the exec gate, pins honored everywhere with only explicit unpin commands
-escaping. **The built half is the permission gate:** `[exec] trust` in `preferences.toml`
-selects which write bits disqualify a script the config names before its bytes are hashed or
-run — `owner-only`, `not-world-writable` (the default: it closes the file-drop hole while
-accepting the umask most real checkouts have), or `warn`. The gate sits in the one
-resolution the preview and the run share, refuses as `Error::Refused` (exit 3), and on
-platforms with no mode word the same enforcement point runs and accepts. Rule `II.61`,
-rationale `V.204`. **The remaining half is build work, not a ruling:** `version_pin` is
-consumed only in `install_group`; upgrade paths float past pins and reinstall rebuilds specs
-that discard versions. Feature-sized; recorded here rather than rushed half-built at the end
-of the fix round. Neither half may be quietly dropped — this entry is the thing that says
-what remains owed.
+**Status: ANSWERED 2026-08-24, both halves built.** The owner ruled the substance —
+config-selectable strictness for the exec gate, pins honored everywhere with only explicit
+unpin commands escaping.
+
+**The permission gate:** `[exec] trust` in `preferences.toml` selects which write bits
+disqualify a script the config names before its bytes are hashed or run — `owner-only`,
+`not-world-writable` (the default: it closes the file-drop hole while accepting the umask
+most real checkouts have), or `warn`. The gate sits in the one resolution the preview and the
+run share, refuses as `Error::Refused` (exit 3), and on platforms with no mode word the same
+enforcement point runs and accepts. Rule `II.61`, rationale `V.204`.
+
+**Pins past install:** the audit's complaint was that `version_pin` was consumed only in
+`install_group`. Verified against the tree before building: the planner already plans a
+drifted pin back down (`spec_is_missing` compares installed against `@version=`), and a
+targeted upgrade re-resolves the line so its pin rides along — the one surface that floated a
+typed decision was the native whole-system upgrade, which hands each manager its own
+upgrade-all. It now refuses while a manifest-typed pin exists on a manager that runs here,
+names the pins, and takes `--ignore-pins` as the explicit escape — the same answer B9 gave
+holds, because it is the same finding one row down the table. The gate reads only
+declarations: its resolver runs with `.upgrading()`, so lockfile records never masquerade as
+pins. Rule `II.62`, rationale `V.205`.

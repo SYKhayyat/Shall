@@ -4,6 +4,36 @@ use crate::verbs::prelude::*;
 use crate::verbs::setup::handle_canary;
 use crate::verbs::sync::{enforce_policy, print_flight_plan};
 
+/// The manifest-typed `@version=` pins this verb's whole-system path cannot honour (R6).
+///
+/// Only declarations count: the resolver that feeds this is built with `.upgrading()`, so
+/// lockfile records — observations this very verb is allowed to move, and re-records after —
+/// never reach here. What survives can only be a version a person typed. Sorted, so two runs
+/// over one config name the same pins in the same order.
+pub(crate) fn typed_version_pins(
+    registry: &BackendRegistry,
+    desired: &std::collections::HashMap<String, Vec<crate::core::PackageSpec>>,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    for (backend, specs) in desired {
+        if !registry.runs_here(backend) {
+            continue;
+        }
+        for spec in specs {
+            if !spec.present {
+                continue;
+            }
+            if let Some(v) = spec.options.one("version") {
+                if crate::backends::concrete_version(v) {
+                    out.push(format!("{}:{}@version={}", backend, spec.name, v));
+                }
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
 /// Everything `handle_upgrade` needs, bundled so the dispatch site stays readable and the
 /// handler doesn't grow an unwieldy positional signature.
 pub struct UpgradeRequest<'a> {
@@ -14,6 +44,8 @@ pub struct UpgradeRequest<'a> {
     pub except: &'a [String],
     /// Run the native whole-system upgrade knowing it cannot honour holds (B9).
     pub ignore_holds: bool,
+    /// Run it knowing it cannot honour a manifest-typed `@version=` pin (R6).
+    pub ignore_pins: bool,
     pub profile: &'a Option<String>,
     pub module: &'a Option<String>,
     pub out: Output,
@@ -547,19 +579,49 @@ async fn upgrade_modes(app: &App, req: UpgradeRequest<'_>) -> Result<Option<usiz
                 holds.len()
             );
         }
-        // `apt upgrade` is a change path, so it passes the `[guard]` gate like every other
-        // one. `deny_packages` is close to meaningless against "upgrade everything";
-        // `require_snapshot` is not, and a gate honoured by some change paths is a gate on
-        // nothing.
+        // **Same shape as the holds gate, one finding later (R6).** A `@version=` typed on a
+        // manifest line is a decision, and `apt upgrade` and its siblings bump it anyway; the
+        // next plain sync would pull it back down, so the machine converges — but only after
+        // this verb spent its run moving what somebody froze, and reported success doing it.
+        // The resolver runs with `.upgrading()` here so lockfile records do not masquerade as
+        // pins: those are observations, and THIS is the verb allowed to move them (it
+        // re-records where things landed). What survives that filter can only be a line
+        // somebody typed.
+        //
+        // The resolver below is moved up for both gates: `enforce_policy` needs the desired
+        // state too, and building it twice resolved the model twice.
         let resolver = crate::app::sync::resolver::StateResolver::new(
             &app.config,
             app.registry.clone(),
             false,
         )
-        .await;
+        .await
+        .upgrading();
         let desired = resolver.resolve_desired_state().await?;
         enforce_policy(app, &desired).await?;
 
+        let pins = typed_version_pins(&app.registry, &desired);
+        if !pins.is_empty() && !req.ignore_pins {
+            return Err(anyhow::anyhow!(
+                "{} package(s) carry a manifest-typed `@version=` pin, and the native \
+                 whole-system upgrade cannot honour it:\n{}\n\nNothing was upgraded. Scope \
+                 the upgrade so the pins bind — `shall upgrade --backend <b>`, or name the \
+                 packages — or run `shall upgrade --ignore-pins` to move everything anyway; \
+                 the next plain sync pulls pinned packages back to their versions.",
+                pins.len(),
+                pins.iter()
+                    .map(|l| format!("  {l}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ));
+        }
+        if !pins.is_empty() {
+            eprintln!(
+                "note: --ignore-pins — {} manifest-pinned package(s) may be bumped by this \
+                 upgrade; the next plain sync pulls them back.",
+                pins.len()
+            );
+        }
         if app.config.dry_run {
             crate::would_print!(
                 "would run each backend's native whole-system upgrade (e.g. `apt upgrade`)."
@@ -661,6 +723,7 @@ mod steps_scope_tests {
             security,
             except: &[],
             ignore_holds: false,
+            ignore_pins: false,
             profile: NONE,
             module: NONE,
             out: Output::Human,
@@ -716,6 +779,103 @@ mod steps_scope_tests {
         assert!(
             !declined.steps.unwrap_or(!declined.narrowed()),
             "`--no-steps` must decline them on a whole-machine run"
+        );
+    }
+}
+
+#[cfg(test)]
+mod typed_pin_tests {
+    use super::*;
+    use crate::core::PackageSpec;
+    use std::collections::HashMap;
+
+    fn spec(name: &str, version: Option<&str>, present: bool) -> PackageSpec {
+        let mut options = crate::config::grammar::Options::default();
+        if let Some(v) = version {
+            options.set("version", v.to_string());
+        }
+        PackageSpec {
+            name: name.into(),
+            backend: "apt".into(),
+            options,
+            requires: vec![],
+            present,
+        }
+    }
+
+    fn desired(specs: Vec<PackageSpec>) -> HashMap<String, Vec<PackageSpec>> {
+        HashMap::from([("apt".to_string(), specs)])
+    }
+
+    fn registry(runs_here: bool) -> BackendRegistry {
+        use crate::core::manager::{BackendCapabilities, BackendCore};
+        use std::sync::Arc;
+        struct Fake {
+            here: bool,
+        }
+        #[async_trait::async_trait]
+        impl BackendCore for Fake {
+            fn name(&self) -> &str {
+                "apt"
+            }
+            fn is_available(&self) -> bool {
+                self.here
+            }
+            fn probes(&self) -> Vec<String> {
+                Vec::new()
+            }
+            fn needs_root(&self) -> bool {
+                false
+            }
+        }
+        let mut reg = BackendRegistry::new();
+        reg.register(Arc::new(
+            BackendCapabilities::builder(Arc::new(Fake { here: runs_here })).build(),
+        ));
+        reg
+    }
+
+    /// The whole point: a typed pin on a manager that is here is named; the same line on an
+    /// absent manager is not this machine's business, and a versionless line pins nothing.
+    #[test]
+    fn only_typed_concrete_versions_on_present_managers_are_pins() {
+        let here = registry(true);
+        let found = typed_version_pins(
+            &here,
+            &desired(vec![
+                spec("jq", Some("1.7"), true),
+                spec("curl", None, true),
+                spec("gone", Some("2.0"), false),
+                spec("float", Some("latest"), true),
+                spec("star", Some("*"), true),
+            ]),
+        );
+        assert_eq!(found, vec!["apt:jq@version=1.7".to_string()]);
+
+        let absent = registry(false);
+        assert!(
+            typed_version_pins(&absent, &desired(vec![spec("jq", Some("1.7"), true)])).is_empty()
+        );
+    }
+
+    /// Sorted output: two runs over one config must name the pins in the same order, or a diff
+    /// of two refusals is noise.
+    #[test]
+    fn the_names_come_out_in_one_order() {
+        let here = registry(true);
+        let found = typed_version_pins(
+            &here,
+            &desired(vec![
+                spec("zlib", Some("1.3"), true),
+                spec("jq", Some("1.7"), true),
+            ]),
+        );
+        assert_eq!(
+            found,
+            vec![
+                "apt:jq@version=1.7".to_string(),
+                "apt:zlib@version=1.3".to_string()
+            ]
         );
     }
 }

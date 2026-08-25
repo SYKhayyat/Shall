@@ -508,6 +508,17 @@ pub enum Commands {
         #[arg(long)]
         ignore_holds: bool,
 
+        /// Run the native whole-system upgrade even though it cannot honour `@version=` pins
+        ///
+        /// Same shape as `--ignore-holds`: the whole-system path runs each manager's own
+        /// upgrade-all, so a version typed on a manifest line is bumped by it and pulled back
+        /// down by the next plain sync. Without this flag that run is refused and names the
+        /// pinned packages; per-package and `--backend` upgrades honour pins and need no opt-in.
+        /// A lockfile record is not a pin — this verb is the one allowed to move those, and it
+        /// re-records where things landed.
+        #[arg(long)]
+        ignore_pins: bool,
+
         /// Limit upgrade to a specific profile
         #[arg(long)]
         profile: Option<String>,
