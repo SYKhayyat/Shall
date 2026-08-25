@@ -112,8 +112,21 @@ pub fn append_lines(path: &Path, lines: &[&str]) -> Result<bool> {
 }
 
 /// Whether `path` has content that does not end in a newline. A missing or empty file does not.
+///
+/// **One byte is wanted, so one byte is read**: the WAL this serves grows with a machine's
+/// whole history, and reading all of it — once or twice per wave, every run — was O(events²)
+/// across that history. Open and seek to the last byte instead; the file cannot shrink under
+/// an open handle's seek in any way that makes the answer wrong.
 fn ends_mid_line(path: &Path) -> bool {
-    fs::read(path).is_ok_and(|b| !b.is_empty() && b.last() != Some(&b'\n'))
+    use std::io::{Seek, SeekFrom};
+    let Ok(mut f) = fs::File::open(path) else {
+        return false;
+    };
+    if f.seek(SeekFrom::End(-1)).is_err() {
+        // Includes the empty file: nothing to seek to, and empty does not end mid-line.
+        return false;
+    }
+    !matches!(std::io::Read::bytes(&mut f).next(), Some(Ok(b'\n')))
 }
 
 /// The bytes, atomically, with no policy.
@@ -169,6 +182,16 @@ pub(crate) fn durable_write(
     prepare(temp_file.path())?;
     temp_file.as_file().sync_all().map_err(Error::from)?;
     temp_file.persist(path).map_err(Error::from)?;
+
+    // The rename is durable only once the directory entry naming it is. Without this, the
+    // first-ever creation of a journal or state file can vanish whole in a power cut: the file
+    // was fsynced, but nothing forced the directory that says it exists.
+    #[cfg(unix)]
+    {
+        if let Ok(d) = std::fs::File::open(dir) {
+            let _ = d.sync_all();
+        }
+    }
 
     Ok(())
 }
@@ -249,10 +272,18 @@ pub fn force_remove(path: &Path) -> Result<()> {
 /// the whole rule, and it covers a dangling link — whose target kind cannot be asked for at all.
 fn remove_by_kind(path: &Path, meta: &fs::Metadata) -> std::io::Result<()> {
     if meta.is_symlink() {
+        // Both forms tried, and when both fail **both errors reported**: the file form's
+        // error used to be swallowed for whatever the directory form said, and on Windows
+        // that second message is routinely the vaguer of the two.
         return match fs::remove_file(path) {
-            Err(e) if !cfg!(windows) => Err(e),
-            Err(_) => fs::remove_dir(path),
-            ok => ok,
+            ok @ Ok(()) => ok,
+            Err(file_err) => match fs::remove_dir(path) {
+                Ok(()) => Ok(()),
+                Err(dir_err) => Err(std::io::Error::new(
+                    dir_err.kind(),
+                    format!("{file_err} (directory form: {dir_err})"),
+                )),
+            },
         };
     }
     if meta.is_dir() {
@@ -825,6 +856,24 @@ mod tests {
             read_lines_filtered(&f).unwrap(),
             vec!["target".to_string(), "*.shall-backup".to_string()]
         );
+    }
+
+    /// The seek-based read answers like the whole-file read it replaced: an empty file and a
+    /// missing file both count as ending cleanly, and one long file still gets the newline
+    /// verdict from its final byte only. (The old form read every byte of that file to ask.)
+    #[test]
+    fn ends_mid_line_reads_the_last_byte_not_the_whole_file() {
+        let dir = TempDir::new().unwrap();
+        assert!(!ends_mid_line(&dir.path().join("absent")));
+        let empty = dir.path().join("empty");
+        std::fs::write(&empty, b"").unwrap();
+        assert!(!ends_mid_line(&empty));
+        let clean = dir.path().join("clean");
+        std::fs::write(&clean, b"one\ntwo\n").unwrap();
+        assert!(!ends_mid_line(&clean));
+        let dirty = dir.path().join("dirty");
+        std::fs::write(&dirty, b"one\ntwo").unwrap();
+        assert!(ends_mid_line(&dirty));
     }
 
     #[test]

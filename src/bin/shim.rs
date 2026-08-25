@@ -49,7 +49,15 @@ fn main() {
     {
         // Fallback for Windows (where exec() is not available)
         match cmd.status() {
-            Ok(status) => exit(status.code().unwrap_or(0)),
+            // An abnormal termination carries no code; exiting 0 here would make every
+            // shimmed invocation's exit code lie about its outcome.
+            Ok(status) => match status.code() {
+                Some(code) => exit(code),
+                None => {
+                    eprintln!("Shall Shim Error: the orchestrated run terminated abnormally.");
+                    exit(1);
+                }
+            },
             Err(e) => {
                 eprintln!("Shall Shim Error: Failed to spawn child process: {}", e);
                 exit(1);

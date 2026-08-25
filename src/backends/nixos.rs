@@ -830,7 +830,15 @@ mod tests {
         let new_files: Vec<_> = after
             .iter()
             .filter(|n| !before.contains(n))
+            // Files only: parallel tests create and remove *directories* under shared
+            // `temp_dir` (the listing-cache fixture among them), and one caught mid-cleanup
+            // by this snapshot read exactly like a staged file.
             .filter(|n| n.to_string_lossy().starts_with("shall-"))
+            .filter(|n| {
+                std::fs::metadata(std::env::temp_dir().join(n))
+                    .map(|m| m.is_file())
+                    .unwrap_or(false)
+            })
             .collect();
         assert!(
             new_files.is_empty(),

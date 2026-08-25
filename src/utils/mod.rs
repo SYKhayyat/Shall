@@ -19,7 +19,11 @@ pub fn safe_data_dir() -> PathBuf {
     // lets a test harness or CI run against a throwaway, isolated state registry so it never
     // touches — or accumulates in — the user's real global state, and so a system-global
     // `prune` only ever sees the packages that run installed.
-    if let Some(dir) = std::env::var_os("SHALL_DATA_DIR") {
+    //
+    // **Present-but-empty is not "set".** The setter side filters empty values; reading one
+    // unfiltered relocated the data root to the current directory, where `shall.lock` and
+    // friends materialized mid-repo. Same rule both sides.
+    if let Some(dir) = std::env::var_os("SHALL_DATA_DIR").filter(|v| !v.is_empty()) {
         return PathBuf::from(dir);
     }
     dirs::data_dir()
