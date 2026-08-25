@@ -41,17 +41,36 @@ impl EphemeralShell {
         let session_id = format!("shell-{}", Uuid::new_v4().simple());
         info!("starting ephemeral shell '{}'", session_id);
 
-        // **The lock covers the provisioning, not the session** (`LockScope::Deferred`).
-        // `shell` installs packages, hands the user an interactive `$SHELL`, and removes them
-        // again when that shell exits. Held for the run, the 120-second exclusive lock was held
-        // for as long as somebody sat at a prompt — the `edit`-blocks-on-`$EDITOR` failure AU6
-        // records, with a subshell in place of vim. The scope below ends before the shell is
-        // launched; `cleanup_transient_env` takes it again for the teardown.
+        // **The reaper.** A session killed mid-flight — the user closes the window, the
+        // machine loses power — never runs its teardown: its packages sit in the registry as
+        // managed-with-session-id, and sync's session-active check actively protects them
+        // from reaping. A NEW session starting is proof the old one is dead (one shell at a
+        // time is the model), so this session's first act under the lock is to reap whatever
+        // the corpse left behind: same cleanup the dead teardown would have run.
         {
             let _data_lock = crate::core::datalock::DataLock::for_one_step("shell").await?;
-            {
+            let stale = {
                 let mut state_guard = self.m.state.lock().await;
-                state_guard.active_session_id = Some(session_id.clone());
+                state_guard.active_session_id.replace(session_id.clone())
+            };
+            if let Some(dead) = stale {
+                warn!(
+                    "session {} was left behind by a run that never tore down; reaping its \
+                     packages and restoring its suspensions now",
+                    dead
+                );
+                if let Err(e) = self.cleanup_transient_env(&dead).await {
+                    warn!(
+                        "could not reap the stranded packages of session {}: {}",
+                        dead, e
+                    );
+                }
+                if let Err(e) = self.restore_session_suspensions(&dead).await {
+                    warn!(
+                        "could not restore the suspensions of session {}: {}",
+                        dead, e
+                    );
+                }
             }
 
             info!("installing session packages");
