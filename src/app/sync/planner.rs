@@ -251,6 +251,9 @@ pub enum SkipKind {
     /// Declared, not installed, and it does not arrive. Your files name software the machine
     /// will not get.
     InstallSkipped,
+    /// Declared for removal on a manager this machine lacks: the removal is withdrawn, and
+    /// whatever that manager holds simply stays where it is.
+    RemovalWithdrawn,
 }
 
 impl SkipKind {
@@ -266,6 +269,10 @@ impl SkipKind {
                 "{} declaration(s) this machine cannot act on, so they will not be installed",
                 n
             ),
+            Self::RemovalWithdrawn => format!(
+                "{} removal(s) this machine cannot act on, so nothing was removed",
+                n
+            ),
         }
     }
 
@@ -275,6 +282,10 @@ impl SkipKind {
             Self::RemovalDeclined => "declare them to keep them, or remove them by hand",
             Self::InstallSkipped => {
                 "install the manager they name, or drop the declaration on this host"
+            }
+            Self::RemovalWithdrawn => {
+                "the manager that owns them is absent here; remove them there, or drop the \
+                 `absent:` declaration on this host"
             }
         }
     }
@@ -427,13 +438,21 @@ impl SyncChanges {
         for (idx, backend, name) in unrunnable {
             let key = format!("{}:{}", backend, name);
             warn!("`{}` is not on this machine — skipping `{}`.", backend, key);
+            // The kind travels with the row: a withdrawn REMOVAL reported under the
+            // install-skip heading read as "this will not be installed" about a package that
+            // is already on the machine and is staying there.
+            let was_removal = self.removal_tracker.contains(&key);
             self.graph.remove_node(idx);
             self.install_map.remove(&key);
             self.removal_tracker.remove(&key);
             self.skipped.push(Skipped {
                 reason: format!("`{}` is not on this machine", backend),
                 key,
-                kind: SkipKind::InstallSkipped,
+                kind: if was_removal {
+                    SkipKind::RemovalWithdrawn
+                } else {
+                    SkipKind::InstallSkipped
+                },
             });
         }
     }
