@@ -815,10 +815,24 @@ fn log_level_from_argv(argv: &[String]) -> &'static str {
         match arg.as_str() {
             "--quiet" => return "error",
             "--verbose" => verbosity += 1,
-            // A bundled short run (`-nv`, `-qv`): every flag in it is a letter here. `--`
-            // ends the flags, and anything after it belongs to the command.
+            // A bundled short run (`-nv`, `-qv`): every flag in it is a letter here. An
+            // ATTACHED VALUE (`-c$HOME/.prefs.toml`) is not flags at all — only its first
+            // letter is the flag, the rest is that flag's argument, and counting the v's in a
+            // path turned `-c/srv/vault/prefs.toml` into two verbosity levels.
             "--" => break,
+            _ if arg.starts_with('-') && !arg.starts_with("--") && arg.len() == 2 => {
+                if arg.contains('q') {
+                    return "error";
+                }
+                verbosity += arg.matches('v').count() as u8;
+            }
             _ if arg.starts_with('-') && !arg.starts_with("--") => {
+                // Attached value (`-c/path`) vs bundled flags (`-nv`): only `-c` takes a
+                // value among the global shorts, so `-c` with extra characters is not a flag
+                // bundle at all — the rest is the config path, and its `v`s are not verbosity.
+                if arg.starts_with("-c") {
+                    continue;
+                }
                 if arg.contains('q') {
                     return "error";
                 }
@@ -1637,6 +1651,21 @@ mod log_level_tests {
         );
     }
 
+    /// An attached VALUE is not a bundle of flags: `-c$HOME/.prefs.toml` names the config
+    /// file, and the v's inside its path said nothing about verbosity — two of them turned
+    /// one quiet config into debug logging.
+    #[test]
+    fn an_attached_short_value_is_not_scored_for_verbosity() {
+        assert_eq!(
+            log_level_from_argv(&argv(&["shall", "-c/srv/vault/prefs.toml", "list"])),
+            "warn"
+        );
+        assert_eq!(
+            log_level_from_argv(&argv(&["shall", "-c/etc/shall.conf", "-v", "list"])),
+            "info"
+        );
+    }
+
     /// Everything after `--` is the command's, not Shall's. A script named `-v` does not
     /// turn logging on, and `shall run -- mytool -q` does not silence Shall.
     #[test]
@@ -1835,7 +1864,6 @@ mod log_level_tests {
             vec!["shall", "remove-orphans"],
             vec!["shall", "rebuild"],
             vec!["shall", "apply", "shall-plan.json"],
-            vec!["shall", "self-upgrade"],
         ] {
             let cli = Cli::parse_from(&argv);
             assert!(
@@ -1858,6 +1886,7 @@ mod log_level_tests {
             vec!["shall", "watch"],
             vec!["shall", "shell"],
             vec!["shall", "run", "true"],
+            vec!["shall", "self-upgrade"],
         ] {
             let cli = Cli::parse_from(&argv);
             assert!(
