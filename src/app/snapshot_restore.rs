@@ -14,9 +14,14 @@ pub struct SnapshotRestore {
 
 #[derive(Debug, Default)]
 pub struct StateDiff {
-    pub added: Vec<ManagedPackage>,
-    pub removed: Vec<ManagedPackage>,
-    pub changed: Vec<(ManagedPackage, ManagedPackage)>, // (Current, Snapshot)
+    /// Installed since the snapshot was taken: what rolling back will REMOVE. Named for the
+    /// action the restore performs — the old name, `added`, described the diff's direction and
+    /// read as the opposite of the `[-] Remove:` line printed beside it.
+    pub to_remove: Vec<ManagedPackage>,
+    /// Present in the snapshot but not on the machine: what rolling back will RESTORE.
+    pub to_restore: Vec<ManagedPackage>,
+    /// (Current, Snapshot) pairs whose version differs.
+    pub changed: Vec<(ManagedPackage, ManagedPackage)>,
 }
 
 /// Snapshot roots `validate_snapshot_path` will read from. Enforced only on the read path
@@ -256,15 +261,15 @@ impl SnapshotRestore {
             return self.confirm_and_execute(snapshot).await;
         };
 
-        if !diff.added.is_empty() || !diff.removed.is_empty() || !diff.changed.is_empty() {
+        if !diff.to_remove.is_empty() || !diff.to_restore.is_empty() || !diff.changed.is_empty() {
             println!("\nPACKAGE CHANGES (Rolling back will result in):");
-            for p in &diff.removed {
+            for p in &diff.to_restore {
                 println!(
                     "  [+] Restore:  {}:{} (Version: {:?})",
                     p.backend, p.name, p.version
                 );
             }
-            for p in &diff.added {
+            for p in &diff.to_remove {
                 println!(
                     "  [-] Remove:   {}:{} (Not present in snapshot)",
                     p.backend, p.name
@@ -328,13 +333,13 @@ impl SnapshotRestore {
 
         for (key, pkg) in &curr_map {
             if !past_map.contains_key(key) {
-                diff.added.push((*pkg).clone());
+                diff.to_remove.push((*pkg).clone());
             }
         }
 
         for (key, pkg) in &past_map {
             if !curr_map.contains_key(key) {
-                diff.removed.push((*pkg).clone());
+                diff.to_restore.push((*pkg).clone());
             } else {
                 let curr_pkg = curr_map.get(key).unwrap();
                 if curr_pkg.version != pkg.version {
@@ -390,11 +395,11 @@ mod tests {
         let diff = SnapshotRestore::calculate_diff(&current, &past);
 
         // In current but not past -> rolling back would REMOVE it.
-        assert_eq!(diff.added.len(), 1);
-        assert_eq!(diff.added[0].name, "rg");
+        assert_eq!(diff.to_remove.len(), 1);
+        assert_eq!(diff.to_remove[0].name, "rg");
         // In past but not current -> rolling back would RESTORE it.
-        assert_eq!(diff.removed.len(), 1);
-        assert_eq!(diff.removed[0].name, "nano");
+        assert_eq!(diff.to_restore.len(), 1);
+        assert_eq!(diff.to_restore[0].name, "nano");
         // In both, different version -> a version change.
         assert_eq!(diff.changed.len(), 1);
         let (cur, old) = &diff.changed[0];
@@ -408,6 +413,6 @@ mod tests {
         let a = reg(&[("apt", "curl", "8.4")]);
         let b = reg(&[("apt", "curl", "8.4")]);
         let diff = SnapshotRestore::calculate_diff(&a, &b);
-        assert!(diff.added.is_empty() && diff.removed.is_empty() && diff.changed.is_empty());
+        assert!(diff.to_remove.is_empty() && diff.to_restore.is_empty() && diff.changed.is_empty());
     }
 }

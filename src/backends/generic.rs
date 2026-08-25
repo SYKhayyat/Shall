@@ -784,6 +784,21 @@ impl MetadataProvider for GenericBackendCore {
         // The operand is the argument that IS `{name}`, never one that merely contains it:
         // dnf asks with `--queryformat %{name}`, where those six characters are rpm's own
         // format language and substituting the package into them produces `%jq`.
+        // The operand is the argument that IS `{name}`, never one that merely contains it:
+        // dnf asks with `--queryformat %{name}`, where those six characters are rpm's own
+        // format language and substituting the package into them produces `%jq`.
+        let has_operand = probe.args.iter().any(|a| a.as_str() == "{name}");
+        // **A probe row without `{name}` is a broken row, not a command.** It used to run
+        // verbatim — `dpkg -s` with no package asked the state of nothing — and its stdout was
+        // parsed as the dependencies of whatever package was being planned, which is how one
+        // bad row would have lied about every package at once.
+        if !has_operand {
+            return Err(Error::Validation(format!(
+                "backend `{}`: its depends-probe row carries no `{{name}}`, so there is no \
+                 way to ask about a specific package; fix the row",
+                self.name
+            )));
+        }
         let mut final_args: Vec<String> = probe
             .args
             .iter()
@@ -791,11 +806,7 @@ impl MetadataProvider for GenericBackendCore {
             .cloned()
             .collect();
         let bin = probe.binary.as_deref().unwrap_or(self.binary());
-        if probe.args.iter().any(|a| a.as_str() == "{name}") {
-            // A read's operand is where a leading dash is least expected and most reachable,
-            // so it goes behind the terminator by the same rule the install path uses.
-            crate::core::argv::push_names(&mut final_args, bin, [name]);
-        }
+        crate::core::argv::push_names(&mut final_args, bin, [name]);
 
         let arg_refs: Vec<&str> = final_args.iter().map(|s| s.as_str()).collect();
         // Dependency resolution is a read-only query — never escalate with sudo.
