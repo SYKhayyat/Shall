@@ -73,7 +73,13 @@ const DOORS: &[&str] = &["off_the_runtime(", "spawn_blocking(", "block_in_place(
 /// remember, and the fix costs nothing at a site that was not hot to begin with. A short reason
 /// is not a reason: an entry here is checked for length below, because "it's fine" is what all
 /// eight would have said.
-const ON_THE_RUNTIME_BY_DESIGN: &[(&str, &str)] = &[];
+const ON_THE_RUNTIME_BY_DESIGN: &[(&str, &str)] = &[(
+    "src/core/download.rs",
+    "tokio::fs::File::sync_all hands the syscall to the runtime's blocking pool and \
+         awaits its completion, the same mechanism `off_the_runtime` uses internally; \
+         wrapping it again would add a task hop for nothing. This is a flush of the file \
+         this async fn already owns mid-stream.",
+)];
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
