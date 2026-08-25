@@ -957,6 +957,19 @@ impl Installable for GenericInstallable {
             }
             return Ok(());
         }
+        // **The operand caps, at the one door every batch walks through.** Windows'
+        // CreateProcess takes 32 767 characters and unix ARG_MAX shrinks with the
+        // environment; a 280-package adopted winget set or a thousand-name pip closure is
+        // not a hypothetical. 100 names / 6 000 operand bytes per command sit far under both
+        // and are what managers themselves batch to anyway. Recursing through `install`
+        // (boxed: async recursion) re-runs every partition above for each chunk.
+        if specs.len() > 1 {
+            let take = batch_bound(specs);
+            if take < specs.len() {
+                self.install_group(&specs[..take], sudo).await?;
+                return Box::pin(self.install(&specs[take..], sudo)).await;
+            }
+        }
         self.install_group(specs, sudo).await
     }
 
@@ -972,6 +985,25 @@ impl Installable for GenericInstallable {
         // separate remove binary means removal is supported however few args it takes.
         if self.core.config.remove_args.is_empty() && self.core.config.remove_binary.is_none() {
             return Err(crate::core::Error::Unsupported(self.core.name.clone()));
+        }
+        // Same operand caps as install: a removal of 280 adopted packages builds the same
+        // oversized command an install would have.
+        if names.len() > 1 {
+            let mut bytes = 0usize;
+            let take = names
+                .iter()
+                .take(BATCH_MAX_NAMES)
+                .take_while(|n| {
+                    bytes += n.len() + 1;
+                    bytes <= BATCH_MAX_OPERAND_BYTES
+                })
+                .count()
+                .max(1);
+            if take < names.len() {
+                self.run_removal(self.core.config.remove_args.clone(), &names[..take], sudo)
+                    .await?;
+                return Box::pin(self.remove(&names[take..], sudo, _reaped)).await;
+            }
         }
         self.run_removal(self.core.config.remove_args.clone(), names, sudo)
             .await
@@ -1002,6 +1034,28 @@ impl Installable for GenericInstallable {
         };
         self.run_removal(args, names, sudo).await
     }
+}
+
+/// Operand caps for one generated command: names and their total bytes. Windows' CreateProcess
+/// takes 32 767 characters and unix ARG_MAX shrinks with the environment; these sit far under
+/// both, and are the sizes managers themselves batch to anyway.
+const BATCH_MAX_NAMES: usize = 100;
+const BATCH_MAX_OPERAND_BYTES: usize = 6_000;
+
+/// How many leading specs fit one command's operand budget. At least one — a single name over
+/// the byte cap is still attempted alone, because truncating it away would silently skip it
+/// and one oversized name failing loudly is the honest outcome.
+fn batch_bound(specs: &[PackageSpec]) -> usize {
+    let mut bytes = 0usize;
+    specs
+        .iter()
+        .take(BATCH_MAX_NAMES)
+        .take_while(|s| {
+            bytes += s.name.len() + 1;
+            bytes <= BATCH_MAX_OPERAND_BYTES
+        })
+        .count()
+        .max(1)
 }
 
 impl GenericInstallable {
@@ -3809,5 +3863,39 @@ mod settings_interpolation_tests {
         cfg.install_args = vec!["install".into(), "-y".into()];
         cfg.resolve_settings(None).expect("resolves");
         assert_eq!(cfg.install_args, vec!["install", "-y"]);
+    }
+
+    /// The operand caps: a batch past either bound splits, and the split respects the
+    /// count cap even when every name is short (the byte cap alone would let 1000 tiny
+    /// names through one CreateProcess).
+    #[test]
+    fn batch_bound_respects_both_caps_and_always_takes_one() {
+        fn spec_named(name: &str) -> PackageSpec {
+            PackageSpec {
+                name: name.into(),
+                backend: "apt".into(),
+                ..Default::default()
+            }
+        }
+        let short: Vec<PackageSpec> = (0..BATCH_MAX_NAMES + 50)
+            .map(|i| spec_named(&format!("p{i}")))
+            .collect();
+        assert_eq!(batch_bound(&short), BATCH_MAX_NAMES, "count caps first");
+
+        let long = spec_named(&"x".repeat(BATCH_MAX_OPERAND_BYTES));
+        assert_eq!(
+            batch_bound(std::slice::from_ref(&long)),
+            1,
+            "an oversized lone name is still attempted"
+        );
+
+        let bytes_capped: Vec<PackageSpec> =
+            (0..200).map(|_| spec_named(&"y".repeat(200))).collect();
+        let take = batch_bound(&bytes_capped);
+        assert!(take <= BATCH_MAX_NAMES);
+        assert!(
+            take * 201 <= BATCH_MAX_OPERAND_BYTES + 201,
+            "the byte cap decided the split, not the count: take={take}"
+        );
     }
 }
