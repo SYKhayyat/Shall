@@ -1062,6 +1062,10 @@ fn map_cron_to_schtasks(cron: &str) -> std::result::Result<Vec<String>, String> 
             step.parse::<u16>().map_err(|_| cannot())?;
             args.extend([s("/MO"), s(step)]);
         }
+        // Anchor the repetition: without /ST Task Scheduler starts counting from
+        // registration time, invisible to the canonical comparison and to the user.
+        let st = schtasks_time("0", "0").unwrap();
+        args.extend([s("/ST"), st]);
         return Ok(args);
     }
     if c.hour == "*" || c.hour.starts_with("*/") {
@@ -1690,8 +1694,11 @@ mod tests {
                 &["/SC", "MONTHLY", "/M", "JAN", "/D", "1", "/ST", "00:00"],
             ),
             // A step in the minute field became the time `*:*/15`.
-            ("*/15 * * * *", &["/SC", "MINUTE", "/MO", "15"]),
-            ("* * * * *", &["/SC", "MINUTE"]),
+            (
+                "*/15 * * * *",
+                &["/SC", "MINUTE", "/MO", "15", "/ST", "00:00"],
+            ),
+            ("* * * * *", &["/SC", "MINUTE", "/ST", "00:00"]),
             // A step in the hour field became `*/6:0`.
             (
                 "0 */6 * * *",
@@ -1788,6 +1795,7 @@ mod tests {
     /// the same string, so an unedited schedule compares equal and an edited one does not.
     #[test]
     fn a_systemd_unit_written_and_read_back_is_the_same_spec() {
+        let _guard = crate::core::shall_data_dir_lock();
         let p = LinuxSystemdProvisioner;
         let bin = Path::new("/usr/local/bin/shall");
         let a = p.rendered(&cfg("0 2 * * *"), bin).unwrap();
