@@ -4,6 +4,8 @@
 //! that already execute here. There is no user-facing arch or os option: a declaration that
 //! could request an artifact this machine cannot run has no use case.
 
+use std::path::Path;
+
 /// A filename names an OS or an architecture, or it names neither. Absent evidence is not
 /// evidence of mismatch — a release that ships one portable `tool.tar.gz` names nothing, and
 /// rejecting it would leave the user with no asset at all.
@@ -33,6 +35,10 @@ impl Match {
 pub struct Platform {
     pub os: String,
     pub arch: String,
+    /// The C library flavour, where the machine has one worth naming: `musl` or `gnu` on
+    /// Linux, empty everywhere else (the axis is silent there, as any other axis is when the
+    /// filename says nothing).
+    pub libc: String,
 }
 
 /// Each row is one canonical target and every spelling releases use for it. A row is matched
@@ -68,6 +74,7 @@ impl Platform {
         Platform {
             os: std::env::consts::OS.to_string(),
             arch: std::env::consts::ARCH.to_string(),
+            libc: detect_libc(),
         }
     }
 
@@ -75,24 +82,69 @@ impl Platform {
         Platform {
             os: os.into(),
             arch: arch.into(),
+            libc: String::new(),
+        }
+    }
+
+    pub fn with_libc(os: &str, arch: &str, libc: &str) -> Self {
+        Platform {
+            os: os.into(),
+            arch: arch.into(),
+            libc: libc.into(),
         }
     }
 
     /// A `Foreign` on *either* axis rejects — unlike within an axis, naming the right OS does
     /// not excuse naming the wrong architecture. `Silent` on both accepts.
+    ///
+    /// The libc axis is the one exception where a NAMED mismatch rejects in only one
+    /// direction: a `-gnu` binary on musl (Alpine) fails at exec unless it is statically
+    /// linked, which the filename cannot say — so an explicit `gnu`/`glibc` is refused there.
+    /// In the other direction a `-musl` binary on glibc may well be static and run, so it is
+    /// merely ranked below (see [`specificity`]) rather than refused.
     pub fn accepts(&self, filename: &str) -> bool {
         let lower = filename.to_lowercase();
+        if self.libc == "musl" && classify(&lower, LIBC_ALIASES, "musl") == Match::Foreign {
+            return false;
+        }
         classify(&lower, OS_ALIASES, &self.os) != Match::Foreign
             && classify(&lower, ARCH_ALIASES, &self.arch) != Match::Foreign
     }
 
     /// Whether the filename actually names this machine, as opposed to merely not contradicting
     /// it. Two otherwise equal candidates are not equally good when one says `linux-x86_64`.
+    ///
+    /// A same-libc name outranks a silent one by as much as the whole os+arch pair: between a
+    /// `-gnu` and a `-musl` build this is what decides, which is exactly the choice Alpine
+    /// never got — both candidates scored equally and the gnu one won, then failed at exec.
     pub fn specificity(&self, filename: &str) -> u8 {
         let lower = filename.to_lowercase();
         let os = classify(&lower, OS_ALIASES, &self.os) == Match::Ours;
         let arch = classify(&lower, ARCH_ALIASES, &self.arch) == Match::Ours;
-        u8::from(os) + u8::from(arch)
+        let libc =
+            !self.libc.is_empty() && classify(&lower, LIBC_ALIASES, &self.libc) == Match::Ours;
+        u8::from(os) + u8::from(arch) + 2 * u8::from(libc)
+    }
+}
+
+/// The C-library flavour a filename can name, and how.
+const LIBC_ALIASES: &[(&str, &[&str])] = &[("musl", &["musl"]), ("gnu", &["gnu", "glibc"])];
+
+/// musl systems carry their dynamic loader at a fixed path; everything else here is assumed
+/// gnu-flavoured (macOS and Windows have no such axis and answer silent-empty).
+fn detect_libc() -> String {
+    if !cfg!(target_os = "linux") {
+        return String::new();
+    }
+    const MUSL_LOADERS: &[&str] = &[
+        "/lib/ld-musl-x86_64.so.1",
+        "/lib/ld-musl-aarch64.so.1",
+        "/lib/ld-musl-armhf.so.1",
+    ];
+    if MUSL_LOADERS.iter().any(|p| Path::new(p).exists()) {
+        "musl".to_string()
+    } else {
+        "gnu".to_string()
     }
 }
 
@@ -238,6 +290,35 @@ mod tests {
         assert_eq!(linux64().specificity("fd-linux-x86_64.tar.gz"), 2);
         assert_eq!(linux64().specificity("fd-linux.tar.gz"), 1);
         assert_eq!(linux64().specificity("fd.tar.gz"), 0);
+    }
+
+    /// The axis the audit found missing: on musl, an explicit `-gnu` asset is refused (it
+    /// fails at exec unless statically linked, which a filename cannot promise), while a
+    /// `-musl` build on glibc is merely ranked below — static-musl runs anywhere.
+    #[test]
+    fn the_libc_axis_prefers_and_refuses_in_one_direction_only() {
+        let alpine = Platform::with_libc("linux", "x86_64", "musl");
+        assert!(alpine.accepts("fd-x86_64-linux-musl.tar.gz"));
+        assert!(!alpine.accepts("fd-x86_64-unknown-linux-gnu.tar.gz"));
+
+        let gnu = Platform::with_libc("linux", "x86_64", "gnu");
+        // Accepted — it may be static — but ranked BELOW nothing: the point is that when both
+        // exist, musl wins by more than os+arch together, so `-gnu` no longer "wins as
+        // readily" and then fails at exec.
+        assert!(gnu.accepts("fd-x86_64-linux-musl.tar.gz"));
+        assert!(
+            gnu.specificity("fd-x86_64-unknown-linux-gnu.tar.gz")
+                > gnu.specificity("fd-x86_64-linux-musl.tar.gz")
+        );
+        assert_eq!(
+            alpine.specificity("fd-x86_64-linux-musl.tar.gz"),
+            alpine.specificity("fd-x86_64-unknown-linux-gnu.tar.gz") + 2,
+            "the same-libc name outranks by the libc weight alone"
+        );
+        // A platform with no libc answer stays silent on the whole axis.
+        assert_eq!(linux64().specificity("fd.tar.gz"), 0);
+        assert_eq!(linux64().specificity("fd-musl.tar.gz"), 0);
+        assert!(linux64().accepts("fd-x86_64-unknown-linux-gnu.tar.gz"));
     }
 
     #[test]
