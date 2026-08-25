@@ -40,6 +40,23 @@ impl RateLimiter {
         }
     }
 
+    /// An hourly budget with headroom, for hosts that document one (GitHub anonymous).
+    ///
+    /// Per-minute quotas cannot express "under the documented hourly ceiling": 1/minute IS
+    /// 60/hour, riding the exact limit, and one retry or one request this limiter never saw
+    /// turned into an hour-long 403 hold. One permit per `3600/n` seconds is a sustained
+    /// `n`/hour with no burst — the burst is what would spend someone else's headroom.
+    pub fn new_hourly(requests_per_hour: u32, description: &str) -> Self {
+        let rph = requests_per_hour.max(1);
+        let quota = Quota::with_period(Duration::from_secs(3600 / rph as u64))
+            .expect("a non-zero hourly budget always yields a non-zero period");
+        Self {
+            inner: Arc::new(OnceLock::new()),
+            quota,
+            description: description.to_string(),
+        }
+    }
+
     /// The issuer, built now if this is the first permit anyone has asked this limiter for.
     fn governor(&self) -> &Governor {
         self.inner
@@ -55,8 +72,10 @@ impl RateLimiter {
     }
 
     pub fn github() -> Self {
-        // GitHub allows 60 requests per hour for unauthenticated IPs.
-        Self::new(1, "GitHub (Unauthenticated)")
+        // GitHub allows 60 requests per hour for unauthenticated IPs; budget to 48 so the
+        // documented limit is never the number we run at — a retry, a second Shall, or any
+        // request outside this limiter's view shares the same IP.
+        Self::new_hourly(48, "GitHub (Unauthenticated)")
     }
 
     pub fn github_authenticated() -> Self {

@@ -59,9 +59,10 @@ pub enum Ceiling {
 impl Ceiling {
     /// Read `@runs=`. `None` (the key absent) is the default ceiling of one.
     ///
-    /// An unparseable value is refused by the grammar (`validate_exec`), so this cannot invent
-    /// a ceiling from a typo: anything that is not `always` and not a positive number never
-    /// reaches here.
+    /// The grammar refuses an unparseable value (`validate_exec`), but this function does not
+    /// rely on that: anything it cannot parse becomes `Times(1)` — deliberately the *tighter*
+    /// ceiling, so a value that slips past validation under-runs (visible: a step that keeps
+    /// wanting to run) rather than over-runs one.
     pub fn read(value: Option<&str>) -> Ceiling {
         match value.map(str::trim) {
             None => Ceiling::Times(1),

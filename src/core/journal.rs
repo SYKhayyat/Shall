@@ -232,9 +232,23 @@ impl Journal {
             // delete. So: move it aside (preserved for inspection, and so it stops
             // re-triggering), say so loudly (P3 — fail loud), and start fresh.
             let backup = {
-                let mut s = self.path.clone().into_os_string();
-                s.push(".corrupt");
-                std::path::PathBuf::from(s)
+                // A second corrupt file must not fail its own preservation on Windows, where
+                // rename refuses an existing destination: number the aside until one is free,
+                // so the evidence survives every time.
+                let mut n: u32 = 0;
+                loop {
+                    let mut s = self.path.clone().into_os_string();
+                    match n {
+                        0 => s.push(".corrupt"),
+                        _ => s.push(format!(".corrupt.{n}")),
+                    }
+                    let candidate = std::path::PathBuf::from(s);
+                    if !candidate.exists() {
+                        break candidate;
+                    }
+                    n += 1;
+                    assert!(n < 1000, "no free .corrupt slot beside {:?}", self.path);
+                }
             };
             // A preview moves nothing. Setting the file aside is a filesystem change like any
             // other, and `--dry-run heal` on a machine with a damaged WAL was making one.
@@ -254,7 +268,8 @@ impl Journal {
                     ),
                     (false, true) => format!("It has been moved to {:?} for inspection.", backup),
                     (false, false) => {
-                        "It could not be moved aside; it will be overwritten on the next write."
+                        "It could not be moved aside; the damage is reported again on every \
+                         read until the file is moved or deleted by hand."
                             .to_string()
                     }
                 },

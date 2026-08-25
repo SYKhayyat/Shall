@@ -219,7 +219,10 @@ async fn run(hook: &EventHook, stdin: &str) -> Result<()> {
             let mut perms = std::fs::metadata(tmp.path())
                 .map_err(Error::from)?
                 .permissions();
-            perms.set_mode(0o700);
+            // 0600, matching the hook runner: an interpreter named on the command line reads
+            // the file, so it never needs the execute bit — and this is the author's script,
+            // sitting in a world-readable temp directory for as long as the event takes.
+            perms.set_mode(0o600);
             std::fs::set_permissions(tmp.path(), perms).map_err(Error::from)?;
         }
         // The handle is closed here, keeping only the path (and the delete-on-drop). Windows

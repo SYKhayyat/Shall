@@ -47,17 +47,24 @@ impl BareLock {
 
     /// Anything a hostname may legally contain but a filename should not becomes `_`, so a
     /// host called `../etc` writes inside `locks/` like every other host.
+    ///
+    /// **Distinct hosts stay distinct.** Folding every unsafe character to `_` collided
+    /// `a.b`, `a b` and `a:b` onto one file — three machines, one resolution store, each
+    /// clobbering the others' answers. The separator itself is escaped too: `%xx`, so the
+    /// mapping stays injective and a filename still names exactly one host.
     pub fn path_for(locks_dir: &Path, host: &str) -> PathBuf {
-        let safe: String = host
-            .chars()
-            .map(|c| {
-                if c.is_ascii_alphanumeric() || c == '-' {
-                    c
-                } else {
-                    '_'
-                }
-            })
-            .collect();
+        let mut safe = String::with_capacity(host.len());
+        for b in host.bytes() {
+            if b.is_ascii_alphanumeric() || b == b'-' {
+                safe.push(b as char);
+            } else if b == b'_' {
+                // `_` is this scheme's own escape marker; escape it like anything else so
+                // `a_b` and `a%5Fb`-style inputs cannot fold together either.
+                safe.push_str("%5F");
+            } else {
+                safe.push_str(&format!("%{:02X}", b));
+            }
+        }
         let safe = if safe.is_empty() {
             "unknown".to_string()
         } else {

@@ -70,7 +70,9 @@ fn build(policy: &Policy) -> Result<reqwest::Client> {
                 return attempt.error("redirected to a non-HTTPS URL");
             }
             if attempt.previous().len() >= 10 {
-                return attempt.stop();
+                // `stop()` hands the last response back as content — a 3xx the caller would
+                // read as the artifact. Too many hops is a failure, and it says so.
+                return attempt.error("more than 10 redirects");
             }
             attempt.follow()
         })

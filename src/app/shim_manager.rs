@@ -114,6 +114,11 @@ impl ShimManager {
     /// Asks the disk, not the ledger. A shim recorded as applied and then deleted by hand is
     /// exactly the drift `check` is for, and the record cannot see it.
     pub async fn is_in_effect(&self, binary_name: &str) -> bool {
+        // Shall itself is its own shim: `create_shim("shall")` correctly does nothing, and
+        // without this arm the drift report nagged forever about a file that must not exist.
+        if binary_name == "shall" {
+            return true;
+        }
         Self::is_deployed_shim(&self.shim_path(binary_name)).await
     }
 
@@ -121,7 +126,8 @@ impl ShimManager {
         let target_path = self.shim_path(binary_name);
 
         // A "shall" shim would overwrite shall itself with itself — and on the copy path,
-        // truncate the running binary.
+        // truncate the running binary. `is_in_effect` answers true for this name, so the
+        // ledger never reports drift over the file that must not exist.
         if binary_name == "shall" {
             return Ok(());
         }

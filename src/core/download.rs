@@ -145,6 +145,9 @@ async fn stream_capped(
         file.write_all(&chunk).await.map_err(Error::from)?;
     }
     file.flush().await.map_err(Error::from)?;
+    // The bytes become an executable later in this same install; flush moves them to the OS,
+    // sync_all is what survives the power cut. The one artifact path that needed saying so.
+    file.sync_all().await.map_err(Error::from)?;
     // **A body that stops early is not a body that ended.** Nothing else notices: the stream
     // reports no error, and the hash that would have caught it is the one `@unverified` turns
     // off and the one VIII.2 exempts every `github:` line from. When the server said how many

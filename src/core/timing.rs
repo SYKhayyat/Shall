@@ -93,13 +93,17 @@ fn label_of(cmd: &str, args: &[String]) -> String {
 /// conspire, which is precisely when the suite runs (AU5). Timing is now measured in exactly
 /// one place — [`end`] — and tested with one loose assertion that cannot order-invert.
 fn record(cmd: &str, args: &[String], at: Duration, took: Duration) {
-    if let Ok(mut spans) = SPANS.lock() {
-        spans.push(Span {
-            label: label_of(cmd, args),
-            at,
-            took,
-        });
-    }
+    // Poisoned is recovered, not dropped — the same policy `summary` applies. A panic between
+    // two spans must not erase every span before it from the one report that explains the run.
+    let mut spans = match SPANS.lock() {
+        Ok(s) => s,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    spans.push(Span {
+        label: label_of(cmd, args),
+        at,
+        took,
+    });
 }
 
 /// What a run spent, gathered per label.
