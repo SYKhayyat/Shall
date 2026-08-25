@@ -66,7 +66,7 @@ pub fn on_install_failure(config: &Config, backend: &str, name: &str, err: &str)
     // fired on any error that happened to mention 11.23 or a path segment — any coincidental
     // digits blamed the lockfile and sent the reader off to unpin. Boundaries on both sides:
     // the neighbours may not be another name character (`.` `-` `_` alnum).
-    let quoted = mentions_token(&err, &pinned);
+    let quoted = mentions_token(err, &pinned);
     if !quoted {
         return None;
     }

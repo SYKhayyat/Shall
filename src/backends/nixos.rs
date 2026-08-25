@@ -34,7 +34,7 @@ use async_trait::async_trait;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tracing::info;
+use tracing::{debug, info};
 
 /// The file Shall generates and owns outright.
 pub const GENERATED: &str = "shall-packages.nix";
@@ -385,6 +385,46 @@ impl NixosBackendCore {
     /// editing boot configuration — this path used to write for real whenever the parent was
     /// writable, which is how a `--dry-run` could touch `/etc/nixos`.
     ///
+    /// The pre-write parse gate for an edited `configuration.nix`. When the machine has
+    /// `nix-instantiate`, the edited body must parse before it is written — a textual edit to
+    /// somebody's boot configuration is checked by the language's own parser, not by the
+    /// confidence of whoever wrote the string matching. No tool on PATH means no gate, and
+    /// that is stated rather than hidden.
+    async fn refuse_unparsable_nix(&self, path: &Path, edited: &str) -> Result<()> {
+        if crate::core::launch::resolve_program("nix-instantiate").is_none() {
+            debug!(
+                "nix-instantiate is not on PATH; skipping the parse check for {}",
+                path.display()
+            );
+            return Ok(());
+        }
+        let tmp = tempfile::NamedTempFile::new().map_err(Error::from)?;
+        std::fs::write(tmp.path(), edited).map_err(Error::from)?;
+        let script = tmp.path().to_path_buf();
+        let out = tokio::task::spawn_blocking(move || {
+            let mut cmd = std::process::Command::new("nix-instantiate");
+            cmd.arg("--parse")
+                .arg(&script)
+                .stdin(std::process::Stdio::null());
+            crate::core::blocking::command_output(&mut cmd)
+        })
+        .await
+        .map_err(|e| Error::Other(e.to_string()))?;
+        match out {
+            Ok(o) if o.status.success() => Ok(()),
+            Ok(o) => Err(Error::Validation(format!(
+                "the edited {} does not parse as Nix; nothing was written.\n  {}",
+                path.display(),
+                String::from_utf8_lossy(&o.stderr).trim()
+            ))),
+            Err(e) => Err(Error::Other(format!(
+                "could not run `nix-instantiate --parse` on {}: {}",
+                path.display(),
+                e
+            ))),
+        }
+    }
+
     /// The escalated half stages through a `NamedTempFile`: a random name, created with no
     /// permissions for anyone else. The pid-derived name this replaced sat in a shared
     /// directory long enough for a local user to pre-create it and win the root `install`.
@@ -486,6 +526,9 @@ impl NixosBackendCore {
         }
         match with_import(&body, GENERATED) {
             Some(edited) => {
+                // The parse gate the comment promised, now real: when the machine has
+                // `nix-instantiate`, the edited file must parse before it is written.
+                self.refuse_unparsable_nix(&path, &edited).await?;
                 self.place(&path, &edited).await?;
                 info!("added the `{}` import to {}", GENERATED, path.display());
                 Ok(())
