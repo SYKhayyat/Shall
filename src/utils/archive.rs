@@ -4,6 +4,22 @@ use std::fs;
 use std::path::Path;
 use tracing::debug;
 
+/// The largest an archive may expand to on disk, by default. `max_download_bytes` sizes the
+/// compressed bytes; nothing bounded what `tar`/`zip` wrote *out* of them, so a 40 MB zstd
+/// whose members declare 200 GB filled the disk mid-install — after every download bound had
+/// been honoured. Generous: real toolchains unpack to a few hundred MB. `0` removes the bound.
+pub const DEFAULT_MAX_UNPACKED_BYTES: u64 = 8 * 1024 * 1024 * 1024;
+static MAX_UNPACKED_BYTES: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(DEFAULT_MAX_UNPACKED_BYTES);
+
+pub fn set_max_unpacked_bytes(v: u64) {
+    MAX_UNPACKED_BYTES.store(v, std::sync::atomic::Ordering::SeqCst);
+}
+
+fn max_unpacked_bytes() -> u64 {
+    MAX_UNPACKED_BYTES.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<()> {
     if !dest_dir.exists() {
         crate::utils::file::ensure_dir(dest_dir)?;
@@ -36,11 +52,29 @@ pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<()> {
             // *targets* as given — so `ln -s /usr/bin/sh ./x` in a tarball plants a symlink
             // the executable search happily walks straight through. Every entry's target is
             // checked against the destination before anything is linked.
+            //
+            // And every entry's DECLARED size counts against the expansion bound before its
+            // bytes are written: the headers state the uncompressed size, so the bomb is seen
+            // in full before the first megabyte of it lands.
             let mut archive = tar::Archive::new(reader);
             let canonical_base =
                 fs::canonicalize(dest_dir).unwrap_or_else(|_| dest_dir.to_path_buf());
+            let cap = max_unpacked_bytes();
+            let mut expanded: u64 = 0;
             for entry in archive.entries().map_err(Error::from)? {
                 let mut entry = entry.map_err(Error::from)?;
+                if cap > 0 {
+                    expanded = expanded.saturating_add(entry.size());
+                    if expanded > cap {
+                        return Err(Error::Other(format!(
+                            "archive expands past the {}-byte unpacked bound (declared total \
+                             exceeds it at entry {:?}); raise `[config] max_unpacked_bytes` to \
+                             allow more",
+                            cap,
+                            entry.path().map_err(Error::from)?
+                        )));
+                    }
+                }
                 if let Some(link) = entry.link_name().map_err(Error::from)? {
                     let link_path = dest_dir
                         .join(entry.path().map_err(Error::from)?)
@@ -78,6 +112,24 @@ pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<()> {
         Some(Opener::Zip) => {
             let mut archive = zip::ZipArchive::new(file)
                 .map_err(|e| Error::Other(format!("Zip error: {}", e)))?;
+            // Same expansion bound as the tar side: zip's central directory declares every
+            // member's uncompressed size up front, so the whole bomb is visible before the
+            // first byte is written.
+            let cap = max_unpacked_bytes();
+            if cap > 0 {
+                let declared: u64 = (0..archive.len())
+                    .map(|i| match archive.by_index(i) {
+                        Ok(f) => f.size(),
+                        Err(_) => 0,
+                    })
+                    .sum();
+                if declared > cap {
+                    return Err(Error::Other(format!(
+                        "zip expands past the {}-byte unpacked bound (members declare {} bytes)",
+                        cap, declared
+                    )));
+                }
+            }
             archive
                 .extract(dest_dir)
                 .map_err(|e| Error::Other(format!("Zip extraction failed: {}", e)))?;
@@ -241,6 +293,46 @@ mod tests {
                 suffix
             );
         }
+    }
+
+    /// A tarball whose members declare more than the expansion bound is refused before the
+    /// first byte is written — the compressed bytes passed every download bound; this is the
+    /// other half.
+    #[test]
+    fn an_archive_that_expands_past_the_bound_is_refused_up_front() {
+        let dir = tempfile::tempdir().unwrap();
+        // ~64 KiB of declared size: tiny, but over a bound set to 1000 for the test.
+        let payload = vec![b'z'; 64 * 1024];
+
+        let mut tar_bytes = Vec::new();
+        {
+            let mut builder = tar::Builder::new(&mut tar_bytes);
+            let mut header = tar::Header::new_gnu();
+            header.set_size(payload.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            builder
+                .append_data(&mut header, "big", payload.as_slice())
+                .unwrap();
+            builder.finish().unwrap();
+        }
+        let archive = dir.path().join("asset.tar");
+        fs::write(&archive, &tar_bytes).unwrap();
+
+        let previous = MAX_UNPACKED_BYTES.load(std::sync::atomic::Ordering::SeqCst);
+        set_max_unpacked_bytes(1_000);
+        let dest = dir.path().join("out");
+        let err = extract_archive(&archive, &dest).unwrap_err().to_string();
+        set_max_unpacked_bytes(previous);
+
+        assert!(
+            err.contains("unpacked bound"),
+            "the refusal names the bound and the knob: {err}"
+        );
+        assert!(
+            !dest.join("big").exists(),
+            "nothing was written before the refusal"
+        );
     }
 
     /// The fallback that must stay. `github.rs` hands every artifact to `extract_archive`,

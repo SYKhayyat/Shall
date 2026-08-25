@@ -150,6 +150,11 @@ async fn main() -> Result<()> {
     }
     apply_process_wide_config(&config);
 
+    // The scheduled-run log is written by shall processes appending under systemd/launchd;
+    // this is the one place every such process passes, so it is where the log gets its
+    // rotation. Before anything else, so a run that fails two lines later still rotates.
+    shall::app::scheduler::rotate_log_if_large();
+
     // 4. A hook fired by a manager that Shall itself is driving has nothing to add — the run
     //    that spawned it is already recording what it installed, and it holds the lock this
     //    process would wait two minutes for.
@@ -1101,6 +1106,7 @@ fn apply_process_wide_config(config: &shall::config::Config) {
     );
     shall::core::executor::set_sudo_password_timeout(config.sudo_password_timeout_secs);
     shall::core::download::set_max_download_bytes(config.max_download_bytes);
+    shall::utils::archive::set_max_unpacked_bytes(config.max_unpacked_bytes);
 }
 
 /// The run-posture flag spellings, asked of clap rather than listed by hand.

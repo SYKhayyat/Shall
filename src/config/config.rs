@@ -704,6 +704,15 @@ pub struct Config {
     #[serde(default = "default_max_download_bytes")]
     pub max_download_bytes: u64,
 
+    /// The largest an archive may expand to on disk while being installed, in bytes — the
+    /// sum of what every member declares uncompressed. `0` removes the bound.
+    ///
+    /// `max_download_bytes` sizes the compressed bytes; this is its other half. Without it a
+    /// small zstd whose members declare hundreds of gigabytes passed every download bound and
+    /// filled the disk mid-install.
+    #[serde(default = "default_max_unpacked_bytes")]
+    pub max_unpacked_bytes: u64,
+
     /// How many times a read whose failure is classified **transient** is asked again. `1`
     /// asks once and does not retry.
     ///
@@ -968,6 +977,9 @@ fn default_sudo_password_timeout_secs() -> u64 {
 fn default_max_download_bytes() -> u64 {
     crate::core::download::DEFAULT_MAX_DOWNLOAD_BYTES
 }
+fn default_max_unpacked_bytes() -> u64 {
+    crate::utils::archive::DEFAULT_MAX_UNPACKED_BYTES
+}
 fn default_read_retry_attempts() -> u32 {
     crate::core::executor::DEFAULT_READ_RETRY_ATTEMPTS
 }
@@ -1139,6 +1151,7 @@ impl Default for Config {
             query_idle_timeout_secs: default_query_idle_timeout_secs(),
             sudo_password_timeout_secs: default_sudo_password_timeout_secs(),
             max_download_bytes: default_max_download_bytes(),
+            max_unpacked_bytes: default_max_unpacked_bytes(),
             read_retry_attempts: default_read_retry_attempts(),
             rate_limit_max_wait_secs: default_rate_limit_max_wait_secs(),
             manager_lock_wait_secs: default_manager_lock_wait_secs(),
