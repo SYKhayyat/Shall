@@ -596,22 +596,31 @@ pub(crate) async fn scan_installed_versions(
     state: &tokio::sync::Mutex<crate::core::StateRegistry>,
     registry: &crate::backends::BackendRegistry,
 ) -> serde_json::Map<String, Value> {
+    // Snapshot the name list under the lock, then query without it: `info` fans out to
+    // subprocesses per package, and holding the global state mutex across that parks
+    // concurrent `watch` ticks behind manager invocations.
+    let snapshot: Vec<(String, String, Option<String>)> = {
+        let state = state.lock().await;
+        state
+            .managed()
+            .map(|pkg| (pkg.backend.clone(), pkg.name.clone(), pkg.version.clone()))
+            .collect()
+    };
     let mut locks = serde_json::Map::new();
-    let state = state.lock().await;
-    for pkg in state.managed() {
+    for (backend, name, recorded) in snapshot {
         let version = match registry
-            .get(&pkg.backend)
+            .get(&backend)
             .and_then(|b| b.as_queryable().cloned())
         {
-            Some(q) => match q.info(&pkg.name).await {
-                Ok(Some(p)) => p.version.or_else(|| pkg.version.clone()),
-                _ => pkg.version.clone(),
+            Some(q) => match q.info(&name).await {
+                Ok(Some(p)) => p.version.or(recorded),
+                _ => recorded,
             },
-            None => pkg.version.clone(),
+            None => recorded,
         };
         if let Some(v) = version {
             if !v.is_empty() && v != "unknown" {
-                locks.insert(format!("{}:{}", pkg.backend, pkg.name), Value::String(v));
+                locks.insert(format!("{}:{}", backend, name), Value::String(v));
             }
         }
     }
