@@ -163,6 +163,18 @@ impl SyncEngine {
     /// caller, where it only takes one forgotten site to purge a system.
     #[instrument(skip(self, changes))]
     pub async fn sync(&self, mut changes: SyncChanges, scope: guard::GuardScope) -> Result<()> {
+        // **The backstop.** Safety used to rest on all N callers checking `dry_run` before
+        // getting here; one ungated caller (a future verb, an embedding) wrote for real under
+        // a preview flag and nothing downstream could tell. The engine is the write itself,
+        // so it refuses — `Refused`, exit 3, not retried — rather than silently previewing
+        // with half the run's reporting.
+        if crate::core::dry_run::active() {
+            return Err(Error::Refused(
+                "the sync engine was reached while a dry-run was active, which means a \
+                 caller skipped its preview gate; nothing was written"
+                    .to_string(),
+            ));
+        }
         let _heartbeat = self.executor.start_sudo_keepalive().await;
 
         // II.7c, before anything counts the plan. A graph that arrived from a plan file another
