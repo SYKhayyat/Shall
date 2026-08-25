@@ -171,6 +171,14 @@ pub fn verify_against(lock: &ArtifactLock, asset: &str, sha256: Option<&str>) ->
             "`{}` does not match the hash in the lock.\n  locked: {}\n  got:    {}",
             asset, locked, got
         )),
+        // A hash was recorded and the new download carries NONE: VIII.2 exists to stop a pass
+        // going through unobjected, and skipping the check here is how a re-download whose
+        // hashing failed (or a caller that forgot to hash) would substitute bytes silently.
+        (Some(locked), None) => Some(format!(
+            "`{}` came back with no checksum to compare against the lock's `{}`. Hashing \
+             failed or was skipped; refusing rather than accepting unverified bytes.",
+            asset, locked
+        )),
         _ => None,
     }
 }
@@ -389,5 +397,16 @@ mod tests {
         let l = lock("fd.tar.gz", None);
         assert!(verify_against(&l, "fd.tar.gz", Some("abc123")).is_none());
         assert!(verify_against(&l, "other.tar.gz", None).is_some());
+    }
+
+    /// VIII.2's point: a lock that recorded a hash must not pass a re-download that carries
+    /// none. Skipping the comparison is how a hashing failure would substitute bytes
+    /// silently.
+    #[test]
+    fn a_locked_hash_with_no_new_hash_is_an_objection() {
+        let l = lock("fd.tar.gz", Some("abc123"));
+        let why = verify_against(&l, "fd.tar.gz", None).unwrap();
+        assert!(why.contains("no checksum"), "{}", why);
+        assert!(why.contains("abc123"), "the locked hash is named: {}", why);
     }
 }
