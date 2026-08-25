@@ -187,8 +187,15 @@ pub async fn create_default_registry(
     register_pip(&mut reg, &executor);
     register_gem(&mut reg, &executor);
     register_bun(&mut reg, &executor);
+    // **OS-gated at registration, not by probe.** These three were registered on every OS
+    // behind mere binary existence, so an unrelated program called `pkg` (an npm-global
+    // `vercel pkg`, say) made FreeBSD's backend report READY here and drove the wrong program.
+    // A manager bound to one packaging universe is compiled in only where that universe lives.
+    #[cfg(target_os = "netbsd")]
     register_pkgin(&mut reg, &executor);
+    #[cfg(target_os = "freebsd")]
     register_pkg_freebsd(&mut reg, &executor);
+    #[cfg(target_os = "openbsd")]
     register_pkg_add_openbsd(&mut reg, &executor);
     register_dotnet(&mut reg, &executor);
 
@@ -526,10 +533,14 @@ mod tests {
         assert_caps(&reg, "conda", FULL);
 
         // Cross-platform generic managers (gated at runtime by their binary)
+        // U26, revised: the BSD package tools are compiled in only where each packaging
+        // universe lives, so on other targets the registry answers "not registered" —
+        // which is II.7c's one answer for both facts.
+        #[cfg(target_os = "netbsd")]
         assert_caps(&reg, "pkgin", FULL);
-        // U26: the BSD package tools. Registered on every platform (runtime-gated by binary
-        // presence), so they are asserted unconditionally like pkgin.
+        #[cfg(target_os = "freebsd")]
         assert_caps(&reg, "pkg", FULL);
+        #[cfg(target_os = "openbsd")]
         assert_caps(&reg, "pkg_add", FULL);
         assert_caps(&reg, "dotnet", FULL);
 
@@ -699,7 +710,9 @@ mod tests {
     #[tokio::test]
     async fn no_self_resolving_system_manager_re_derives_a_dependency_closure() {
         type Registrar = fn(&mut BackendRegistry, &CommandExecutor);
-        let system: &[(&str, Registrar)] = &[
+        // `mut` is used by the BSD-target pushes below; other targets never touch it again.
+        #[allow(unused_mut)]
+        let mut system: Vec<(&str, Registrar)> = vec![
             ("apt", register_apt),
             ("apk", register_apk),
             ("zypper", register_zypper),
@@ -710,12 +723,17 @@ mod tests {
             ("emerge", register_emerge),
             ("eopkg", register_eopkg),
             ("slackpkg", register_slackpkg),
-            ("pkgin", register_pkgin),
-            ("pkg", register_pkg_freebsd),
-            ("pkg_add", register_pkg_add_openbsd),
             ("yay", register_yay),
             ("paru", register_paru),
         ];
+        // Same gating as the registration site: each is compiled where its packaging
+        // universe lives.
+        #[cfg(target_os = "netbsd")]
+        system.push(("pkgin", register_pkgin));
+        #[cfg(target_os = "freebsd")]
+        system.push(("pkg", register_pkg_freebsd));
+        #[cfg(target_os = "openbsd")]
+        system.push(("pkg_add", register_pkg_add_openbsd));
 
         let mut asks: Vec<String> = Vec::new();
         for (name, register) in system {
@@ -852,7 +870,9 @@ mod tests {
     /// The argv table. Kept in one function so the scan has one region to read.
     fn argv_cases() -> Vec<ArgvCase> {
         use Expect::{NoCommand, Runs, Unsupported};
-        vec![
+        // `mut` is used by the BSD-target pushes at the end; other targets never touch it.
+        #[allow(unused_mut)]
+        let mut cases = vec![
             // ---- OS-native system managers, each invisible to every platform's CI but its own.
             ArgvCase::pkg(
                 "apt",
@@ -964,25 +984,6 @@ mod tests {
             // reached through a five-argument helper no row could name.
             ArgvCase::pkg("yay", &register_yay, Runs("yay -S"), Runs("yay -Rs")),
             ArgvCase::pkg("paru", &register_paru, Runs("paru -S"), Runs("paru -Rs")),
-            // The BSD tools, where removal is a different program.
-            ArgvCase::pkg(
-                "pkgin",
-                &register_pkgin,
-                Runs("pkgin -y install"),
-                Runs("pkgin -y remove"),
-            ),
-            ArgvCase::pkg(
-                "pkg",
-                &register_pkg_freebsd,
-                Runs("pkg install -y"),
-                Runs("pkg delete -y"),
-            ),
-            ArgvCase::pkg(
-                "pkg_add",
-                &register_pkg_add_openbsd,
-                Runs("pkg_add"),
-                Runs("pkg_delete"),
-            ),
             // ---- Cross-platform store-shaped managers.
             ArgvCase::pkg(
                 "brew",
@@ -1349,7 +1350,34 @@ mod tests {
                 ),
                 NoCommand("deletes the image it downloaded; no process is involved."),
             ),
-        ]
+        ];
+
+        // The BSD tools, where removal is a different program — pushed rather than listed,
+        // because their registrars are compiled only where each packaging universe lives
+        // (same gating as the registration site).
+        #[cfg(target_os = "netbsd")]
+        cases.push(ArgvCase::pkg(
+            "pkgin",
+            &register_pkgin,
+            Runs("pkgin -y install"),
+            Runs("pkgin -y remove"),
+        ));
+        #[cfg(target_os = "freebsd")]
+        cases.push(ArgvCase::pkg(
+            "pkg",
+            &register_pkg_freebsd,
+            Runs("pkg install -y"),
+            Runs("pkg delete -y"),
+        ));
+        #[cfg(target_os = "openbsd")]
+        cases.push(ArgvCase::pkg(
+            "pkg_add",
+            &register_pkg_add_openbsd,
+            Runs("pkg_add"),
+            Runs("pkg_delete"),
+        ));
+
+        cases
     }
 
     #[tokio::test]

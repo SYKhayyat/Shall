@@ -339,13 +339,46 @@ impl Upgradable for GoUpgradable {
     }
 
     async fn upgrade(&self, _sudo: bool) -> Result<()> {
-        info!("Go: Upgrading all installed binaries to @latest...");
+        info!("Go: upgrading the binaries Shall manages to @latest...");
+        // **Only what Shall manages, only what nothing pins.** The scan reads `$GOPATH/bin`,
+        // a directory other tools and hand-installs write into: reinstalling everything found
+        // there at @latest overwrote binaries Shall never installed. And a module a manifest
+        // line pins at `go:name@version` is a decision — floating it to latest and letting the
+        // next sync drag it back is churn around an ignored pin, so pinned modules are skipped
+        // outright (their version moves only when the line does).
+        let managed: std::collections::BTreeMap<String, Option<String>> =
+            match crate::core::StateRegistry::load_default() {
+                Ok(state) => state
+                    .managed()
+                    .filter(|pkg| pkg.backend == "go")
+                    .map(|pkg| {
+                        let pinned = pkg.options.one("version").map(str::to_string);
+                        (pkg.name.clone(), pinned)
+                    })
+                    .collect(),
+                Err(_) => Default::default(),
+            };
+        if managed.is_empty() {
+            info!("Go: no go-managed packages in the registry; nothing to upgrade");
+            return Ok(());
+        }
         let q = GoQueryable {
             core: self.core.clone(),
         };
         for pkg in q.scan().await? {
             // Only module paths can be reinstalled; skip bare-filename fallbacks.
             if !pkg.name.contains('/') {
+                continue;
+            }
+            let Some(recorded) = managed.get(&pkg.name) else {
+                info!("Go: {} is not Shall-managed; leaving it alone", pkg.name);
+                continue;
+            };
+            if recorded.is_some() {
+                info!(
+                    "Go: {} is pinned by its declaration; skipping (change the line to move it)",
+                    pkg.name
+                );
                 continue;
             }
             let args = install_argv(&format!("{}@latest", pkg.name));

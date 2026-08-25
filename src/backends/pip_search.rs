@@ -22,7 +22,11 @@ pub async fn registry_search(query: &str, backend: &str) -> Result<Vec<Package>>
 
     let client = crate::core::http::api("shall-manager", http_timeout().as_secs())?;
 
-    let url = format!("https://pypi.org/pypi/{}/json", name);
+    // Path-segment encoding, hand-rolled rather than a dependency for one call site: a
+    // package name is `[A-Za-z0-9._-]`, everything else (a stray `/`, space or `?` from user
+    // text) is path syntax to the server and gets escaped.
+    let encoded = percent_encode_segment(name);
+    let url = format!("https://pypi.org/pypi/{encoded}/json");
     let res = client.get(&url).send().await.map_err(Error::from)?;
 
     // 404 simply means "no such package" — not an error for a search.
@@ -35,6 +39,19 @@ pub async fn registry_search(query: &str, backend: &str) -> Result<Vec<Package>>
 
     let json: serde_json::Value = res.json().await.map_err(Error::from)?;
     Ok(vec![parse_pypi(&json, name, backend)])
+}
+
+/// Percent-encode one URL path segment: unreserved bytes pass, everything else becomes `%XX`.
+fn percent_encode_segment(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
 }
 
 /// Parse a PyPI JSON document (`https://pypi.org/pypi/<name>/json`) into a `Package`.
@@ -92,5 +109,13 @@ mod tests {
         let json: serde_json::Value =
             serde_json::from_str(r#"{"info": {"name": "ruff", "version": "0.16.2"}}"#).unwrap();
         assert_eq!(parse_pypi(&json, "ruff", "uv").backend, "uv");
+    }
+
+    /// Path syntax in user text must not become a path: a `/` or space is escaped, ordinary
+    /// names pass through untouched.
+    #[test]
+    fn the_query_is_path_encoded_not_pasted_into_the_url() {
+        assert_eq!(percent_encode_segment("scikit-learn"), "scikit-learn");
+        assert_eq!(percent_encode_segment("a/b c?d"), "a%2Fb%20c%3Fd");
     }
 }

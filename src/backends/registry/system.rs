@@ -824,6 +824,9 @@ pub(super) fn register_macports(reg: &mut BackendRegistry, executor: &CommandExe
 
 /// pkgsrc's binary package tool. Cross-platform (NetBSD/SmartOS/illumos, plus pkgsrc
 /// on Linux/macOS); gated at runtime by the presence of the `pkgin` binary.
+// Compiled in only where each packaging universe lives (see the registration site): on any
+// other target these would be dead rows whose mere binary-existence probe misfires.
+#[cfg(target_os = "netbsd")]
 pub(super) fn register_pkgin(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "pkgin".into(),
@@ -896,6 +899,7 @@ pub(super) fn register_pkgin(reg: &mut BackendRegistry, executor: &CommandExecut
 /// `pkg info`. Gated at runtime by the presence of `pkg`; on a Linux/mac box it simply is not
 /// available. `when family == freebsd` already answers on a BSD (`d66730e`), so a module can
 /// scope its `pkg:` lines to the platform.
+#[cfg(target_os = "freebsd")]
 pub(super) fn register_pkg_freebsd(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "pkg".into(),
@@ -974,6 +978,7 @@ pub(super) fn register_pkg_freebsd(reg: &mut BackendRegistry, executor: &Command
 /// `pkg_add <name>` (no subcommand), remove is a SEPARATE binary `pkg_delete <name>`, and both
 /// listing and search are `pkg_info`. The `remove_binary` field is what lets one backend drive
 /// three tools. Gated by the presence of `pkg_add`.
+#[cfg(target_os = "openbsd")]
 pub(super) fn register_pkg_add_openbsd(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "pkg_add".into(),

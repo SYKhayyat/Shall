@@ -322,7 +322,16 @@ impl ServiceBackendCore {
             return Ok(());
         };
         for (step, cmd) in init.plan(action, name) {
-            let (prog, args) = cmd.split_first().expect("an init command is never empty");
+            // **Empty is a row the loader's floor lets through, not an impossibility** — so
+            // it is refused here by name instead of trusted away with an `expect`. This used
+            // to panic on the first `service:` line against such a row.
+            let Some((prog, args)) = cmd.split_first() else {
+                return Err(Error::Validation(format!(
+                    "service `{name}`: the {:?} step carries an empty command; fix its init \
+                     definition",
+                    step
+                )));
+            };
             let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
             self.executor_for(init, step)
                 .run(prog, &arg_refs, sudo)

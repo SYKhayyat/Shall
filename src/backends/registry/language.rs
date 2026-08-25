@@ -390,10 +390,15 @@ pub(super) fn register_conda(
     // per-package query, so it is not asked.
     cfg.depends = None;
 
-    // The row is not finished until the machine's settings are in it. A failure here names the
-    // key the user has to set; it cannot silently ship `-n {setting.env}` to conda.
+    // The row is not finished until the machine's settings are in it. **A failure is a
+    // registration failure, loud and named** — this used to warn and return, so the backend
+    // silently vanished and every `conda:x` line failed as "unknown backend", a message
+    // pointing nowhere near the bad `[backend_settings.conda]` key.
     if let Err(e) = cfg.resolve_settings(cfg_src.backend_settings.get("conda")) {
-        tracing::warn!("conda: {e}");
+        tracing::error!(
+            "conda: {e}\n  The conda backend is NOT registered: every `conda:` line will fail \
+             until `[backend_settings.conda]` names the setting it asks for."
+        );
         return;
     }
 
