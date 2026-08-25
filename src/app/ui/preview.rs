@@ -5,7 +5,6 @@ use petgraph::graph::NodeIndex;
 use ratatui::crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{
     backend::CrosstermBackend,
@@ -57,23 +56,18 @@ impl<'a> TuiPreview<'a> {
 
     /// Returns true if the user confirmed the transaction.
     pub fn run(&mut self) -> Result<bool> {
-        enable_raw_mode()?;
+        // Guard-restored on any exit — see `RawScreenGuard`.
+        let _screen = super::RawScreenGuard::enter()?;
         let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+        execute!(stdout, EnableMouseCapture)?;
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend)?;
 
         let result = self.main_loop(&mut terminal);
 
-        // Restore terminal state
-        disable_raw_mode()?;
-        execute!(
-            terminal.backend_mut(),
-            LeaveAlternateScreen,
-            DisableMouseCapture
-        )?;
+        execute!(terminal.backend_mut(), DisableMouseCapture)?;
         terminal.show_cursor()?;
-
+        drop(_screen);
         result
     }
 

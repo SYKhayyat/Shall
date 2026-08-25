@@ -26,7 +26,6 @@ use crate::core::Result;
 use ratatui::crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{
     backend::CrosstermBackend,
@@ -153,21 +152,19 @@ impl HistoryBrowser {
 
     /// Launch the history; returns the action the caller should perform.
     pub fn run(&mut self) -> Result<HistoryAction> {
-        enable_raw_mode()?;
+        // The guard restores raw mode and the main screen on ANY exit — return, `?`, panic —
+        // where the old tail-of-function restore was skipped by everything but success.
+        let _screen = super::RawScreenGuard::enter()?;
         let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+        execute!(stdout, EnableMouseCapture)?;
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend)?;
 
         let action = self.event_loop(&mut terminal);
 
-        disable_raw_mode()?;
-        execute!(
-            terminal.backend_mut(),
-            LeaveAlternateScreen,
-            DisableMouseCapture
-        )?;
+        execute!(terminal.backend_mut(), DisableMouseCapture)?;
         terminal.show_cursor()?;
+        drop(_screen);
         action
     }
 
@@ -227,10 +224,12 @@ impl HistoryBrowser {
         terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
         cmd: &str,
     ) -> Result<()> {
-        disable_raw_mode()?;
+        // The outer `RawScreenGuard` is still alive; this nested leave/re-enter pair runs
+        // inside it, so raw mode and screen state end up back where the guard expects.
+        ratatui::crossterm::terminal::disable_raw_mode()?;
         execute!(
             terminal.backend_mut(),
-            LeaveAlternateScreen,
+            ratatui::crossterm::terminal::LeaveAlternateScreen,
             DisableMouseCapture
         )?;
 
@@ -246,10 +245,10 @@ impl HistoryBrowser {
         println!("\n[press Enter to return to the history]");
         let _ = io::stdin().read_line(&mut String::new());
 
-        enable_raw_mode()?;
+        ratatui::crossterm::terminal::enable_raw_mode()?;
         execute!(
             terminal.backend_mut(),
-            EnterAlternateScreen,
+            ratatui::crossterm::terminal::EnterAlternateScreen,
             EnableMouseCapture
         )?;
         terminal.clear()?;

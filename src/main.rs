@@ -1211,7 +1211,16 @@ pub(crate) async fn attempt_shim_hijack() -> Result<Option<Result<()>>> {
         .ok()
         .and_then(|p| p.file_name().map(|s| s.to_string_lossy().into_owned()))
         .unwrap_or_else(|| "shall".to_string());
-    if current_name != "shall" && !current_name.starts_with("shall") {
+    // **The `.exe` never reaches the matcher.** Shim declarations are keyed on bare names
+    // (`shim:jq`), so a Windows copy named `jq.exe` used to miss the ledger, degrade the spec
+    // to the literal string `jq.exe`, and — per run.rs's respawn note — resolve back to this
+    // same file: the unbounded spawn chain. Case-insensitive both ways, because `SHALL.EXE`
+    // and `Shall.exe` are this binary too.
+    let bare = current_name
+        .strip_suffix(std::env::consts::EXE_SUFFIX)
+        .unwrap_or(&current_name)
+        .to_lowercase();
+    if bare != "shall" {
         let root = shall::app::locate::locate(None)?.path;
         let config =
             shall::config::Config::from_file(&root.join(shall::config::PREFERENCES_FILE_NAME))
@@ -1219,7 +1228,7 @@ pub(crate) async fn attempt_shim_hijack() -> Result<Option<Result<()>>> {
         let app = App::new(config).await?;
         return Ok(Some(
             app.runner()
-                .exec_shim(&current_name, &env::args().collect::<Vec<_>>()[1..])
+                .exec_shim(&bare, &env::args().collect::<Vec<_>>()[1..])
                 .await
                 .map_err(|e| e.into()),
         ));
