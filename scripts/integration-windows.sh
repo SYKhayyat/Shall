@@ -711,7 +711,7 @@ grep_ok "priority names this backend" "$BACKEND" cat "$SHALL_CONFIG_DIR/priority
 
 # --- 2. Discovery / read-only ---------------------------------------------
 echo "[2] Discovery / read-only verbs"
-ok "check health" lx check health
+ok "check health" lx check health || { echo "---- full check health output ----"; cat /tmp/itw.out; }
 ok "check drift" lx check drift
 # The aggregate `check` exits 2 when it has findings to report, and an unmanaged package
 # on a developer's own machine is a finding. Every named section exits 0.
@@ -1598,7 +1598,7 @@ ok "path prints the config repo" lx path
 ok "path --explain says which source won" lx path --explain
 ok "config show prints the active configuration" lx config show
 ok "policy checks the desired state against [guard]" lx policy
-ok "check conflicts reports cross-backend conflicts" lx check conflicts
+ok "check conflicts reports cross-backend conflicts" lx check conflicts || { echo "---- full check conflicts output ----"; cat /tmp/itw.out; }
 # `adapters` (S78) — the eight extension surfaces. Twin of the block in
 # `docker/integration/run-in-container.sh`; change one, change the other. A fresh machine has no
 # `adapters/` directory at all, which is the state almost every machine is in and the one a
