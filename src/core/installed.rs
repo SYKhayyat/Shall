@@ -154,42 +154,59 @@ impl InstalledListings {
     /// Every failure here — unreadable, unparseable, a clock that moved backwards — answers
     /// `None` and asks the manager. A cache that cannot be read is a cache miss; it is never a
     /// reason to fail a command, and never a reason to report a machine as empty.
-    fn read_from_disk(&self, backend: &str) -> Option<Vec<Package>> {
+    ///
+    /// The read runs on the blocking pool: it happens behind the slot mutex inside an async
+    /// fn, and a multi-megabyte listing read on a runtime worker parks everything scheduled
+    /// behind it for the length of the disk hit.
+    async fn read_from_disk(&self, backend: &str) -> Option<Vec<Package>> {
         let ttl = self.ttl?;
         let path = Self::cache_file(backend)?;
-        let raw = std::fs::read_to_string(path).ok()?;
+        let raw =
+            crate::core::blocking::off_the_runtime(move || std::fs::read_to_string(path).ok())
+                .await
+                .ok()??;
         let cached: CachedListing = serde_json::from_str(&raw).ok()?;
         let age = Self::now_secs().checked_sub(cached.taken_at)?;
         (age <= ttl.as_secs()).then_some(cached.packages)
     }
 
-    fn to_disk(&self, backend: &str, packages: &[Package]) {
+    async fn to_disk(&self, backend: &str, packages: &[Package]) {
         if self.ttl.is_none() {
             return;
         }
         let Some(path) = Self::cache_file(backend) else {
             return;
         };
-        if std::fs::create_dir_all(Self::cache_dir()).is_err() {
-            return;
-        }
         let entry = CachedListing {
             taken_at: Self::now_secs(),
             packages: packages.to_vec(),
         };
-        if let Ok(json) = serde_json::to_string(&entry) {
-            // Written through a temp file and renamed: a listing half-flushed when the process
-            // is killed would otherwise be read back as a shorter machine, and a shorter
-            // machine is a list of things to remove.
-            //
-            // The temp name carries the pid, because the rename is only atomic per writer:
-            // two `shall` runs sharing one temp path write into each other's file and rename
-            // the interleaving, which is the torn listing this exists to prevent, arrived at
-            // by the mechanism meant to prevent it. A prompt hook and a terminal are two runs.
-            let tmp = path.with_extension(format!("json.{}.tmp", std::process::id()));
-            if std::fs::write(&tmp, json).is_ok() && std::fs::rename(&tmp, &path).is_err() {
-                let _ = std::fs::remove_file(&tmp);
-            }
+        // Serialised on the caller's worker (cheap, in-memory); only the write moves.
+        let Ok(json) = serde_json::to_string(&entry) else {
+            return;
+        };
+        let dir = Self::cache_dir();
+        let wrote = crate::core::blocking::off_the_runtime(move || {
+            std::fs::create_dir_all(&dir).is_ok()
+                // Written through a temp file and renamed: a listing half-flushed when the
+                // process is killed would otherwise be read back as a shorter machine, and a
+                // shorter machine is a list of things to remove.
+                //
+                // The temp name carries the pid, because the rename is only atomic per writer:
+                // two `shall` runs sharing one temp path write into each other's file and rename
+                // the interleaving, which is the torn listing this exists to prevent, arrived at
+                // by the mechanism meant to prevent it. A prompt hook and a terminal are two runs.
+                && {
+                    let tmp = path.with_extension(format!("json.{}.tmp", std::process::id()));
+                    if std::fs::write(&tmp, json).is_ok() && std::fs::rename(&tmp, &path).is_err() {
+                        let _ = std::fs::remove_file(&tmp);
+                    }
+                    true
+                }
+        })
+        .await;
+        if wrote.ok() != Some(true) {
+            return;
         }
     }
 
@@ -244,7 +261,7 @@ impl InstalledListings {
         }
         // The disk layer is consulted inside the slot lock, so two concurrent askers still
         // produce one read rather than two — the same reason the fetch is in here.
-        if let Some(on_disk) = self.read_from_disk(backend) {
+        if let Some(on_disk) = self.read_from_disk(backend).await {
             let handle: Listing = Arc::new(on_disk);
             *slot = Some((generation, handle.clone()));
             return Ok(handle);
@@ -253,7 +270,7 @@ impl InstalledListings {
         // time, and remembering "it errored" would turn one transient failure into the run's
         // permanent verdict.
         let fresh = fetch.await?;
-        self.to_disk(backend, &fresh);
+        self.to_disk(backend, &fresh).await;
         let handle: Listing = Arc::new(fresh);
         // Stamped with the generation the fetch *started* in. An invalidation that landed
         // while the manager was answering makes this answer stale the moment it is stored,
