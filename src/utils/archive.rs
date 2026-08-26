@@ -50,15 +50,16 @@ pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<()> {
             // **Link targets are inside the archive too, and they are trusted by nobody.**
             // `unpack` refuses entry *names* that escape the destination but follows link
             // *targets* as given — so `ln -s /usr/bin/sh ./x` in a tarball plants a symlink
-            // the executable search happily walks straight through. Every entry's target is
-            // checked against the destination before anything is linked.
+            // the executable search happily walks straight through.
             //
-            // And every entry's DECLARED size counts against the expansion bound before its
-            // bytes are written: the headers state the uncompressed size, so the bomb is seen
-            // in full before the first megabyte of it lands.
+            // The containment test is LEXICAL, deliberately: canonicalize() here answered
+            // differently per platform (macOS resolves `/var` → `/private/var`, so the base
+            // and the target disagreed about the prefix and an in-bounds link was refused).
+            // Absolute targets are refused outright; relative ones may climb with `..` only
+            // as far as the destination root. A relative link that lands inside and then
+            // points at ANOTHER in-dest link is not chased here — each entry is checked when
+            // its own turn comes, which bounds one hop per archive entry.
             let mut archive = tar::Archive::new(reader);
-            let canonical_base =
-                fs::canonicalize(dest_dir).unwrap_or_else(|_| dest_dir.to_path_buf());
             let cap = max_unpacked_bytes();
             let mut expanded: u64 = 0;
             for entry in archive.entries().map_err(Error::from)? {
@@ -76,34 +77,46 @@ pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<()> {
                     }
                 }
                 if let Some(link) = entry.link_name().map_err(Error::from)? {
-                    let link_path = dest_dir
-                        .join(entry.path().map_err(Error::from)?)
-                        .parent()
-                        .unwrap_or(dest_dir)
-                        .join(&*link);
-                    // Resolvable now: it must land inside. Not resolvable yet (created later
-                    // in this same extraction, or a deliberate dangle): an absolute target
-                    // can only leave the destination, and a relative one is checked
-                    // textually for `../` escapes before its components exist.
-                    match fs::canonicalize(&link_path) {
-                        Ok(resolved) => {
-                            if !resolved.starts_with(&canonical_base) {
-                                return Err(Error::Other(format!(
-                                    "archive entry {:?} links to {:?}, which leaves the destination",
-                                    entry.path().map_err(Error::from)?,
-                                    link
-                                )));
+                    if link.is_absolute() {
+                        return Err(Error::Other(format!(
+                            "archive entry {:?} links to {:?}, which leaves the destination",
+                            entry.path().map_err(Error::from)?,
+                            link
+                        )));
+                    }
+                    // Depth walk from the entry's own directory. The +1/-1 accounting:
+                    // entering a component adds a level, `..` removes one, and climbing
+                    // above zero means the target left the destination.
+                    let entry_rel = entry.path().map_err(Error::from)?;
+                    let mut depth = entry_rel
+                        .components()
+                        .filter(|c| matches!(c, std::path::Component::Normal(_)))
+                        .count()
+                        .saturating_sub(1);
+                    let mut escapes = false;
+                    for comp in link.components() {
+                        match comp {
+                            std::path::Component::ParentDir => {
+                                if depth == 0 {
+                                    escapes = true;
+                                    break;
+                                }
+                                depth -= 1;
+                            }
+                            std::path::Component::Normal(_) => depth += 1,
+                            std::path::Component::CurDir => {}
+                            // RootDir/Prefix on a relative-checked link: absolute in disguise.
+                            _ => {
+                                escapes = true;
+                                break;
                             }
                         }
-                        Err(_) => {
-                            if link.is_absolute() || !link_path.starts_with(&canonical_base) {
-                                return Err(Error::Other(format!(
-                                    "archive entry {:?} links to {:?}, which leaves the destination",
-                                    entry.path().map_err(Error::from)?,
-                                    link
-                                )));
-                            }
-                        }
+                    }
+                    if escapes {
+                        return Err(Error::Other(format!(
+                            "archive entry {:?} links to {:?}, which leaves the destination",
+                            entry_rel, link
+                        )));
                     }
                 }
                 entry.unpack_in(dest_dir).map_err(Error::from)?;

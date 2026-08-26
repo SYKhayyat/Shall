@@ -891,7 +891,10 @@ mod tests {
             mock.get_calls()
                 .await
                 .iter()
-                .any(|c| c.starts_with("install -m 0644")),
+                // Substring, not prefix: on Unix an escalated run records
+                // `sudo -n install -m 0644 …`, and a prefix match would make this test
+                // pass on Windows and root only.
+                .any(|c| c.contains("install -m 0644")),
             "the install step is still previewed in the run log"
         );
     }
