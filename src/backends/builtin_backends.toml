@@ -835,3 +835,36 @@ expect = [
     "aaa_base",
     "xorg-server",
 ]
+
+# AerynOS moss. Content-addressable system package manager; atomic transactions over /usr.
+# Needs root and is exclusive (moss holds its own store lock). Linux only: it requires
+# renameat2(2) and namespace isolation that are not available elsewhere.
+#
+# **The fixture is UNVERIFIED** — no AerynOS container was reachable when this row was
+# written. `names_only` is chosen because moss's installed listing is expected to carry one
+# package name per line, possibly with a version column that names_only safely drops. The
+# fixture MUST be replaced with captured real output before this backend can be proven.
+[[backend]]
+name = "moss"
+os = "linux"
+install_args = ["install"]
+remove_args = ["remove"]
+list_args = ["list", "installed"]
+search_args = ["search"]
+upgrade_args = ["sync", "--update"]
+reads = "names_only"
+searches = "names_only"
+needs_root = true
+
+[backend.fixture]
+source = "UNVERIFIED: written from the documented CLI surface at aerynos.dev/users/system-management/moss-state-management/; no AerynOS image was reachable"
+list = '''
+bash
+coreutils
+systemd
+'''
+expect = [
+    "bash",
+    "coreutils",
+    "systemd",
+]
