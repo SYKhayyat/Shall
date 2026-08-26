@@ -301,9 +301,13 @@ impl GithubBackendCore {
         };
 
         let [bare, prefixed] = tag_spellings(pin);
-        let found_bare = self.release_at(&tag_url(repo, &bare)).await?;
-        let found_prefixed = self.release_at(&tag_url(repo, &prefixed)).await?;
-        one_release(repo, pin, found_bare, found_prefixed)
+        let bare_url = tag_url(repo, &bare);
+        let prefixed_url = tag_url(repo, &prefixed);
+        // Both spellings asked at once: they are independent rate-limited calls, and the
+        // anonymous budget is exactly what two serial round-trips burn twice as much of.
+        let (found_bare, found_prefixed) =
+            tokio::join!(self.release_at(&bare_url), self.release_at(&prefixed_url));
+        one_release(repo, pin, found_bare?, found_prefixed?)
     }
 
     /// The records as they stand, for reading. A copy, deliberately: a caller that held a

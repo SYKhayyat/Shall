@@ -182,25 +182,6 @@ impl Installable for WebInstallable {
             crate::core::download::check_checksum_declared(spec)?;
             let client = crate::core::download::client(allow_http, "shall-manager")?;
 
-            let head_res = client.head(&spec.name).send().await.map_err(Error::from)?;
-            let remote_etag = head_res
-                .headers()
-                .get("etag")
-                .and_then(|v| v.to_str().ok().map(|s| s.to_string()));
-            let remote_mod = head_res
-                .headers()
-                .get("last-modified")
-                .and_then(|v| v.to_str().ok().map(|s| s.to_string()));
-
-            if let Some(existing) = state.get(&spec.name) {
-                if (remote_etag.is_some() && remote_etag == existing.etag)
-                    || (remote_mod.is_some() && remote_mod == existing.last_modified)
-                {
-                    debug!("Web: {} is up to date, skipping download.", spec.name);
-                    continue;
-                }
-            }
-
             // Q37: the PATH name is derived from the URL and from nothing inside the file, so
             // the deploy refusal is answerable before the transfer rather than after it. The
             // `web:` twin of the `github:` ordering that spent 180s on a rejected artifact.
@@ -222,11 +203,32 @@ impl Installable for WebInstallable {
                 .await?;
             }
 
-            // As in `appimage:`: the deploy refusal above is the half of this a preview can
-            // actually answer, and it is answered before this line.
             if crate::core::dry_run::active() {
                 crate::would!("download and install {}", spec.name);
                 continue;
+            }
+
+            // The freshness HEAD runs only when a download is actually possible: in a preview
+            // it was a live network round-trip per spec before bailing, and a failed HEAD
+            // silently disabled etag freshness for ever.
+            let head_res = client.head(&spec.name).send().await.map_err(Error::from)?;
+            let remote_etag = head_res
+                .headers()
+                .get("etag")
+                .and_then(|v| v.to_str().ok().map(|s| s.to_string()));
+            let remote_mod = head_res
+                .headers()
+                .get("last-modified")
+                .and_then(|v| v.to_str().ok().map(|s| s.to_string()));
+
+            // Etag/Last-Modified freshness: skip the download when neither changed.
+            if let Some(existing) = state.get(&spec.name) {
+                if (remote_etag.is_some() && remote_etag == existing.etag)
+                    || (remote_mod.is_some() && remote_mod == existing.last_modified)
+                {
+                    debug!("Web: {} is up to date, skipping download.", spec.name);
+                    continue;
+                }
             }
 
             info!("Web: Downloading resource: {}", spec.name);
