@@ -2,10 +2,7 @@ use crate::app::sync::SyncChanges;
 use crate::core::{GraphAction, Result};
 use petgraph::graph::NodeIndex;
 // See `history.rs`: crossterm is reached through ratatui so there can only be one of it.
-use ratatui::crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
-    execute,
-};
+use ratatui::crossterm::event::{self, Event, KeyCode};
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
@@ -32,7 +29,9 @@ pub struct TuiPreview<'a> {
 impl<'a> TuiPreview<'a> {
     pub fn new(changes: &'a SyncChanges, alternatives: HashMap<NodeIndex, Vec<String>>) -> Self {
         let mut list_state = ListState::default();
-        list_state.select(Some(0));
+        if changes.graph.node_count() > 0 {
+            list_state.select(Some(0));
+        }
 
         // NodeIndex is not the list position: the graph is sparse, so the UI keeps its own
         // dense index and must map back through this table before touching the graph.
@@ -58,14 +57,12 @@ impl<'a> TuiPreview<'a> {
     pub fn run(&mut self) -> Result<bool> {
         // Guard-restored on any exit — see `RawScreenGuard`.
         let _screen = super::RawScreenGuard::enter()?;
-        let mut stdout = io::stdout();
-        execute!(stdout, EnableMouseCapture)?;
+        let stdout = io::stdout();
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend)?;
 
         let result = self.main_loop(&mut terminal);
 
-        execute!(terminal.backend_mut(), DisableMouseCapture)?;
         terminal.show_cursor()?;
         drop(_screen);
         result
@@ -171,31 +168,29 @@ impl<'a> TuiPreview<'a> {
     }
 
     fn next(&mut self) {
+        let total = self.ui_index_to_node.len();
+        if total == 0 {
+            self.list_state.select(None);
+            return;
+        }
+
         let i = match self.list_state.selected() {
-            Some(i) => {
-                let total = self.ui_index_to_node.len();
-                if i >= total - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
+            Some(i) if i < total - 1 => i + 1,
+            Some(_) | None => 0,
         };
         self.list_state.select(Some(i));
     }
 
     fn previous(&mut self) {
+        let total = self.ui_index_to_node.len();
+        if total == 0 {
+            self.list_state.select(None);
+            return;
+        }
+
         let i = match self.list_state.selected() {
-            Some(i) => {
-                let total = self.ui_index_to_node.len();
-                if i == 0 {
-                    total - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
+            Some(0) | None => total - 1,
+            Some(i) => i - 1,
         };
         self.list_state.select(Some(i));
     }
@@ -240,6 +235,11 @@ impl<'a> TuiPreview<'a> {
         let mut filtered = self.changes.clone();
         for idx in &self.disabled_nodes {
             filtered.graph.remove_node(*idx);
+        }
+        for (node_idx, backend) in &self.backend_overrides {
+            if let Some(GraphAction::Install(spec)) = filtered.graph.node_weight_mut(*node_idx) {
+                spec.backend = backend.clone();
+            }
         }
         filtered
     }

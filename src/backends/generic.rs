@@ -2216,15 +2216,21 @@ impl GenericRepoManager {
     /// itself (apk prints one field per line, which `list_repos` cannot read as a pair) leaves
     /// the identifier as the only thing that can be it.
     async fn url_for(&self, ident: &str) -> Result<String> {
-        if let Ok(repos) = self.list_repos().await {
-            if let Some((_, url)) = repos.iter().find(|(n, _)| n == ident) {
-                return Ok(url.clone());
-            }
-            if repos.iter().any(|(_, url)| url == ident) {
-                return Ok(ident.to_string());
-            }
-        }
+        // A URL is already the complete operand; asking a failing listing command to confirm it
+        // would turn a usable direct removal into an unrelated repository-listing failure.
         if ident.contains("://") || ident.starts_with('/') {
+            return Ok(ident.to_string());
+        }
+        let repos = self.list_repos().await.map_err(|e| {
+            crate::core::Error::Other(format!(
+                "could not list repositories for `{}` while resolving `{}`: {}",
+                self.core.name, ident, e
+            ))
+        })?;
+        if let Some((_, url)) = repos.iter().find(|(n, _)| n == ident) {
+            return Ok(url.clone());
+        }
+        if repos.iter().any(|(_, url)| url == ident) {
             return Ok(ident.to_string());
         }
         Err(crate::core::Error::Other(format!(
@@ -2341,15 +2347,25 @@ impl RepoManager for GenericRepoManager {
                 let filled: Vec<String> =
                     detail.iter().map(|a| a.replace("{name}", name)).collect();
                 let refs: Vec<&str> = filled.iter().map(String::as_str).collect();
-                let source = self
+                let detail = self
                     .core
                     .executor
                     .run_output(self.core.repo_list_binary(), &refs, false)
                     .await
-                    .ok()
-                    .and_then(|s| s.lines().next().map(|l| l.trim().to_string()))
-                    .unwrap_or_default();
-                repos.push((name.to_string(), source));
+                    .map_err(|e| {
+                        crate::core::Error::Other(format!(
+                            "could not read repository `{}` details for `{}`: {}",
+                            name, self.core.name, e
+                        ))
+                    })?;
+                let source = detail.lines().next().map(str::trim).unwrap_or_default();
+                if source.is_empty() {
+                    return Err(crate::core::Error::Unreadable(format!(
+                        "repository `{}` returned no source from `{}`",
+                        name, self.core.name
+                    )));
+                }
+                repos.push((name.to_string(), source.to_string()));
             }
             return Ok(repos);
         }

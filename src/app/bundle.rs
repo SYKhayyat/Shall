@@ -9,7 +9,6 @@
 use crate::config::Config;
 use crate::core::{Error, Result};
 use crate::model::Writes;
-use crate::utils::file::copy_over;
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
@@ -324,6 +323,7 @@ pub async fn restore_bundle(
     config_root: &Path,
     registry_path: &Path,
     force: bool,
+    dry_run: bool,
 ) -> Result<RestoreReport> {
     if !bundle_dir.join("packages.json").exists() && !bundle_dir.join("modules").exists() {
         return Err(Error::Other(format!(
@@ -347,10 +347,11 @@ pub async fn restore_bundle(
         git_history_present: bundle_dir.join("config.bundle").exists(),
         ..Default::default()
     };
+    let writes = Writes::for_run(dry_run);
 
     // Copy the config, entry by entry, skipping the bundle's own metadata files so the
     // restored root is a config root and not a bundle.
-    crate::utils::file::ensure_dir_async(config_root).await?;
+    writes.mkdir(config_root).await?;
     let mut rd = tokio::fs::read_dir(bundle_dir).await.map_err(Error::from)?;
     while let Some(entry) = rd.next_entry().await.map_err(Error::from)? {
         let name = entry.file_name();
@@ -362,12 +363,12 @@ pub async fn restore_bundle(
         let from = entry.path();
         let to = config_root.join(&name);
         if entry.file_type().await.map_err(Error::from)?.is_dir() {
-            report.config_files += copy_dir_recursive(&from, &to, None, Writes::ToDisk).await?;
+            report.config_files += copy_dir_recursive(&from, &to, None, writes).await?;
         } else {
             if let Some(p) = to.parent() {
-                crate::utils::file::ensure_dir_async(p).await?;
+                writes.mkdir(p).await?;
             }
-            copy_over(&from, &to).await?;
+            writes.copy(&from, &to).await?;
             report.config_files += 1;
         }
     }
@@ -376,9 +377,9 @@ pub async fn restore_bundle(
     let bundled_registry = bundle_dir.join("registry.json");
     if bundled_registry.exists() {
         if let Some(p) = registry_path.parent() {
-            crate::utils::file::ensure_dir_async(p).await?;
+            writes.mkdir(p).await?;
         }
-        copy_over(&bundled_registry, registry_path).await?;
+        writes.copy(&bundled_registry, registry_path).await?;
         report.registry_restored = true;
     }
 
@@ -396,6 +397,7 @@ async fn dir_has_entries(dir: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::file::copy_over;
 
     #[tokio::test]
     async fn restore_refuses_a_nonempty_config_unless_forced() {
@@ -412,7 +414,7 @@ mod tests {
         std::fs::write(cfg.join("something"), "keep me").unwrap();
 
         let reg = data.join("registry.json");
-        let refused = restore_bundle(&bundle, &cfg, &reg, false).await;
+        let refused = restore_bundle(&bundle, &cfg, &reg, false, false).await;
         assert!(refused.is_err(), "a non-empty config must be refused");
         // And refused as a REFUSAL: `Error::Other` here exited 1, which README.md's table
         // defines as "Shall could not carry it out", and never fired `on_guard_refusal`.
@@ -423,7 +425,9 @@ mod tests {
 
         // Into a clean directory it restores the declarations.
         let clean = tmp.join("clean");
-        let report = restore_bundle(&bundle, &clean, &reg, false).await.unwrap();
+        let report = restore_bundle(&bundle, &clean, &reg, false, false)
+            .await
+            .unwrap();
         assert!(report.config_files >= 2);
         assert_eq!(
             std::fs::read_to_string(clean.join("modules/tools.txt")).unwrap(),
@@ -457,7 +461,7 @@ mod tests {
         std::fs::set_permissions(&obj, perms).unwrap();
 
         let reg = data.join("registry.json");
-        restore_bundle(&bundle, &cfg, &reg, false)
+        restore_bundle(&bundle, &cfg, &reg, false, false)
             .await
             .expect("first restore into a clean directory");
         assert!(
@@ -468,7 +472,7 @@ mod tests {
             "the copy must carry the read-only bit across, or this test proves nothing"
         );
 
-        restore_bundle(&bundle, &cfg, &reg, true)
+        restore_bundle(&bundle, &cfg, &reg, true, false)
             .await
             .expect("--force must overwrite a read-only file, not fail with EACCES");
         assert_eq!(

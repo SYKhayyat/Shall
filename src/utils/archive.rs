@@ -1,7 +1,7 @@
 use crate::backends::artifact::format::{Codec, Format, Opener};
 use crate::core::{Error, Result};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tracing::debug;
 
 /// The largest an archive may expand to on disk, by default. `max_download_bytes` sizes the
@@ -18,6 +18,95 @@ pub fn set_max_unpacked_bytes(v: u64) {
 
 fn max_unpacked_bytes() -> u64 {
     MAX_UNPACKED_BYTES.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+/// Validate archive names in a platform-independent way. An archive may be downloaded on one
+/// platform and extracted on another, so host `Path` parsing alone is insufficient: on Unix a
+/// backslash is a filename character, while Windows treats it as a separator.
+fn validate_archive_path(path: &Path) -> Result<()> {
+    let raw = path.to_string_lossy();
+    let normalized = raw.replace('\\', "/");
+    if normalized.starts_with('/')
+        || normalized.starts_with("//")
+        || normalized.as_bytes().get(1).is_some_and(|b| *b == b':')
+    {
+        return Err(Error::Other(format!(
+            "archive entry {:?} is an absolute path",
+            path
+        )));
+    }
+
+    const RESERVED: [&str; 22] = [
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+    let mut depth = 0usize;
+    for component in normalized.split('/') {
+        match component {
+            "" | "." => {}
+            ".." => {
+                if depth == 0 {
+                    return Err(Error::Other(format!(
+                        "archive entry {:?} leaves the destination",
+                        path
+                    )));
+                }
+                depth -= 1;
+            }
+            value => {
+                let stem = value
+                    .split('.')
+                    .next()
+                    .unwrap_or(value)
+                    .trim_end_matches(' ');
+                if RESERVED.iter().any(|name| stem.eq_ignore_ascii_case(name)) {
+                    return Err(Error::Other(format!(
+                        "archive entry {:?} uses the reserved Windows device name `{}`",
+                        path, value
+                    )));
+                }
+                depth += 1;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_archive_link(entry: &Path, link: &Path) -> Result<()> {
+    validate_archive_path(entry)?;
+    let raw = link.to_string_lossy();
+    let normalized = raw.replace('\\', "/");
+    if normalized.starts_with('/')
+        || normalized.starts_with("//")
+        || normalized.as_bytes().get(1).is_some_and(|b| *b == b':')
+    {
+        return Err(Error::Other(format!(
+            "archive entry {:?} links to {:?}, which leaves the destination",
+            entry, link
+        )));
+    }
+
+    let parent = entry.parent().unwrap_or_else(|| Path::new(""));
+    let target = parent.join(link);
+    validate_archive_path(&target).map_err(|_| {
+        Error::Other(format!(
+            "archive entry {:?} links to {:?}, which leaves the destination",
+            entry, link
+        ))
+    })
+}
+
+/// Tar hard-link names are resolved from the archive root, while symlink names are resolved
+/// relative to the link's containing directory. Keep the two rules explicit so a safe hard link
+/// is not rejected and a `../` target cannot escape through a nested member path.
+fn validate_archive_hard_link(entry: &Path, link: &Path) -> Result<()> {
+    validate_archive_path(entry)?;
+    validate_archive_path(link).map_err(|_| {
+        Error::Other(format!(
+            "archive entry {:?} links to {:?}, which leaves the destination",
+            entry, link
+        ))
+    })
 }
 
 pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<()> {
@@ -76,47 +165,17 @@ pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<()> {
                         )));
                     }
                 }
+                let entry_path = entry.path().map_err(Error::from)?.into_owned();
+                validate_archive_path(&entry_path)?;
                 if let Some(link) = entry.link_name().map_err(Error::from)? {
-                    if link.is_absolute() {
-                        return Err(Error::Other(format!(
-                            "archive entry {:?} links to {:?}, which leaves the destination",
-                            entry.path().map_err(Error::from)?,
-                            link
-                        )));
-                    }
-                    // Depth walk from the entry's own directory. The +1/-1 accounting:
-                    // entering a component adds a level, `..` removes one, and climbing
-                    // above zero means the target left the destination.
-                    let entry_rel = entry.path().map_err(Error::from)?;
-                    let mut depth = entry_rel
-                        .components()
-                        .filter(|c| matches!(c, std::path::Component::Normal(_)))
-                        .count()
-                        .saturating_sub(1);
-                    let mut escapes = false;
-                    for comp in link.components() {
-                        match comp {
-                            std::path::Component::ParentDir => {
-                                if depth == 0 {
-                                    escapes = true;
-                                    break;
-                                }
-                                depth -= 1;
-                            }
-                            std::path::Component::Normal(_) => depth += 1,
-                            std::path::Component::CurDir => {}
-                            // RootDir/Prefix on a relative-checked link: absolute in disguise.
-                            _ => {
-                                escapes = true;
-                                break;
-                            }
-                        }
-                    }
-                    if escapes {
-                        return Err(Error::Other(format!(
-                            "archive entry {:?} links to {:?}, which leaves the destination",
-                            entry_rel, link
-                        )));
+                    // Validate symlinks and hard links alike. `unpack_in` confines the member
+                    // name, but a link target is a second path that can be followed later by
+                    // executable discovery. Tar hard links are archive-root-relative; symlinks
+                    // are relative to the member's parent directory.
+                    if entry.header().entry_type().is_hard_link() {
+                        validate_archive_hard_link(&entry_path, &link)?;
+                    } else {
+                        validate_archive_link(&entry_path, &link)?;
                     }
                 }
                 entry.unpack_in(dest_dir).map_err(Error::from)?;
@@ -141,6 +200,25 @@ pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<()> {
                         "zip expands past the {}-byte unpacked bound (members declare {} bytes)",
                         cap, declared
                     )));
+                }
+            }
+            // `ZipArchive::extract` sanitizes member names for the host platform, but ZIP files
+            // can carry Unix symlinks and Windows separators are ordinary characters on Unix.
+            // Inspect every member before extracting any of them so a later link cannot escape
+            // after an earlier member has already been written.
+            for i in 0..archive.len() {
+                let mut member = archive
+                    .by_index(i)
+                    .map_err(|e| Error::Other(format!("Zip member {}: {}", i, e)))?;
+                let name = PathBuf::from(member.name());
+                validate_archive_path(&name)?;
+                if member.is_symlink() {
+                    use std::io::Read;
+                    let mut target = String::new();
+                    member.read_to_string(&mut target).map_err(|e| {
+                        Error::Other(format!("ZIP symlink {:?} cannot be read: {}", name, e))
+                    })?;
+                    validate_archive_link(&name, Path::new(&target))?;
                 }
             }
             archive
@@ -402,6 +480,48 @@ mod tests {
 
     /// And an in-bounds link — the legitimate shape, a `bin/tool -> ../lib/tool` layout —
     /// still extracts, so the refusal is aimed and not a ban on symlinks.
+    #[cfg(unix)]
+    #[test]
+    fn a_hard_link_that_leaves_the_destination_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut tar_bytes = Vec::new();
+        {
+            let mut builder = tar::Builder::new(&mut tar_bytes);
+            let mut header = tar::Header::new_gnu();
+            header.set_size(0);
+            header.set_entry_type(tar::EntryType::Link);
+            header.set_mode(0o644);
+            builder
+                .append_link(&mut header, "bin/tool", "../../outside")
+                .unwrap();
+            builder.finish().unwrap();
+        }
+        let archive = dir.path().join("asset.tar");
+        fs::write(&archive, &tar_bytes).unwrap();
+        let err = extract_archive(&archive, &dir.path().join("out")).unwrap_err();
+        assert!(err.to_string().contains("leaves the destination"), "{err}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_windows_reserved_archive_name_is_refused_before_extraction() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut tar_bytes = Vec::new();
+        {
+            let mut builder = tar::Builder::new(&mut tar_bytes);
+            let mut header = tar::Header::new_gnu();
+            header.set_size(3);
+            header.set_mode(0o644);
+            header.set_cksum();
+            builder.append_data(&mut header, "NUL.exe", b"bad").unwrap();
+            builder.finish().unwrap();
+        }
+        let archive = dir.path().join("asset.tar");
+        fs::write(&archive, &tar_bytes).unwrap();
+        let err = extract_archive(&archive, &dir.path().join("out")).unwrap_err();
+        assert!(err.to_string().contains("reserved Windows"), "{err}");
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_symlink_inside_the_destination_still_extracts() {

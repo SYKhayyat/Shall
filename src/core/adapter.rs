@@ -222,6 +222,9 @@ pub fn has_unfilled_placeholder(arg: &str) -> bool {
 /// A row with an empty command is refused by [`AdapterRow::unusable`] before it can get here,
 /// so this returns `None` rather than inventing a program name.
 pub fn program_and_args(filled: Vec<String>) -> Option<(String, Vec<String>)> {
+    if filled.iter().any(|arg| has_unfilled_placeholder(arg)) {
+        return None;
+    }
     let (program, rest) = filled.split_first()?;
     Some((program.clone(), rest.to_vec()))
 }
@@ -393,6 +396,10 @@ mod tests {
         assert!(
             program_and_args(Vec::new()).is_none(),
             "an empty command yields nothing rather than an invented program name"
+        );
+        assert!(
+            program_and_args(vec!["reg".into(), "query".into(), "{missing}".into()]).is_none(),
+            "an unresolved placeholder must not reach a command executor"
         );
     }
 }

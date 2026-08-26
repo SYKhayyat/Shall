@@ -402,9 +402,10 @@ impl SnapshotProvider for ConfigSnapshotProvider {
 
     async fn create(&self, label: SnapshotLabel) -> Result<Snapshot> {
         let id = if self.def.powershell {
-            // Windows: the cmdlet does not return the SequenceNumber, so Shall carries a synthetic
-            // marker id (list() reads the real ids). `label` is an enum, so no `'` reaches the
-            // shell; there is no `{id}` in a create.
+            // Windows' create cmdlet does not expose the SequenceNumber directly. The provider
+            // row therefore appends a query for the newest restore point and declares a pattern
+            // for that output. Returning a synthetic id here made the object handed to delete
+            // and restore unusable: those cmdlets require the real sequence number.
             let template = self.def.create.clone();
             let line = self.fill_ps(
                 self.first_command(&template, "create")?,
@@ -412,8 +413,25 @@ impl SnapshotProvider for ConfigSnapshotProvider {
                 label.as_str(),
             )?;
             info!("{}: creating snapshot ({})", self.def.name, label);
-            self.run_ps(&line, true).await?;
-            self.generated_id(label)
+            let out = self.run_ps(&line, true).await?;
+            let pattern = self.def.create_id_pattern.as_ref().ok_or_else(|| {
+                Error::Snapshot(format!(
+                    "{} creates restore points but has no create_id_pattern",
+                    self.def.name
+                ))
+            })?;
+            let re = crate::utils::regex_cache::compiled(pattern)
+                .map_err(|e| Error::Snapshot(format!("bad create_id_pattern: {}", e)))?;
+            re.captures_iter(&out)
+                .filter_map(|c| c.get(1))
+                .last()
+                .map(|m| m.as_str().trim().to_string())
+                .ok_or_else(|| {
+                    Error::Snapshot(format!(
+                        "{} created a restore point but did not return its SequenceNumber",
+                        self.def.name
+                    ))
+                })?
         } else if let Some(pattern) = &self.def.create_id_pattern {
             // The tool names the snapshot; read the id back from its output.
             let cmd = Self::fill(&self.def.create, "", label.as_str(), &self.def.source);

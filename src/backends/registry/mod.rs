@@ -354,6 +354,7 @@ mod tests {
         register_helm => "helm",
         register_krew => "krew",
         register_luarocks => "luarocks",
+        register_moss => "moss",
         register_mix => "mix",
         register_nimble => "nimble",
         register_npm => "npm",
@@ -979,6 +980,12 @@ mod tests {
                 &register_slackpkg,
                 Runs("slackpkg -batch=on"),
                 Runs("remove"),
+            ),
+            ArgvCase::pkg(
+                "moss",
+                &register_moss,
+                Runs("moss install"),
+                Runs("moss remove"),
             ),
             // The AUR helpers: pacman-syntax, registered on Linux only, and until 2026-07-30
             // reached through a five-argument helper no row could name.

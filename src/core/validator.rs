@@ -252,31 +252,51 @@ impl Validator {
     /// names that merely contain a forbidden one. A path that does not exist is returned
     /// unresolved and unchecked — callers must not treat this as proof it is allowed.
     pub async fn validate_path(path: &Path) -> Result<PathBuf> {
-        if !tokio::fs::try_exists(path).await.unwrap_or(false) {
-            return Ok(path.to_path_buf());
-        }
-
         let path_owned = path.to_path_buf();
-        let canonical = tokio::task::spawn_blocking(move || path_owned.canonicalize())
+        tokio::task::spawn_blocking(move || Self::validate_path_blocking(&path_owned))
             .await
             .map_err(|e| Error::Other(e.to_string()))?
-            .map_err(|e| Error::Validation(format!("Path resolution failed: {}", e)))?;
-
-        Self::refuse_forbidden(&canonical)?;
-        Ok(canonical)
     }
 
     /// [`Validator::validate_path`] for a caller that cannot await — the `vars` standard
     /// library's `read_file`, which runs inside Rhai.
     pub fn validate_path_sync(path: &Path) -> Result<PathBuf> {
-        if !path.exists() {
-            return Ok(path.to_path_buf());
+        Self::validate_path_blocking(path)
+    }
+
+    /// Resolve the existing portion of a path even when its final component does not exist.
+    /// This preserves the unresolved suffix for callers that want to create/read it, while
+    /// still refusing a future path nested below a forbidden directory.
+    fn validate_path_blocking(path: &Path) -> Result<PathBuf> {
+        if path.exists() {
+            let canonical = path
+                .canonicalize()
+                .map_err(|e| Error::Validation(format!("Path resolution failed: {}", e)))?;
+            Self::refuse_forbidden(&canonical)?;
+            return Ok(canonical);
         }
-        let canonical = path
+
+        let mut missing = Vec::new();
+        let mut ancestor = path;
+        while !ancestor.exists() {
+            let Some(parent) = ancestor.parent() else {
+                return Ok(path.to_path_buf());
+            };
+            if let Some(name) = ancestor.file_name() {
+                missing.push(name.to_os_string());
+            }
+            ancestor = parent;
+        }
+
+        let mut candidate = ancestor
             .canonicalize()
             .map_err(|e| Error::Validation(format!("Path resolution failed: {}", e)))?;
-        Self::refuse_forbidden(&canonical)?;
-        Ok(canonical)
+        Self::refuse_forbidden(&candidate)?;
+        for component in missing.iter().rev() {
+            candidate.push(component);
+            Self::refuse_forbidden(&candidate)?;
+        }
+        Ok(candidate)
     }
 
     fn refuse_forbidden(canonical: &Path) -> Result<()> {

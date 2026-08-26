@@ -20,6 +20,11 @@ pub struct SandboxSettings {
     /// Optional path to a custom macOS sandbox (.sb) profile.
     pub macos_profile_template: Option<PathBuf>,
 
+    /// On macOS, if true, Shall will fail if sandbox-exec is unavailable.
+    /// This is the macOS counterpart to `require_bwrap` and `windows_require_sandbox`.
+    #[serde(default = "default_false")]
+    pub macos_require_sandbox: bool,
+
     /// On Windows, if true, Shall will fail if Windows Sandbox is unavailable.
     ///
     /// `require_bwrap`'s twin. Both are read by `Sandbox::decide` and both outrank
@@ -42,6 +47,7 @@ impl Default for SandboxSettings {
         Self {
             require_bwrap: false,
             macos_profile_template: None,
+            macos_require_sandbox: false,
             windows_require_sandbox: false,
             fallback_allowed: true,
         }
@@ -895,6 +901,24 @@ pub struct VarsSettings {
 /// joins it to the repo root; nothing else may name it.
 pub const PREFERENCES_FILE_NAME: &str = "preferences.toml";
 
+fn validate_safety_settings(config: &Config, path: &Path) -> Result<()> {
+    let ratio = config.guard.purge_ratio;
+    if !ratio.is_finite() || !(0.0..=1.0).contains(&ratio) {
+        return Err(Error::Config(format!(
+            "{} has invalid [guard] purge_ratio = {}; expected a finite value from 0.0 through 1.0",
+            path.display(),
+            ratio
+        )));
+    }
+    if config.max_parallel == 0 || config.network_parallel == 0 {
+        return Err(Error::Config(format!(
+            "{} sets a parallelism limit to 0; max_parallel and network_parallel must be positive",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
 fn default_config_root() -> PathBuf {
     safe_config_dir()
 }
@@ -1234,6 +1258,7 @@ impl Config {
         if config.guard.protected_packages.is_empty() {
             config.guard.protected_packages = default_protected_packages();
         }
+        validate_safety_settings(&config, path)?;
         Ok(config)
     }
 

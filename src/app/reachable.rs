@@ -183,7 +183,18 @@ pub fn is_on_path(dir: &Path) -> bool {
 /// before they can run it is the "add it to your PATH" advice this warning exists to replace.
 fn how_to_add(dir: &Path) -> String {
     if cfg!(windows) {
-        format!("setx PATH \"%PATH%;{}\"", dir.display())
+        // `setx` expands and rewrites PATH through a legacy 1024-character buffer. Use a
+        // PowerShell user-scope update instead; it reads the current value and writes the full
+        // string without truncating long developer or CI PATHs.
+        let path = dir
+            .display()
+            .to_string()
+            .replace('`', "``")
+            .replace('"', "`\"");
+        format!(
+            "powershell -NoProfile -Command \"[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'User') + ';{}', 'User')\"",
+            path
+        )
     } else {
         format!("export PATH=\"{}:$PATH\"", dir.display())
     }
@@ -421,7 +432,7 @@ mod tests {
         // is a wrong answer, not a terse one.
         assert!(
             msg.contains(if cfg!(windows) {
-                "setx PATH"
+                "powershell -NoProfile -Command"
             } else {
                 "export PATH="
             }),

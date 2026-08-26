@@ -985,7 +985,7 @@ named and skipped rather than rebuilt. It cannot be put in `schedules`.
 
 ### What has been driven, and what has only been argv-checked
 
-Shall ships 62 backends. That counts the managers it drives by building a command line; `nixos:`
+Shall ships 63 backends. That counts the managers it drives by building a command line; `nixos:`
 is a further one that works differently, by writing the system configuration instead. Either way
 the number is what Shall *knows how to drive*, not a claim that every one has been driven — so
 here is the difference, taken from the harnesses' own tables rather than from anybody's memory.

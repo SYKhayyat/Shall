@@ -165,19 +165,35 @@ impl EphemeralShell {
         decided: &Confinement,
     ) -> Result<()> {
         let mut mounts = Vec::new();
-        let mut internal_path = String::from("/usr/local/bin:/usr/bin:/bin");
+        let mut path_entries = if cfg!(windows) {
+            vec![String::from(r"C:\Windows\System32")]
+        } else {
+            vec![String::from("/usr/local/bin:/usr/bin:/bin")]
+        };
 
         for (path, name) in store_paths {
             let target = format!("/opt/shall/packages/{}", name);
-            mounts.push((path.clone(), target.clone()));
-            internal_path = format!("{}:{}/bin", internal_path, target);
+            let guest_target = if cfg!(windows) {
+                format!(r"C:\Users\WDAGUtilityAccount\Desktop\{}", name)
+            } else {
+                target.clone()
+            };
+            mounts.push((path.clone(), target));
+            path_entries.push(if cfg!(windows) {
+                format!(r"{}\bin", guest_target)
+            } else {
+                format!("{}/bin", guest_target)
+            });
         }
 
+        let path_separator = if cfg!(windows) { ";" } else { ":" };
+        let internal_path = path_entries.join(path_separator);
         let sandbox_cfg = SandboxConfig {
             allow_network: true,
             allow_home: true,
             allow_write: true,
             custom_mounts: mounts,
+            environment: vec![(String::from("PATH"), internal_path.clone())],
             ..Default::default()
         };
 

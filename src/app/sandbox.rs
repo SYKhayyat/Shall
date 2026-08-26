@@ -76,8 +76,8 @@ impl Sandbox {
             (
                 "sandbox-exec",
                 Self::sandbox_exec_available(),
-                false,
-                "sandbox.fallback_allowed",
+                settings.macos_require_sandbox,
+                "sandbox.macos_require_sandbox",
             )
         } else if cfg!(target_os = "windows") {
             (
@@ -159,6 +159,33 @@ impl Sandbox {
     /// Generates a Windows Sandbox (.wsb) configuration file content.
     #[cfg(target_os = "windows")]
     fn generate_wsb_config(cmd: &str, args: &[String], config: &SandboxConfig) -> String {
+        // Windows Sandbox maps each host folder to the guest user's Desktop under the host
+        // folder's basename; the schema has no arbitrary guest-target field. Keep that rule in
+        // one helper so the caller can construct a PATH that names the same guest locations.
+        fn guest_folder_name(source: &str) -> String {
+            let source = source.replace('/', "\\");
+            let name = Path::new(&source)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .filter(|name| !name.is_empty())
+                .unwrap_or("ShallMount");
+            if name.contains(':') {
+                return name.to_string();
+            }
+            if source.starts_with(r"C:\") || source.starts_with(r"D:\") {
+                return source;
+            }
+            format!(r"C:\Users\WDAGUtilityAccount\Desktop\{}", name)
+        }
+        fn xml(value: &str) -> String {
+            value
+                .replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;")
+                .replace('"', "&quot;")
+                .replace('\'', "&apos;")
+        }
+
         let mut wsb = String::from("<Configuration>\n");
 
         wsb.push_str("  <VGpu>Disable</VGpu>\n");
@@ -172,19 +199,73 @@ impl Sandbox {
         ));
 
         wsb.push_str("  <MappedFolders>\n");
-        for (src, _) in &config.custom_mounts {
-            if Path::new(src).exists() {
+        let mut mapped = Vec::new();
+        if config.allow_home {
+            if let Some(home) = dirs::home_dir() {
+                mapped.push((
+                    home.to_string_lossy().into_owned(),
+                    String::from(r"C:\Users\WDAGUtilityAccount\Desktop\Home"),
+                    config.allow_write,
+                ));
+            }
+        }
+        mapped.extend(
+            config
+                .custom_read_only_mounts
+                .iter()
+                .map(|(src, target)| (src.clone(), guest_folder_name(target), true)),
+        );
+        mapped.extend(
+            config
+                .custom_mounts
+                .iter()
+                .map(|(src, target)| (src.clone(), guest_folder_name(target), false)),
+        );
+        for (src, target, read_only) in mapped {
+            if Path::new(&src).exists() {
                 wsb.push_str("    <MappedFolder>\n");
-                wsb.push_str(&format!("      <HostFolder>{}</HostFolder>\n", src));
-                wsb.push_str("      <ReadOnly>false</ReadOnly>\n");
+                wsb.push_str(&format!("      <HostFolder>{}</HostFolder>\n", xml(&src)));
+                wsb.push_str(&format!(
+                    "      <SandboxFolder>{}</SandboxFolder>\n",
+                    xml(&target)
+                ));
+                wsb.push_str(&format!(
+                    "      <ReadOnly>{}</ReadOnly>\n",
+                    if read_only { "true" } else { "false" }
+                ));
                 wsb.push_str("    </MappedFolder>\n");
             }
         }
         wsb.push_str("  </MappedFolders>\n");
 
-        let full_cmd = format!("{} {}", cmd, args.join(" "));
+        if !config.environment.is_empty() {
+            wsb.push_str("  <EnvironmentVariables>\n");
+            for (name, value) in &config.environment {
+                wsb.push_str(&format!(
+                    "    <Variable name=\"{}\" value=\"{}\" />\n",
+                    xml(name),
+                    xml(value)
+                ));
+            }
+            wsb.push_str("  </EnvironmentVariables>\n");
+        }
+
+        // WSB parses this as a command line after XML decoding. Keep arguments as separate
+        // quoted tokens so an argument containing whitespace cannot become a second command;
+        // XML escaping above handles the serialization layer independently.
+        let full_cmd = std::iter::once(cmd)
+            .chain(args.iter().map(String::as_str))
+            .map(|arg| {
+                if arg.chars().any(char::is_whitespace) || arg.contains(['&', '<', '>', '"']) {
+                    format!("\\\"{}\\\"", arg.replace('"', "\\\""))
+                } else {
+                    arg.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
         wsb.push_str("  <LogonCommand>\n");
-        wsb.push_str(&format!("    <Command>{}</Command>\n", full_cmd));
+        wsb.push_str(&format!("    <Command>{}</Command>\n", xml(&full_cmd)));
         wsb.push_str("  </LogonCommand>\n");
 
         wsb.push_str("</Configuration>");

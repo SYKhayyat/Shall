@@ -75,7 +75,7 @@ fn probe(program: &str, chain: &[String]) -> Option<String> {
     let (prog, argv) = crate::core::launch::effective_command(program, &args);
     let mut cmd = std::process::Command::new(prog);
     cmd.args(&argv).stdin(std::process::Stdio::null());
-    crate::core::blocking::command_output(&mut cmd)
+    crate::core::blocking::command_output_bounded(&mut cmd, "manager help probe")
         .ok()
         .map(|o| {
             format!(

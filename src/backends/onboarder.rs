@@ -301,9 +301,21 @@ fn starts_with_any(line: &str, prefixes: &[String]) -> bool {
 fn navigate<'a>(root: &'a Value, path: &str) -> Option<&'a Value> {
     let mut cur = root;
     for seg in path.split('.').filter(|s| !s.is_empty()) {
-        cur = cur.get(seg)?;
+        cur = match cur {
+            Value::Object(object) => object.get(seg)?,
+            Value::Array(array) => array.get(seg.parse::<usize>().ok()?)?,
+            _ => return None,
+        };
     }
     Some(cur)
+}
+
+fn json_version(value: &Value) -> Option<String> {
+    match value {
+        Value::String(s) => Some(s.clone()),
+        Value::Number(n) => Some(n.to_string()),
+        _ => None,
+    }
 }
 
 fn json_package(
@@ -319,10 +331,10 @@ fn json_package(
     let version = version_key
         .as_deref()
         .and_then(|k| item.get(k))
-        .and_then(|v| v.as_str())
+        .and_then(json_version)
         .filter(|s| !s.is_empty());
     Some(match version {
-        Some(v) => Package::with_version(name, v, backend),
+        Some(v) => Package::with_version(name, &v, backend),
         None => Package::new(name, backend),
     })
 }
@@ -1500,6 +1512,19 @@ mod tests {
         assert_eq!(pkgs.len(), 2);
         assert_eq!(pkgs[0].name, "httpie");
         assert_eq!(pkgs[0].version.as_deref(), Some("3.2"));
+    }
+
+    #[test]
+    fn json_parser_supports_array_path_indices() {
+        let spec = ParserSpec::Json {
+            array_path: Some("results.1.packages".to_string()),
+            name_key: "name".to_string(),
+            version_key: Some("version".to_string()),
+        };
+        let out = r#"{"results":[{"packages":[]},{"packages":[{"name":"jq","version":3}]}]}"#;
+        let pkgs = spec.parse(out, "c").expect("numeric array path parses");
+        assert_eq!(pkgs[0].name, "jq");
+        assert_eq!(pkgs[0].version.as_deref(), Some("3"));
     }
 
     #[test]

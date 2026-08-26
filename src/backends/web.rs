@@ -186,9 +186,9 @@ impl Installable for WebInstallable {
             // the deploy refusal is answerable before the transfer rather than after it. The
             // `web:` twin of the `github:` ordering that spent 180s on a rejected artifact.
             let url_name = crate::utils::file::url_filename(&spec.name)?;
-            let deploys = !crate::backends::artifact::ArtifactOptions::read(&spec.options)
-                .map(|o| o.download_only)
-                .unwrap_or(false);
+            let artifact_options = crate::backends::artifact::ArtifactOptions::read(&spec.options)
+                .map_err(Error::Validation)?;
+            let deploys = !artifact_options.download_only;
             if deploys {
                 let bin_dest = crate::utils::bin_destination(
                     &self.core.bin_dir,
@@ -349,9 +349,7 @@ impl Installable for WebInstallable {
             // resolves to no runnable program keeps the download rather than failing — the
             // default download-only fallback is simply "no binary was found to deploy" here,
             // because the discovery below records `None` when it finds nothing.
-            let download_only = crate::backends::artifact::ArtifactOptions::read(&spec.options)
-                .map(|o| o.download_only)
-                .unwrap_or(false);
+            let download_only = artifact_options.download_only;
 
             let mut final_bin_link = None;
             if !download_only {

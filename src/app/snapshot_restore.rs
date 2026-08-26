@@ -102,7 +102,10 @@ impl SnapshotRestore {
             .map(|s| {
                 format!(
                     "[{}] {} - {} ({})",
-                    s.backend, s.timestamp, s.description, s.id
+                    crate::utils::text::sanitize(&s.backend),
+                    crate::utils::text::sanitize(&s.timestamp),
+                    crate::utils::text::sanitize(&s.description),
+                    crate::utils::text::sanitize(&s.id)
                 )
             })
             .collect();

@@ -347,16 +347,18 @@ impl ProfileManager {
             return Ok(());
         }
         // II.5's error teaches the rule rather than just saying no.
-        let err = loader
-            .resolve(
-                name,
-                &Origin::argument(),
-                &self.facts().await?,
-                &mut Vec::new(),
-                &Vec::new(),
-            )
-            .unwrap_err();
-        Err(err.into())
+        match loader.resolve(
+            name,
+            &Origin::argument(),
+            &self.facts().await?,
+            &mut Vec::new(),
+            &Vec::new(),
+        ) {
+            Err(err) => Err(err.into()),
+            Ok(_) => Err(Error::Config(format!(
+                "profile `{name}` could not be found even though resolution produced no error"
+            ))),
+        }
     }
 
     /// `active` is a plain list of profile names and nothing else goes in it (II.6).

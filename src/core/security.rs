@@ -51,7 +51,7 @@ fn verify_checksum_blocking(path: &PathBuf, expected_hex: &str) -> Result<()> {
 
     let actual_hex = generate_checksum_blocking(path)?;
 
-    if actual_hex.eq_ignore_ascii_case(expected_hex) {
+    if constant_time_hex_eq(&actual_hex, expected_hex) {
         debug!("Security: Checksum verified for {:?}", path);
         Ok(())
     } else {
@@ -59,6 +59,35 @@ fn verify_checksum_blocking(path: &PathBuf, expected_hex: &str) -> Result<()> {
             "SECURITY ALERT: Checksum mismatch detected!\nPath: {:?}\nExpected: {}\nActual:   {}",
             path, expected_hex, actual_hex
         )))
+    }
+}
+
+/// Compare hexadecimal digests without returning early on the first differing byte.
+/// Invalid or differently-sized input is still a mismatch, but it is processed across the
+/// longer length so the comparison does not expose a useful prefix timing signal.
+fn constant_time_hex_eq(actual: &str, expected: &str) -> bool {
+    let actual = actual.as_bytes();
+    let expected = expected.as_bytes();
+    let mut diff = actual.len() ^ expected.len();
+    let length = actual.len().max(expected.len());
+    for i in 0..length {
+        let a = actual.get(i).copied().unwrap_or(0).to_ascii_lowercase();
+        let b = expected.get(i).copied().unwrap_or(0).to_ascii_lowercase();
+        diff |= usize::from(a ^ b);
+    }
+    diff == 0
+}
+
+#[cfg(test)]
+mod comparison_tests {
+    use super::constant_time_hex_eq;
+
+    #[test]
+    fn checksum_comparison_accepts_only_equal_digests() {
+        assert!(constant_time_hex_eq("abcdef", "abcdef"));
+        assert!(constant_time_hex_eq("abcdef", "ABCDEF"));
+        assert!(!constant_time_hex_eq("abcdef", "abcdee"));
+        assert!(!constant_time_hex_eq("abcdef", "abcdef0"));
     }
 }
 

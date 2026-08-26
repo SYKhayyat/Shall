@@ -155,14 +155,12 @@ impl HistoryBrowser {
         // The guard restores raw mode and the main screen on ANY exit — return, `?`, panic —
         // where the old tail-of-function restore was skipped by everything but success.
         let _screen = super::RawScreenGuard::enter()?;
-        let mut stdout = io::stdout();
-        execute!(stdout, EnableMouseCapture)?;
+        let stdout = io::stdout();
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend)?;
 
         let action = self.event_loop(&mut terminal);
 
-        execute!(terminal.backend_mut(), DisableMouseCapture)?;
         terminal.show_cursor()?;
         drop(_screen);
         action

@@ -840,10 +840,9 @@ expect = [
 # Needs root and is exclusive (moss holds its own store lock). Linux only: it requires
 # renameat2(2) and namespace isolation that are not available elsewhere.
 #
-# **The fixture is UNVERIFIED** — no AerynOS container was reachable when this row was
-# written. `names_only` is chosen because moss's installed listing is expected to carry one
-# package name per line, possibly with a version column that names_only safely drops. The
-# fixture MUST be replaced with captured real output before this backend can be proven.
+# The installed listing is a three-column shape: `name (version) - description`. The
+# parser keeps both identity and version, while the description stays out of the package name.
+# The fixture is the example output published in AerynOS's package-manager documentation.
 [[backend]]
 name = "moss"
 os = "linux"
@@ -852,19 +851,23 @@ remove_args = ["remove"]
 list_args = ["list", "installed"]
 search_args = ["search"]
 upgrade_args = ["sync", "--update"]
-reads = "names_only"
-searches = "names_only"
+parser = { format = "regex", pattern = '^([^ ]+) \(([^)]+)\) - .*$', name_group = 1, version_group = 2 }
+search_parser = { format = "regex", pattern = '^([^ ]+) \(([^)]+)\) - .*$', name_group = 1, version_group = 2 }
 needs_root = true
 
 [backend.fixture]
-source = "UNVERIFIED: written from the documented CLI surface at aerynos.dev/users/system-management/moss-state-management/; no AerynOS image was reachable"
+source = "AerynOS documentation, `It All Depends` (2021-11-23), example `list installed` output"
 list = '''
-bash
-coreutils
-systemd
+file (5.4) - File type identification utility
+file-32bit (5.4) - Provides 32-bit runtime libraries for file
+file-32bit-devel (5.4) - Provides development files for file
+file-devel (5.4) - Development files for file
+nano (5.5) - GNU Text Editor
 '''
 expect = [
-    "bash",
-    "coreutils",
-    "systemd",
+    "file@5.4",
+    "file-32bit@5.4",
+    "file-32bit-devel@5.4",
+    "file-devel@5.4",
+    "nano@5.5",
 ]

@@ -27,6 +27,11 @@ impl RawScreenGuard {
             let _ = disable_raw_mode();
             return Err(e.into());
         }
+        if let Err(e) = execute!(stdout, ratatui::crossterm::event::EnableMouseCapture) {
+            let _ = execute!(stdout, LeaveAlternateScreen);
+            let _ = disable_raw_mode();
+            return Err(e.into());
+        }
         let _ = stdout.flush();
         Ok(Self { _private: () })
     }
@@ -34,9 +39,10 @@ impl RawScreenGuard {
 
 impl Drop for RawScreenGuard {
     fn drop(&mut self) {
-        let _ = disable_raw_mode();
         let mut stdout = io::stdout();
+        let _ = execute!(stdout, ratatui::crossterm::event::DisableMouseCapture);
         let _ = execute!(stdout, LeaveAlternateScreen);
+        let _ = disable_raw_mode();
         let _ = stdout.flush();
     }
 }

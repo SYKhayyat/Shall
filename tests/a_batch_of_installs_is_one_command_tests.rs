@@ -139,7 +139,7 @@ async fn a_restored_bundle_resolves_to_the_set_it_was_made_from() {
         .join("restored-cfg");
     let _ = fs::remove_dir_all(&clean).await;
     let reg = clean.join("data/registry.json");
-    shall::app::bundle::restore_bundle(&bundle_dir, &clean, &reg, false)
+    shall::app::bundle::restore_bundle(&bundle_dir, &clean, &reg, false, false)
         .await
         .unwrap();
 

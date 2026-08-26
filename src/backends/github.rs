@@ -774,7 +774,7 @@ impl Installable for GithubInstallable {
                 // punctuation today, but the constraint is theirs, not ours. A name
                 // carrying a path separator would write outside the staging directory.
                 if pick.asset.name.contains('/') || pick.asset.name.contains('\\') {
-                    return Err(Error::Validation(format!(
+                    return Err(Error::Refused(format!(
                         "asset name `{}` contains a path separator; refusing to write it",
                         pick.asset.name
                     )));

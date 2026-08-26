@@ -15,6 +15,31 @@ use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+fn is_lock_contended(error: &std::io::Error) -> bool {
+    if matches!(
+        error.kind(),
+        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::AlreadyExists
+    ) {
+        return true;
+    }
+    #[cfg(unix)]
+    {
+        error.raw_os_error() == Some(libc::EWOULDBLOCK)
+            || error.raw_os_error() == Some(libc::EAGAIN)
+    }
+    #[cfg(windows)]
+    {
+        // LockFileEx/LockFile on Windows reports these as Win32 errors instead of mapping
+        // them to std::io::ErrorKind::WouldBlock: ERROR_SHARING_VIOLATION (32) and
+        // ERROR_LOCK_VIOLATION (33).
+        matches!(error.raw_os_error(), Some(32 | 33))
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        false
+    }
+}
+
 /// How long a waiting run gives the holder before it says so instead.
 ///
 /// 120s: long enough to outlast the longest wait a holder can legitimately make before it
@@ -114,10 +139,15 @@ impl DataLock {
     /// and says nothing â€” contention is the ordinary case here, not a fault.
     pub fn try_acquire(data_dir: &Path, command: &str) -> Result<Option<Self>> {
         let (file, owner_path) = Self::open_lock_file(data_dir)?;
-        if file.try_lock_exclusive().is_err() {
-            return Ok(None);
+        match file.try_lock_exclusive() {
+            Ok(()) => Ok(Some(Self::stamped(file, owner_path, data_dir, command))),
+            Err(e) if is_lock_contended(&e) => Ok(None),
+            Err(e) => Err(Error::Io(format!(
+                "could not lock {}: {}",
+                data_dir.join("shall.lock").display(),
+                e
+            ))),
         }
-        Ok(Some(Self::stamped(file, owner_path, data_dir, command)))
     }
 
     /// Open the lock file and name its owner stamp. Shared so the waiting and non-waiting
@@ -179,35 +209,53 @@ impl DataLock {
         let (file, owner_path) = Self::open_lock_file(data_dir)?;
         let path = data_dir.join("shall.lock");
 
-        if file.try_lock_exclusive().is_err() {
-            eprintln!(
-                "shall: waiting for the data directory â€” held by {}",
-                Self::holder(&owner_path)
-            );
-            let deadline = Instant::now() + timeout;
-            loop {
-                if file.try_lock_exclusive().is_ok() {
-                    break;
+        match file.try_lock_exclusive() {
+            Ok(()) => {}
+            Err(e) if is_lock_contended(&e) => {
+                eprintln!(
+                    "shall: waiting for the data directory â€” held by {}",
+                    Self::holder(&owner_path)
+                );
+                let deadline = Instant::now() + timeout;
+                loop {
+                    match file.try_lock_exclusive() {
+                        Ok(()) => break,
+                        Err(e) if !is_lock_contended(&e) => {
+                            return Err(Error::Io(format!(
+                                "could not lock {}: {}",
+                                path.display(),
+                                e
+                            )));
+                        }
+                        Err(_) => {}
+                    }
+                    if Instant::now() >= deadline {
+                        // S27: the old text ended "remove shall.lock if nothing is running", and
+                        // that advice is never right. The lock is an OS lock on an open handle,
+                        // released when the holding process exits â€” so a lock that is still
+                        // contended after the wait proves a live holder, and deleting the file
+                        // takes the lock away from it rather than from a corpse.
+                        return Err(Error::Other(format!(
+                            "the Shall data directory is locked by {}, and still was after {}s.\n  \
+                             {} is where state lives, and two writers make a removal out of a race.\n  \
+                             The lock is held by a running process, not by the file: {} exists\n  \
+                             between runs and deleting it would take the lock from a live writer.\n  \
+                             Wait for that run to finish, or stop it.",
+                            Self::holder(&owner_path),
+                            timeout.as_secs(),
+                            data_dir.display(),
+                            path.display()
+                        )));
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
                 }
-                if Instant::now() >= deadline {
-                    // S27: the old text ended "remove shall.lock if nothing is running", and
-                    // that advice is never right. The lock is an OS lock on an open handle,
-                    // released when the holding process exits â€” so a lock that is still
-                    // contended after the wait proves a live holder, and deleting the file
-                    // takes the lock away from it rather than from a corpse.
-                    return Err(Error::Other(format!(
-                        "the Shall data directory is locked by {}, and still was after {}s.\n  \
-                         {} is where state lives, and two writers make a removal out of a race.\n  \
-                         The lock is held by a running process, not by the file: {} exists\n  \
-                         between runs and deleting it would take the lock from a live writer.\n  \
-                         Wait for that run to finish, or stop it.",
-                        Self::holder(&owner_path),
-                        timeout.as_secs(),
-                        data_dir.display(),
-                        path.display()
-                    )));
-                }
-                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(e) => {
+                return Err(Error::Io(format!(
+                    "could not lock {}: {}",
+                    path.display(),
+                    e
+                )));
             }
         }
 

@@ -117,9 +117,14 @@ pub async fn handle_restore(
     let config_root = config.config_root();
     let registry_path = { state.lock().await.path.clone() };
 
-    let report =
-        crate::app::bundle::restore_bundle(&bundle_dir, &config_root, &registry_path, force)
-            .await?;
+    let report = crate::app::bundle::restore_bundle(
+        &bundle_dir,
+        &config_root,
+        &registry_path,
+        force,
+        config.dry_run,
+    )
+    .await?;
 
     println!(
         "Restored {} config file(s) into {}.",

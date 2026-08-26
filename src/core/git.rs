@@ -267,7 +267,19 @@ impl GitManager {
                 &String::from_utf8_lossy(&out.stdout),
             )))
         } else {
-            Ok(None) // no commits yet
+            // `rev-parse HEAD` also fails for a damaged repository. Only an unborn symbolic
+            // branch is the normal no-commit case; every other failure must remain visible so
+            // history consumers do not mistake corruption for an empty history.
+            let branch = self.run(&["symbolic-ref", "--quiet", "--short", "HEAD"])?;
+            if branch.status.success() {
+                Ok(None)
+            } else {
+                Err(Error::command_failed(format!(
+                    "git cannot read HEAD in {}: {}",
+                    self.root.display(),
+                    String::from_utf8_lossy(&out.stderr).trim()
+                )))
+            }
         }
     }
 

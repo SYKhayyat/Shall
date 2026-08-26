@@ -265,6 +265,10 @@ const CANNOT_PIN_VERSION: &[(&str, &str)] = &[
         "Solus is rolling — the repository holds one version and eopkg has no flag for another",
     ),
     (
+        "moss",
+        "moss applies a package to a selected atomic system state; its CLI has no bare package-version selector",
+    ),
+    (
         "slackpkg",
         "slackpkg installs what the configured mirror carries and takes no version",
     ),
