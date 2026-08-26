@@ -1,0 +1,453 @@
+==============================================================
+ Shall v7 harness — backend=apt package=jq
+==============================================================
+[1] Bootstrap
+  PASS  init scaffolds the repo
+  PASS  priority file exists
+  PASS  priority names this backend
+  PASS  active file exists
+[2] Discovery / read-only verbs
+  PASS  check health
+  PASS  check drift
+  PASS  plan (no changes yet) (rc=0)
+  PASS  check parses the model (rc=2)
+  PASS  check absent lists nothing
+  PASS  protected lists guarded packages
+  PASS  protected includes a system essential
+[3] Dry-run safety
+  PASS  sync --dry-run does not error
+  PASS  a dry-run install shows a plan
+  PASS  dry-run did NOT actually install jq (failed, as it must)
+[4] purge-undeclared, before adopt (the state that makes it a test)
+  PASS  purge-undeclared is refused on a machine Shall has not adopted (refused on purpose, exit 3)
+  PASS  and it is the unadopted-machine ratio that refused
+[5] Install
+  PASS  install jq
+  PASS  list shows jq
+  PASS  apt: jq is on PATH (at /usr/bin/jq)
+[6] Idempotency
+  PASS  second sync is a no-op (exit 0)
+[7] Negative path
+  PASS  installing a nonexistent package fails (failed, as it must)
+  PASS  a failed install leaves the model parseable
+  PASS  the unresolvable name is out of the manifest (failed, as it must)
+[8] Adopt
+  PASS  nothing is adopted before adopt runs (failed, as it must)
+  PASS  adopt takes manual packages
+  PASS  python3 still installed after adopt
+        adopted=106 (of which apt: 106)  apt manual set=107  apt installed=597
+  PASS  adopt wrote an adoption manifest
+  PASS  adopt recorded at least one package
+  PASS  adopt took the manual set, not the whole dependency closure
+  PASS  adopt took no more than what apt calls user-chosen
+[9] The guard
+        guard victim: sudo (from `shall protected`, and installed here)
+  PASS  sudo survives an uninstall attempt
+  PASS  purge-undeclared is still not a silent mass-delete after adopt (refused on purpose, exit 3)
+  PASS  and the refusal after adopt still names its rule
+[10] Remove
+  PASS  uninstall jq
+  PASS  jq binary gone after uninstall (failed, as it must)
+[11] Git history + rollback
+  PASS  git init enables manifest history
+  PASS  git status reads the repo
+  PASS  an install after git init succeeds
+  PASS  the install left a commit behind
+  PASS  git log shows a shall commit
+  PASS  git commit records the current state on demand
+  PASS  diff against a commit runs
+  PASS  rollback to HEAD is accepted
+[12] rebuild
+  PASS  bare rebuild is accepted, not refused (K2)
+  PASS  bare rebuild warns it will rebuild EVERY declared package (K2)
+  PASS  there is history for a rebuild to leave alone
+  PASS  rebuild jq runs
+  PASS  jq is reinstalled, not left removed
+        commits before=2 after=2
+  PASS  rebuild wrote no git commit (K14)
+[13] Chains and the per-host lock
+        lock file: /tmp/shall-it-config/locks/bare.f4d0d26f275c.toml
+  PASS  the lock is named for this host
+  PASS  an unpinned name froze to apt
+  PASS  sync ignores another host's lock file
+  PASS  and leaves it alone
+  PASS  a chain is legal
+  PASS  a chain may end in list
+  PASS  list alone is legal
+  PASS  an empty slot is refused (refused, saying so)
+  PASS  an unknown link is refused (refused, saying so)
+  PASS  list must come last (refused, saying so)
+  PASS  a name repeated is refused (refused, saying so)
+  PASS  a pattern cannot span one (refused, saying so)
+  PASS  a pin to a manager this host lacks is not silent (failed, as it must)
+  PASS  unlock backends --list names the frozen package
+  PASS  unlock backends forgets one name
+  PASS  the entry is really gone (failed, as it must)
+  PASS  unlocking a name that was never frozen is not an error
+[13b] Silence is not a no
+  PASS  a sync past a silent manager still resolves
+  PASS  and freezes nothing (failed, as it must)
+  PASS  and says which manager could not answer
+[14] Real lifecycle, every other manager on this image
+        READY backends: appimage apt bun cargo gem github link npm pip pipx service uv web 
+  soft  appimage: no real lifecycle here — needs FUSE, which a plain container does not have — smoked in 15
+    -- bun:sort-package-json
+  PASS  bun installed sort-package-json for real
+  PASS  bun: list shows sort-package-json
+  PASS  bun: sort-package-json is on PATH (at /root/.bun/bin/sort-package-json)
+  PASS  bun: uninstall sort-package-json
+  PASS  bun: sort-package-json is gone from list (failed, as it must)
+  PASS  bun: sort-package-json is gone
+    -- cargo:hexyl
+  PASS  cargo installed hexyl for real
+  PASS  cargo: list shows hexyl
+  PASS  cargo: hexyl is on PATH (at /root/.cargo/bin/hexyl)
+  PASS  cargo: uninstall hexyl
+  PASS  cargo: hexyl is gone from list (failed, as it must)
+  PASS  cargo: hexyl is gone
+    -- gem:colorize
+  PASS  gem installed colorize for real
+  PASS  gem: list shows colorize
+  PASS  gem: uninstall colorize
+  PASS  gem: colorize is gone from list (failed, as it must)
+    -- github:sharkdp/fd
+  PASS  github installed sharkdp/fd for real
+  PASS  github: list shows fd
+  PASS  github: fd is on PATH (at /root/.local/bin/fd)
+  PASS  github: uninstall sharkdp/fd
+  PASS  github: fd is gone from list (failed, as it must)
+  PASS  github: fd is gone
+        link: driven as a dependent statement — section 14b: declared, synced, asserted on disk, undeclared, gone
+    -- npm:cowsay
+  PASS  npm installed cowsay for real
+  PASS  npm: list shows cowsay
+  PASS  npm: cowsay is on PATH (at /usr/local/bin/cowsay)
+  PASS  npm: uninstall cowsay
+  PASS  npm: cowsay is gone from list (failed, as it must)
+  PASS  npm: cowsay is gone
+  soft  pip: no real lifecycle here — this distro marks its Python EXTERNALLY-MANAGED (PEP 668), so a system pip install is refused by design
+    -- pipx:pycowsay
+  PASS  pipx installed pycowsay for real
+  PASS  pipx: list shows pycowsay
+  PASS  pipx: pycowsay is on PATH (at /root/.local/bin/pycowsay)
+  PASS  pipx: uninstall pycowsay
+  PASS  pipx: pycowsay is gone from list (failed, as it must)
+  PASS  pipx: pycowsay is gone
+        service: driven as a dependent statement — section 14c: SysVinit enable+start, asserted in /etc/rc?.d and by the daemon, then disable+stop
+    -- uv:pyjokes
+  PASS  uv installed pyjokes for real
+  PASS  uv: list shows pyjokes
+  PASS  uv: pyjoke is on PATH (at /root/.local/bin/pyjoke)
+  PASS  uv: uninstall pyjokes
+  PASS  uv: pyjokes is gone from list (failed, as it must)
+  PASS  uv: pyjoke is gone
+  soft  web: no real lifecycle here — installs from a pasted URL; no stable public canary — smoked in 15
+[14b] A dependent statement driven for real: link:
+  PASS  the link target does not exist before sync
+  PASS  sync applies a declared link
+  PASS  the declared link is a symlink on disk
+  PASS  and it resolves to the declared source
+  PASS  sync tears down a link whose declaration is gone
+  PASS  the link is gone from disk
+[14c] shim:, dotfiles: and exec: driven for real
+  PASS  the package the shim wraps is installed
+  PASS  no shim exists before the sync that deploys it
+  PASS  sync deploys a declared shim
+  PASS  the shim is on disk
+  PASS  the shim is byte-identical to the shall binary
+  PASS  running the shim reaches the real tool
+  PASS  sync removes a shim whose declaration is gone
+  PASS  the shim is gone from disk
+  PASS  the wrapped package uninstalls
+  PASS  the tree's destinations are empty before sync
+  PASS  sync places a declared dotfiles tree
+  PASS  a top-level file is placed
+  PASS  a NESTED file keeps its path under the target
+  PASS  the placed file resolves to the tree's copy
+  PASS  sync tears down a tree whose declaration is gone
+  PASS  every file the tree placed is gone
+  PASS  including the nested one
+  PASS  an unapproved exec: refuses the sync (refused, saying so)
+  PASS  and the unapproved script did NOT run
+  PASS  shall lock approves it
+  PASS  sync runs an approved exec:
+  PASS  the script really ran
+  PASS  a second sync is clean under @runs=1
+  PASS  and the script did not run a second time
+  PASS  sync undoes an exec: whose line has gone
+  PASS  the @undo= really ran
+  PASS  a service with an init script is installed
+  PASS  the service is disabled and stopped before the declaration
+  PASS  sync enables and starts a declared service
+  PASS  the init system really enabled it
+  PASS  and the daemon is really running
+  PASS  sync disables and stops it when the line says so
+  PASS  the init system really disabled it
+  PASS  and the daemon really stopped
+  PASS  the service's package uninstalls
+[15] Plan-smoke, every backend this image cannot run
+        registered backends: 56
+  PASS  check health --json enumerates the registry
+  PASS  apk: a dry-run install plans apk:jq
+  PASS  appimage: a dry-run install plans appimage:https://example.invalid/tool.AppImage
+  PASS  asdf: a dry-run install plans asdf:jq
+  PASS  brew: a dry-run install plans brew:jq
+  PASS  btrfs: the snapshot verb runs
+  PASS  cabal: a dry-run install plans cabal:jq
+  PASS  composer: a dry-run install plans composer:psr/log
+  PASS  conda: a dry-run install plans conda:jq
+  PASS  dnf: a dry-run install plans dnf:jq
+  PASS  dotnet: a dry-run install plans dotnet:jq
+  PASS  emacs: a dry-run install plans emacs:jq
+  PASS  emerge: a dry-run install plans emerge:app-misc/jq
+  PASS  eopkg: a dry-run install plans eopkg:jq
+  PASS  flatpak: a dry-run install plans flatpak:org.freedesktop.Platform
+  PASS  go: a dry-run install plans go:golang.org/x/example/hello
+  PASS  guix: a dry-run install plans guix:jq
+  PASS  helm: a dry-run install plans helm:secrets@url=https://github.com/jkroepke/helm-secrets,unverified
+  PASS  krew: a dry-run install plans krew:jq
+  PASS  luarocks: a dry-run install plans luarocks:jq
+  PASS  lvm: a dry-run install plans lvm:jq
+  PASS  mise: a dry-run install plans mise:jq
+  PASS  mix: a dry-run install plans mix:jq
+  PASS  nimble: a dry-run install plans nimble:jq
+  PASS  nix: a dry-run install plans nix:jq
+  PASS  opam: a dry-run install plans opam:jq
+  PASS  pacman: a dry-run install plans pacman:jq
+  PASS  paru: a dry-run install plans paru:jq
+  PASS  pip: a dry-run install plans pip:jq
+  PASS  pixi: a dry-run install plans pixi:jq
+  PASS  pkg: a dry-run install plans pkg:jq
+  PASS  pkg_add: a dry-run install plans pkg_add:jq
+  PASS  pkgin: a dry-run install plans pkgin:jq
+  PASS  pnpm: a dry-run install plans pnpm:jq
+  PASS  pub: a dry-run install plans pub:jq
+  PASS  setting: a setting statement parses (rc=2)
+  PASS  setting: and reaches a plan
+  PASS  slackpkg: a dry-run install plans slackpkg:jq
+  PASS  snap: a dry-run install plans snap:jq
+  PASS  spack: a dry-run install plans spack:jq
+  PASS  stack: a dry-run install plans stack:jq
+  PASS  vscode: a dry-run install plans vscode:ms-python.python
+  PASS  web: a dry-run install plans web:https://example.invalid/tool.tar.gz
+  PASS  xbps: a dry-run install plans xbps:jq
+  PASS  yarn: a dry-run install plans yarn:jq
+  PASS  yay: a dry-run install plans yay:jq
+  PASS  zfs: a dry-run install plans zfs:jq
+  PASS  zypper: a dry-run install plans zypper:jq
+[16] Command surface, executed
+  PASS  vars resolves this machine's variables
+  PASS  eval prints a versioned document
+  PASS  eval emits valid JSON
+  PASS  repl evaluates a piped session and exits on EOF (U34)
+  PASS  try refuses when there is no container runtime (refused on purpose, exit 3)
+  PASS  try's refusal names what is missing
+  PASS  check unmanaged lists what Shall does not manage
+  PASS  path prints the config repo
+  PASS  path --explain says which source won
+  PASS  config show prints the active configuration
+  PASS  policy checks the desired state against [guard]
+  PASS  check conflicts reports cross-backend conflicts
+  PASS  check approvals is clean with no hooks
+  PASS  adapters names every surface it knows
+  PASS  adapters says an unextended machine has extended nothing
+  PASS  adapters refuses a name that is not a surface, and lists the real ones
+  PASS  an adapter file nobody approved is reported unapproved
+  PASS  a table nobody opens is 'no rows', not 'in use'
+  PASS  a row of the right kind is in force
+  PASS  an unreadable adapter file is reported malformed
+  PASS  a malformed adapter warns, naming the file, and the sync goes on
+  PASS  check adapters names a file that is not in force
+  PASS  check adapters is clean once the file is gone
+  PASS  add vendors a module from a local source
+  PASS  add brought the module file in
+  PASS  add refuses a source that does not exist (failed, as it must)
+  PASS  sbom emits a bill of materials
+  PASS  completions bash generates a script
+  PASS  profile list
+  PASS  profile active
+  PASS  profile create scaffolds one
+  PASS  profile show reads it back
+  PASS  module list
+  PASS  module create scaffolds one
+  PASS  module show reads it back
+  PASS  snapshot list
+  PASS  schedule list
+  PASS  service list
+  PASS  repo list says which backends cannot enumerate
+  PASS  list enumerates what is installed
+  PASS  hooks status says which managers are hookable
+  PASS  hooks shell-init prints the wrapper functions
+  PASS  heal had nothing to recover and said nothing
+  PASS  clean-cache frees archives without removing a package
+  PASS  update refreshes repository metadata
+  PASS  watch --once runs a single unattended reconcile
+  PASS  search finds something
+  PASS  info reads a package's metadata
+  PASS  why explains a package's provenance
+  PASS  lock records installed versions
+  PASS  upgrade --dry-run previews
+  PASS  remove-orphans previews without removing
+  PASS  activate converges onto the named profiles
+  PASS  deactivate previews dropping one
+  PASS  hold pins a package against bulk upgrade
+  PASS  unhold releases it
+  PASS  teleport previews moving a package between managers
+  PASS  unmanage forgets a package without uninstalling it
+  PASS  jq is still installed after unmanage
+  PASS  check security scans for vulnerabilities
+  PASS  export writes native manifests
+  PASS  run executes inside an ephemeral environment
+  PASS  plan freezes a reviewable file (rc=2)
+  PASS  the plan file exists
+  PASS  apply reads a saved plan
+  PASS  edit opens a file in $EDITOR
+  PASS  reset refuses while a config repo still exists (refused on purpose, exit 3)
+  PASS  and says --force is what overrides it
+  PASS  self-upgrade --check reports the version and source
+[16b] bundle → restore
+  PASS  bundle packs the config
+  PASS  the bundle directory exists
+  PASS  restore into a clean config directory
+  PASS  the restored model parses (rc=2)
+  PASS  restore refuses a config directory that is not empty (refused on purpose, exit 3)
+  PASS  and --force overrides it
+[16c] --help across the surface
+  PASS  `activate --help` exists
+  PASS  `adapters --help` exists
+  PASS  `add --help` exists
+  PASS  `adopt --help` exists
+  PASS  `apply --help` exists
+  PASS  `bisect --help` exists
+  PASS  `bundle --help` exists
+  PASS  `check --help` exists
+  PASS  `clean-cache --help` exists
+  PASS  `completions --help` exists
+  PASS  `config --help` exists
+  PASS  `deactivate --help` exists
+  PASS  `diff --help` exists
+  PASS  `edit --help` exists
+  PASS  `eval --help` exists
+  PASS  `export --help` exists
+  PASS  `fleet --help` exists
+  PASS  `git --help` exists
+  PASS  `heal --help` exists
+  PASS  `history --help` exists
+  PASS  `hold --help` exists
+  PASS  `hooks --help` exists
+  PASS  `info --help` exists
+  PASS  `init --help` exists
+  PASS  `install --help` exists
+  PASS  `list --help` exists
+  PASS  `lock --help` exists
+  PASS  `module --help` exists
+  PASS  `path --help` exists
+  PASS  `plan --help` exists
+  PASS  `policy --help` exists
+  PASS  `profile --help` exists
+  PASS  `protected --help` exists
+  PASS  `purge-undeclared --help` exists
+  PASS  `rebuild --help` exists
+  PASS  `remove-orphans --help` exists
+  PASS  `repl --help` exists
+  PASS  `repo --help` exists
+  PASS  `reset --help` exists
+  PASS  `restore --help` exists
+  PASS  `rollback --help` exists
+  PASS  `run --help` exists
+  PASS  `sbom --help` exists
+  PASS  `schedule --help` exists
+  PASS  `search --help` exists
+  PASS  `self-upgrade --help` exists
+  PASS  `service --help` exists
+  PASS  `shell --help` exists
+  PASS  `snapshot --help` exists
+  PASS  `sync --help` exists
+  PASS  `teleport --help` exists
+  PASS  `try --help` exists
+  PASS  `unhold --help` exists
+  PASS  `uninstall --help` exists
+  PASS  `unlock --help` exists
+  PASS  `unmanage --help` exists
+  PASS  `update --help` exists
+  PASS  `upgrade --help` exists
+  PASS  `vars --help` exists
+  PASS  `watch --help` exists
+  PASS  `why --help` exists
+[16d] SIGKILL mid-transaction, then heal
+  PASS  journal: an ordinary run left nothing open in the write-ahead log (22 recorded, 0 failed-and-retryable)
+  PASS  heal: an operation it cannot act on is named rather than skipped in silence
+  PASS  heal: and it says so in the exit code rather than reporting success
+  PASS  crash/heal: the control sync installs all 3 canaries ( pv dos2unix ncdu)
+  PASS  crash/open: SIGKILL left 2 newly-opened operation(s) in the write-ahead log (2 open in all), with 0 of 3 canaries on disk
+  PASS  crash/open: heal recovered the interrupted operation(s)
+  PASS  crash/open: heal's report is in the user's words, not the journal's
+  PASS  crash/open: nothing is open in the log that heal did not name
+  PASS  crash/open: the model still parses after the crash (rc=2)
+  PASS  crash/open: every canary the crash left on the machine is under Shall management
+  PASS  crash/open: the sync after the crash converged onto all 3 canaries
+  PASS  crash/open: and the preview after that plans no change at all
+  PASS  crash/open: the canaries are off the machine again
+  PASS  crash/midway: SIGKILL left 3 newly-opened operation(s) in the write-ahead log (3 open in all), with 1 of 3 canaries on disk
+  PASS  crash/midway: heal recovered the interrupted operation(s)
+  PASS  crash/midway: heal's report is in the user's words, not the journal's
+  PASS  crash/midway: nothing is open in the log that heal did not name
+  PASS  crash/midway: the model still parses after the crash (rc=2)
+  PASS  crash/midway: every canary the crash left on the machine is under Shall management
+  PASS  crash/midway: the sync after the crash converged onto all 3 canaries
+  PASS  crash/midway: and the preview after that plans no change at all
+  PASS  crash/midway: the canaries are off the machine again
+  PASS  crash/completed: SIGKILL landed with 2 operation(s) closed in the write-ahead log and 1 still open, with 3 of 3 canaries on disk
+  PASS  crash/completed: heal recovered the interrupted operation(s)
+  PASS  crash/completed: heal's report is in the user's words, not the journal's
+  PASS  crash/completed: nothing is open in the log that heal did not name
+  PASS  crash/completed: the model still parses after the crash (rc=2)
+  PASS  crash/completed: every canary the crash left on the machine is under Shall management
+  PASS  crash/completed: the sync after the crash converged onto all 3 canaries
+  PASS  crash/completed: and the preview after that plans no change at all
+  PASS  crash/completed: the canaries are off the machine again
+  PASS  crash/groupkill: SIGKILL left 3 newly-opened operation(s) in the write-ahead log (3 open in all), with 1 of 3 canaries on disk
+  PASS  crash/groupkill: heal named what it could not recover and said so in the exit code
+  PASS  crash/groupkill: heal's report is in the user's words, not the journal's
+  PASS  crash/groupkill: nothing is open in the log that heal did not name
+  PASS  crash/groupkill: the model still parses after the crash (rc=2)
+  PASS  crash/groupkill: every canary the crash left on the machine is under Shall management
+  PASS  crash/groupkill: the manager was left broken and Shall named the manager's own state
+  PASS  crash/groupkill: the repair Shall named put the manager back, and the next sync worked
+  PASS  crash/groupkill: the canaries are off the machine again
+[16e] Two runs at once, and killing the lock holder
+  PASS  two-writers: the second run announced the wait instead of going quiet
+  PASS  two-writers: it waited 12s for the holder rather than writing alongside it
+  PASS  two-writers: and it proceeded once the lock was free (rc=0, after 12s)
+  PASS  lock: the holder published its own command and pid — shall sync (pid 14518)
+  PASS  lock: the stamp outlived the process that wrote it, which is the state under test
+  PASS  lock: a killed holder's lock died with it — the next run took 16s, took the lock and released it
+[16f] sudo with a real password, on a pty
+        fixture ok: shallsudo reaches uid 0 by typing a password
+  PASS  sudo: the password prompt reached the terminal
+  PASS  sudo: the typed password reached sudo and the privileged command ran
+  PASS  sudo: a wrong password fails in 3s and says which program refused
+  PASS  sudo: an unanswered prompt is a bounded failure (0s) that names sudo, not a wedge
+  PASS  sudo: one run that installed and removed asked for a password 1 time(s)
+  PASS  sudo: a non-root user installed apt:pv, and the file is on disk
+  PASS  sudo: and the same user removed it again
+  PASS  sudo: an empty manifest took back everything this section installed — dos2unix
+[16g] Snapshot → mutate → restore, on a real device
+  soft  restore: no volume group on this image — 13b said why, and only the `storage` image (--privileged) builds one
+[17] Coverage audit
+        backends: 10 real lifecycle, 0 install-attempted, 46 plan-smoked
+  PASS  every registered backend got a lifecycle or a plan-smoke
+  PASS  apt: the image that claims its lifecycle is this one, and it ran
+  PASS  every registered backend has a canary or a stated reason it cannot have one
+  PASS  real-lifecycle ratchet: 10 >= 7 recorded for container-linux-ubuntu-local
+        ratchet up:  sed -i 's/^container-linux-ubuntu-local .*/container-linux-ubuntu-local 10/' /src/scripts/lifecycle-floor.txt
+        exempt: shell — opens an interactive subshell
+        exempt: history — an interactive manifest-history TUI
+        exempt: bisect — restores system snapshots, and may need a reboot between steps
+        exempt: fleet — compares machines over SSH; there are no peers here
+        subcommands: 61 in --help, 57 executed, 4 exempt
+  PASS  every non-exempt subcommand was executed, not just --help'd
+==============================================================
+ RESULT  pass=393  fail=0  soft=4
+ OK — every hard check passed.
+==============================================================

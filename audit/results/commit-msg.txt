@@ -1,0 +1,262 @@
+fix: one package database with three clients, and four defects behind it
+
+The arch image started running its harness as an unprivileged user so that `yay` and `paru`
+could be driven at all. This is the first round that read everything the new arrangement said,
+and it said a great deal more than the one defect it was pointed at.
+
+J3 - adopt wrote one installed package once per client of its database
+-----------------------------------------------------------------------------
+`pacman`, `yay` and `paru` are three programs over one libalpm database; `-Qe` from
+any of them returns the same lines. Every surface that enumerates installed software
+across backends keyed on `backend:name`, so one package was three packages.
+
+    install jq     -> one line, `jq`, resolving to pacman            (correct)
+    adopt          -> skipped pacman:jq as declared, then wrote
+                      paru:jq AND yay:jq
+    uninstall jq   -> install 0  remove 3   backends: pacman, paru, yay
+    the removal    -> pacman took jq; paru and yay were asked to remove
+                      a package that was gone: `error: target not found: jq`
+
+20 packages became 60 declarations, and forty of the next forty-five checks failed
+on those two lines, none of them about what they were testing.
+
+Three more surfaces, same shape:
+  * `shall list` printed 203 packages as 609 rows.
+  * the installed-but-undeclared crawl tripled - the list `purge-undeclared`
+    deletes from, and the ratio that guards the deletion.
+  * `uninstall <pkg> --absent` writes an `absent:` line per holder, so it wrote
+    three. An `absent:` line is permanent, so that machine fails EVERY later sync,
+    and deleting the line that "fails" does not help: the failing removal is the
+    second one.
+
+One table, READS_THE_DATABASE_OF in backends/capability.rs, and three functions over
+it. The claim is made BEFORE the already-declared filter, not after - filtering
+first is what let the clients through, because pacman was dropped as "already
+managed" and left the name unclaimed for the two backends behind it.
+
+Which backend survives is J3's reversible half, written up for the owner.
+
+update and upgrade collided on the same lock
+-----------------------------------------------------------------------------
+`update` fanned out concurrently, above a comment saying a refresh "changes no
+package, so concurrent runs cannot contend on a package database". All three clients
+take /var/lib/pacman/db.lck: `yay: could not refresh - failed to synchronize all
+databases (unable to lock database)`. It refreshes once per database now; a client's
+`-Sy` refreshes the owner's repositories and none of its own.
+
+`upgrade` partitions into a sequential half and a concurrent half, discriminating on
+`needs_root`. The AUR helpers are exactly where that proxy breaks: `needs_root =
+false` is correct for them, and they contend anyway, so they ran concurrently with
+the pacman holding the lock. The partition asks the real question now.
+
+VI.7 - eight system managers sorted below the language managers
+-----------------------------------------------------------------------------
+`starter_order`'s one distinction is "a system manager beats a language manager",
+implemented by a hand-kept list. slackpkg, emerge, eopkg, guix, macports, pkg,
+pkg_add and pkgin were missing, and fell to the "unrecognised sorts low" branch -
+which exists for backends the ONBOARDER added and nobody vetted.
+
+Measured on the slackware image: `init` wrote `appimage, cargo, gem, github, go,
+setting, slackpkg`, so `shall install bc` became `cargo install bc` and failed with
+"nothing to install in bc v0.1.17, because it has no binaries" - while slackpkg had
+bc-1.07.1-x86_64-5 sitting in its own package list. Every bare name on a Slackware,
+Gentoo, Solus, Guix, MacPorts or BSD machine went to a language manager first.
+
+The guard reads run.sh's own `backend_for()`: the backend a distro image is driven
+with IS that distro's system manager. Adding a Solus image is what makes `eopkg`
+required, so nobody has to remember a second list.
+
+VI.8 - the lock Shall could remove, would not look at, so could not remove
+-----------------------------------------------------------------------------
+pacman's db.lck is mode 0000, owned by root, and empty - a pure existence lock.
+Both readers in stale_lock.rs took `Option<String>` and read `None` as ABSENT, and
+`None` is also what an unreadable file returns. So wherever Shall is not root, a
+stale lock read as no lock:
+
+  * `find` (heal's) left it alone - "it is there and could not be read, so nothing
+    can be proved about it" - about a file with nothing in it to read;
+  * `held_for` (the retry loop's) answered Free, so sync backed off four times into
+    `exhausted` instead of sending the user to `heal`.
+
+`clear_stale_manager_locks` removes these with `rm -f` through the ELEVATING
+executor. The privilege was already there; the look that would have authorised it
+was the one thing not elevated. Named the third state - LockFile::{Absent,
+Unreadable, Body} - and unreadable is evidence only where the contents were going to
+be the evidence. A running holder still wins, readable or not.
+
+VI.9 - a `--` terminator sent to a shell script, and the empty answer it gave
+-----------------------------------------------------------------------------
+`core/argv.rs` listed `slackpkg` as terminating under `GETOPT`, whose own text says what kind
+of claim that is: "inferred from the parser it links against, not asked of the tool itself".
+slackpkg links against nothing. It is a shell script that reads `$1` as the pattern.
+
+    $ slackpkg search -- bc
+    search: Ignoring extra arguments: bc
+    Looking for -- in package list. Please wait... DONE
+    No package name matches the pattern.
+    $ echo $?
+    0
+
+Exit 0, empty result, nothing on stderr, so `search` returned Ok(vec![]) and every caller read
+it as "slackpkg does not carry this package".
+
+This is the second half of VI.7 and neither half works alone. Ranking slackpkg above the
+language managers does nothing while slackpkg answers "not me" about a package in its own list,
+so `shall install bc` still became `cargo install bc` with bc-1.07.1-x86_64-5 one subcommand
+away. `install` hid it: it takes a LIST of patterns and drops the one that matched nothing, so
+the verb anybody would test is the verb that survives the terminator.
+
+Removing the terminator opens no injection hole - a name beginning with `-` is refused by
+`Validator` and again by the grammar, before any argv is built. The unasked-rows ceiling drops
+48 -> 47. CI runs the terminator probe against each distro image's own managers, so this row was
+unasked only because no Slackware image existed to ask it; wiring slackware into that matrix
+arms it.
+
+Two harness defects the same image reported
+-----------------------------------------------------------------------------
+The crash fixture is `pv dos2unix ncdu`, chosen as "present in the repos of all six distros this
+harness images". Slackware is the seventh and carries none of them. Section 16d asks whether the
+fixture installs and softens when it does not; 16e declares the SAME fixture and then judges the
+recovery sync by its exit code, having never asked - so it failed with `slackpkg: No packages
+match the pattern for install` under a sentence reading *"the lock was free, so this is a sync
+defect"*. That sentence's own comment records paying for this confusion twice already, once for
+six nights on macOS. The control's answer is now a variable both sections read, in this harness
+and in the Windows one, which has the identical unguarded twin.
+
+`tail -c 300` with no FILE operand resolves `300` as a filename on Slackware's coreutils - so
+every diagnostic built as `tr '\n' ' ' < file | tail -c N` printed `tail: cannot open '300'`
+instead of the excerpt, on the runs where the excerpt was the only evidence. Six sites across
+both harnesses; each now gives tail the file and pipes into `tr`, which needs no opinion about
+how a given build parses a separated option argument.
+
+The probe that could pass while measuring nothing
+-----------------------------------------------------------------------------
+`terminator_probe_tests` asserted one thing: that no row DISAGREED with its tool. `wrong` is
+empty both when every row was confirmed and when no row could be read at all, and only one of
+those is a pass.
+
+What prompted it is this round's own doing, and it is narrower than a whole leg. The arch image
+now runs its harness as an unprivileged user so `yay` and `paru` can be driven. Measured on that
+image both ways: as root the probe measures seven binaries, as `shall` it measures six, and the
+missing one is `pacman` - whose row says `Measured` on the strength of this very leg. It refuses
+before parsing an operand, so it echoes no operand either way; the AUR helpers answer regardless.
+So the leg would have gone on passing while it had quietly stopped checking one row.
+
+The distro probe step therefore passes `-u 0`. The probe also now fails when it drove installed
+binaries and could measure NONE of them - the whole-leg version of the same shape. **That
+assertion has not been observed to fire** and its comment says so: the partial case is what was
+measured, and a gate for "a row this leg used to measure went unchecked" is not written. It may
+turn a leg red, and a red there would be a true statement about that leg's coverage rather than a
+flake - the same bargain `UNASKED_CEILING` and the lifecycle ratchet already make.
+
+`yay` and `paru` also stop being inferences. Both were `GETOPT` — *"inferred from the parser it
+links against"* — about a Go program and a Rust one that link getopt(3) no more than slackpkg
+does. Both do terminate, so the guess was right twice and wrong once out of three; the ceiling
+falls 48 -> 45.
+
+The nightly gate that has never once reported
+-----------------------------------------------------------------------------
+`Mutation (the safety files, nightly)` mutates four files where a silent mutation is a safety
+failure rather than a wrong answer. Its own comment does the arithmetic - "one file of 125
+mutants cost ~90 minutes" - and then runs all four in one job under `timeout-minutes: 360`.
+
+Runs 31771331606 and 31821620442 both ended `cancelled`, the second at 16:55:47 -> 22:56:03: six
+hours and sixteen seconds, which is the timeout to the second. So the job has never produced a
+mutation score, while appearing in every nightly job list as a gate that ran.
+
+One job per file now. Sharded by file rather than `--shard k/n` because the files are the unit
+that comment reasons in, each shard's name says which safety property it covers, and a file that
+outgrows the limit names itself instead of moving an anonymous fraction of the work. The first
+completing run may well be red - nobody has ever seen this gate's answer - and nightly is where
+that belongs.
+
+guix, and what an image owes a harness
+-----------------------------------------------------------------------------
+`guix` had been exempted through three successively less wrong reasons, each rewritten as it was
+measured false. The last was "the manager works, Shall has not driven it". Shall drives it now:
+pass=340 fail=0, three backends round-tripped, and the seccomp flag the previous round had
+already identified (`personality(2)`, blocked by Docker's default profile) is passed through the
+`flags` matrix slot that was renamed in anticipation of exactly this.
+
+Getting there cost two findings that are not about guix:
+
+  * `guix install hello` writes `/root/.guix-profile/bin/hello` and then tells you to put that on
+    PATH yourself. So the canary installed correctly and was invisible: `guix: hello is not on
+    PATH and nothing said where it went`, with seven checks cascading off it. The entrypoint does
+    what a person does once on a guix machine.
+  * A guix profile starts EMPTY, so the harness had no `git` for the history proofs and no
+    protected package for the removal guard to refuse. Those go in at run time and not in a build
+    layer, because the same seccomp wall blocks `guix install` during `docker build` — measured,
+    the layer failed with the identical setPersonality error.
+
+And a third that IS about the harness, the same unguarded-twin shape as the crash fixture: section
+11 softens its history checks on an image with no git, and section 12's siblings asserted anyway
+— "there is history for a rebuild to leave alone" failed, and K14's no-commit proof PASSED by
+comparing 0 to 0, which the comment directly above it had described as proving nothing.
+
+`NOWHERE_CEILING` 10 -> 8, for `slackpkg` and `guix` in turn.
+
+Also in this round
+-----------------------------------------------------------------------------
+* `@undo=` never ran when the last `exec:` line was deleted: sync's converged
+  early-return reconciles extras and skips the execs phase. `Execs::apply`'s own
+  comment teaches this lesson (S20); its caller re-created it.
+* `shall lock` was broken outright by H8 for any config naming a catalogued step -
+  `exec:step/rustup` was read as a path to hash.
+* systemd detection: `systemctl` on PATH is not systemd running. Root-caused to
+  `Detected::detect_command`, shared by three adapter tables; fixed with an optional
+  `detect_file` liveness predicate (/run/systemd/system, what sd_booted(3) checks).
+* the install-script CI jobs were driven by nothing local, so the one gate that asks
+  "does a stranger following the README get a working program" was unreachable from
+  a developer's machine. Both release scripts run it now.
+* a source scanner whose terminator knew `fn` and `pub fn` but not `pub(crate) fn`
+  merged two functions and reported the second's fields against the first's name.
+* run.sh's CRLF guard scanned only `*.sh`; five Dockerfiles were CRLF in the tree.
+* slackpkg and guix are driven for real and join the nightly matrix and the release script.
+* `stale_lock.rs` claimed, in a comment, that a `pacman` process holds the lock whichever client
+  started it — and that list is what decides a lock is STALE, so a helper holding it under its
+  own name would be a live lock deleted. Now measured rather than asserted.
+
+Verification
+-----------------------------------------------------------------------------
+arch image, unprivileged, driving pacman + yay + paru: pass=395 fail=0 soft=6, up from a run
+where forty of forty-five checks failed on two declarations. `adopt` reports `adopted=19 (of
+which pacman: 19)` against a manual set of 20 and 203 installed - one row per package, none
+through a client. 12 backends completed a real install -> list -> binary -> remove round trip
+against a floor of 7, so `lifecycle-floor.txt` and the README coverage table move to 12.
+
+ubuntu image: pass=393 fail=0, which is what the `@undo=` and systemd-detection fixes and the
+full `service:` lifecycle are verified by. Floor 7 -> 10.
+
+The claim that `heal` cannot mistake a live AUR-helper run for a stale lock was ASSERTED in a
+comment and is now measured: 435 samples across `yay -Sy` and `paru -Sy`, a live `pacman`
+process in every single one, zero samples with the lock held and no pacman running.
+
+slackware image, its manager's first run anywhere: pass=323 fail=0 soft=8, from a first run of
+pass=322 fail=7 where five failures were `cargo:bc` and the sixth was the fixture. 7 backends
+round-tripped, recorded as that host class's first floor.
+
+The terminator probe was self-tested rather than trusted: with slackpkg's row put back to the
+value that shipped the bug, the probe FAILS (rc=101, `measured: slackpkg does NOT terminate`,
+all three verbs named). So the claim that wiring slackware into the matrix arms this gate is
+one somebody ran, not one somebody reasoned.
+
+The probe also needs `-u 0` on the distro leg now, and that is measured too: on the arch image
+as root it measures `pacman`, `yay` and `paru` and all three terminate; as the unprivileged
+harness user it measures NOTHING and passes anyway, because no verb gets far enough to name the
+operand. The lifecycle wants the user and the probe wants root.
+
+guix image, the last one that existed and had never been run: pass=340 fail=0 soft=9, after
+290/8 and 328/7 - the PATH finding cleared seven and the empty-profile fixtures the eighth.
+
+Host: `cargo build --all-targets` clean, `cargo clippy --all-targets` clean, `cargo fmt --
+--check` clean, `cargo test --no-fail-fast` 1853 lib + 592 suite + 22, 0 failed.
+`scripts/unix-check.sh` ok - the 45 cfg-gated blocks the other four steps cannot see still
+compile for Linux. `latency_budget_tests` failed
+twice under load - `shall eval` at 5.62s and `shall check config` at 5.67s against a 5s budget,
+while image builds shared the box - and passes on a quiet one. Reported rather than quietly
+re-run, because a contention failure and a regression look identical in a log, and the message
+that prints says "on an unloaded box" while being the one thing it cannot check.
+shellcheck -S warning over all 13 scripts: clean. actionlint: clean.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>

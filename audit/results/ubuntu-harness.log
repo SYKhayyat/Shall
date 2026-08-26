@@ -1,0 +1,145 @@
+==============================================================
+ Shall v7 harness — backend=apt package=jq
+==============================================================
+[1] Bootstrap
+  PASS  init scaffolds the repo
+  PASS  priority file exists
+  PASS  priority names this backend
+  PASS  active file exists
+[2] Discovery / read-only verbs
+  PASS  check health
+  PASS  check drift
+  PASS  plan (no changes yet) (rc=0)
+  PASS  check parses the model (rc=2)
+  PASS  check absent lists nothing
+  PASS  protected lists guarded packages
+  PASS  protected includes a system essential
+[3] Dry-run safety
+  PASS  sync --dry-run does not error
+  PASS  a dry-run install shows a plan
+  PASS  dry-run did NOT actually install jq (failed, as it must)
+[4] purge-undeclared, before adopt (the state that makes it a test)
+  PASS  purge-undeclared is refused on a machine Shall has not adopted (refused on purpose, exit 3)
+  PASS  and it is the unadopted-machine ratio that refused
+[5] Install
+  PASS  install jq
+  PASS  list shows jq
+  PASS  apt: jq is on PATH (at /usr/bin/jq)
+[6] Idempotency
+  PASS  second sync is a no-op (exit 0)
+[7] Negative path
+  PASS  installing a nonexistent package fails (failed, as it must)
+  PASS  a failed install leaves the model parseable
+  PASS  the unresolvable name is out of the manifest (failed, as it must)
+[8] Adopt
+  PASS  nothing is adopted before adopt runs (failed, as it must)
+  PASS  adopt takes manual packages
+  PASS  python3 still installed after adopt
+        adopted=105 (of which apt: 105)  apt manual set=106  apt installed=585
+  PASS  adopt wrote an adoption manifest
+  PASS  adopt recorded at least one package
+  PASS  adopt took the manual set, not the whole dependency closure
+  PASS  adopt took no more than what apt calls user-chosen
+[9] The guard
+        guard victim: sudo (from `shall protected`, and installed here)
+  PASS  sudo survives an uninstall attempt
+  PASS  purge-undeclared is still not a silent mass-delete after adopt (refused on purpose, exit 3)
+  PASS  and the refusal after adopt still names its rule
+[10] Remove
+  PASS  uninstall jq
+  PASS  jq binary gone after uninstall (failed, as it must)
+[11] Git history + rollback
+  PASS  git init enables manifest history
+  PASS  git status reads the repo
+  PASS  an install after git init succeeds
+  PASS  the install left a commit behind
+  PASS  git log shows a shall commit
+  PASS  git commit records the current state on demand
+  PASS  diff against a commit runs
+  PASS  rollback to HEAD is accepted
+[12] rebuild
+  PASS  bare rebuild is accepted, not refused (K2)
+  PASS  bare rebuild warns it will rebuild EVERY declared package (K2)
+  PASS  there is history for a rebuild to leave alone
+  PASS  rebuild jq runs
+  PASS  jq is reinstalled, not left removed
+        commits before=2 after=2
+  PASS  rebuild wrote no git commit (K14)
+[13] Chains and the per-host lock
+        lock file: /tmp/shall-it-config/locks/bare.341d7ffa115c.toml
+  PASS  the lock is named for this host
+  PASS  an unpinned name froze to apt
+  PASS  sync ignores another host's lock file
+  PASS  and leaves it alone
+  PASS  a chain is legal
+  PASS  a chain may end in list
+  PASS  list alone is legal
+  PASS  an empty slot is refused (refused, saying so)
+  PASS  an unknown link is refused (refused, saying so)
+  PASS  list must come last (refused, saying so)
+  PASS  a name repeated is refused (refused, saying so)
+  PASS  a pattern cannot span one (refused, saying so)
+  PASS  a pin to a manager this host lacks is not silent (failed, as it must)
+  PASS  unlock backends --list names the frozen package
+  PASS  unlock backends forgets one name
+  PASS  the entry is really gone (failed, as it must)
+  PASS  unlocking a name that was never frozen is not an error
+[13b] Silence is not a no
+  PASS  a sync past a silent manager still resolves
+  PASS  and freezes nothing (failed, as it must)
+  PASS  and says which manager could not answer
+[14] Real lifecycle, every other manager on this image
+        READY backends: appimage apt bun cargo gem github link npm pip pipx service uv web 
+  soft  appimage: no real lifecycle here — needs FUSE, which a plain container does not have — smoked in 15
+    -- bun:sort-package-json
+  PASS  bun installed sort-package-json for real
+  PASS  bun: list shows sort-package-json
+  PASS  bun: sort-package-json is on PATH (at /root/.bun/bin/sort-package-json)
+  PASS  bun: uninstall sort-package-json
+  PASS  bun: sort-package-json is gone from list (failed, as it must)
+  PASS  bun: sort-package-json is gone
+    -- cargo:hexyl
+  PASS  cargo installed hexyl for real
+  PASS  cargo: list shows hexyl
+  PASS  cargo: hexyl is on PATH (at /root/.cargo/bin/hexyl)
+  PASS  cargo: uninstall hexyl
+  PASS  cargo: hexyl is gone from list (failed, as it must)
+  PASS  cargo: hexyl is gone
+    -- gem:colorize
+  PASS  gem installed colorize for real
+  PASS  gem: list shows colorize
+  PASS  gem: uninstall colorize
+  PASS  gem: colorize is gone from list (failed, as it must)
+    -- github:sharkdp/fd
+  PASS  github installed sharkdp/fd for real
+  PASS  github: list shows fd
+  PASS  github: fd is on PATH (at /root/.local/bin/fd)
+  PASS  github: uninstall sharkdp/fd
+  PASS  github: fd is gone from list (failed, as it must)
+  PASS  github: fd is gone
+  soft  link: READY here and this harness has no canary — it falls through to the plan-smoke, which is weaker than this image could give
+    -- npm:cowsay
+  PASS  npm installed cowsay for real
+  PASS  npm: list shows cowsay
+  PASS  npm: cowsay is on PATH (at /usr/local/bin/cowsay)
+  PASS  npm: uninstall cowsay
+  PASS  npm: cowsay is gone from list (failed, as it must)
+  PASS  npm: cowsay is gone
+  soft  pip: no real lifecycle here — this distro marks its Python EXTERNALLY-MANAGED (PEP 668), so a system pip install is refused by design
+    -- pipx:pycowsay
+  PASS  pipx installed pycowsay for real
+  PASS  pipx: list shows pycowsay
+  PASS  pipx: pycowsay is on PATH (at /root/.local/bin/pycowsay)
+  PASS  pipx: uninstall pycowsay
+  PASS  pipx: pycowsay is gone from list (failed, as it must)
+  PASS  pipx: pycowsay is gone
+  soft  service: READY here and this harness has no canary — it falls through to the plan-smoke, which is weaker than this image could give
+    -- uv:pyjokes
+  PASS  uv installed pyjokes for real
+  PASS  uv: list shows pyjokes
+  PASS  uv: pyjoke is on PATH (at /root/.local/bin/pyjoke)
+  PASS  uv: uninstall pyjokes
+  PASS  uv: pyjokes is gone from list (failed, as it must)
+  PASS  uv: pyjoke is gone
+  soft  web: no real lifecycle here — installs from a pasted URL; no stable public canary — smoked in 15
+/src/docker/integration/run-in-container.sh: 1582: Syntax error: "else" unexpected

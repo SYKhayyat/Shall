@@ -1,0 +1,10 @@
+=== guix package -I, cat -A (exact bytes) ===
+nss-certs^I3.101.4^Iout^I/gnu/store/v9i76lmhx0rlq46wyypv62wh2s3igqcf-nss-certs-3.101.4$
+hello    ^I2.12.3 ^Iout^I/gnu/store/ab584kfyc7pymc1cmdrkwzz3lwv86yf6-hello-2.12.3$
+sed      ^I4.9    ^Iout^I/gnu/store/w7cxnqm5g12jnn1nm86dapmc6l4k40aa-sed-4.9$
+=== guix package -I, raw ===
+nss-certs	3.101.4	out	/gnu/store/v9i76lmhx0rlq46wyypv62wh2s3igqcf-nss-certs-3.101.4
+hello    	2.12.3 	out	/gnu/store/ab584kfyc7pymc1cmdrkwzz3lwv86yf6-hello-2.12.3
+sed      	4.9    	out	/gnu/store/w7cxnqm5g12jnn1nm86dapmc6l4k40aa-sed-4.9
+=== guix --version ===
+guix (GNU Guix) 43833afaa165e851c322d05ece0a0d105a144a1f

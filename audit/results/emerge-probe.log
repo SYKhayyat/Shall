@@ -1,0 +1,20 @@
+=== is there a portage tree? ===
+ls: cannot access '/var/db/repos/gentoo': No such file or directory
+ebuild count:
+0
+=== binhost config as shipped ===
+gentoo.conf
+=== can it resolve a binary package? ===
+!!! Section 'gentoo' in repos.conf has location attribute set to nonexistent directory: '/var/db/repos/gentoo'
+!!! Invalid Repository Location (not a dir): '/var/db/repos/gentoo'
+
+
+!!! /etc/portage/make.profile is not a symlink and will probably prevent most merges.
+!!! It should point into a profile within /var/db/repos/gentoo/profiles/
+!!! (You can safely ignore this message when syncing. It's harmless.)
+
+
+!!! Your current profile is invalid. If you have just changed your profile
+!!! configuration, you should revert back to the previous configuration.
+!!! Allowed actions are limited to --help, --info, --search, --sync, and
+!!! --version.

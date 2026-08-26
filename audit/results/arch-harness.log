@@ -1,0 +1,183 @@
+==============================================================
+ Shall v7 harness — backend=pacman package=jq
+==============================================================
+[1] Bootstrap
+  PASS  init scaffolds the repo
+  PASS  priority file exists
+  PASS  priority names this backend
+  PASS  active file exists
+[2] Discovery / read-only verbs
+  PASS  check health
+  PASS  check drift
+  PASS  plan (no changes yet) (rc=0)
+  PASS  check parses the model (rc=2)
+  PASS  check absent lists nothing
+  PASS  protected lists guarded packages
+  PASS  protected includes a system essential
+[3] Dry-run safety
+  PASS  sync --dry-run does not error
+  PASS  a dry-run install shows a plan
+  PASS  dry-run did NOT actually install jq (failed, as it must)
+[4] purge-undeclared, before adopt (the state that makes it a test)
+  PASS  purge-undeclared is refused on a machine Shall has not adopted (refused on purpose, exit 3)
+  PASS  and it is the unadopted-machine ratio that refused
+[5] Install
+  PASS  install jq
+  PASS  list shows jq
+  PASS  pacman: jq is on PATH (at /usr/sbin/jq)
+[6] Idempotency
+  PASS  second sync is a no-op (exit 0)
+[7] Negative path
+  PASS  installing a nonexistent package fails (failed, as it must)
+  PASS  a failed install leaves the model parseable
+  PASS  the unresolvable name is out of the manifest (failed, as it must)
+[8] Adopt
+  PASS  nothing is adopted before adopt runs (failed, as it must)
+  PASS  adopt takes manual packages
+  PASS  python3 still installed after adopt
+        adopted=43 (of which pacman: 19)  pacman manual set=20  pacman installed=203
+  PASS  adopt wrote an adoption manifest
+  PASS  adopt recorded at least one package
+  PASS  adopt took the manual set, not the whole dependency closure
+  PASS  adopt took no more than what pacman calls user-chosen
+[9] The guard
+        guard victim: sudo (from `shall protected`, and installed here)
+  PASS  sudo survives an uninstall attempt
+  PASS  purge-undeclared is still not a silent mass-delete after adopt (refused on purpose, exit 3)
+  PASS  and the refusal after adopt still names its rule
+[10] Remove
+  FAIL  uninstall jq (rc=1)
+        | 2 package(s) installed and declared nowhere that `sync` will not remove:
+        |   ~ pacman:sudo  (protected by config rule `sudo`)
+        |   ~ yay:sudo  (protected by config rule `sudo`)
+        |   declare them to keep them, or remove them by hand.
+        | shall-failure-class: unknown
+        | Error: `yay` failed (exit 1): error: target not found: jq
+        |  -> exit status 1
+        |     while applying `yay:jq`.
+  PASS  jq binary gone after uninstall (failed, as it must)
+[11] Git history + rollback
+  PASS  git init enables manifest history
+  PASS  git status reads the repo
+  PASS  an install after git init succeeds
+  PASS  the install left a commit behind
+  PASS  git log shows a shall commit
+  PASS  git commit records the current state on demand
+  PASS  diff against a commit runs
+  PASS  rollback to HEAD is accepted
+[12] rebuild
+  PASS  bare rebuild is accepted, not refused (K2)
+  PASS  bare rebuild warns it will rebuild EVERY declared package (K2)
+  PASS  there is history for a rebuild to leave alone
+  PASS  rebuild jq runs
+  PASS  jq is reinstalled, not left removed
+        commits before=2 after=2
+  PASS  rebuild wrote no git commit (K14)
+[13] Chains and the per-host lock
+        lock file: /tmp/shall-it-config/locks/bare.e1c70ea110e3.toml
+  PASS  the lock is named for this host
+  PASS  an unpinned name froze to pacman
+  PASS  sync ignores another host's lock file
+  PASS  and leaves it alone
+  PASS  a chain is legal
+  PASS  a chain may end in list
+  PASS  list alone is legal
+  PASS  an empty slot is refused (refused, saying so)
+  PASS  an unknown link is refused (refused, saying so)
+  PASS  list must come last (refused, saying so)
+  PASS  a name repeated is refused (refused, saying so)
+  PASS  a pattern cannot span one (refused, saying so)
+  PASS  a pin to a manager this host lacks is not silent (failed, as it must)
+  PASS  unlock backends --list names the frozen package
+  PASS  unlock backends forgets one name
+  PASS  the entry is really gone (failed, as it must)
+  PASS  unlocking a name that was never frozen is not an error
+[13b] Silence is not a no
+  PASS  a sync past a silent manager still resolves
+  PASS  and freezes nothing (failed, as it must)
+  PASS  and says which manager could not answer
+[14] Real lifecycle, every other manager on this image
+        READY backends: appimage bun cargo gem github go link npm pacman paru pipx service setting uv web yay 
+  soft  appimage: no real lifecycle here — needs FUSE, which a plain container does not have — smoked in 15
+    -- bun:sort-package-json
+  PASS  bun installed sort-package-json for real
+  PASS  bun: list shows sort-package-json
+  PASS  bun: sort-package-json is on PATH (at /home/shall/.bun/bin/sort-package-json)
+  PASS  bun: uninstall sort-package-json
+  PASS  bun: sort-package-json is gone from list (failed, as it must)
+  PASS  bun: sort-package-json is gone
+    -- cargo:hexyl
+        (first attempt failed, class=unknown; retrying once)
+  FAIL  cargo: install of cargo:hexyl failed twice, unclassified — a defect, not ecosystem variance (rc=1, 1)
+        |  Downloading crates ...
+        |   Downloaded hexyl v0.17.0
+        | error: failed to open `/opt/cargo/registry/cache/index.crates.io-1949cf8c6b5b557f/hexyl-0.17.0.crate`
+        | Caused by:
+        |   Permission denied (os error 13)
+        |     while applying `cargo:hexyl` (/tmp/shall-it-config/modules/imperative.txt:7).
+    -- gem:colorize
+  PASS  gem installed colorize for real
+  PASS  gem: list shows colorize
+  PASS  gem: uninstall colorize
+  PASS  gem: colorize is gone from list (failed, as it must)
+    -- github:sharkdp/fd
+  PASS  github installed sharkdp/fd for real
+  PASS  github: list shows fd
+  PASS  github: fd is on PATH (at /home/shall/.local/bin/fd)
+  PASS  github: uninstall sharkdp/fd
+  PASS  github: fd is gone from list (failed, as it must)
+  PASS  github: fd is gone
+    -- go:golang.org/x/example/hello
+  PASS  go installed golang.org/x/example/hello for real
+  PASS  go: list shows hello
+  PASS  go: hello is not on PATH, and the install said so, naming /home/shall/go/bin
+  PASS  go: uninstall golang.org/x/example/hello
+  PASS  go: hello is gone from list (failed, as it must)
+  PASS  go: hello is gone
+  soft  link: READY here and this harness has no canary — it falls through to the plan-smoke, which is weaker than this image could give
+    -- npm:cowsay
+        (first attempt failed, class=unknown; retrying once)
+  FAIL  npm: install of npm:cowsay failed twice, unclassified — a defect, not ecosystem variance (rc=1, 1)
+        | npm error It is likely you do not have the permissions to access this file as the current user
+        | npm error
+        | npm error If you believe this might be a permissions issue, please double-check the permissions of the file and its containing directories, or try running the command again as root/Administrator.
+        | npm error A complete log of this run can be found in: /home/shall/.npm/_logs/2026-08-14T18_27_21_679Z-debug-0.log
+        | (16 more line(s) of output; re-run with -v to see all of it)
+        |     while applying `npm:cowsay` (/tmp/shall-it-config/modules/imperative.txt:7).
+    -- paru:pv
+        (first attempt failed, class=unknown; retrying once)
+  FAIL  paru: install of paru:pv failed twice, unclassified — a defect, not ecosystem variance (rc=1, 1)
+        |   ~ yay:sudo  (protected by config rule `sudo`)
+        |   declare them to keep them, or remove them by hand.
+        |  WARN `paru:pv` is still declared in /tmp/shall-it-config/modules/imperative.txt, so `sync` will try it again. Nothing classified the failure above, so if it repeats unchanged the cause is not a passing one — run `shall unmanage paru:pv` if you did not mean it.
+        | shall-failure-class: unknown
+        | Error: `paru` failed (exit 127): paru: error while loading shared libraries: libalpm.so.15: cannot open shared object file: No such file or directory
+        |     while applying `paru:pv` (/tmp/shall-it-config/modules/imperative.txt:7).
+    -- pipx:pycowsay
+  PASS  pipx installed pycowsay for real
+  PASS  pipx: list shows pycowsay
+  PASS  pipx: pycowsay is on PATH (at /home/shall/.local/bin/pycowsay)
+  PASS  pipx: uninstall pycowsay
+  PASS  pipx: pycowsay is gone from list (failed, as it must)
+  PASS  pipx: pycowsay is gone
+  soft  service: no real lifecycle here — a dependent statement (service:NAME), not a package name — smoked in 15
+  soft  setting: no real lifecycle here — a dependent statement (setting:K @value=), not a package name — smoked in 15
+    -- uv:pyjokes
+  PASS  uv installed pyjokes for real
+  PASS  uv: list shows pyjokes
+  PASS  uv: pyjoke is on PATH (at /home/shall/.local/bin/pyjoke)
+  PASS  uv: uninstall pyjokes
+  PASS  uv: pyjokes is gone from list (failed, as it must)
+  PASS  uv: pyjoke is gone
+  soft  web: no real lifecycle here — installs from a pasted URL; no stable public canary — smoked in 15
+    -- yay:ncdu
+  PASS  yay installed ncdu for real
+  PASS  yay: list shows ncdu
+  PASS  yay: ncdu is on PATH (at /usr/sbin/ncdu)
+  PASS  yay: uninstall ncdu
+  PASS  yay: ncdu is gone from list (failed, as it must)
+  PASS  yay: ncdu is gone
+/src/docker/integration/run-in-container.sh: line 1424: he: command not found
+/src/docker/integration/run-in-container.sh: line 1428: syntax error near unexpected token `fi'
+/src/docker/integration/run-in-container.sh: line 1428: `        fi'
+  soft  yay: READY here and this harness has no canary — it falls through to the plan-smoke, which is weaker than this image could give

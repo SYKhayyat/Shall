@@ -1,0 +1,102 @@
++ getent group guixbuild
+guixbuild:x:999:guixbuilder01,guixbuilder02,guixbuilder03,guixbuilder04,guixbuilder05,guixbuilder06,guixbuilder07,guixbuilder08,guixbuilder09,guixbuilder10
++ ls -ld /var/guix /gnu/store
++ head
+drwxrwxr-t 1 root guixbuild 172032 May  4 04:43 /gnu/store
+drwxr-xr-x 1 root root        4096 May  4 04:40 /var/guix
++ i=0
++ [ 0 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=1
++ sleep 1
++ guix-daemon --disable-chroot --build-users-group=guixbuild
++ [ 1 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=2
++ sleep 1
++ [ 2 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=3
++ sleep 1
++ [ 3 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=4
++ sleep 1
++ [ 4 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=5
++ sleep 1
++ [ 5 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=6
++ sleep 1
++ [ 6 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=7
++ sleep 1
++ [ 7 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=8
++ sleep 1
++ [ 8 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=9
++ sleep 1
++ [ 9 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=10
++ sleep 1
++ [ 10 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=11
++ sleep 1
++ [ 11 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=12
++ sleep 1
++ [ 12 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=13
++ sleep 1
++ [ 13 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=14
++ sleep 1
++ [ 14 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=15
++ sleep 1
++ [ 15 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=16
++ sleep 1
++ [ 16 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=17
++ sleep 1
++ [ 17 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=18
++ sleep 1
++ [ 18 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=19
++ sleep 1
++ [ 19 -lt 20 ]
++ [ ! -S /var/guix/daemon-socket/socket ]
++ i=20
++ sleep 1
++ [ 20 -lt 20 ]
++ echo --- daemon log:
++ cat /tmp/daemon.log
+--- daemon log:
+sh: 5: guix-daemon: not found
++ ls -l /var/guix/daemon-socket/
+total 0
+--- install:
++ echo --- install:
++ guix install hello
++ tail -15
+guix install: error: failed to connect to `/var/guix/daemon-socket/socket': No such file or directory
++ ls -l /root/.guix-profile/bin/hello
+ls: cannot access '/root/.guix-profile/bin/hello': No such file or directory

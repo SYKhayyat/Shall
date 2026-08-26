@@ -1,0 +1,22 @@
+--- guix install hello (seccomp unconfined):
+hint: Consider setting the necessary environment variables by running:
+
+     GUIX_PROFILE="/root/.guix-profile"
+     . "$GUIX_PROFILE/etc/profile"
+     unset GUIX_PROFILE
+
+Alternately, see `guix package --search-paths -p "/root/.guix-profile"'.
+
+--- did it land?
+-r-xr-xr-x 2 root root 55840 Jan  1  1970 /root/.guix-profile/bin/hello
+Hello, world!
+--- guix package -I:
+nss-certs	3.101.4	out	/gnu/store/v9i76lmhx0rlq46wyypv62wh2s3igqcf-nss-certs-3.101.4
+hello    	2.12.3 	out	/gnu/store/ab584kfyc7pymc1cmdrkwzz3lwv86yf6-hello-2.12.3
+--- guix remove hello:
+listing Emacs sub-directories...
+building fonts directory...
+building directory of Info manuals...
+building profile with 1 package...
+ls: cannot access '/root/.guix-profile/bin/hello': No such file or directory
+gone

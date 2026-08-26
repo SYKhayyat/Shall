@@ -1,0 +1,29 @@
+daemon at: /var/guix/profiles/per-user/root/current-guix/bin/guix-daemon
+waited 1s; socket:
+total 0
+srw-rw-rw- 1 root root 0 Aug 14 18:55 socket
+--- daemon log:
+guile: warning: failed to install locale
+--- guix install hello:
+..
+...
+..
+..
+..
+..
+..
+....
+.
+..
+.......
+guix install: error: while setting up the child process: in phase setPersonality: cannot set personality: Operation not permitted
+--- did it land?
+ls: cannot access '/root/.guix-profile/bin/hello': No such file or directory
+--- guix package -I (list):
+nss-certs	3.101.4	out	/gnu/store/v9i76lmhx0rlq46wyypv62wh2s3igqcf-nss-certs-3.101.4
+--- guix remove hello:
+guix remove: warning: Consider running 'guix pull' followed by
+'guix package -u' to get up-to-date packages and security updates.
+
+guix remove: error: package 'hello' not found in profile
+ls: cannot access '/root/.guix-profile/bin/hello': No such file or directory

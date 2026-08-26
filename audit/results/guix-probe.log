@@ -1,0 +1,50 @@
+=== image entrypoint / guix presence ===
+Unable to find image 'metacall/guix:latest' locally
+latest: Pulling from metacall/guix
+a409917aa265: Pulling fs layer
+7a78a2f51c82: Pulling fs layer
+857f65ebe753: Pulling fs layer
+4f341618148a: Pulling fs layer
+60f11a8e858e: Pulling fs layer
+7df9c8c89e62: Pulling fs layer
+3531af2bc2a9: Pulling fs layer
+bb378ef06481: Pulling fs layer
+929fbc263f90: Pulling fs layer
+c288cf56abb2: Download complete
+857f65ebe753: Download complete
+7df9c8c89e62: Download complete
+4f341618148a: Download complete
+bb378ef06481: Download complete
+60f11a8e858e: Download complete
+3531af2bc2a9: Download complete
+3531af2bc2a9: Pull complete
+7a78a2f51c82: Download complete
+7a78a2f51c82: Pull complete
+a409917aa265: Download complete
+929fbc263f90: Download complete
+929fbc263f90: Pull complete
+60f11a8e858e: Pull complete
+bb378ef06481: Pull complete
+857f65ebe753: Pull complete
+4f341618148a: Pull complete
+7df9c8c89e62: Pull complete
+a409917aa265: Pull complete
+Digest: sha256:e028ebad915a2ff1e4b91680444600dd6712214cf2c7cb0bcb6ebd5fe8891afe
+Status: Downloaded newer image for metacall/guix:latest
+/usr/local/bin/guix
+guix (GNU Guix) 43833afaa165e851c322d05ece0a0d105a144a1f
+Copyright (C) 2026 the Guix authors
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+uid=0(root) gid=0(root) groups=0(root)
+
+=== can the daemon run, and can it install? ===
++ sleep 5
++ guix-daemon --build-users-group=guixbuild --disable-chroot
++ guix install hello
++ tail -20
+guix install: error: failed to connect to `/var/guix/daemon-socket/socket': No such file or directory
++ ls -l /root/.guix-profile/bin/hello
+ls: cannot access '/root/.guix-profile/bin/hello': No such file or directory
++ hello
++ head -2
+sh: 7: hello: not found

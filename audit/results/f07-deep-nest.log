@@ -1,0 +1,2 @@
+C:\Users\Administrator\Videos\Ksav-audit\fuzz\f07-deep-nest.ksav:1:769: error: יותר מדי רמות קינון בבת אחת (מגבלת בטיחות של Typst) — נסו לפשט מעט את המבנה · Too many levels of nesting at once (a Typst safety limit) — try simplifying the structure [#הערה]
+✗ compilation failed (1 diagnostic(s))

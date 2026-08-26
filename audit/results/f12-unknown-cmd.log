@@ -1,0 +1,2 @@
+C:\Users\Administrator\Videos\Ksav-audit\fuzz\f12-unknown-cmd.ksav:1:7: error: הפקודה #לא_קיים אינה מוכרת — בדקו את האיות, או הגדירו אותה תחת "הפקודות שלי" · There is no command #לא_קיים — check the spelling, or define it under "Your commands" [#לא_קיים]
+✗ compilation failed (1 diagnostic(s))

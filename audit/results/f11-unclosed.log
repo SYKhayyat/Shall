@@ -1,0 +1,2 @@
+C:\Users\Administrator\Videos\Ksav-audit\fuzz\f11-unclosed.ksav:1:6: error: יש סוגר שלא נסגר — ודאו שלכל [ יש ] ולכל ( יש ) · A bracket isn't closed — make sure every [ has a ] and every ( has a )
+✗ compilation failed (1 diagnostic(s))
