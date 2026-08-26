@@ -186,7 +186,9 @@ impl InstalledListings {
             return;
         };
         let dir = Self::cache_dir();
-        let wrote = crate::core::blocking::off_the_runtime(move || {
+        // A failed cache write is ignored on purpose — same contract as the read side: the
+        // cache is best-effort, and the manager is asked again next time either way.
+        crate::core::blocking::off_the_runtime(move || {
             std::fs::create_dir_all(&dir).is_ok()
                 // Written through a temp file and renamed: a listing half-flushed when the
                 // process is killed would otherwise be read back as a shorter machine, and a
@@ -204,10 +206,8 @@ impl InstalledListings {
                     true
                 }
         })
-        .await;
-        if wrote.ok() != Some(true) {
-            return;
-        }
+        .await
+        .ok();
     }
 
     /// Drop every listing this machine has on disk.
