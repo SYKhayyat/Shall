@@ -544,8 +544,13 @@ pub async fn handle_rebuild(
             .collect();
         let backends: std::collections::HashSet<String> =
             all_pairs.iter().map(|(b, _)| b.clone()).collect();
-        let essential =
-            guard::essential_names(&app.registry, &backends, app.config.max_parallel).await;
+        let essential = guard::essential_names(
+            &app.registry,
+            &backends,
+            app.config.max_parallel,
+            &mut Default::default(),
+        )
+        .await;
         let unanswered = essential.unanswered;
         let names = essential.names;
         rebuild::without_protected(&mut plan, &|backend, name| {

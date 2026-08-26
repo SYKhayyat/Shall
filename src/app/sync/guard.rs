@@ -18,7 +18,7 @@
 use crate::backends::BackendRegistry;
 use crate::config::Config;
 use crate::core::{Error, Result};
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 use tracing::{debug, warn};
 
@@ -469,15 +469,25 @@ pub struct EssentialAnswers {
 }
 
 /// What one backend answered about its OS-essential packages.
-enum EssentialOutcome {
+#[derive(Debug, Clone)]
+pub enum EssentialOutcome {
     /// The manager answered; the vec holds raw names, qualified per backend when folded.
     Reported(Vec<String>),
     /// The manager is here and its query failed. Removals through it are refused this run.
     QueryFailed,
-    /// No queryable manager exists here to ask (II.7c) â€” nothing installed through it on
+    /// No queryable manager exists here to ask (II.7c) — nothing installed through it on
     /// this machine, so there is no subject for the question and nothing to protect from.
     NothingToAsk,
 }
+
+/// One command's cache of essential answers, keyed by backend name.
+///
+/// The audit's arithmetic: the orphan path enforces the same removal set twice (`H8`'s ask +
+/// spend split), `heal` once per interrupted entry, and each enforcement re-ran every
+/// backend's `essential()` subprocess from scratch. One query per backend per command serves
+/// them all; the caller owns the map, so a new command starts cold and `watch` ticks cannot
+/// grow stale answers across passes.
+pub type EssentialsCache = HashMap<String, EssentialOutcome>;
 
 /// Names the OS itself reports as essential, per backend, for the backends being removed
 /// from. Queried live so it tracks the running system rather than a list we maintain.
@@ -487,16 +497,23 @@ pub async fn essential_names(
     registry: &Arc<BackendRegistry>,
     backends: &HashSet<String>,
     max_parallel: usize,
+    cache: &mut EssentialsCache,
 ) -> EssentialAnswers {
     // Each `essential()` is a subprocess and they have nothing to say to one another, so they
-    // run at once. This is on every removal path.
+    // run at once — the UNCACHED ones do; anything this command already asked is served from
+    // `cache` without a second subprocess.
     use futures::stream::StreamExt;
-    futures::stream::iter(backends.iter().cloned())
+    let uncached: Vec<String> = backends
+        .iter()
+        .filter(|b| !cache.contains_key(*b))
+        .cloned()
+        .collect();
+    let fresh = futures::stream::iter(uncached)
         .map(|name| {
             let registry = registry.clone();
             async move {
                 // **Two kinds of "cannot ask", and only one refuses.** A backend that is not
-                // on this machine has nothing installed through it here (II.7c) â€” the
+                // on this machine has nothing installed through it here (II.7c) — the
                 // essential question has no subject, and the planner already declines those
                 // removals upstream. A backend that IS here and whose query fails is the
                 // dangerous one: silence must not read as "nothing here is essential".
@@ -535,28 +552,32 @@ pub async fn essential_names(
                 }
             }
         })
-        // `max_parallel`, and a cap that ignores the setting is a cap the user cannot move â€”
-        // `planner.rs` states the rule and this was the one fan-out in the tree that did
-        // not follow it (AU9). It is on every removal path, which is where a user who has
-        // turned the parallelism down most wants it honoured.
         .buffer_unordered(max_parallel.max(1))
-        .fold(
-            EssentialAnswers {
-                names: HashSet::new(),
-                unanswered: BTreeSet::new(),
-            },
-            |mut answers, (backend, outcome)| async move {
-                match outcome {
-                    EssentialOutcome::Reported(qualified) => answers.names.extend(qualified),
-                    EssentialOutcome::QueryFailed => {
-                        answers.unanswered.insert(backend);
-                    }
-                    EssentialOutcome::NothingToAsk => {}
+        .collect::<Vec<_>>()
+        .await;
+
+    for (backend, outcome) in &fresh {
+        cache.insert(backend.clone(), outcome.clone());
+    }
+    // The answer folds from CACHE, not from the fresh batch: cached and fresh outcomes take
+    // identical shape, so a second enforcement in one command sees exactly the sets the
+    // first saw without re-running any subprocess.
+    let mut answers = EssentialAnswers {
+        names: HashSet::new(),
+        unanswered: BTreeSet::new(),
+    };
+    for backend in backends {
+        if let Some(outcome) = cache.get(backend) {
+            match outcome {
+                EssentialOutcome::Reported(qualified) => answers.names.extend(qualified.clone()),
+                EssentialOutcome::QueryFailed => {
+                    answers.unanswered.insert(backend.clone());
                 }
-                answers
-            },
-        )
-        .await
+                EssentialOutcome::NothingToAsk => {}
+            }
+        }
+    }
+    answers
 }
 
 /// Inspect a removal set and report what disqualifies it. `removals` are
@@ -574,6 +595,7 @@ pub async fn inspect(
         removals,
         RemovalKind::Package,
         &Reaping::new(),
+        &mut EssentialsCache::default(),
     )
     .await
 }
@@ -861,6 +883,7 @@ pub async fn inspect_removals(
     removals: &[(String, String)],
     kind: RemovalKind,
     reaping: &Reaping,
+    essentials: &mut EssentialsCache,
 ) -> GuardReport {
     let mut report = GuardReport::default();
     if removals.is_empty() {
@@ -870,7 +893,8 @@ pub async fn inspect_removals(
     let (os_essential, unanswered) = match kind {
         RemovalKind::Package => {
             let backends: HashSet<String> = removals.iter().map(|(b, _)| b.clone()).collect();
-            let answers = essential_names(registry, &backends, config.max_parallel).await;
+            let answers =
+                essential_names(registry, &backends, config.max_parallel, essentials).await;
             (answers.names, answers.unanswered)
         }
         // `service`/`link`/`setting` are not package managers and have no essential list to
@@ -996,13 +1020,16 @@ pub async fn preview_refusals(
     scope: GuardScope,
 ) -> Vec<String> {
     let reaping = Reaping::new();
+    // One cache across both phases: the same backend asked twice answers once.
+    let mut cache = EssentialsCache::default();
     let mut refusals = Vec::new();
     // The engine's order: packages, then the install ceiling, then the extras teardown.
     for (pairs, kind) in [
         (package_removals, RemovalKind::Package),
         (extra_removals, RemovalKind::Extra),
     ] {
-        let mut report = inspect_removals(config, registry, pairs, kind, &reaping).await;
+        let mut report =
+            inspect_removals(config, registry, pairs, kind, &reaping, &mut cache).await;
         allow_the_count(config, &mut report, scope);
         if !report.is_empty() {
             refusals.push(report.message(scope, kind));
@@ -1081,7 +1108,8 @@ pub async fn vet(
     reaping: &Reaping,
     scope: GuardScope,
 ) -> Result<()> {
-    let mut report = inspect_removals(config, registry, removals, kind, reaping).await;
+    let mut cache = EssentialsCache::default();
+    let mut report = inspect_removals(config, registry, removals, kind, reaping, &mut cache).await;
 
     allow_the_count(config, &mut report, scope);
 
@@ -1490,6 +1518,7 @@ mod tests {
             &[("service".to_string(), "sshd".to_string())],
             RemovalKind::Extra,
             &Reaping::new(),
+            &mut EssentialsCache::default(),
         )
         .await;
         assert!(
@@ -2088,8 +2117,15 @@ mod tests {
             "schedule:nightly-sync",
             "repo:apt:ppa:x/y",
         ]);
-        let report =
-            inspect_removals(&cfg, &reg, &all_six, RemovalKind::Extra, &Reaping::new()).await;
+        let report = inspect_removals(
+            &cfg,
+            &reg,
+            &all_six,
+            RemovalKind::Extra,
+            &Reaping::new(),
+            &mut EssentialsCache::default(),
+        )
+        .await;
         assert!(
             report.is_empty(),
             "an ordinary teardown of one of each kind must be allowed: {:?}",
@@ -2120,6 +2156,7 @@ mod tests {
                 &extras(&[key]),
                 RemovalKind::Extra,
                 &Reaping::new(),
+                &mut EssentialsCache::default(),
             )
             .await;
             assert!(
@@ -2138,6 +2175,7 @@ mod tests {
             &extras(&["link:/home/u/other"]),
             RemovalKind::Extra,
             &Reaping::new(),
+            &mut EssentialsCache::default(),
         )
         .await;
         assert!(report.is_empty(), "{:?}", report.objections);
@@ -2575,6 +2613,7 @@ mod tests {
             &over_the_limit,
             RemovalKind::Package,
             &Reaping::new(),
+            &mut EssentialsCache::default(),
         )
         .await;
         allow_the_count(&cfg, &mut report, GuardScope::Sync);
@@ -2601,6 +2640,7 @@ mod tests {
             &over_the_limit,
             RemovalKind::Package,
             &Reaping::new(),
+            &mut EssentialsCache::default(),
         )
         .await;
         allow_the_count(&cfg, &mut report, GuardScope::Sync);
@@ -2625,6 +2665,7 @@ mod tests {
             &pairs(&["python3"]),
             RemovalKind::Package,
             &Reaping::new(),
+            &mut EssentialsCache::default(),
         )
         .await;
         allow_the_count(&cfg, &mut report, GuardScope::Sync);
@@ -3008,7 +3049,8 @@ mod tests {
         let registry = registry_reporting("apt", &["tar", "sed", "grep"]);
         let backends: HashSet<String> = ["apt".to_string()].into_iter().collect();
 
-        let answers = essential_names(&registry, &backends, 4).await;
+        let answers =
+            essential_names(&registry, &backends, 4, &mut EssentialsCache::default()).await;
 
         assert!(
             answers.unanswered.is_empty(),
@@ -3031,7 +3073,8 @@ mod tests {
     async fn a_backend_with_no_essential_concept_contributes_nothing() {
         let registry = registry_reporting("cargo", &[]);
         let backends: HashSet<String> = ["cargo".to_string()].into_iter().collect();
-        let answers = essential_names(&registry, &backends, 4).await;
+        let answers =
+            essential_names(&registry, &backends, 4, &mut EssentialsCache::default()).await;
         assert!(answers.names.is_empty());
         assert!(answers.unanswered.is_empty());
     }
@@ -3054,6 +3097,7 @@ mod tests {
             &[("apt".into(), "curl".into())],
             RemovalKind::Package,
             &reaping,
+            &mut EssentialsCache::default(),
         )
         .await;
         assert!(
@@ -3074,6 +3118,7 @@ mod tests {
             &[("cargo".into(), "ripgrep".into())],
             RemovalKind::Package,
             &Reaping::new(),
+            &mut EssentialsCache::default(),
         )
         .await;
         assert!(
@@ -3110,6 +3155,7 @@ mod tests {
             &pairs(&["tar", "sed", "grep", "gzip", "findutils"]),
             RemovalKind::Package,
             &reaping,
+            &mut EssentialsCache::default(),
         )
         .await;
 
@@ -3155,6 +3201,7 @@ mod tests {
             &pairs(&["a", "b", "c"]),
             RemovalKind::Package,
             &reaping,
+            &mut EssentialsCache::default(),
         )
         .await;
         assert!(
@@ -3171,6 +3218,7 @@ mod tests {
             &pairs(&["a", "b", "c", "d"]),
             RemovalKind::Package,
             &reaping,
+            &mut EssentialsCache::default(),
         )
         .await;
         assert!(

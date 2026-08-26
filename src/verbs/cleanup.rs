@@ -724,6 +724,7 @@ pub async fn handle_protected(
             registry,
             &named_backends,
             config.max_parallel,
+            &mut Default::default(),
         )
         .await;
 

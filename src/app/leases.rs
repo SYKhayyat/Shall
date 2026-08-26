@@ -41,6 +41,7 @@ impl Leases<'_> {
             self.registry,
             &backends,
             self.config.max_parallel,
+            &mut Default::default(),
         )
         .await;
         // An essential query that failed is not "nothing here is essential": a package whose
