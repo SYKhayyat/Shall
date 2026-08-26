@@ -207,6 +207,16 @@ pub fn fill(args: &[String], subs: &[(&str, &str)]) -> Vec<String> {
         .collect()
 }
 
+/// Whether a filled argument still carries an unsubstituted `{placeholder}`.
+///
+/// A case-typo'd key (`{Url}` for `{url}`) or a placeholder outside the row's vocabulary
+/// passes through [`fill`] untouched and reaches the manager as a literal — which is how
+/// `sed -i '\|{Url}|d'` once searched for the literal text instead of the URL. True means
+/// the caller should refuse rather than run.
+pub fn has_unfilled_placeholder(arg: &str) -> bool {
+    arg.contains('{') && arg.contains('}')
+}
+
 /// Split a filled template into the program and its arguments.
 ///
 /// A row with an empty command is refused by [`AdapterRow::unusable`] before it can get here,

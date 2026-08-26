@@ -2126,6 +2126,10 @@ fn reject_shell_meta(field: &str, value: &str) -> Result<()> {
         matches!(
             c,
             '\'' | '"' | '`' | '$' | ';' | '&' | '|' | '<' | '>' | '\n' | '\r' | '\\'
+                // Spaces and glob characters: apk's removal template embeds `{url}` inside
+                // a sed pattern (`sed -i '\|{url}|d' …`), where a space or `*` in the URL
+                // mangles the match and either deletes the wrong line or none.
+                | ' ' | '*' | '?' | '[' | ']'
         )
     }) {
         return Err(crate::core::Error::Other(format!(
@@ -2172,7 +2176,9 @@ fn find_placeholder(s: &str) -> Option<String> {
         // there is no later `}` that could close a different placeholder.
         let close = after.find('}')?;
         let inner = &after[..close];
-        if !inner.is_empty() && inner.chars().all(|c| c.is_ascii_lowercase() || c == '_') {
+        // Any word-shaped content counts, not just lowercase: `{Url}` was a real case-typo
+        // that slipped past the lowercase-only filter and reached the manager literally.
+        if !inner.is_empty() && inner.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
             return Some(format!("{{{}}}", inner));
         }
         rest = &after[close..];
@@ -3592,9 +3598,12 @@ installed ripgrep 15.2.0
         // A brace that is not a placeholder must not become a refusal: shell brace expansion
         // and printf formats both use them.
         assert_eq!(find_placeholder("printf '%s\\n'").as_deref(), None);
-        assert_eq!(find_placeholder("{NAME}").as_deref(), None);
         assert_eq!(find_placeholder("{}").as_deref(), None);
         assert_eq!(find_placeholder("a{b").as_deref(), None);
+        // **Case-typo'd placeholders ARE caught now**: `{Url}` was a real defect that slipped
+        // past the old lowercase-only filter and reached the manager literally.
+        assert_eq!(find_placeholder("{NAME}").as_deref(), Some("{NAME}"));
+        assert_eq!(find_placeholder("{Url}").as_deref(), Some("{Url}"));
     }
 
     #[test]

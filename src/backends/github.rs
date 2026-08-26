@@ -770,6 +770,15 @@ impl Installable for GithubInstallable {
                         response.status()
                     )));
                 }
+                // Defense-in-depth: GitHub constrains asset names to alphanumerics and
+                // punctuation today, but the constraint is theirs, not ours. A name
+                // carrying a path separator would write outside the staging directory.
+                if pick.asset.name.contains('/') || pick.asset.name.contains('\\') {
+                    return Err(Error::Validation(format!(
+                        "asset name `{}` contains a path separator; refusing to write it",
+                        pick.asset.name
+                    )));
+                }
                 let dl_path = tmp_dir.path().join(&pick.asset.name);
                 crate::core::download::write_capped(response, &dl_path, &pick.asset.name).await?;
 
