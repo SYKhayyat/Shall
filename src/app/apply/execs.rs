@@ -547,6 +547,7 @@ impl Execs<'_> {
 }
 
 /// What the mode word of an `exec:` script means under the configured trust level.
+#[derive(Debug)]
 pub(crate) enum PermVerdict {
     Accept,
     /// Reported and survived, under `trust = "warn"`.
