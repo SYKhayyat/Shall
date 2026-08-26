@@ -392,8 +392,6 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn a_symlink_inside_the_destination_still_extracts() {
-        use std::io::Write;
-
         let dir = tempfile::tempdir().unwrap();
         let payload = b"real";
 

@@ -493,6 +493,9 @@ impl Wrapped {
     }
 }
 
+// Windows-gated whole: the only test here drives `Wrapped`'s `.wsb` keepalive, and the
+// imports below are used by nothing else on any other target.
+#[cfg(target_os = "windows")]
 #[cfg(test)]
 mod wsb_tests {
     use super::*;
