@@ -113,7 +113,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 indicatif = "0.18" # Progress bars
 
 # UI & Interaction
-dialoguer = "0.11"
+dialoguer = "0.12"
 ratatui = "0.30"
 # crossterm is NOT a direct dependency: it is reached through `ratatui::crossterm`.
 # Declaring it here is how the tree ended up with 0.27 under `src/app/ui/` and 0.28 under
