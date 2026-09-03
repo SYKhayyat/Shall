@@ -103,8 +103,8 @@ fetch_binary() {
   # keep installing. A caller that wants a hard guarantee pins SHALL_INSTALL_SHA256.
   sums_url="${url%/*}/SHA256SUMS"
   want=""
-  if [ -n "$SHALL_INSTALL_SHA256" ]; then
-    want="$SHALL_INSTALL_SHA256"
+  if [ -n "${SHALL_INSTALL_SHA256:-}" ]; then
+    want="${SHALL_INSTALL_SHA256:-}"
   else
     if command -v curl >/dev/null 2>&1; then
       sums=$(curl -fsSL "$sums_url" 2>/dev/null) || sums=""

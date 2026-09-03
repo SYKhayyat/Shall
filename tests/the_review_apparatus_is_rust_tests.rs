@@ -747,6 +747,63 @@ fn every_asset_name_the_installers_ask_for_is_one_the_release_writes() {
     );
 }
 
+/// The full token at `rest` when `rest` starts with `$`: the `$` and the name that follows.
+fn sh_token(rest: &str) -> &str {
+    let name_end = rest[1..]
+        .find(|c: char| !(c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_'))
+        .map(|i| i + 1)
+        .unwrap_or(rest.len());
+    &rest[..name_end]
+}
+
+/// Every `$SHALL_*` environment variable `install.sh` reads is guarded with a `:-` default.
+///
+/// `install.sh` runs under `set -eu` (line 16), where reading an unset variable aborts the
+/// whole script. `SHALL_INSTALL_SHA256` is the documented optional pin — "checked only when
+/// present" — and it was read bare, so the default install a user pipes from the web died with
+/// `SHALL_INSTALL_SHA256: parameter not set` before installing anything. The `:-` guard is the
+/// mechanism; this scan keeps the whole family (every `$SHALL_*` read) under it.
+#[test]
+fn every_shall_env_var_the_installer_reads_has_a_guard() {
+    let script = read("scripts/install.sh");
+    let mut guarded_count = 0usize;
+    let mut unguarded = Vec::new();
+
+    for (n, line) in script.lines().enumerate() {
+        if line.trim_start().starts_with('#') {
+            continue;
+        }
+        let mut rest = line;
+        // A `SHALL_` name appears in one of two spellings: `${SHALL_X…` (the guarded form) or
+        // `$SHALL_X` (bare, aborts under `set -u` when unset). Find either.
+        while let Some(idx) = rest.find("$SHALL_").or_else(|| rest.find("${SHALL_")) {
+            let braced = rest[idx..].starts_with("${");
+            // The token begins after the opening `$` (and `{`, when present).
+            let name_start = idx + if braced { 2 } else { 1 };
+            let name = sh_token(&rest[name_start - 1..]);
+            let after = &rest[name_start - 1 + name.len()..];
+            if braced && after.starts_with(":-") {
+                guarded_count += 1;
+            } else {
+                unguarded.push(format!("{}:{}", n + 1, line.trim()));
+            }
+            rest = &rest[name_start - 1 + name.len()..];
+        }
+    }
+
+    assert!(
+        guarded_count >= 5,
+        "found only {guarded_count} guarded `$SHALL_*` reads in install.sh; the scan has \
+         stopped matching the script it audits"
+    );
+    assert!(
+        unguarded.is_empty(),
+        "these `$SHALL_*` reads in install.sh abort the default install under `set -eu` when \
+         the variable is unset — guard them with `${{SHALL_*:-…}}`:\n  {}",
+        unguarded.join("\n  ")
+    );
+}
+
 /// A base key beside `include:` gives the matrix one combination, and GitHub merges an include
 /// entry into an existing combination whenever it overwrites none of the base values — so every
 /// row lands in that same job in turn and only the last survives.
