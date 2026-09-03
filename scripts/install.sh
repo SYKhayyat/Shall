@@ -291,7 +291,18 @@ say "running health check..."
 if [ -z "${SHALL_NO_ADOPT:-}" ]; then
   printf '\033[1;36mshall\033[0m adopt the packages already installed on this machine into a manifest now? [y/N] '
   # Read from the terminal even when the script itself arrived over a pipe.
-  if [ -r /dev/tty ]; then read -r ans </dev/tty; else read -r ans || ans=n; fi
+  # `[ -r /dev/tty ]` is the wrong test: the node exists in a container with no
+  # controlling terminal, but opening it fails with ENXIO — which the `read`
+  # then reports as a fatal error under `set -e`. Ask the open itself, inside
+  # the if so the failure cannot abort the install; the group keeps the shell's
+  # own "cannot open /dev/tty" diagnostic off the user's stderr.
+  {
+    if read -r ans </dev/tty; then
+      :
+    else
+      read -r ans || ans=n
+    fi
+  } 2>/dev/null
   case "$ans" in
     y | Y | yes | YES) "$SHALL" adopt ;;
     *) say "skipped — run \`shall adopt\` whenever you're ready." ;;

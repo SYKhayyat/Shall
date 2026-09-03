@@ -183,12 +183,29 @@ elif command -v docker >/dev/null 2>&1; then
     # a developer's machine. Same container, same assertion: not the exit code, but a `shall`
     # on PATH afterwards. A script that reports success and installs nothing is the failure
     # this exists to catch.
+    #
+    # **The three additions are the CI job's, carried to the twin the same way the twin's are
+    # carried to the job.** This gate used to be the CI job with the hard-won parts stripped:
+    # no Rust (so `~/.cargo/bin` — where both the download and the source path put `shall` —
+    # was never on PATH, and `command -v shall` failed on the very success it asserts), no
+    # `SHALL_NO_ADOPT` (so a container with a TTY blocked on the prompt), and an asserted
+    # exit code (so `shall check health`'s exit 2 by design read a green install as red).
+    # The abort that produced issue #52 hid all of it: the gate died at line 106 before any of
+    # these could be reached. CI learned them the hard way and documented each in its comment
+    # (`U21`, `H2`); this is that comment's twin.
     step "2b. THE INSTALL SCRIPT, IN A CLEAN CONTAINER"
-    if docker run --rm -v "$REPO_ROOT:/src:ro" -e SHALL_REF="${SHALL_REF:-}" debian:stable-slim sh -c '
+    if docker run --rm -v "$REPO_ROOT:/src:ro" -e SHALL_REF="${SHALL_REF:-}" -e SHALL_NO_ADOPT=1 debian:stable-slim sh -c '
             set -e
             apt-get update -qq >/dev/null
             apt-get install -y -qq curl ca-certificates build-essential pkg-config libssl-dev git >/dev/null
-            sh /src/scripts/install.sh
+            # The source-build path needs a toolchain, and the container has none. Installed
+            # here rather than mocked, for the reason the CI job gives: this is the path every
+            # user gets while no release is tagged, so it is the path that has to compile.
+            curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal >/dev/null
+            . "$HOME/.cargo/env"
+            # Deliberately not asserting on the exit code: the last act of install.sh is
+            # `shall check health`, which exits 2 by design when it finds work (U21, H2).
+            sh /src/scripts/install.sh || echo "install.sh exited $? — asserting on the artifact, not the code"
             command -v shall || { echo "install.sh exited 0 and left no shall on PATH"; exit 1; }
             shall --version
         '; then pass "install.sh leaves a working shall on PATH"
