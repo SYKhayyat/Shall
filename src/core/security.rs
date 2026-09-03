@@ -78,19 +78,6 @@ fn constant_time_hex_eq(actual: &str, expected: &str) -> bool {
     diff == 0
 }
 
-#[cfg(test)]
-mod comparison_tests {
-    use super::constant_time_hex_eq;
-
-    #[test]
-    fn checksum_comparison_accepts_only_equal_digests() {
-        assert!(constant_time_hex_eq("abcdef", "abcdef"));
-        assert!(constant_time_hex_eq("abcdef", "ABCDEF"));
-        assert!(!constant_time_hex_eq("abcdef", "abcdee"));
-        assert!(!constant_time_hex_eq("abcdef", "abcdef0"));
-    }
-}
-
 fn generate_checksum_blocking(path: &PathBuf) -> Result<String> {
     let mut file = File::open(path).map_err(Error::from)?;
     let mut hasher = Sha256::new();
@@ -108,4 +95,17 @@ fn generate_checksum_blocking(path: &PathBuf) -> Result<String> {
         hasher.update(&buf[..n]);
     }
     Ok(hex::encode(hasher.finalize()))
+}
+
+#[cfg(test)]
+mod comparison_tests {
+    use super::constant_time_hex_eq;
+
+    #[test]
+    fn checksum_comparison_accepts_only_equal_digests() {
+        assert!(constant_time_hex_eq("abcdef", "abcdef"));
+        assert!(constant_time_hex_eq("abcdef", "ABCDEF"));
+        assert!(!constant_time_hex_eq("abcdef", "abcdee"));
+        assert!(!constant_time_hex_eq("abcdef", "abcdef0"));
+    }
 }
