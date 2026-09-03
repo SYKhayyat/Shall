@@ -513,7 +513,9 @@ mod tests {
             header.set_size(3);
             header.set_mode(0o644);
             header.set_cksum();
-            builder.append_data(&mut header, "NUL.exe", b"bad").unwrap();
+            builder
+                .append_data(&mut header, "NUL.exe", &b"bad"[..])
+                .unwrap();
             builder.finish().unwrap();
         }
         let archive = dir.path().join("asset.tar");
