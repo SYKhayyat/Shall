@@ -25,6 +25,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 ## Phase 3 — Correctness Mediums
 - [ ] #79 forget_all wipes all caches, #80 probe storm, #81 Mutex across --help, #82 batch deadline, #83 vars JSON fragile, #84 fan-out uncapped, #85 pool race, #86 zip sum wraps, #87 dir-symlink Windows.
 - [ ] #25 lifecycle jobs on distro containers, #53 nimble Windows, #54 dirty-host fixtures, #55 gentoo jq.
+- [ ] Suite-isolation bugs (Rust suite green only on NOPASSWD-sudo/adoptable hosts): #88 mock-layer tests probe real sudo, #89 guard-reachability control builds vacuous fixture, #90 fan-out floor vs skewed hosts.
 - [ ] #41 prose tax distill, #36 doc-comment layer, #38 eopkg RETIRED honesty.
 
 ## Phase 4 — Feature gaps (Info, after core is safe)
