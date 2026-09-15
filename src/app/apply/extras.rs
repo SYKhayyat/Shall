@@ -408,15 +408,41 @@ pub(crate) async fn in_effect(
             // is then filed under `ok`. So the reporting half agreed the link was fine because
             // it was looking somewhere the link was never written (B0b).
             let source = crate::backends::link::resolve_source(config, source).ok()?;
-            let want: Vec<u8> = match (
-                opts.one("content"),
-                opts.one("decrypt"),
-                opts.one("template"),
-            ) {
+            // Which bytes the destination must hold, and whether a symlink to the source
+            // counts as holding them. Only the plain mode places a link: a managed file
+            // (inline content or rendered template) is compared byte for byte, because a
+            // symlink to the source shows the source's bytes rather than the declared ones.
+            //
+            // The order below is the installer's mode order (content, then decrypt, then
+            // template, then the plain link): `check` compares what `install` writes, so a
+            // line naming two modes is read the same way in both places. The grammar
+            // refuses such a line; this order is the backstop for one that arrives anyway.
+            let (want, link_counts): (Vec<u8>, bool) = if let Some(content) = opts.one("content") {
                 // Declared inline: the bytes are in the line, and that is what gets written.
-                (Some(content), None, None) => content.as_bytes().to_vec(),
-                // A rendered template or a decrypted secret is not its source, and comparing
-                // them would need the transform run; both are `unverifiable`, which places.
+                (content.as_bytes().to_vec(), false)
+            } else if opts.one("decrypt").is_some() {
+                // A decrypted secret is not its source, and comparing it would need the
+                // transform run; it stays `unverifiable`, which places.
+                return None;
+            } else if opts.one("template") == Some("true") {
+                // A rendered template is its transform run through the same renderer the
+                // installer uses, so a hand-edited destination reads as drift rather than as
+                // `unverifiable`. A source that is not on disk is not in effect (the B0b
+                // rule below); a template that will not render is unverifiable here and a
+                // loud error when the installer reaches it.
+                match std::fs::read_to_string(&source) {
+                    Ok(text) => match crate::backends::link::render_template_text(
+                        &source,
+                        &text,
+                        &crate::config::parser::HostFacts::current(),
+                        config,
+                    ) {
+                        Ok(rendered) => (rendered.into_bytes(), false),
+                        Err(_) => return None,
+                    },
+                    Err(_) => return Some(false),
+                }
+            } else {
                 // **Not in effect, and not "cannot say".** A source that is not on disk is
                 // precisely the state that produced a dangling symlink: the destination
                 // exists, an `-L` test passes, and reading it back failed — which arrived as
@@ -425,18 +451,19 @@ pub(crate) async fn in_effect(
                 // the installer refuses by name when it comes to do it. Reported here rather
                 // than refused, because the source may be a file a package installed in an
                 // earlier phase of this very sync.
-                (_, None, None) => match std::fs::read(&source) {
-                    Ok(bytes) => bytes,
+                match std::fs::read(&source) {
+                    Ok(bytes) => (bytes, true),
                     Err(_) => return Some(false),
-                },
-                _ => return None,
+                }
             };
             // The source is known readable by now, so a link pointing at it is genuinely in
             // effect — the comparison could not say that before, and a dangling one would have
             // passed it.
-            if let Ok(link) = std::fs::read_link(dest) {
-                if link == source {
-                    return Some(true);
+            if link_counts {
+                if let Ok(link) = std::fs::read_link(dest) {
+                    if link == source {
+                        return Some(true);
+                    }
                 }
             }
             // A destination that cannot be read does not match the source. `.ok()?` said
@@ -733,6 +760,58 @@ list_pattern = 'SERVICE_NAME:\s+(\S+)'
             in_effect(&config, &reg, &exec, &both, &key).await,
             None,
             "running is satisfied and enabled is unknown — the line as a whole is unknown"
+        );
+    }
+
+    /// #69: a rendered template is read back rendered, not raw. `check` renders through
+    /// the same constructor the installer uses, so the destination holding the *source*
+    /// bytes is drift (`Some(false)`), not in-effect — and a template that will not
+    /// render is unverifiable (`None`), never a quiet ok.
+    #[tokio::test]
+    async fn a_rendered_template_is_read_back_rendered_not_raw() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("gitconfig.tmpl");
+        let dest = dir.path().join("gitconfig");
+        std::fs::write(&source, "os={{ OS }}\n").unwrap();
+        let rendered = format!("os={}\n", std::env::consts::OS);
+
+        let config = Arc::new(crate::config::Config::default());
+        let reg = BackendRegistry::new();
+        let exec = CommandExecutor::new(false, false);
+        let mut opts = Options::default();
+        opts.insert("target".to_string(), dest.to_string_lossy().to_string());
+        opts.insert("template".to_string(), "true".to_string());
+        let stmt = Statement::Link(source.to_string_lossy().to_string(), opts);
+        let key = ExtraKey::link(&dest);
+
+        // Matching the render: in effect, no work.
+        std::fs::write(&dest, &rendered).unwrap();
+        assert_eq!(
+            in_effect(&config, &reg, &exec, &stmt, &key).await,
+            Some(true)
+        );
+        // Holding the raw template: drift, not in-effect. This is the comparison that
+        // used to be impossible, which filed every template under `unverifiable`.
+        std::fs::write(&dest, "os={{ OS }}\n").unwrap();
+        assert_eq!(
+            in_effect(&config, &reg, &exec, &stmt, &key).await,
+            Some(false),
+            "the destination holds the unrendered source, which is not the declaration"
+        );
+        // Hand-edited to something else: drift too.
+        std::fs::write(&dest, "os=plan9\n").unwrap();
+        assert_eq!(
+            in_effect(&config, &reg, &exec, &stmt, &key).await,
+            Some(false)
+        );
+        // A template that will not render cannot be compared: unverifiable, which places.
+        std::fs::write(&source, "{% if %}unclosed\n").unwrap();
+        assert_eq!(in_effect(&config, &reg, &exec, &stmt, &key).await, None);
+        // A source that is not on disk is not in effect — the B0b rule, same as plain.
+        std::fs::remove_file(&source).unwrap();
+        assert_eq!(
+            in_effect(&config, &reg, &exec, &stmt, &key).await,
+            Some(false)
         );
     }
 }

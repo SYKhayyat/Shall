@@ -388,27 +388,62 @@ impl LinkBackendCore {
             ))
         })
     }
+}
 
+/// The facts a `link:` template renders against, as Tera sees them. One constructor for
+/// the installer and the checker, so the two cannot disagree about what `{{ HOME }}`
+/// means: a template `check` calls unverifiable while `sync` places is a drift report
+/// that never settles. Keys are the existing uppercase vocabulary (`OS`, `ARCH`, `USER`,
+/// `HOSTNAME`) plus `HOME` and `FAMILY`; `aliases` rides along as before. A fact the
+/// machine could not detect is absent rather than `"unknown"`, so a template that needs
+/// it fails naming the variable instead of writing a path with `unknown` in it — except
+/// `USER`, which keeps its long-standing `"unknown"` fallback so existing templates do
+/// not start failing where they used to render.
+pub fn template_context(facts: &crate::config::parser::HostFacts, config: &Config) -> Context {
+    let mut context = Context::new();
+    context.insert("OS".to_string(), &facts.os);
+    context.insert("ARCH".to_string(), &facts.arch);
+    context.insert("HOSTNAME".to_string(), &facts.host);
+    context.insert("FAMILY".to_string(), &facts.family);
+    context.insert(
+        "USER".to_string(),
+        facts.user.as_deref().unwrap_or("unknown"),
+    );
+    if let Some(home) = &facts.home {
+        context.insert("HOME".to_string(), home);
+    }
+    context.insert("aliases".to_string(), &config.aliases);
+    context
+}
+
+/// Render template `text` from `source` against the shared context. Pure apart from its
+/// arguments: the installer reads the file through the executor (dry-run VFS aware) and the
+/// checker reads it off the disk, and both render here.
+pub fn render_template_text(
+    source: &Path,
+    text: &str,
+    facts: &crate::config::parser::HostFacts,
+    config: &Config,
+) -> Result<String> {
+    let mut tera = Tera::default();
+    tera.add_raw_template("config", text)
+        .map_err(|e| Error::Other(format!("Tera Parse Error in {:?}: {}", source, e)))?;
+    tera.render("config", &template_context(facts, config))
+        .map_err(|e| Error::Other(format!("Tera Render Error in {:?}: {}", source, e)))
+}
+
+impl LinkBackendCore {
+    /// Render the template at `source_path` against this machine's facts. Reads through
+    /// the executor rather than off the disk, so a dry run renders the file this run
+    /// would read rather than failing on one that is not there yet.
     async fn render_template(&self, source_path: &Path) -> Result<String> {
         let content = self.executor.read_file(source_path).await?;
-
-        let mut tera = Tera::default();
-        tera.add_raw_template("config", &content)
-            .map_err(|e| Error::Other(format!("Tera Parse Error in {:?}: {}", source_path, e)))?;
-
-        let mut context = Context::new();
-        context.insert("OS".to_string(), std::env::consts::OS);
-        context.insert("ARCH".to_string(), std::env::consts::ARCH);
-        context.insert(
-            "USER",
-            &std::env::var("USER").unwrap_or_else(|_| "unknown".to_string()),
-        );
-        context.insert("HOSTNAME".to_string(), &Config::get_hostname());
-
-        context.insert("aliases".to_string(), &self.config.aliases);
-
-        tera.render("config", &context)
-            .map_err(|e| Error::Other(format!("Tera Render Error in {:?}: {}", source_path, e)))
+        render_template_text(
+            source_path,
+            &content,
+            &crate::config::parser::HostFacts::current(),
+            &self.config,
+        )
     }
 
     /// Write `desired` content to `target`, idempotently. If the target already holds
@@ -1119,6 +1154,89 @@ mod tests {
             ),
             "the template reached the target unrendered, or rendered to the wrong thing"
         );
+    }
+
+    /// #69's motivating case: a template names the home directory it is rendered for. The
+    /// context answers `HOME` from the detected fact — the same directory `~/` targets
+    /// expand through — so `topdirs = {{ HOME }}/Documents` is per-user by construction.
+    #[tokio::test]
+    async fn a_template_names_the_home_it_is_rendered_for() {
+        let dir = tempdir().unwrap();
+        let source = dir.path().join("recoll.tmpl");
+        let target = dir.path().join("recoll.conf");
+        tokio::fs::write(&source, "topdirs = {{ HOME }}/Documents\n")
+            .await
+            .unwrap();
+
+        let mut options = crate::config::grammar::Options::default();
+        options.set("target", target.to_string_lossy().to_string());
+        options.set("template", "true".to_string());
+        let spec = PackageSpec {
+            name: source.to_string_lossy().to_string(),
+            backend: "link".into(),
+            options,
+            requires: vec![],
+            present: true,
+        };
+
+        installer()
+            .install(std::slice::from_ref(&spec), false)
+            .await
+            .unwrap();
+
+        let home = dirs::home_dir().expect("this test needs a detectable home");
+        assert_eq!(
+            tokio::fs::read_to_string(&target).await.unwrap(),
+            format!("topdirs = {}/Documents\n", home.display())
+        );
+    }
+
+    /// The whole fact vocabulary renders through the one shared constructor — installer and
+    /// checker included — so `USER` is the detected login name rather than whatever the
+    /// environment happened to carry, and `FAMILY` answers beside it.
+    #[test]
+    fn the_shared_context_carries_every_fact_install_and_check_agree_on() {
+        let facts = crate::config::parser::HostFacts {
+            os: "linux".into(),
+            arch: "x86_64".into(),
+            host: "laptop".into(),
+            family: "debian".into(),
+            home: Some("/home/u".into()),
+            user: Some("u".into()),
+            vars: Default::default(),
+        };
+        let out = render_template_text(
+            Path::new("recoll.tmpl"),
+            "{{ OS }}/{{ ARCH }}/{{ USER }}/{{ HOSTNAME }}/{{ FAMILY }}/{{ HOME }}",
+            &facts,
+            &Config::default(),
+        )
+        .unwrap();
+        assert_eq!(out, "linux/x86_64/u/laptop/debian//home/u");
+    }
+
+    /// A fact the machine could not detect is absent from the context, so the template
+    /// fails naming the variable — the same fail-loud rule as `$home` in a value. A path
+    /// with `unknown` written into it is a file that deploys and then misleads.
+    #[test]
+    fn a_template_needing_an_undetectable_home_fails_naming_it() {
+        let facts = crate::config::parser::HostFacts {
+            os: "linux".into(),
+            arch: "x86_64".into(),
+            host: "laptop".into(),
+            family: "debian".into(),
+            home: None,
+            user: None,
+            vars: Default::default(),
+        };
+        let err = render_template_text(
+            Path::new("recoll.tmpl"),
+            "topdirs = {{ HOME }}/Documents",
+            &facts,
+            &Config::default(),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("HOME"), "{}", err);
     }
 
     /// The other half of the same promise: a template that does not parse must be reported as

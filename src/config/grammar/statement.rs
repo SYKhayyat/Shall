@@ -1491,7 +1491,7 @@ pub fn validate(origin: &Origin, stmt: &Statement) -> Result<()> {
         Statement::Service(name, o) => {
             validate_extra_options(origin, OptionKind::Service, name, o, None)
         }
-        Statement::Link(name, o) => validate_extra_options(origin, OptionKind::Link, name, o, None),
+        Statement::Link(name, o) => validate_link(origin, name, o),
         Statement::Schedule(name, o) => {
             validate_extra_options(origin, OptionKind::Schedule, name, o, None)
         }
@@ -1631,6 +1631,54 @@ pub(crate) const SINGLE_VALUE_OPTION_KEYS: &[&str] = &[
     "download_only",
     "runs",
 ];
+
+/// A `link:` names one mode — inline `@content=`, a `@template=true` source file, a
+/// `@decrypt=` source, or a plain symlink — and the installer reads them in that order.
+/// A line naming two is a line whose second mode nobody reads: `content` wins in the
+/// installer while `check` used to call the same line unverifiable, so the refusal lives
+/// here, where the line is written, rather than in either reader. `@template=` is a flag
+/// with a value, so anything but `true` or `false` is refused rather than read as a plain
+/// symlink that happens to carry a word nobody acts on.
+fn validate_link(origin: &Origin, name: &str, options: &Options) -> Result<()> {
+    validate_extra_options(origin, OptionKind::Link, name, options, None)?;
+    if let Some(t) = options.one("template") {
+        if t != "true" && t != "false" {
+            return Err(GrammarError::new(
+                origin.clone(),
+                format!(
+                    "`link:{}` has `@template={}`, which is neither on nor off",
+                    name, t
+                ),
+            )
+            .with_hint(
+                "write `@template` or `@template=true` to render, or drop it for a plain link.",
+            ));
+        }
+    }
+    // `@template=false` states the default and is not a mode, so it never collides:
+    // only a `true` template competes with content and decrypt.
+    let mut modes = Vec::new();
+    if options.contains("content") {
+        modes.push("content");
+    }
+    if options.contains("decrypt") {
+        modes.push("decrypt");
+    }
+    if options.one("template") == Some("true") {
+        modes.push("template");
+    }
+    if modes.len() > 1 {
+        return Err(GrammarError::new(
+            origin.clone(),
+            format!(
+                "`link:{}` names two modes (`@{}` and `@{}`), and only the first one runs",
+                name, modes[0], modes[1]
+            ),
+        )
+        .with_hint("a `link:` is inline `@content=`, a `@template=true` source, a `@decrypt=` source, or a plain link — pick one."));
+    }
+    Ok(())
+}
 
 /// A firewall line names a rule the grammar can read, and a default policy says which one.
 fn validate_firewall(origin: &Origin, name: &str, options: &Options) -> Result<()> {
@@ -2879,6 +2927,50 @@ mod tests {
         ] {
             assert!(p(line).is_ok(), "{} was refused", line);
         }
+    }
+
+    /// A `link:` names one mode: the installer reads content first, decrypt second,
+    /// template third, so a line naming two runs one and shelves the other in silence.
+    /// The family, because each pair degrades differently and a test pinning one pair
+    /// leaves the other two live.
+    #[test]
+    fn a_link_naming_two_modes_is_refused_naming_both() {
+        for line in [
+            "link:/a/b@target=/c,content=x,template=true",
+            "link:/a/b@target=/c,content=x,decrypt=age",
+            "link:/a/b@target=/c,decrypt=age,template=true",
+        ] {
+            let err = p(line).unwrap_err();
+            assert!(
+                err.what.contains("two modes"),
+                "{} was refused for the wrong reason: {}",
+                line,
+                err.what
+            );
+        }
+        // Controls: each mode alone, and `@template=false` stating the default beside
+        // content, are all ordinary lines.
+        for line in [
+            "link:/a/b@target=/c,content=x",
+            "link:/a/b@target=/c,template=true",
+            "link:/a/b@target=/c,decrypt=age",
+            "link:/a/b@target=/c",
+            "link:/a/b@target=/c,content=x,template=false",
+        ] {
+            assert!(p(line).is_ok(), "{} was refused", line);
+        }
+    }
+
+    /// `@template=` is a flag with a value: anything but `true` or `false` would fall
+    /// through to the plain-symlink mode carrying a word nobody acts on.
+    #[test]
+    fn a_link_template_that_is_neither_on_nor_off_is_refused() {
+        for bad in ["maybe", "yes", "1", ""] {
+            let line = format!("link:/a/b@target=/c,template={}", bad);
+            assert!(p(&line).is_err(), "{} was accepted", line);
+        }
+        assert!(p("link:/a/b@target=/c,template=false").is_ok());
+        assert!(p("link:/a/b@target=/c,template").is_ok());
     }
 
     /// `RESOURCE_BACKENDS` is the same three prefixes `listed_as` answers with, and the guard
