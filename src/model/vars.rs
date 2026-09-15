@@ -533,10 +533,20 @@ fn split_reference(text: &str) -> (Option<&str>, &str) {
 }
 
 /// Substitute `$name` references in a value written outside `vars` — a `link:` target, a
-/// `@version=`. Unknown names are an error, never left as literal text: a silently unexpanded
+/// `@version=`, a `link:`'s `@content=`. A name resolves to a variable first, then to a
+/// detected fact (`os`, `arch`, `host`, `hostname`, `family`, `home`, `user`); a variable
+/// you decided always wins over a fact the machine reported, so adding a fact can never
+/// move a file that named a variable the same thing (IX.4's sigil rule, applied to values:
+/// facts only fill names that are undefined as variables, and an undefined name today is
+/// an error — so no working file changes meaning, only errors become answers).
+/// Unknown names are an error, never left as literal text: a silently unexpanded
 /// `$rle` would become a path with a dollar sign in it and fail somewhere with no mention of
 /// the typo. A referenced list is refused by name for the same reason as inside `vars`.
-pub fn expand(value: &str, vars: &Vars, origin: &Origin) -> Result<String> {
+pub fn expand(
+    value: &str,
+    facts: &crate::config::parser::HostFacts,
+    origin: &Origin,
+) -> Result<String> {
     let mut out = String::with_capacity(value.len());
     let mut rest = value;
     while let Some(at) = rest.find('$') {
@@ -554,13 +564,20 @@ pub fn expand(value: &str, vars: &Vars, origin: &Origin) -> Result<String> {
                 rest = after;
             }
             Some(referenced) => {
-                let Some(v) = vars.get(referenced) else {
+                let v = facts
+                    .vars
+                    .get(referenced)
+                    .cloned()
+                    .or_else(|| facts.value_for(referenced));
+                let Some(v) = v else {
                     return Err(GrammarError::new(
                         origin.clone(),
                         format!("`${}` is not defined", referenced),
                     )
                     .with_hint(
-                        "every variable needs a top-level default in `vars` before it can be used.",
+                        "a name in a value is a variable from `vars`, or a detected fact \
+                         (os, arch, host, hostname, family, home, user). Every variable needs \
+                         a top-level default in `vars` before it can be used.",
                     ));
                 };
                 match v.as_interpolated() {
@@ -870,43 +887,107 @@ mod tests {
 
     // --- expand ---------------------------------------------------------------------------
 
+    fn expand_facts() -> crate::config::parser::HostFacts {
+        crate::config::parser::HostFacts {
+            os: "linux".into(),
+            arch: "x86_64".into(),
+            host: "laptop".into(),
+            family: "debian".into(),
+            home: Some("/home/u".into()),
+            user: Some("u".into()),
+            vars: Vars::new(),
+        }
+    }
+
     #[test]
     fn expand_substitutes_into_a_value_written_outside_vars() {
-        let mut vars = Vars::new();
-        vars.insert("role".to_string(), str_val("travel"));
-        let out = expand("~/.config/$role/init.lua", &vars, &origin(3)).unwrap();
+        let mut facts = expand_facts();
+        facts.vars.insert("role".to_string(), str_val("travel"));
+        let out = expand("~/.config/$role/init.lua", &facts, &origin(3)).unwrap();
         assert_eq!(out, "~/.config/travel/init.lua");
     }
 
     #[test]
     fn expand_stringifies_a_number_or_boolean() {
-        let mut vars = Vars::new();
-        vars.insert("n".to_string(), Value::Num(5.0));
-        assert_eq!(expand("v$n", &vars, &origin(1)).unwrap(), "v5");
+        let mut facts = expand_facts();
+        facts.vars.insert("n".to_string(), Value::Num(5.0));
+        assert_eq!(expand("v$n", &facts, &origin(1)).unwrap(), "v5");
     }
 
     #[test]
     fn expand_refuses_a_list_rather_than_joining_it() {
-        let mut vars = Vars::new();
-        vars.insert("tags".to_string(), Value::List(vec![str_val("a")]));
-        let err = expand("x-$tags", &vars, &origin(1)).unwrap_err();
+        let mut facts = expand_facts();
+        facts
+            .vars
+            .insert("tags".to_string(), Value::List(vec![str_val("a")]));
+        let err = expand("x-$tags", &facts, &origin(1)).unwrap_err();
         assert!(err.what.contains("list"), "{}", err);
     }
 
     #[test]
     fn expand_refuses_an_unknown_name_rather_than_leaving_it_literal() {
-        let vars = Vars::new();
-        let err = expand("~/.config/$rle/init.lua", &vars, &origin(3)).unwrap_err();
+        let facts = expand_facts();
+        let err = expand("~/.config/$rle/init.lua", &facts, &origin(3)).unwrap_err();
         assert!(err.what.contains("rle"), "{}", err);
     }
 
     #[test]
     fn expand_leaves_a_value_with_no_references_alone() {
-        let vars = Vars::new();
+        let facts = expand_facts();
         assert_eq!(
-            expand("plain/path", &vars, &origin(1)).unwrap(),
+            expand("plain/path", &facts, &origin(1)).unwrap(),
             "plain/path"
         );
+    }
+
+    #[test]
+    fn expand_reads_a_detected_fact_when_no_variable_names_it() {
+        // #69: `$home` in a `link:` value is the machine's answer, without a `vars` entry.
+        let facts = expand_facts();
+        assert_eq!(
+            expand("topdirs = ${home}/Documents", &facts, &origin(1)).unwrap(),
+            "topdirs = /home/u/Documents"
+        );
+        assert_eq!(
+            expand("$user@$hostname", &facts, &origin(1)).unwrap(),
+            "u@laptop"
+        );
+        assert_eq!(
+            expand("on $os/$arch", &facts, &origin(1)).unwrap(),
+            "on linux/x86_64"
+        );
+    }
+
+    #[test]
+    fn expand_prefers_a_variable_you_decided_over_a_fact_the_machine_reported() {
+        // IX.4 in values: a `home = …` in `vars` wins, so adding a fact never moves a file
+        // that named a variable the same thing.
+        let mut facts = expand_facts();
+        facts.vars.insert("home".to_string(), str_val("/elsewhere"));
+        assert_eq!(
+            expand("${home}/Documents", &facts, &origin(1)).unwrap(),
+            "/elsewhere/Documents"
+        );
+    }
+
+    #[test]
+    fn expand_names_the_fact_vocabulary_when_nothing_answers() {
+        let facts = expand_facts();
+        let err = expand("$rle", &facts, &origin(1)).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("home"),
+            "the hint must list the facts: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn expand_of_an_undetectable_fact_is_an_error_not_an_empty_string() {
+        let mut facts = expand_facts();
+        facts.home = None;
+        let err = expand("${home}/Documents", &facts, &origin(1)).unwrap_err();
+        assert!(err.what.contains("home"), "{}", err);
     }
 
     #[test]

@@ -24,10 +24,12 @@ use std::path::Path;
 
 /// Run `vars.shall` and turn the map it evaluates to into resolved variables.
 ///
-/// The script is handed the machine's detected facts as the constants `OS`, `ARCH`, `HOST` and
-/// `FAMILY`, and must end in a map: `#{ role: "travel", cores: 8 }`. The map's values are the
-/// four types (string, number, boolean, list); a map value, or a script that does not end in a
-/// map, is an error naming the file.
+/// The script is handed the machine's detected facts as the constants `OS`, `ARCH`, `HOST`,
+/// `FAMILY`, `HOME` and `USER`, and must end in a map: `#{ role: "travel", cores: 8 }`. The
+/// map's values are the four types (string, number, boolean, list); a map value, or a script
+/// that does not end in a map, is an error naming the file. A fact the machine could not
+/// detect is absent rather than empty, so a script that reads it fails loudly instead of
+/// resolving a variable to the wrong value with no sign it failed.
 pub fn resolve(path: &Path, facts: &HostFacts) -> Result<Vars> {
     resolve_with_origins(path, facts).map(|(v, _)| v)
 }
@@ -53,6 +55,12 @@ pub fn resolve_with_origins(path: &Path, facts: &HostFacts) -> Result<(Vars, Var
     scope.push_constant("ARCH", facts.arch.clone());
     scope.push_constant("HOST", facts.host.clone());
     scope.push_constant("FAMILY", facts.family.clone());
+    if let Some(home) = &facts.home {
+        scope.push_constant("HOME", home.clone());
+    }
+    if let Some(user) = &facts.user {
+        scope.push_constant("USER", user.clone());
+    }
 
     let map = engine
         .eval_with_scope::<rhai::Map>(&mut scope, &code)
@@ -131,6 +139,8 @@ mod tests {
             arch: "x86_64".into(),
             host: "laptop".into(),
             family: "debian".into(),
+            home: None,
+            user: None,
             vars: Default::default(),
         }
     }

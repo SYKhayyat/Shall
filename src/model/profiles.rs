@@ -511,6 +511,8 @@ mod tests {
             arch: "x86_64".into(),
             host: "laptop".into(),
             family: "debian".into(),
+            home: None,
+            user: None,
             vars: Default::default(),
         }
     }
@@ -707,6 +709,8 @@ mod active_tests {
             arch: "x86_64".into(),
             host: host.into(),
             family: "debian".into(),
+            home: None,
+            user: None,
             vars: Default::default(),
         }
     }

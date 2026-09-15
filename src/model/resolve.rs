@@ -651,11 +651,11 @@ impl<'a> Resolver<'a> {
     /// and fails later, somewhere else, with no mention of the typo.
     fn expand_vars(&self, statements: &mut [(Statement, Origin, Gates)]) -> Result<()> {
         for (stmt, origin, _) in statements.iter_mut() {
-            let vars = &self.facts.vars;
+            let facts = &self.facts;
             match stmt {
                 Statement::Package(d) | Statement::Absent(d) => {
                     for value in d.options.values_mut() {
-                        *value = crate::model::vars::expand(value, vars, origin)?;
+                        *value = crate::model::vars::expand(value, facts, origin)?;
                     }
                 }
                 Statement::Shim(name, opts)
@@ -665,21 +665,21 @@ impl<'a> Resolver<'a> {
                 | Statement::Exec(name, opts)
                 | Statement::Dotfiles(name, opts)
                 | Statement::Firewall(name, opts) => {
-                    *name = crate::model::vars::expand(name, vars, origin)?;
+                    *name = crate::model::vars::expand(name, facts, origin)?;
                     for value in opts.values_mut() {
-                        *value = crate::model::vars::expand(value, vars, origin)?;
+                        *value = crate::model::vars::expand(value, facts, origin)?;
                     }
                 }
                 Statement::Repo { spec, .. } => {
-                    *spec = crate::model::vars::expand(spec, vars, origin)?;
+                    *spec = crate::model::vars::expand(spec, facts, origin)?;
                 }
                 // A schedule's `run` is a command line, where `$` belongs to the shell that
                 // will run it. Set math and `use` name files, which are not values.
                 // A `generate:` command line may carry `$vars` (a machine fact in the path).
                 Statement::Generate(name, opts) => {
-                    *name = crate::model::vars::expand(name, vars, origin)?;
+                    *name = crate::model::vars::expand(name, facts, origin)?;
                     for value in opts.values_mut() {
-                        *value = crate::model::vars::expand(value, vars, origin)?;
+                        *value = crate::model::vars::expand(value, facts, origin)?;
                     }
                 }
                 Statement::Schedule(..)
@@ -1324,6 +1324,8 @@ mod tests {
             arch: "x86_64".into(),
             host: "laptop".into(),
             family: "debian".into(),
+            home: None,
+            user: None,
             vars: Default::default(),
         }
     }

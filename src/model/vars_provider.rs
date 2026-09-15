@@ -114,7 +114,9 @@ pub fn select(config_root: &Path, source: &Option<String>) -> Result<Option<Sele
 /// Run an external provider and parse its output into resolved variables.
 ///
 /// The program is handed the machine's detected facts as `SHALL_OS`/`SHALL_ARCH`/`SHALL_HOST`/
-/// `SHALL_FAMILY`, so it decides per machine without re-detecting them. Its stdout is a JSON
+/// `SHALL_FAMILY`/`SHALL_HOME`/`SHALL_USER`, so it decides per machine without re-detecting
+/// them. A fact the machine could not detect is handed as the empty string rather than left
+/// unset, so a provider reads one vocabulary whatever the host answered. Its stdout is a JSON
 /// object of `name → value`, or `name = value` lines. A non-zero exit is an error carrying the
 /// program's own stderr — a provider that fails must not silently resolve to nothing.
 pub fn run_external(path: &Path, facts: &HostFacts) -> Result<Vars> {
@@ -135,7 +137,9 @@ pub fn run_external_with_origins(path: &Path, facts: &HostFacts) -> Result<(Vars
         .env("SHALL_OS", &facts.os)
         .env("SHALL_ARCH", &facts.arch)
         .env("SHALL_HOST", &facts.host)
-        .env("SHALL_FAMILY", &facts.family);
+        .env("SHALL_FAMILY", &facts.family)
+        .env("SHALL_HOME", facts.home.as_deref().unwrap_or_default())
+        .env("SHALL_USER", facts.user.as_deref().unwrap_or_default());
 
     // An external provider runs on every resolution, before any manager is asked — so a slow
     // one looks like Shall being slow to start until the breakdown names it.
@@ -417,6 +421,8 @@ mod tests {
             arch: "x86_64".into(),
             host: "laptop".into(),
             family: "debian".into(),
+            home: None,
+            user: None,
             vars: Default::default(),
         }
     }

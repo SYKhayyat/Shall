@@ -14,6 +14,14 @@ pub struct HostFacts {
     ///
     /// `os` already answers linux-or-windows, which is why this does not.
     pub family: String,
+    /// The running user's home directory, when the machine can say it. `None` where no home
+    /// is detectable — a `$home` in a value and a `when home ==` are then loud errors naming
+    /// the fact, never an empty string that makes a path silently relative.
+    pub home: Option<String>,
+    /// The running user's login name, from the environment (`USER`, else `USERNAME`). `None`
+    /// where neither answers, for the same reason as `home`: a fact that cannot be detected
+    /// is an error, not an empty substitution.
+    pub user: Option<String>,
     /// The resolved `vars` (Part IX), reached as `$name`. Empty until a caller supplies them,
     /// so a `when $role == …` in a repo with no `vars` file is an unknown key and says so.
     pub vars: crate::model::vars::Vars,
@@ -27,6 +35,8 @@ static DETECTED: once_cell::sync::Lazy<HostFacts> = once_cell::sync::Lazy::new(|
     arch: std::env::consts::ARCH.to_string(),
     host: crate::config::Config::get_hostname(),
     family: distro_family().unwrap_or_else(|| std::env::consts::OS.to_string()),
+    home: detect_home(),
+    user: detect_user(),
     vars: Default::default(),
 });
 
@@ -36,7 +46,11 @@ impl HostFacts {
         DETECTED.clone()
     }
 
-    fn value_for(&self, key: &str) -> Option<Value> {
+    /// A detected fact's value, for value interpolation (`vars::expand`) as well as `when`.
+    /// `$`-prefixed keys read the variables; bare keys read the machine. `home` and `user`
+    /// answer `None` where the machine could not detect them, and the callers turn that into
+    /// a loud error naming the fact — never an empty string.
+    pub(crate) fn value_for(&self, key: &str) -> Option<Value> {
         // IX.4: `$name` is a variable you decided, `name` is a fact the machine reported. The
         // sigil is what lets Shall add a detected fact without changing the meaning of a file
         // where someone happened to use that word as a variable.
@@ -50,6 +64,8 @@ impl HostFacts {
             "arch" => Some(Value::Str(self.arch.clone())),
             "host" | "hostname" => Some(Value::Str(self.host.clone())),
             "family" => Some(Value::Str(self.family.clone())),
+            "home" => self.home.clone().map(Value::Str),
+            "user" => self.user.clone().map(Value::Str),
             _ => None,
         }
     }
@@ -63,6 +79,30 @@ impl HostFacts {
         self.vars = vars;
         self
     }
+}
+
+/// The running user's home directory, as the `~` in a `link:` target already reads it.
+/// `dirs` answers from the environment first and the user database second, so this agrees
+/// with `resolve_target` by construction rather than by luck — a `$home` in content and a
+/// `~/` in a target name the same directory. `None` where neither answers.
+fn detect_home() -> Option<String> {
+    dirs::home_dir().map(|p| p.to_string_lossy().into_owned())
+}
+
+/// The running user's login name, from the environment. `USER` on Unix, `USERNAME` on
+/// Windows; an empty answer counts as no answer, because an empty `$user` substituted into
+/// a path is the silent relative-path failure `detect_home`'s `None` exists to prevent.
+/// There is no user-database lookup here: `dirs` has no such function, and a new dependency
+/// for one string the environment already carries is not justified.
+fn detect_user() -> Option<String> {
+    for key in ["USER", "USERNAME"] {
+        if let Ok(v) = std::env::var(key) {
+            if !v.trim().is_empty() {
+                return Some(v);
+            }
+        }
+    }
+    None
 }
 
 /// The distribution family — `debian`, `fedora`, `arch`, `suse`, … — read from
@@ -152,9 +192,18 @@ pub fn eval_when(pred: &str, facts: &HostFacts) -> Result<bool> {
 /// unknown one is an error, never a silent false (a typo'd `$rle` that read as false is a block
 /// that never fires and never complains, IX.3).
 fn lhs_value(key: &str, facts: &HostFacts) -> Result<Value> {
-    facts
-        .value_for(key)
-        .ok_or_else(|| Error::Config(format!("unknown `when` key '{}'", key)))
+    if let Some(v) = facts.value_for(key) {
+        return Ok(v);
+    }
+    // A fact this machine cannot answer is a different failure from a key that is not a
+    // fact at all: the first names what could not be detected, the second is a typo.
+    if ["home", "user"].contains(&key) {
+        return Err(Error::Config(format!(
+            "this machine cannot say `{}`, so `when {} == …` has nothing to compare",
+            key, key
+        )));
+    }
+    Err(Error::Config(format!("unknown `when` key '{}'", key)))
 }
 
 /// The right side is a value: another `$variable`, or a literal read with the same rules a `vars`
@@ -267,6 +316,8 @@ mod conditional_tests {
             arch: "x86_64".into(),
             host: "laptop".into(),
             family: "debian".into(),
+            home: Some("/home/u".into()),
+            user: Some("u".into()),
             vars: Default::default(),
         }
     }
@@ -386,6 +437,63 @@ mod conditional_tests {
         // complains, which is the failure IX.3 exists to delete.
         let f = with_role("travel");
         assert!(eval_when("$rle == travel", &f).is_err());
+    }
+
+    #[test]
+    fn home_and_user_are_facts_the_machine_reports() {
+        // #69: the per-user substitution vocabulary. Facts, not variables — so they are
+        // reached bare, and a `vars` entry of the same name does not move them.
+        let f = facts();
+        assert!(eval_when("home == /home/u", &f).unwrap());
+        assert!(!eval_when("home == /root", &f).unwrap());
+        assert!(eval_when("user == u", &f).unwrap());
+        assert!(!eval_when("user == root", &f).unwrap());
+
+        let mut vars = crate::model::vars::Vars::new();
+        vars.insert("home".to_string(), Value::Str("/elsewhere".into()));
+        let g = facts().with_vars(vars);
+        assert!(
+            eval_when("home == /home/u", &g).unwrap(),
+            "a variable of the same name must not move the fact (IX.4)"
+        );
+        assert!(eval_when("$home == /elsewhere", &g).unwrap());
+    }
+
+    #[test]
+    fn a_fact_the_machine_cannot_answer_is_an_error_naming_the_fact() {
+        // `home` unanswerable is not the same failure as `kernel` unknown: the first says
+        // what could not be detected, the second is a typo.
+        let mut f = facts();
+        f.home = None;
+        f.user = None;
+        for key in ["home", "user"] {
+            let err = eval_when(&format!("{} == x", key), &f).unwrap_err();
+            assert!(
+                err.to_string().contains("cannot say"),
+                "an undetectable fact must say so: {}",
+                err
+            );
+        }
+        assert!(eval_when("kernel == 6.1", &f).is_err());
+    }
+
+    #[test]
+    fn the_detected_home_agrees_with_the_tilde_the_link_backend_reads() {
+        // One home, not two: `$home` in content and `~/` in a target must name the same
+        // directory, and both go through `dirs`.
+        let current = HostFacts::current();
+        match (current.home, dirs::home_dir()) {
+            (Some(fact), Some(dir)) => assert_eq!(
+                std::path::PathBuf::from(fact),
+                dir,
+                "the fact and the target expansion disagree about home"
+            ),
+            (None, None) => {}
+            (fact, dir) => panic!(
+                "one home source answered and the other did not: {:?} vs {:?}",
+                fact, dir
+            ),
+        }
     }
 
     #[test]

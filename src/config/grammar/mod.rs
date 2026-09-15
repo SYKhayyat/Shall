@@ -299,7 +299,7 @@ impl Document {
                 Item::Block(Block::When(pred, body), origin) => {
                     let hit = eval_when(pred, facts).map_err(|e| {
                         GrammarError::new(origin.clone(), e.to_string()).with_hint(
-                            "`when` keys are os, arch, host, hostname, family, or `$name` for \
+                            "`when` keys are os, arch, host, hostname, family, home, user, or `$name` for \
                              a variable; operators are ==, != and `in [a, b]`.",
                         )
                     })?;
@@ -575,6 +575,8 @@ mod tests {
             arch: "x86_64".into(),
             host: "laptop".into(),
             family: "debian".into(),
+            home: None,
+            user: None,
             vars: Default::default(),
         }
     }
@@ -707,7 +709,7 @@ mod tests {
         assert!(err
             .hint
             .unwrap()
-            .contains("os, arch, host, hostname, family"));
+            .contains("os, arch, host, hostname, family, home, user"));
     }
 
     // ------------------------------------------------------------ statements
