@@ -1730,6 +1730,8 @@ two `when` arms.
 
 
 **RULED (owner, 2026-07-24): no.** No variable interpolation outside `when`. `$role` is tested in a condition, not substituted into a value; the same intent is two `when` arms. Reopen only with a case that cannot be.
+
+**REOPENED IN PART by `#69` (owner issue, 2026-09-15): values interpolate, `when` does not widen.** The case W9 asked for arrived as declared config content with per-user substitution: `topdirs = ${home}/Documents` in a `link:`'s `@content=` cannot be expressed as two `when` arms, because the arms would have to enumerate every machine's home directory. What reopened is exactly the value position (`link:` targets and option values, `@version=`), resolved once per invocation through the existing interpolation with facts as fallback (V.206); what did not reopen is anything else — `vars`-file values still reference variables only (W10 stands), and the sigil rule still separates `$name` from `name` in `when` (V.52 stands, facts added under it: `home`, `user`).
 ---
 
 ## W10

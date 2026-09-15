@@ -1,0 +1,19 @@
+# modules/generated.txt — config files Shall writes, per user, from declarations.
+#
+# A `link:` places a file; `@content=` declares the bytes inline and `@template=true`
+# renders a source file the repo carries. Both substitute the machine's facts at sync
+# time — `${home}` in a value, `{{ HOME }}` in a template — so one shared module
+# converges every machine without a `vars` entry per account. The write is idempotent
+# (a destination already holding the bytes is left alone, with no backup taken) and
+# `check` reads a rendered file back rendered: a hand edit is drift, not silence.
+
+# Inline content with per-user substitution. The `vars` file may hold `role`, but
+# nothing has to declare `home`: the machine reports it.
+link:recoll-inline@target=~/.config/recoll/recoll.conf {
+  content = topdirs = ${home}/Documents/seforim
+}
+
+# The same file rendered from a template the repo carries, for content longer than a
+# line. `recoll.conf.tmpl` holds `topdirs = {{ HOME }}/Documents/seforim` and the
+# sections around it; the declaration names the template and where it lands.
+link:./templates/recoll.conf.tmpl@target=~/.config/recoll/recoll.conf,template=true

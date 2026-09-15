@@ -1061,3 +1061,19 @@ scoped upgrades, makes parallelism configurable, and adds first-class applicatio
 ### Notes
 - `pnpm`/`yarn` search returns npm-registry results (not the manager's own index).
 - `pip` search is exact-name resolution only (PyPI has no public search API).
+
+### A `link:` writes declared content with per-user substitution, and `check` reads it back
+
+- **Config content with the home directory in it no longer needs a `vars` entry per
+  machine.** `$home` and `$user` in a `link:` target or `@content=` resolve to the
+  detected facts (a variable of the same name still wins), and a `@template=true`
+  source file renders `{{ HOME }}`, `{{ USER }}` and `{{ FAMILY }}` through the same
+  context the installer uses. `when` learns `home` and `user` as fact keys beside the
+  rest. An undetectable fact is a loud error naming it, never an empty string in a path.
+- **`check` compares a rendered template rather than calling it unverifiable.** A
+  destination holding the raw source bytes is drift; a template that will not render is
+  unverifiable (and a loud error at apply time). The symlink shortcut answers the plain
+  mode only — a managed file is compared byte for byte.
+- **A `link:` names one content mode.** Inline `@content=`, a `@template=true` source,
+  a `@decrypt=` source, or a plain symlink; a line naming two is refused where it is
+  written, and `@template=` is `true` or `false`.

@@ -301,7 +301,7 @@ apt:nginx {             declaration â†’ body is options
 
 **`when` gates the lines inside it. One rule, everywhere** — in a module those lines are
 packages; in a profile they're imports; in `priority` they're backends; in `active` they're
-profile names. To gate a whole file, wrap it. Keys: `os`, `arch`, `host`, `hostname`, `family`. Operators: `==`, `!=`,
+profile names. To gate a whole file, wrap it. Keys: `os`, `arch`, `host`, `hostname`, `family`, `home`, `user`. Operators: `==`, `!=`,
 `in [a, b]`.
 
 **`os` is the kernel** (`linux`, `windows`, `macos`, `freebsd`, …); **`family` is the
@@ -316,6 +316,13 @@ is correctly false and `== freebsd` is true. The fallback is load-bearing: `fami
 empty**, because an empty family is exactly what would make every `when family ==` silently
 take the else branch — the silent-wrongness this rule closes.
 
+**`home` is the running user's home directory** (the same directory `~/` targets expand
+through) **and `user` is the running user's login name** (`USER`, else `USERNAME`). Unlike
+`family` they can be undetectable, and an undetectable fact is an error naming the fact —
+`when home ==` on a machine with no detectable home refuses rather than comparing against
+`""`, because an empty home makes every path silently relative, which is the failure the
+fallback above exists to prevent in the other direction.
+
 ### Option keys
 
 | key | meaning |
@@ -329,7 +336,7 @@ take the else branch — the silent-wrongness this rule closes.
 | `source` | on `shim:` — `BACKEND:NAME`, which provider this stand-in forwards to. **It is read when the shim runs, not when it is deployed**: a shim is the shall binary under another name and has nowhere to keep data, so the answer comes from the line itself, which the shim process has already loaded. Absent means the bare name, resolved through `priority` like any other. **V.152** |
 | `cron`, `run`, `notify` | on `schedule:` |
 | `enabled`, `persistent`, `jitter`, `elevated` | on `schedule:` — arm it, catch up a missed firing, spread a fleet, raise its privilege. **No scheduler expresses all four**, so each one either expresses the option or refuses it by name; an option nobody wrote is never refused. **V.192** |
-| `target`, `content`, `template`, `decrypt`, `identity`, `backup` | on `link:` |
+| `target`, `content`, `template`, `decrypt`, `identity`, `backup` | on `link:` — one mode per line: inline `@content=`, a `@template=true` source file, a `@decrypt=` source, or a plain link (`#69`); a line naming two modes is refused, and `@template=` is `true` or `false` |
 | `enabled`, `status` | on `service:` |
 | `value` | on `setting:` (the value to write) and on `firewall:default/…` (`allow` or `deny`) |
 | `target` | on `dotfiles:` — where the tree is mirrored. Absent means the home directory. **There is no per-file option**: the tree has no place to write one, which is why it never decrypts (U24) |
@@ -464,6 +471,15 @@ old destination instead of orphaning it forever.
 **Decrypt mode never backs up at all.** `backup_once` exists so a user is not silently robbed of
 a config file they hand-wrote; a secret Shall itself decrypted a moment ago is not that, and the
 copy would sit in plaintext under the ordinary umask beside a file that got `0600` (T1).
+
+**A `link:` carries at most one content mode** (`#69`): inline `@content=`, a `@template=true`
+source file rendered with the machine's facts (`OS`, `ARCH`, `USER`, `HOSTNAME`, `HOME`,
+`FAMILY`), a `@decrypt=` source, or a plain symlink — in that precedence order, and the
+grammar refuses a line naming two. `@content=` is substituted with `$name` (variables, then
+facts) at resolve time; a template is rendered at apply time through the one shared context
+the installer and the checker both use, so `check` reads a rendered template back rendered —
+a destination holding the raw source is drift, not `unverifiable`. Only the plain mode places
+a symlink; the managed modes compare bytes. (V.207)
 
 **A `dotfiles:` tree is the `link:` lines it stands for, and gets every one of the rules above**
 (2026-08-06, `Y10`). It is expanded once into those lines, and from there it is not a second
@@ -904,9 +920,14 @@ other value containing `$` is string interpolation and yields a string (`tier = 
 `$$` is a literal `$`; `${name}` ends a reference where a name character would otherwise
 continue. Values may be **derived from other variables**, resolved in dependency order, and a
 cycle is an error naming the whole loop (the same shape as a `use` loop, II.7). A `$var` may
-also be expanded into a `link:` target or a `@version=` (`~/.config/$role/init.lua`); an unknown
+also be expanded into a `link:` target, a `link:`'s `@content=`, or a `@version=`
+(`~/.config/$role/init.lua`, `topdirs = ${home}/Documents`); an unknown
 name there is an error, never left as literal text, and a list has no text form so it is refused
-by name.
+by name. **A name with no variable behind it falls back to the detected facts** (`os`, `arch`,
+`host`, `hostname`, `family`, `home`, `user`) — a variable you decided always wins, so a fact
+fills only a name that is undefined as a variable, and an undefined name today is an error:
+no working file changes meaning, only errors become answers. The fallback is what makes
+`$home` per-user without a `vars` entry per machine. (V.206)
 
 ### One contract, three providers
 
@@ -920,10 +941,12 @@ feature and not several:
 | **external** | `vars.py`, `vars.sh`, `vars.js`, … | any executable, run by Shall, printing a JSON object or `name = value` lines; only works where its interpreter is installed |
 
 **The kind is the filename, not a config key**, so what a file *is* is visible in the repo. The
-external program is handed the facts as `SHALL_OS`/`SHALL_ARCH`/`SHALL_HOST`/`SHALL_FAMILY` and
+external program is handed the facts as `SHALL_OS`/`SHALL_ARCH`/`SHALL_HOST`/`SHALL_FAMILY`/`SHALL_HOME`/`SHALL_USER` and
 its non-zero exit is an error carrying its stderr — a provider that fails must never resolve
 silently to nothing (P3). The embedded script reads the facts as the constants `OS`/`ARCH`/
-`HOST`/`FAMILY` and must end in a map of the four types.
+`HOST`/`FAMILY`/`HOME`/`USER` and must end in a map of the four types. A fact the machine
+could not detect arrives as the empty string to an external provider and is absent to an
+embedded script — the two say "missing" the way each language says everything else.
 
 **Several provider files may coexist; `[vars] source` in `preferences.toml` names the active
 one.** One present and no `source` uses it; two present and no `source` is a **loud error

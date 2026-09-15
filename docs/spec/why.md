@@ -7311,3 +7311,32 @@ and take `--ignore-pins` as the explicit opt-in. The resolver feeding the gate r
 `.upgrading()`, so lockfile records - observations this verb is allowed to move, and
 re-records afterwards - never masquerade as decisions; what survives that filter can only be
 a line somebody typed.
+
+**V.206 — Why a `$name` in a value falls back to the detected facts. *(#69; 2026-09-15)***
+
+A `link:`'s `@content=` carrying `topdirs = ${home}/Documents` has two readings and only
+one of them is per-user: a variable the repo defines per machine, or a fact the machine
+reports about itself. The first is what a `vars` entry does, and it is hand-rolling — one
+more file that says what the machine already knows, kept in sync by hand, wrong the day
+somebody copies the repo to a second account. The second is what `#69` builds, and the
+objection to it is V.52's: a namespace that merges silently, so the day Shall detects a
+new fact, a file that named a variable the same thing changes meaning. The order answers
+it. A variable you decided is consulted first and always wins; a fact fills only a name
+that is undefined as a variable, and an undefined name today is a loud error — so no
+file that resolves today can resolve differently tomorrow. Errors become answers; answers
+never move. The same order is what keeps `when`'s sigil rule intact: `$home` in a value
+is "your variable, else the machine's fact", and `home` in a `when` is the fact alone.
+
+**V.207 — Why a `link:` names one content mode, and why the checker renders templates. *(#69; 2026-09-15)***
+
+The installer reads `link:` modes in order — content, decrypt, template, plain link — so a
+line naming two ran the first and shelved the second in silence, and the checker disagreed
+with the installer about which one that was: content-plus-template installed the content
+while `check` called the line unverifiable, which places on every sync for ever. Two
+readers of one line answering different questions is the B0b shape exactly, so the grammar
+refuses the combination where the line is written, and the checker renders a template
+through the same constructor the installer uses. A destination holding the raw source is
+then drift rather than `unverifiable`, which is the whole of what `#69` asked `check` to
+do. Decrypt stays unverifiable: its transform needs the secret tool run, and running a
+decrypt inside a read-only check would make previewing a secret the same act as
+materialising it.
