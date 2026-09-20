@@ -431,15 +431,24 @@ pub(crate) async fn in_effect(
                 // rule below); a template that will not render is unverifiable here and a
                 // loud error when the installer reaches it.
                 match std::fs::read_to_string(&source) {
-                    Ok(text) => match crate::backends::link::render_template_text(
-                        &source,
-                        &text,
-                        &crate::config::parser::HostFacts::current(),
-                        config,
-                    ) {
-                        Ok(rendered) => (rendered.into_bytes(), false),
-                        Err(_) => return None,
-                    },
+                    Ok(text) => {
+                        // Templates referencing `${secret:name}` are unverifiable in the
+                        // check path: decrypting would need the secret providers and a
+                        // runtime, neither of which this read-only probe has. The installer
+                        // resolves secrets; check honestly reports what it cannot confirm.
+                        if !crate::backends::link::secrets_in_template(&text).is_empty() {
+                            return None;
+                        }
+                        match crate::backends::link::render_template_text(
+                            &source,
+                            &text,
+                            &crate::config::parser::HostFacts::current(),
+                            config,
+                        ) {
+                            Ok(rendered) => (rendered.into_bytes(), false),
+                            Err(_) => return None,
+                        }
+                    }
                     Err(_) => return Some(false),
                 }
             } else {

@@ -72,6 +72,15 @@ pub struct Module {
     /// `networking.firewall.enable`. `None` writes nothing and leaves NixOS's own default in
     /// place — only `firewall:default/incoming` makes this an answer Shall has.
     pub firewall: Option<bool>,
+    /// Extra Nix expressions to include in the generated module, with secrets resolved.
+    /// Each entry is `(attr_path, value)` rendered as `attr_path = value;`. The `attr_path`
+    /// is validated as a Nix attribute path; the `value` is inserted verbatim (it may be a
+    /// string literal, a number, or a complex expression).
+    ///
+    /// Secrets are resolved before rendering: `${secret:name}` in a value is replaced with
+    /// the decrypted plaintext. This lets a nixos line declare `nix.access-tokens =
+    /// "${secret:github-token}"` and have the real token appear in `shall-packages.nix`.
+    pub config_text: Vec<(String, String)>,
 }
 
 impl Module {
@@ -83,6 +92,21 @@ impl Module {
             .iter()
             .map(|p| (*p, Proto::Tcp))
             .chain(self.udp_ports.iter().map(|p| (*p, Proto::Udp)))
+    }
+
+    /// Resolve `${secret:name}` references in `config_text` values, replacing them with
+    /// the corresponding decrypted plaintext from `secrets`.
+    ///
+    /// A reference to a name not in the map is an error. This mutates the module in place
+    /// so the caller can then call `render()` to produce the final output.
+    pub fn resolve_secrets(
+        &mut self,
+        secrets: &crate::backends::link::SecretContext,
+    ) -> Result<()> {
+        for (_attr_path, value) in &mut self.config_text {
+            *value = substitute_secrets(value, secrets)?;
+        }
+        Ok(())
     }
 }
 
@@ -145,7 +169,65 @@ pub fn render(m: &Module) -> Result<String> {
         ));
     }
 
+    for (attr_path, value) in &m.config_text {
+        validate_attrpath(attr_path).map_err(|why| {
+            Error::Validation(format!(
+                "`nixos:` cannot render config attribute `{attr_path}` as Nix: {why}"
+            ))
+        })?;
+        out.push_str(&format!("  {} = {};\n", attr_path, value));
+    }
+
     out.push_str("}\n");
+    Ok(out)
+}
+
+/// Render the module and resolve `${secret:name}` references in config_text values.
+///
+/// The secrets map is the same [`SecretContext`] the link backend uses for template
+/// composition. Each `${secret:name}` in a config_text value is replaced with the
+/// corresponding plaintext; a reference to a name not in the map is an error naming
+/// the missing secret.
+///
+/// This is a thin wrapper over [`render`] — it clones the module, substitutes secrets
+/// into the `config_text` values, then delegates.
+pub fn render_with_secrets(
+    m: &Module,
+    secrets: &crate::backends::link::SecretContext,
+) -> Result<String> {
+    let mut resolved = m.clone();
+    for (_attr_path, value) in &mut resolved.config_text {
+        *value = substitute_secrets(value, secrets)?;
+    }
+    render(&resolved)
+}
+
+/// Replace every `${secret:name}` in `text` with the corresponding value from `secrets`.
+///
+/// A reference to a name not in the map is an error. This is a pure function — the
+/// secrets were already decrypted by the caller.
+pub fn substitute_secrets(
+    text: &str,
+    secrets: &crate::backends::link::SecretContext,
+) -> Result<String> {
+    let re = regex::Regex::new(r#"\$\{secret:([^}]+)\}"#)
+        .expect("the secret-substitution regex is valid");
+    let mut out = String::with_capacity(text.len());
+    let mut last = 0;
+    for m in re.find_iter(text) {
+        let name = &m.as_str()[9..m.as_str().len() - 1]; // strip `${secret:` and `}`
+        let value = secrets.get(name).ok_or_else(|| {
+            Error::Other(format!(
+                "template references `${{secret:{}}}` but no decrypted value is available. \
+                 Create ~/.config/shall/secrets/{}.age or remove the ${{secret:{}}} reference.",
+                name, name, name
+            ))
+        })?;
+        out.push_str(&text[last..m.start()]);
+        out.push_str(value);
+        last = m.end();
+    }
+    out.push_str(&text[last..]);
     Ok(out)
 }
 
@@ -344,6 +426,9 @@ pub struct NixosBackendCore {
     /// Whether Shall may append the one `imports` line to `configuration.nix` (owner ruling: a
     /// setting decides). When false, the line is printed for the user to paste once.
     pub manage_imports: bool,
+    /// Declared secret-decryption providers (U38), beyond the built-in `age`/`sops`.
+    /// Used to resolve `${secret:name}` references in `config_text` values.
+    pub secret_providers: Vec<crate::model::secret::SecretProvider>,
 }
 
 impl NixosBackendCore {
@@ -353,7 +438,95 @@ impl NixosBackendCore {
             name: "nixos".to_string(),
             config_dir,
             manage_imports,
+            secret_providers: Vec::new(),
         }
+    }
+
+    /// Attach declared secret providers (U38), loaded from `adapters/secret.toml`.
+    pub fn with_secret_providers(
+        mut self,
+        providers: Vec<crate::model::secret::SecretProvider>,
+    ) -> Self {
+        self.secret_providers = providers;
+        self
+    }
+
+    /// The conventional directory for template secret files: `~/.config/shall/secrets/`.
+    fn secrets_dir(&self) -> Option<PathBuf> {
+        dirs::home_dir().map(|h| h.join(".config").join("shall").join("secrets"))
+    }
+
+    /// Find the encrypted file backing a named template secret.
+    fn find_secret_file(&self, name: &str) -> Option<PathBuf> {
+        let dir = self.secrets_dir()?;
+        let with_ext = dir.join(format!("{}.age", name));
+        if with_ext.exists() {
+            return Some(with_ext);
+        }
+        let bare = dir.join(name);
+        if bare.exists() {
+            return Some(bare);
+        }
+        None
+    }
+
+    /// Decrypt a named template secret, returning its plaintext.
+    async fn resolve_secret(&self, name: &str) -> Result<String> {
+        use crate::config::grammar::Options;
+        let source = self.find_secret_file(name).ok_or_else(|| {
+            let dir = self
+                .secrets_dir()
+                .map(|d| d.display().to_string())
+                .unwrap_or_else(|| "~/.config/shall/secrets".to_string());
+            Error::Other(format!(
+                "template references `${{secret:{}}}` but no encrypted file exists at {}/{}.age \
+                 (or {}/{}). Create the file or remove the ${{secret:{}}} reference.",
+                name, dir, name, dir, name, name
+            ))
+        })?;
+        let spec = PackageSpec {
+            name: source.to_string_lossy().to_string(),
+            backend: "nixos".into(),
+            options: Options::default(),
+            requires: vec![],
+            present: true,
+        };
+        // Delegate to the link backend's decrypt_secret — same age/sops/provided path.
+        // The nixos backend does not embed its own decrypt logic; it reuses the link
+        // backend's, which already carries the T-series safeguards.
+        let link_core = crate::backends::link::LinkBackendCore::new(
+            self.executor.clone(),
+            std::sync::Arc::new(crate::config::Config::default()),
+        )
+        .with_secret_providers(self.secret_providers.clone());
+        match link_core.decrypt_secret("age", &source, &spec).await? {
+            Some(plaintext) => Ok(plaintext),
+            None => Err(Error::Other(format!(
+                "${{secret:{}}}` requires a physical touch but this is an unattended run",
+                name
+            ))),
+        }
+    }
+
+    /// Pre-fetch every secret referenced in `config_text` values, returning a context map.
+    pub async fn resolve_template_secrets(
+        &self,
+        config_text: &[(String, String)],
+    ) -> Result<crate::backends::link::SecretContext> {
+        let re = regex::Regex::new(r#"\$\{secret:([^}]+)\}"#)
+            .expect("the secret-substitution regex is valid");
+        let mut names = std::collections::HashSet::new();
+        for (_attr, value) in config_text {
+            for cap in re.captures_iter(value) {
+                names.insert(cap[1].to_string());
+            }
+        }
+        let mut ctx = crate::backends::link::SecretContext::new();
+        for name in &names {
+            let plaintext = self.resolve_secret(name).await?;
+            ctx.insert(name.clone(), plaintext);
+        }
+        Ok(ctx)
     }
 
     pub fn generated_path(&self) -> PathBuf {
@@ -715,6 +888,11 @@ impl Installable for NixosInstallable {
             }
             module.packages.insert(spec.name.clone());
         }
+        // Resolve any `${secret:name}` references in config_text values before rendering.
+        if !module.config_text.is_empty() {
+            let secrets = self.core.resolve_template_secrets(&module.config_text).await?;
+            module.resolve_secrets(&secrets)?;
+        }
         self.core.write_and_switch(&module).await
     }
 
@@ -727,6 +905,11 @@ impl Installable for NixosInstallable {
         let mut module = self.core.declared();
         for n in names {
             module.packages.remove(n);
+        }
+        // Resolve secrets before rendering, even on removal (the config_text may have changed).
+        if !module.config_text.is_empty() {
+            let secrets = self.core.resolve_template_secrets(&module.config_text).await?;
+            module.resolve_secrets(&secrets)?;
         }
         self.core.write_and_switch(&module).await
     }
@@ -783,11 +966,37 @@ pub fn register(
     exec: &CommandExecutor,
     cfg: &crate::config::Config,
 ) {
-    let core = Arc::new(NixosBackendCore::new(
-        exec.clone(),
-        cfg.nixos.config_dir.clone(),
-        cfg.nixos.manage_imports,
-    ));
+    // Declared secret providers (U38), through the same approved loader the link backend uses.
+    let layout = cfg.layout();
+    let secret_providers = crate::backends::onboarder::read_approved_definitions(
+        &layout.adapter_secret_file(),
+        &layout.locks_dir(),
+    )
+    .and_then(
+        |body| match toml::from_str::<crate::model::secret::SecretProviderFile>(&body) {
+            Ok(f) => Some(crate::model::secret::providers(f.secret)),
+            Err(e) => {
+                tracing::warn!(
+                    "{}",
+                    crate::app::adapters::cannot_use(
+                        crate::app::adapters::surface("secret").expect("a declared surface"),
+                        e,
+                    )
+                );
+                None
+            }
+        },
+    )
+    .unwrap_or_default();
+
+    let core = Arc::new(
+        NixosBackendCore::new(
+            exec.clone(),
+            cfg.nixos.config_dir.clone(),
+            cfg.nixos.manage_imports,
+        )
+        .with_secret_providers(secret_providers),
+    );
     reg.register(Arc::new(
         crate::core::BackendCapabilities::builder(core.clone())
             .with_installable(Arc::new(NixosInstallable { core: core.clone() }))
@@ -1011,6 +1220,7 @@ mod tests {
             tcp_ports: [22u16, 443].into_iter().collect(),
             udp_ports: [53u16].into_iter().collect(),
             firewall: Some(true),
+            config_text: Vec::new(),
         })
         .expect("renders");
         assert!(out.contains("services.nginx.enable = true;"), "{out}");
@@ -1058,6 +1268,7 @@ mod tests {
                 tcp_ports: [22u16, 443].into_iter().collect(),
                 udp_ports: [53u16].into_iter().collect(),
                 firewall: Some(true),
+                config_text: Vec::new(),
             },
             Module {
                 firewall: Some(false),
@@ -1100,6 +1311,7 @@ mod tests {
             tcp_ports: [22u16].into_iter().collect(),
             udp_ports: [53u16].into_iter().collect(),
             firewall: Some(true),
+            config_text: Vec::new(),
         };
         let mut after = read(&render(&before).expect("renders"));
         after.packages.insert("ripgrep".to_string());
@@ -1186,6 +1398,7 @@ mod tests {
                     tcp_ports: [22u16, 80, 443].into_iter().collect(),
                     udp_ports: [53u16, 123].into_iter().collect(),
                     firewall: Some(true),
+                    config_text: Vec::new(),
                 })
                 .expect("renders"),
             ),
@@ -1324,5 +1537,106 @@ mod tests {
         assert!(!imports_generated(
             "imports = [ ./hardware-configuration.nix ];"
         ));
+    }
+
+    #[test]
+    fn substitute_secrets_replaces_secret_references() {
+        let mut secrets = crate::backends::link::SecretContext::new();
+        secrets.insert("api_key".to_string(), "s3cret".to_string());
+        secrets.insert("db_pass".to_string(), "hunter2".to_string());
+
+        let result =
+            substitute_secrets("password = ${secret:api_key};", &secrets).expect("substitutes");
+        assert_eq!(result, "password = s3cret;");
+
+        let result = substitute_secrets(
+            "${secret:api_key}:${secret:db_pass}",
+            &secrets,
+        )
+        .expect("substitutes");
+        assert_eq!(result, "s3cret:hunter2");
+    }
+
+    #[test]
+    fn substitute_secrets_returns_error_for_missing_secret() {
+        let secrets = crate::backends::link::SecretContext::new();
+        let err = substitute_secrets("val = ${secret:missing};", &secrets)
+            .expect_err("missing secret is an error");
+        assert!(
+            err.to_string().contains("missing"),
+            "error names the missing secret: {err}"
+        );
+    }
+
+    #[test]
+    fn substitute_secrets_leaves_text_without_secrets_unchanged() {
+        let secrets = crate::backends::link::SecretContext::new();
+        let input = "plain text with no secrets";
+        let result = substitute_secrets(input, &secrets).expect("no-op");
+        assert_eq!(result, input);
+    }
+
+    #[test]
+    fn render_with_secrets_injects_config_text_values() {
+        let mut secrets = crate::backends::link::SecretContext::new();
+        secrets.insert("token".to_string(), "abc123".to_string());
+        let module = Module {
+            config_text: vec![(
+                "services.nginx.extraConfig".to_string(),
+                "auth_token = \"${secret:token}\";".to_string(),
+            )],
+            ..Module::default()
+        };
+        let out = render_with_secrets(&module, &secrets).expect("renders");
+        assert!(
+            out.contains("auth_token = \"abc123\";"),
+            "secret substituted in rendered output: {out}"
+        );
+    }
+
+    #[test]
+    fn render_with_secrets_fails_on_missing_secret() {
+        let secrets = crate::backends::link::SecretContext::new();
+        let module = Module {
+            config_text: vec![(
+                "services.app.key".to_string(),
+                "\"${secret:gone}\"".to_string(),
+            )],
+            ..Module::default()
+        };
+        let err = render_with_secrets(&module, &secrets).expect_err("missing secret");
+        assert!(
+            err.to_string().contains("gone"),
+            "error names the missing secret: {err}"
+        );
+    }
+
+    #[test]
+    fn module_resolve_secrets_replaces_all_config_text_entries() {
+        let mut secrets = crate::backends::link::SecretContext::new();
+        secrets.insert("user".to_string(), "admin".to_string());
+        secrets.insert("pass".to_string(), "s3cret".to_string());
+        let mut module = Module {
+            config_text: vec![
+                (
+                    "services.app.settings.USER".to_string(),
+                    "\"${secret:user}\"".to_string(),
+                ),
+                (
+                    "services.app.settings.PASS".to_string(),
+                    "\"${secret:pass}\"".to_string(),
+                ),
+            ],
+            ..Module::default()
+        };
+        module.resolve_secrets(&secrets).expect("resolves");
+        assert_eq!(
+            module.config_text[0].1, "\"admin\"",
+            "first entry resolved"
+        );
+        assert_eq!(
+            module.config_text[1].1, "\"s3cret\"",
+            "second entry resolved"
+        );
     }
 }

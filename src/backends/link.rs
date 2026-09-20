@@ -260,6 +260,90 @@ impl LinkBackendCore {
         self
     }
 
+    /// The conventional directory for template secret files: `~/.config/shall/secrets/`.
+    ///
+    /// A `secret("github-token")` in a template resolves against a file at this path.
+    /// The directory is created on first use rather than at startup — most machines never
+    /// place a template secret, and a startup `mkdir` would be noise.
+    fn secrets_dir(&self) -> Option<PathBuf> {
+        dirs::home_dir().map(|h| h.join(".config").join("shall").join("secrets"))
+    }
+
+    /// Find the encrypted file backing a named template secret.
+    ///
+    /// Searches `~/.config/shall/secrets/<name>.age`, then `<name>` (for providers
+    /// that do not use the `.age` extension). Returns `None` when neither exists — the
+    /// caller decides whether that is an error or a skip.
+    fn find_secret_file(&self, name: &str) -> Option<PathBuf> {
+        let dir = self.secrets_dir()?;
+        let with_ext = dir.join(format!("{}.age", name));
+        if with_ext.exists() {
+            return Some(with_ext);
+        }
+        let bare = dir.join(name);
+        if bare.exists() {
+            return Some(bare);
+        }
+        None
+    }
+
+    /// Decrypt a named template secret, returning its plaintext.
+    ///
+    /// The secret file is located via [`find_secret_file`] and decrypted with the default
+    /// provider (`age`). Custom providers registered in `adapters/secret.toml` are tried
+    /// in order when `age` is not available.
+    async fn resolve_secret(&self, name: &str) -> Result<String> {
+        let source = self.find_secret_file(name).ok_or_else(|| {
+            let dir = self
+                .secrets_dir()
+                .map(|d| d.display().to_string())
+                .unwrap_or_else(|| "~/.config/shall/secrets".to_string());
+            Error::Other(format!(
+                "template references `${{secret:{}}}` but no encrypted file exists at {}/{}.age \
+                 (or {}/{}). Create the file or remove the ${{secret:{}}} reference.",
+                name, dir, name, dir, name, name
+            ))
+        })?;
+        // Build a minimal PackageSpec for the decrypt call — the spec carries the identity
+        // option, which `decrypt_secret` reads.
+        let spec = PackageSpec {
+            name: source.to_string_lossy().to_string(),
+            backend: "link".into(),
+            options: crate::config::grammar::Options::default(),
+            requires: vec![],
+            present: true,
+        };
+        match self.decrypt_secret("age", &source, &spec).await? {
+            Some(plaintext) => Ok(plaintext),
+            None => Err(Error::Other(format!(
+                "${{secret:{}}}` requires a physical touch but this is an unattended run",
+                name
+            ))),
+        }
+    }
+
+    /// Pre-fetch every secret a template references, returning a context map.
+    ///
+    /// Scans `text` for `${secret:name}` references, decrypts each referenced secret, and
+    /// returns the name→plaintext map. A secret that cannot be resolved is an `Err`
+    /// naming the missing name — the sync stops rather than silently rendering an
+    /// unresolved `${secret:name}` reference.
+    pub async fn resolve_template_secrets(&self, text: &str) -> Result<SecretContext> {
+        let names = secrets_in_template(text);
+        if names.is_empty() {
+            return Ok(SecretContext::new());
+        }
+        let mut ctx = SecretContext::new();
+        for name in &names {
+            if ctx.contains_key(name) {
+                continue;
+            }
+            let plaintext = self.resolve_secret(name).await?;
+            ctx.insert(name.clone(), plaintext);
+        }
+        Ok(ctx)
+    }
+
     /// Resolve the age identity file: explicit `@identity=`, else `$SHALL_AGE_IDENTITY`,
     /// else the conventional `~/.config/shall/age.key`.
     fn age_identity(&self, spec: &PackageSpec) -> Option<PathBuf> {
@@ -283,7 +367,7 @@ impl LinkBackendCore {
     /// whole reconcile waiting for a physical touch nobody will give. `Ok(Some)` is the
     /// plaintext; an `Err` is a real failure — including a decrypt that hung past the timeout
     /// (T3), which is the touch-required case reached at a terminal rather than under `watch`.
-    async fn decrypt_secret(
+    pub(crate) async fn decrypt_secret(
         &self,
         tool: &str,
         source: &Path,
@@ -416,9 +500,29 @@ pub fn template_context(facts: &crate::config::parser::HostFacts, config: &Confi
     context
 }
 
+/// Every `secret("name")` call in a template body, in the order they appear.
+///
+/// The pattern is `${secret:name}` — the same syntax in `content:`, `link:` templates,
+/// and `nixos:` config text. Names are returned in order so a missing secret can name
+/// its position.
+pub fn secrets_in_template(text: &str) -> Vec<String> {
+    let re = regex::Regex::new(r#"\$\{secret:([^}]+)\}"#)
+        .expect("the secret-substitution regex is valid");
+    re.captures_iter(text)
+        .map(|cap| cap[1].to_string())
+        .collect()
+}
+
+/// A map of secret name to its decrypted plaintext, ready for template context injection.
+pub type SecretContext = std::collections::HashMap<String, String>;
+
 /// Render template `text` from `source` against the shared context. Pure apart from its
 /// arguments: the installer reads the file through the executor (dry-run VFS aware) and the
 /// checker reads it off the disk, and both render here.
+///
+/// `${secret:name}` references must be resolved **before** calling this function — the
+/// rendering is Tera, which knows nothing about secrets. Pre-process with
+/// [`substitute_secrets`] (from the nixos module) to replace them with plaintext.
 pub fn render_template_text(
     source: &Path,
     text: &str,
@@ -436,11 +540,20 @@ impl LinkBackendCore {
     /// Render the template at `source_path` against this machine's facts. Reads through
     /// the executor rather than off the disk, so a dry run renders the file this run
     /// would read rather than failing on one that is not there yet.
+    ///
+    /// `${secret:name}` references are resolved before Tera rendering, so the same
+    /// syntax works in `content:`, `link:` templates, and `nixos:` config text.
     async fn render_template(&self, source_path: &Path) -> Result<String> {
         let content = self.executor.read_file(source_path).await?;
+        let pre_rendered = if content.contains("${secret:") {
+            let secrets = self.resolve_template_secrets(&content).await?;
+            crate::backends::nixos::substitute_secrets(&content, &secrets)?
+        } else {
+            content
+        };
         render_template_text(
             source_path,
-            &content,
+            &pre_rendered,
             &crate::config::parser::HostFacts::current(),
             &self.config,
         )
@@ -609,9 +722,16 @@ impl Installable for LinkInstallable {
             let backup = wants_backup(spec);
 
             // Mode A: Inline content declared directly (no separate source file).
+            // Supports `${secret:name}` substitution for secret composition.
             if let Some(content) = spec.options.one("content") {
+                let resolved = if content.contains("${secret:") {
+                    let secrets = self.core.resolve_template_secrets(content).await?;
+                    crate::backends::nixos::substitute_secrets(content, &secrets)?
+                } else {
+                    content.to_string()
+                };
                 self.core
-                    .apply_managed_content(&target_path, content, backup)
+                    .apply_managed_content(&target_path, &resolved, backup)
                     .await?;
                 continue;
             }
@@ -1535,5 +1655,49 @@ mod tests {
             !target.join("placed-by-shall").exists(),
             "what Shall placed does not outlive its declaration"
         );
+    }
+
+    #[test]
+    fn secrets_in_template_finds_all_secret_references() {
+        assert_eq!(secrets_in_template("no secrets here"), Vec::<String>::new());
+        assert_eq!(
+            secrets_in_template("password is ${secret:api_key}"),
+            vec!["api_key".to_string()]
+        );
+        assert_eq!(
+            secrets_in_template("${secret:a} and ${secret:b} and ${secret:a}"),
+            vec!["a".to_string(), "b".to_string(), "a".to_string()]
+        );
+        assert_eq!(
+            secrets_in_template("${secret:db-pass}"),
+            vec!["db-pass".to_string()]
+        );
+        assert_eq!(
+            secrets_in_template("prefix ${secret:x}${secret:y} suffix"),
+            vec!["x".to_string(), "y".to_string()]
+        );
+        // Adjacent secrets without whitespace between
+        assert_eq!(
+            secrets_in_template("${secret:a}${secret:b}"),
+            vec!["a".to_string(), "b".to_string()]
+        );
+        // Unrelated template syntax is ignored
+        assert_eq!(
+            secrets_in_template("{{ foo }} ${secret:bar} {% if %}"),
+            vec!["bar".to_string()]
+        );
+        // Dollar-sign without the secret prefix is ignored
+        assert_eq!(
+            secrets_in_template("$secret:not_a_match ${secret:yes}"),
+            vec!["yes".to_string()]
+        );
+    }
+
+    #[test]
+    fn secrets_in_template_handles_empty_and_edge_cases() {
+        assert_eq!(secrets_in_template(""), Vec::<String>::new());
+        assert_eq!(secrets_in_template("${}"), Vec::<String>::new());
+        assert_eq!(secrets_in_template("${secret:}"), Vec::<String>::new());
+        assert_eq!(secrets_in_template("${secret: }"), vec![" ".to_string()]);
     }
 }

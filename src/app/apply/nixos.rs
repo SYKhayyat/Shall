@@ -304,6 +304,7 @@ impl SystemConfig<'_> {
             tcp_ports: want.tcp_ports.clone(),
             udp_ports: want.udp_ports.clone(),
             firewall: want.firewall,
+            config_text: current.config_text,
         };
         core.write_and_switch(&module).await?;
         for r in &opening {
