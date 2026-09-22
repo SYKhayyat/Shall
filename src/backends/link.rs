@@ -170,7 +170,10 @@ pub async fn chown_to_user(path: &Path, user: &str, executor: &CommandExecutor) 
         if current_uid == uid && current_gid == gid {
             return Ok(());
         }
-        let ret = unsafe { libc::chown(path.as_ptr() as *const libc::c_char, uid, gid) };
+        use std::os::unix::ffi::OsStrExt;
+        let c_path = std::ffi::CString::new(path.as_os_str().as_bytes())
+            .map_err(|_| Error::Other(format!("path {:?} contains null byte", path)))?;
+        let ret = unsafe { libc::chown(c_path.as_ptr(), uid, gid) };
         if ret != 0 {
             return Err(Error::Other(format!(
                 "chown {:?} to {} failed: {}",
@@ -669,9 +672,8 @@ pub fn render_template_text(
     user: Option<&str>,
 ) -> Result<String> {
     let user_home = user
-        .map(|u| home_for_user(u).ok().map(|h| (u, h.to_string_lossy().into_owned())))
-        .flatten();
-    let user_home_ref = user_home.as_ref().map(|(u, h)| (u.as_str(), h.as_str()));
+        .and_then(|u| home_for_user(u).ok().map(|h| (u, h.to_string_lossy().into_owned())));
+    let user_home_ref = user_home.as_ref().map(|(u, h)| (&**u, h.as_str()));
     let mut tera = Tera::default();
     tera.add_raw_template("config", text)
         .map_err(|e| Error::Other(format!("Tera Parse Error in {:?}: {}", source, e)))?;
@@ -863,7 +865,7 @@ impl Installable for LinkInstallable {
                 .ok_or_else(|| Error::Other("Link requires @target".into()))?;
 
             // U71: when @user=NAME is present, resolve ~/ to that user's home.
-            let target_path = match spec.options.one("user").as_deref() {
+            let target_path = match spec.options.one("user") {
                 Some(u) => resolve_target_for_user(target_str, u)?,
                 None => resolve_target(target_str)?,
             };

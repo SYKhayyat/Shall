@@ -54,7 +54,7 @@ impl Installable for DirInstallable {
             let mode = spec.options.one("mode");
 
             // U71: when @user=NAME is present, resolve ~/ to that user's home.
-            let path = match user.as_deref() {
+            let path = match user {
                 Some(u) => super::link::resolve_target_for_user(path_str, u)?,
                 None => std::path::PathBuf::from(path_str),
             };
@@ -64,6 +64,12 @@ impl Installable for DirInstallable {
                     crate::would!("Dir: {:?} already exists", path);
                 } else {
                     crate::would!("Dir: would create {:?}", path);
+                }
+                if let Some(m) = mode {
+                    crate::would!("Dir: would set mode {} on {:?}", m, path);
+                }
+                if let Some(o) = owner {
+                    crate::would!("Dir: would chown {:?} to {}", path, o);
                 }
                 continue;
             }
