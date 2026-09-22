@@ -502,6 +502,20 @@ pub struct ScheduleConfig {
 /// Refusals and behaviour: `<config_root>/preferences.toml` (II.1).
 ///
 /// `deny_unknown_fields`: a key that no longer exists must fail loudly. Silently ignoring one
+/// Settings for `link:` and `dir:` resources (U71).
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LinkSettings {
+    #[serde(default = "default_true")]
+    pub auto_create_parent_dirs: bool,
+}
+
+impl Default for LinkSettings {
+    fn default() -> Self {
+        Self { auto_create_parent_dirs: true }
+    }
+}
+
 /// means a `[guard]` setting can be deleted from the code and every config still claiming it
 /// keeps parsing — the guard reads as configured while being off.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -546,6 +560,9 @@ pub struct Config {
     /// `trust = "not-world-writable"` — see [`ExecTrust`].
     #[serde(default)]
     pub exec: ExecSettings,
+
+    #[serde(default)]
+    pub link: LinkSettings,
 
     /// This run is an unattended `watch` tick, so nobody is present to answer a prompt (T4).
     /// CLI/runtime only (`serde(skip)`): it is a property of *how Shall was invoked*, not a
@@ -1154,6 +1171,7 @@ impl Default for Config {
             yes: false,
             bootstrap_auto_yes: false,
             exec: ExecSettings::default(),
+            link: LinkSettings::default(),
             allow_mass_removal: false,
             replace_existing: false,
             config_root: default_config_root(),

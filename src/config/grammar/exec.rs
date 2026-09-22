@@ -233,6 +233,7 @@ mod exec_tests {
             Statement::Schedule("nightly".into(), opt()),
             Statement::Service("nginx".into(), opt()),
             Statement::Link("./vimrc".into(), opt()),
+            Statement::Dir("logs".into(), opt()),
             Statement::Setting("dark".into(), opt()),
             Statement::Exec("./bin/x.sh".into(), opt()),
             Statement::Generate("./bin/pick.sh".into(), opt()),

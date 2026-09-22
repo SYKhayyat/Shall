@@ -169,6 +169,7 @@ pub async fn create_default_registry(
     crate::backends::btrfs::register(&mut reg, &executor, config);
     crate::backends::storage::register(&mut reg, &executor, config);
     crate::backends::link::register(&mut reg, &executor, config);
+    crate::backends::dir::register(&mut reg, &executor, config);
     crate::backends::nix::register(&mut reg, &executor, config);
     crate::backends::nixos::register(&mut reg, &executor, config);
     crate::backends::vscode::register(&mut reg, &executor, config);

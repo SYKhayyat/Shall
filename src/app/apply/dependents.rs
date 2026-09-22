@@ -119,6 +119,10 @@ impl Dependents<'_> {
                     self.apply_through_backend("link", name, opts, origin)
                         .await?
                 }
+                Statement::Dir(name, opts) => {
+                    self.apply_through_backend("dir", name, opts, origin)
+                        .await?
+                }
                 Statement::Setting(name, opts) => {
                     self.apply_through_backend("setting", name, opts, origin)
                         .await?

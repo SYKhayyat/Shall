@@ -9706,3 +9706,20 @@ names the pins, and takes `--ignore-pins` as the explicit escape — the same an
 holds, because it is the same finding one row down the table. The gate reads only
 declarations: its resolver runs with `.upgrading()`, so lockfile records never masquerade as
 pins. Rule `II.62`, rationale `V.205`.
+
+
+## U71
+
+**Status: ANSWERED 2026-09-20, built.** Per-user home layer: per-user manifests, ownership, idempotent directories.
+
+**Two scoping forms:** `use user:NAME { ... }` block AND `@user=NAME` on individual statements. Both add `@user=NAME` to resource statements that carry options.
+
+**`@user=NAME` resolution:** Resolves `~/` in `@target=` to `/home/NAME/` via `getent passwd`. `$HOME` in templates resolves the same way. Parent directory created idempotently if `auto_create_parent_dirs = true`.
+
+**`@owner=NAME`:** Separate from `@user=`. Controls explicit ownership (chown). `@owner=` without `@user=` is legal.
+
+**`dir:PATH`:** New statement for idempotent directory creation with ownership and permissions. Teardown removes only if empty. Phase: Dependents.
+
+**`auto_create_parent_dirs`:** Config setting in `[link]`, default `true`. Gates automatic parent directory creation for `dir:` and `@user=` targets.
+
+**Ownership lookup:** Via `getent passwd` (no `users` crate available). Unknown user is a parse-time error.

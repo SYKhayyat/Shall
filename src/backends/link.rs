@@ -86,6 +86,124 @@ pub fn resolve_existing_source(config: &Config, declared: &str) -> Result<PathBu
     )))
 }
 
+/// Where a `@target=` value lands on disk for a specific user (U71). Resolves `~/` to
+/// that user's home via `getent passwd`, falling back to the process home if the user
+/// cannot be looked up (which the parser should have already refused).
+pub fn resolve_target_for_user(target: &str, user: &str) -> Result<PathBuf> {
+    let home = home_for_user(user)?;
+    if let Some(rest) = target.strip_prefix("~/") {
+        Ok(home.join(rest))
+    } else if target == "~" {
+        Ok(home)
+    } else {
+        Ok(PathBuf::from(target))
+    }
+}
+
+/// Look up a user's home directory via `getent passwd`, returning the fifth field.
+pub fn home_for_user(user: &str) -> Result<PathBuf> {
+    let output = std::process::Command::new("getent")
+        .args(["passwd", user])
+        .output()
+        .map_err(|e| Error::Other(format!("getent passwd failed: {}", e)))?;
+    if !output.status.success() {
+        return Err(Error::Other(format!(
+            "user `{}` not found (getent passwd failed)",
+            user
+        )));
+    }
+    let line = String::from_utf8_lossy(&output.stdout);
+    let home = line
+        .split(':')
+        .nth(5)
+        .ok_or_else(|| Error::Other(format!(
+            "could not parse home for `{}` from getent output",
+            user
+        )))?;
+    Ok(PathBuf::from(home))
+}
+
+/// Look up uid and gid for a user via `getent passwd`.
+fn uid_gid_for_user(user: &str) -> Result<(u32, u32)> {
+    let output = std::process::Command::new("getent")
+        .args(["passwd", user])
+        .output()
+        .map_err(|e| Error::Other(format!("getent passwd failed: {}", e)))?;
+    if !output.status.success() {
+        return Err(Error::Other(format!(
+            "user `{}` not found (getent passwd failed)",
+            user
+        )));
+    }
+    let line = String::from_utf8_lossy(&output.stdout);
+    let parts: Vec<&str> = line.trim().split(':').collect();
+    if parts.len() < 4 {
+        return Err(Error::Other(format!(
+            "could not parse uid/gid for `{}` from getent output",
+            user
+        )));
+    }
+    let uid = parts[2]
+        .parse::<u32>()
+        .map_err(|_| Error::Other(format!("invalid uid for `{}`", user)))?;
+    let gid = parts[3]
+        .parse::<u32>()
+        .map_err(|_| Error::Other(format!("invalid gid for `{}`", user)))?;
+    Ok((uid, gid))
+}
+
+/// Change ownership of a path to a named user. Uses `chown(2)` on Unix.
+pub async fn chown_to_user(path: &Path, user: &str, executor: &CommandExecutor) -> Result<()> {
+    if executor.dry_run {
+        crate::would!("Link: would chown {:?} to {}", path, user);
+        return Ok(());
+    }
+    let (uid, gid) = uid_gid_for_user(user)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let meta = tokio::fs::metadata(path)
+            .await
+            .map_err(Error::from)?;
+        let current_uid = meta.uid();
+        let current_gid = meta.gid();
+        if current_uid == uid && current_gid == gid {
+            return Ok(());
+        }
+        let ret = unsafe { libc::chown(path.as_ptr() as *const libc::c_char, uid, gid) };
+        if ret != 0 {
+            return Err(Error::Other(format!(
+                "chown {:?} to {} failed: {}",
+                path,
+                user,
+                std::io::Error::last_os_error()
+            )));
+        }
+        info!("Link: chown {:?} to {}", path, user);
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (uid, gid);
+    }
+    Ok(())
+}
+
+/// Create parent directories for a target path if they don't exist. Idempotent.
+pub async fn ensure_parent_dir(path: &Path, executor: &CommandExecutor) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            if executor.dry_run {
+                crate::would!("Link: would create parent {:?}", parent);
+            } else {
+                tokio::fs::create_dir_all(parent)
+                    .await
+                    .map_err(Error::from)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Where the pre-existing file at `target` is kept while Shall owns that path. One function,
 /// because the write path and the undo path must agree on the name or a restore looks for a
 /// file nothing wrote.
@@ -483,18 +601,35 @@ impl LinkBackendCore {
 /// it fails naming the variable instead of writing a path with `unknown` in it — except
 /// `USER`, which keeps its long-standing `"unknown"` fallback so existing templates do
 /// not start failing where they used to render.
-pub fn template_context(facts: &crate::config::parser::HostFacts, config: &Config) -> Context {
+/// Build the template variable context (II.8, II.21).
+///
+/// `$user` and `$home` are not hardcoded — they are resolved from the process environment,
+/// with a fallback for hosts that do not set `$USER`. A `link:` whose `@template=true` sees
+/// the same variables `shall variables` prints.
+///
+/// When `user_home` is provided (U71 — per-user `@target=` with `@user=NAME`), it overrides
+/// the HOME and USER variables for that particular link.
+pub fn template_context(
+    facts: &crate::config::parser::HostFacts,
+    config: &Config,
+    user_home: Option<(&str, &str)>,
+) -> Context {
     let mut context = Context::new();
     context.insert("OS".to_string(), &facts.os);
     context.insert("ARCH".to_string(), &facts.arch);
     context.insert("HOSTNAME".to_string(), &facts.host);
     context.insert("FAMILY".to_string(), &facts.family);
-    context.insert(
-        "USER".to_string(),
-        facts.user.as_deref().unwrap_or("unknown"),
-    );
-    if let Some(home) = &facts.home {
+    if let Some((user, home)) = user_home {
+        context.insert("USER".to_string(), user);
         context.insert("HOME".to_string(), home);
+    } else {
+        context.insert(
+            "USER".to_string(),
+            facts.user.as_deref().unwrap_or("unknown"),
+        );
+        if let Some(home) = &facts.home {
+            context.insert("HOME".to_string(), home);
+        }
     }
     context.insert("aliases".to_string(), &config.aliases);
     context
@@ -523,16 +658,24 @@ pub type SecretContext = std::collections::HashMap<String, String>;
 /// `${secret:name}` references must be resolved **before** calling this function — the
 /// rendering is Tera, which knows nothing about secrets. Pre-process with
 /// [`substitute_secrets`] (from the nixos module) to replace them with plaintext.
+///
+/// When `user` is provided (U71), $HOME and $user in the template resolve to that user's
+/// home directory and name respectively.
 pub fn render_template_text(
     source: &Path,
     text: &str,
     facts: &crate::config::parser::HostFacts,
     config: &Config,
+    user: Option<&str>,
 ) -> Result<String> {
+    let user_home = user
+        .map(|u| home_for_user(u).ok().map(|h| (u, h.to_string_lossy().into_owned())))
+        .flatten();
+    let user_home_ref = user_home.as_ref().map(|(u, h)| (u.as_str(), h.as_str()));
     let mut tera = Tera::default();
     tera.add_raw_template("config", text)
         .map_err(|e| Error::Other(format!("Tera Parse Error in {:?}: {}", source, e)))?;
-    tera.render("config", &template_context(facts, config))
+    tera.render("config", &template_context(facts, config, user_home_ref))
         .map_err(|e| Error::Other(format!("Tera Render Error in {:?}: {}", source, e)))
 }
 
@@ -556,6 +699,7 @@ impl LinkBackendCore {
             &pre_rendered,
             &crate::config::parser::HostFacts::current(),
             &self.config,
+            None,
         )
     }
 
@@ -718,7 +862,14 @@ impl Installable for LinkInstallable {
                 .one("target")
                 .ok_or_else(|| Error::Other("Link requires @target".into()))?;
 
-            let target_path = resolve_target(target_str)?;
+            // U71: when @user=NAME is present, resolve ~/ to that user's home.
+            let target_path = match spec.options.one("user").as_deref() {
+                Some(u) => resolve_target_for_user(target_str, u)?,
+                None => resolve_target(target_str)?,
+            };
+
+            // U71: create parent directories if auto_create_parent_dirs is enabled.
+            ensure_parent_dir(&target_path, &self.core.executor).await?;
             let backup = wants_backup(spec);
 
             // Mode A: Inline content declared directly (no separate source file).
@@ -1330,6 +1481,7 @@ mod tests {
             "{{ OS }}/{{ ARCH }}/{{ USER }}/{{ HOSTNAME }}/{{ FAMILY }}/{{ HOME }}",
             &facts,
             &Config::default(),
+            None,
         )
         .unwrap();
         assert_eq!(out, "linux/x86_64/u/laptop/debian//home/u");
@@ -1354,6 +1506,7 @@ mod tests {
             "topdirs = {{ HOME }}/Documents",
             &facts,
             &Config::default(),
+            None,
         )
         .unwrap_err();
         assert!(err.to_string().contains("HOME"), "{}", err);

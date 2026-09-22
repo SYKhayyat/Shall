@@ -391,6 +391,48 @@ fn parse_items(
 
         // A `{` at the end makes this a block header. The header decides the body kind.
         if let Some(header) = block_header(line) {
+            // `use user:NAME { ... }` — a user scope block (U71). Parsed here rather than
+            // in `parse_block` because it expands into multiple items, not one Block.
+            if let Some(user_name) = header.strip_prefix("use user:") {
+                let user_name = user_name.trim().to_string();
+                if user_name.is_empty() {
+                    return Err(GrammarError::new(
+                        origin.clone(),
+                        "`use user:` block has no username",
+                    )
+                    .with_hint("write `use user:shaul { ... }`."));
+                }
+                let body = parse_items(file, lines, backends, true)?;
+                for item in body {
+                    match item {
+                        Item::Statement(mut stmt, stmt_origin) => {
+                            // Add @user=NAME to resource statements that carry options.
+                            match &mut stmt {
+                                Statement::Link(_, opts)
+                                | Statement::Service(_, opts)
+                                | Statement::Shim(_, opts)
+                                | Statement::Setting(_, opts)
+                                | Statement::Dir(_, opts) => {
+                                    opts.insert("user".to_string(), user_name.clone());
+                                }
+                                _ => {}
+                            }
+                            items.push(Item::Statement(stmt, stmt_origin));
+                        }
+                        Item::Block(..) => {
+                            return Err(GrammarError::new(
+                                origin.clone(),
+                                "`use user:NAME { ... }` cannot contain blocks",
+                            )
+                            .with_hint(
+                                "put blocks outside the user scope, or use `@user=NAME` on \
+                                 individual statements.",
+                            ));
+                        }
+                    }
+                }
+                continue;
+            }
             items.push(parse_block(file, header, lines, backends, &origin)?);
             continue;
         }
@@ -528,9 +570,10 @@ fn merge_options(stmt: &mut Statement, extra: Options, origin: &Origin) -> Resul
         | Statement::Service(_, o)
         | Statement::Link(_, o)
         | Statement::Setting(_, o)
-        | Statement::Exec(_, o)
+        |         Statement::Exec(_, o)
         | Statement::Dotfiles(_, o)
-        | Statement::Firewall(_, o) => o,
+        | Statement::Firewall(_, o)
+        | Statement::Dir(_, o) => o,
         Statement::Repo { .. }
         | Statement::Use(..)
         | Statement::Param { .. }
@@ -890,5 +933,61 @@ mod tests {
         let out = d.statements_for(&facts()).unwrap();
         assert_eq!(out[0].1.line, 2);
         assert_eq!(out[0].1.file, PathBuf::from("modules/dev.txt"));
+    }
+
+    // ----------------------------------------------------------- use user:NAME
+
+    #[test]
+    fn use_user_block_adds_user_option_to_link() {
+        let out = stmts("use user:alice {\n  link:./vimrc@target=~/vimrc\n}\n");
+        assert_eq!(out.len(), 1);
+        let Statement::Link(name, opts) = &out[0] else {
+            panic!("expected link statement")
+        };
+        assert_eq!(name, "./vimrc");
+        assert_eq!(opts.one("user"), Some("alice"));
+    }
+
+    #[test]
+    fn use_user_block_adds_user_option_to_dir() {
+        let out = stmts("use user:bob {\n  dir:~/logs@mode=0755\n}\n");
+        assert_eq!(out.len(), 1);
+        let Statement::Dir(name, opts) = &out[0] else {
+            panic!("expected dir statement")
+        };
+        assert_eq!(name, "~/logs");
+        assert_eq!(opts.one("user"), Some("bob"));
+    }
+
+    #[test]
+    fn use_user_block_adds_user_option_to_service() {
+        let out = stmts("use user:charlie {\n  service:nginx@status=running\n}\n");
+        assert_eq!(out.len(), 1);
+        let Statement::Service(name, opts) = &out[0] else {
+            panic!("expected service statement")
+        };
+        assert_eq!(name, "nginx");
+        assert_eq!(opts.one("user"), Some("charlie"));
+    }
+
+    #[test]
+    fn use_user_block_rejects_nested_blocks() {
+        let err = doc("use user:alice {\n  module fancy {\n    apt:neovim\n  }\n}\n")
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("cannot contain blocks"),
+            "{}",
+            err
+        );
+    }
+
+    #[test]
+    fn use_user_block_rejects_empty_username() {
+        let err = doc("use user: {\n  link:./vimrc@target=~/vimrc\n}\n").unwrap_err();
+        assert!(
+            err.to_string().contains("no username"),
+            "{}",
+            err
+        );
     }
 }

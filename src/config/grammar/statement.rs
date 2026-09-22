@@ -138,6 +138,7 @@ pub enum ResourceKind {
     Generate,
     Dotfiles,
     Firewall,
+    Dir,
 }
 
 impl ResourceKind {
@@ -154,6 +155,7 @@ impl ResourceKind {
             Self::Generate => "generate",
             Self::Dotfiles => "dotfiles",
             Self::Firewall => "firewall",
+            Self::Dir => "dir",
         }
     }
 
@@ -170,6 +172,7 @@ impl ResourceKind {
         Self::Generate,
         Self::Dotfiles,
         Self::Firewall,
+        Self::Dir,
     ];
 }
 
@@ -244,6 +247,9 @@ pub enum Statement {
     /// (Part XI). One spelling across ufw, firewalld and Windows Defender, which is the whole
     /// argument for a built-in backend rather than a per-machine `[[backend]]` naming `ufw`.
     Firewall(String, Options),
+    /// `dir:PATH` — an idempotent directory (U71). Creates the directory (and parents)
+    /// if absent, sets ownership and permissions. Teardown removes only if empty.
+    Dir(String, Options),
     /// `use editors` / `use workstation(user=shaul, gpu=nvidia)` — bring in a module or profile
     /// (II.2), optionally with **arguments** binding that module's `param`s (U32). The args are
     /// empty for the ordinary form; a profile referenced with args is refused at parse time,
@@ -304,6 +310,7 @@ impl Statement {
             Statement::Generate(n, _) => format!("generate:{}", n),
             Statement::Dotfiles(n, _) => format!("dotfiles:{}", n),
             Statement::Firewall(n, _) => format!("firewall:{}", n),
+        Statement::Dir(n, _) => format!("dir:{}", n),
             Statement::Use(r, _) => format!("use {}", r.name()),
             Statement::Param { name, .. } => format!("param {}", name),
             Statement::Exclude(r) => format!("exclude {}", r.name()),
@@ -333,6 +340,7 @@ impl Statement {
             Statement::Generate(..) => ResourceKind::Generate,
             Statement::Dotfiles(..) => ResourceKind::Dotfiles,
             Statement::Firewall(..) => ResourceKind::Firewall,
+        Statement::Dir(..) => ResourceKind::Dir,
             Statement::Package(_)
             | Statement::Absent(_)
             | Statement::Use(..)
@@ -374,7 +382,8 @@ impl Statement {
             Statement::Shim(..)
             | Statement::Service(..)
             | Statement::Link(..)
-            | Statement::Setting(..) => Phase::Dependents,
+            | Statement::Setting(..)
+            | Statement::Dir(..) => Phase::Dependents,
             Statement::Dotfiles(..) => Phase::Dotfiles,
             Statement::Firewall(..) => Phase::Firewall,
             Statement::Schedule(..) => Phase::Schedules,
@@ -611,6 +620,12 @@ const KEYWORDS: &[Keyword] = &[
         means: "firewall:443/tcp",
         role: KeywordRole::Prefix,
         build: Some(Statement::Firewall),
+    },
+    Keyword {
+        spelling: "dir:",
+        means: "dir:/path/to/directory",
+        role: KeywordRole::Prefix,
+        build: Some(Statement::Dir),
     },
     // The directives. No colon, no `build` — each has its own parser above the package
     // parser, but only when written with something after it, so the bare word falls through
@@ -1502,6 +1517,9 @@ pub fn validate(origin: &Origin, stmt: &Statement) -> Result<()> {
             validate_extra_options(origin, OptionKind::Dotfiles, name, o, None)
         }
         Statement::Firewall(name, o) => validate_firewall(origin, name, o),
+        Statement::Dir(name, o) => {
+            validate_extra_options(origin, OptionKind::Dir, name, o, None)
+        }
         Statement::Repo { .. }
         | Statement::Use(..)
         | Statement::Param { .. }
@@ -1539,6 +1557,7 @@ pub enum OptionKind {
     Generate,
     Dotfiles,
     Firewall,
+    Dir,
 }
 
 impl OptionKind {
@@ -1554,6 +1573,7 @@ impl OptionKind {
             Self::Generate => "generate",
             Self::Dotfiles => "dotfiles",
             Self::Firewall => "firewall",
+            Self::Dir => "dir",
         }
     }
 
@@ -1569,6 +1589,7 @@ impl OptionKind {
         Self::Generate,
         Self::Dotfiles,
         Self::Firewall,
+        Self::Dir,
     ];
 }
 
@@ -1598,6 +1619,7 @@ pub const DOTFILES_OPTION_KEYS: &[&str] = &["target"];
 /// `value` is the policy a `default/...` rule sets (`allow` or `deny`). A port rule takes no
 /// options: `firewall:22/tcp` is the whole declaration.
 pub const FIREWALL_OPTION_KEYS: &[&str] = &["value"];
+pub const DIR_OPTION_KEYS: &[&str] = &["user", "owner", "mode"];
 
 /// The option keys that answer to ONE value, across every kind.
 ///
@@ -1733,6 +1755,7 @@ fn keys_for(kind: OptionKind) -> &'static [&'static str] {
         OptionKind::Generate => super::exec::GENERATE_OPTION_KEYS,
         OptionKind::Dotfiles => DOTFILES_OPTION_KEYS,
         OptionKind::Firewall => FIREWALL_OPTION_KEYS,
+        OptionKind::Dir => DIR_OPTION_KEYS,
     }
 }
 

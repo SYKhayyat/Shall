@@ -9,6 +9,7 @@ pub mod registry;
 
 pub mod appimage;
 pub mod btrfs;
+pub mod dir;
 pub mod emacs;
 pub mod firewall;
 pub mod flatpak;

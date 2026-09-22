@@ -266,7 +266,7 @@ impl Extras<'_> {
         match kind {
             K::Shim => self.shim_manager().await?.remove_shim(id, reaped).await,
             K::Schedule => self.scheduler.deprovision(self.executor, id, reaped).await,
-            K::Service | K::Link | K::Setting => {
+            K::Service | K::Link | K::Dir | K::Setting => {
                 let kind = kind.as_str();
                 let Some(b) = self.registry.get(kind) else {
                     return Err(Error::BackendNotFound(format!(
@@ -444,6 +444,7 @@ pub(crate) async fn in_effect(
                             &text,
                             &crate::config::parser::HostFacts::current(),
                             config,
+                            None,
                         ) {
                             Ok(rendered) => (rendered.into_bytes(), false),
                             Err(_) => return None,
@@ -557,7 +558,7 @@ pub(crate) async fn in_effect(
         //   own diff against what is in force; a per-line probe here would be a second opinion.
         // - `exec:`, `generate:` and `dotfiles:` never reach here — `extra_key` returns `None`
         //   for all three — and are listed so the compiler keeps that true.
-        K::Repo | K::Firewall => None,
+        K::Repo | K::Firewall | K::Dir => None,
         K::Exec | K::Generate | K::Dotfiles => None,
     }
 }

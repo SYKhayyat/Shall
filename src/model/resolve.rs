@@ -661,6 +661,7 @@ impl<'a> Resolver<'a> {
                 Statement::Shim(name, opts)
                 | Statement::Service(name, opts)
                 | Statement::Link(name, opts)
+                | Statement::Dir(name, opts)
                 | Statement::Setting(name, opts)
                 | Statement::Exec(name, opts)
                 | Statement::Dotfiles(name, opts)

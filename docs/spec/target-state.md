@@ -158,6 +158,7 @@ shim:NAME                     a shim
 schedule:NAME                 a scheduled task (only in `schedules`)
 service:NAME                  a service
 link:SOURCE                   a managed file
+dir:PATH                      a directory, created idempotently with ownership and permissions
 setting:SCHEMA/KEY            a desktop setting (`@value=…`), read-before-write
 dotfiles:PATH                 a folder mirrored into place, one file at a time
 firewall:PORT/PROTO           a port; `firewall:default/incoming @value=deny` a policy
@@ -216,7 +217,7 @@ remembering — and it is, today:
 
 ```
 # prefixes — written `word:`, each introduces a typed statement
-absent  repo  shim  schedule  service  link  setting  exec  generate  dotfiles  firewall
+absent  repo  shim  schedule  service  link  dir  setting  exec  generate  dotfiles  firewall
 # directives — this grammar's words, written bare
 use  param  exclude  intersect  module  when
 # the words people arrive with, refused so a typo cannot install a package

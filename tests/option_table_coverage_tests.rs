@@ -55,6 +55,11 @@ const GRAMMARS: &[(&str, &str, &str)] = &[
         "firewall:default/incoming@value=deny",
         "@nosuchkey",
     ),
+    (
+        "dir",
+        "dir:/tmp/shall-test-dir@mode=0700",
+        "@nosuchkey",
+    ),
 ];
 
 /// **The same text, admitted or refused by its position alone.**
