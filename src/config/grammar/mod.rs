@@ -413,7 +413,7 @@ fn parse_items(
                                 | Statement::Shim(_, opts)
                                 | Statement::Setting(_, opts)
                                 | Statement::Dir(_, opts) => {
-                                    opts.insert("user".to_string(), user_name.clone());
+                                    opts.set("user", user_name.clone());
                                 }
                                 _ => {}
                             }

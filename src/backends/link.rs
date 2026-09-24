@@ -923,6 +923,7 @@ impl Installable for LinkInstallable {
                         tool,
                         target_path
                     );
+                    apply_declared_owner(&target_path, spec, &self.core.executor).await?;
                     continue;
                 }
                 // `None` is T4's deliberate skip (an unattended tick met a touch-required key);
@@ -936,6 +937,7 @@ impl Installable for LinkInstallable {
                 // outlasting the declaration that made it.
                 if let Ok(existing) = self.core.executor.read_file(&target_path).await {
                     if existing == plaintext {
+                        apply_declared_owner(&target_path, spec, &self.core.executor).await?;
                         debug!("Link: {:?} is already up-to-date.", target_path);
                         continue;
                     }
