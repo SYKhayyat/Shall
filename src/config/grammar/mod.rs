@@ -972,7 +972,7 @@ mod tests {
 
     #[test]
     fn individual_user_and_owner_options_are_validated() {
-        let out = stmts("link:./vimrc@target=~/.vimrc@user=alice@owner=alice\n");
+        let out = stmts("link:./vimrc@target=~/.vimrc,user=alice,owner=alice\n");
         let Statement::Link(_, opts) = &out[0] else {
             panic!("expected link statement")
         };

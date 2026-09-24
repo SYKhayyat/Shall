@@ -131,13 +131,13 @@ fn a_bogus_option_is_refused_in_second_position_in_every_grammar() {
     }
 }
 
-/// Nine kinds, and the enum's own list is what drives this — a kind added to `OptionKind`
+/// Ten kinds, and the enum's own list is what drives this — a kind added to `OptionKind`
 /// without a case here fails the count below rather than being quietly untested.
 #[test]
 fn every_option_carrying_kind_is_covered_here() {
     assert_eq!(
         OptionKind::ALL.len(),
-        9,
+        10,
         "a statement kind was added or removed; give it a case in this file"
     );
 }
