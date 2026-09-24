@@ -1593,10 +1593,10 @@ impl OptionKind {
     ];
 }
 
-pub const SHIM_OPTION_KEYS: &[&str] = &["source", "scope"];
-pub const SERVICE_OPTION_KEYS: &[&str] = &["enabled", "status"];
+pub const SHIM_OPTION_KEYS: &[&str] = &["source", "scope", "user"];
+pub const SERVICE_OPTION_KEYS: &[&str] = &["enabled", "status", "user"];
 pub const LINK_OPTION_KEYS: &[&str] = &[
-    "target", "content", "template", "decrypt", "identity", "scope", "backup",
+    "target", "content", "template", "decrypt", "identity", "scope", "backup", "user", "owner",
 ];
 /// `enabled`, `persistent`, `jitter` and `elevated` are here even though no scheduler expresses
 /// all four: the grammar says what a schedule may *say*, and `app/scheduler` says what each OS
@@ -1611,7 +1611,7 @@ pub const SCHEDULE_OPTION_KEYS: &[&str] = &[
     "jitter",
     "elevated",
 ];
-pub const SETTING_OPTION_KEYS: &[&str] = &["value", "scope"];
+pub const SETTING_OPTION_KEYS: &[&str] = &["value", "scope", "user"];
 /// `target` is where the tree is mirrored to; absent means the home directory, which is what a
 /// dotfiles tree mirrors by definition. There is deliberately no per-file option: the tree has
 /// no place to write one, which is why it never decrypts (U24).
@@ -1642,6 +1642,9 @@ pub(crate) const SINGLE_VALUE_OPTION_KEYS: &[&str] = &[
     "undo",
     "value",
     "scope",
+    "user",
+    "owner",
+    "mode",
     "version",
     "hold",
     "expires",

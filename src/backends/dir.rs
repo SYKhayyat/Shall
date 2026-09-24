@@ -56,7 +56,7 @@ impl Installable for DirInstallable {
             // U71: when @user=NAME is present, resolve ~/ to that user's home.
             let path = match user {
                 Some(u) => super::link::resolve_target_for_user(path_str, u)?,
-                None => std::path::PathBuf::from(path_str),
+                None => super::link::resolve_target(path_str)?,
             };
 
             if self.core.executor.dry_run {

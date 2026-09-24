@@ -191,6 +191,17 @@ pub async fn chown_to_user(path: &Path, user: &str, executor: &CommandExecutor) 
     Ok(())
 }
 
+async fn apply_declared_owner(
+    path: &Path,
+    spec: &PackageSpec,
+    executor: &CommandExecutor,
+) -> Result<()> {
+    if let Some(owner) = spec.options.one("owner") {
+        chown_to_user(path, owner, executor).await?;
+    }
+    Ok(())
+}
+
 /// Create parent directories for a target path if they don't exist. Idempotent.
 pub async fn ensure_parent_dir(path: &Path, executor: &CommandExecutor) -> Result<()> {
     if let Some(parent) = path.parent() {
@@ -688,7 +699,7 @@ impl LinkBackendCore {
     ///
     /// `${secret:name}` references are resolved before Tera rendering, so the same
     /// syntax works in `content:`, `link:` templates, and `nixos:` config text.
-    async fn render_template(&self, source_path: &Path) -> Result<String> {
+    async fn render_template(&self, source_path: &Path, user: Option<&str>) -> Result<String> {
         let content = self.executor.read_file(source_path).await?;
         let pre_rendered = if content.contains("${secret:") {
             let secrets = self.resolve_template_secrets(&content).await?;
@@ -701,7 +712,7 @@ impl LinkBackendCore {
             &pre_rendered,
             &crate::config::parser::HostFacts::current(),
             &self.config,
-            None,
+            user,
         )
     }
 
@@ -871,7 +882,9 @@ impl Installable for LinkInstallable {
             };
 
             // U71: create parent directories if auto_create_parent_dirs is enabled.
-            ensure_parent_dir(&target_path, &self.core.executor).await?;
+            if self.core.config.link.auto_create_parent_dirs {
+                ensure_parent_dir(&target_path, &self.core.executor).await?;
+            }
             let backup = wants_backup(spec);
 
             // Mode A: Inline content declared directly (no separate source file).
@@ -886,6 +899,7 @@ impl Installable for LinkInstallable {
                 self.core
                     .apply_managed_content(&target_path, &resolved, backup)
                     .await?;
+                apply_declared_owner(&target_path, spec, &self.core.executor).await?;
                 continue;
             }
 
@@ -931,16 +945,20 @@ impl Installable for LinkInstallable {
                     .executor
                     .write_secret(&target_path, &plaintext)
                     .await?;
+                apply_declared_owner(&target_path, spec, &self.core.executor).await?;
                 info!("Link: Writing managed secret {:?}", target_path);
                 continue;
             }
 
             // Mode B: Rendered template read from a source file.
             if spec.options.one("template") == Some("true") {
-                let rendered = self.core.render_template(&source).await?;
+                let rendered = self.core
+                    .render_template(&source, spec.options.one("user"))
+                    .await?;
                 self.core
                     .apply_managed_content(&target_path, &rendered, backup)
                     .await?;
+                apply_declared_owner(&target_path, spec, &self.core.executor).await?;
                 continue;
             }
 
@@ -951,6 +969,7 @@ impl Installable for LinkInstallable {
             if exists || is_symlink {
                 if let Ok(existing_link) = tokio::fs::read_link(&target_path).await {
                     if existing_link == source {
+                        apply_declared_owner(&target_path, spec, &self.core.executor).await?;
                         debug!("Link: Correct symlink already exists at {:?}", target_path);
                         continue;
                     }
@@ -967,6 +986,7 @@ impl Installable for LinkInstallable {
                         tokio::fs::read(&target_path).await,
                     ) {
                         if from == to {
+                            apply_declared_owner(&target_path, spec, &self.core.executor).await?;
                             debug!("Link: {:?} already matches {:?}", target_path, source);
                             continue;
                         }
@@ -1018,6 +1038,7 @@ impl Installable for LinkInstallable {
             {
                 self.core.executor.symlink(&source, &target_path).await?;
             }
+            apply_declared_owner(&target_path, spec, &self.core.executor).await?;
         }
         Ok(())
     }
