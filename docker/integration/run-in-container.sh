@@ -1459,6 +1459,7 @@ primary_manager_image() {
 dependent_lifecycle() {
     case "$1" in
         link)     echo "section 14b: declared, synced, asserted on disk, undeclared, gone" ;;
+        dir)      echo "section 14b: created with mode, asserted on disk, undeclared, removed" ;;
         shim)     echo "section 14c: deployed, byte-identical to the binary, RUN, undeclared, gone" ;;
         dotfiles) echo "section 14c: a two-level tree placed, nested file checked, undeclared, gone" ;;
         exec)     echo "section 14c: refused unapproved, locked, run once, not twice, undo on departure" ;;
@@ -1966,6 +1967,20 @@ else
     gone_ok "the link is gone from disk" link-dst test -e "$LINK_DST"
     # Credited by the section that drove it, and only when nothing in it failed.
     [ "$FAILC" = "$_dep_f0" ] && echo link >> "$LEDGER/be-life"
+
+    _dep_f1=$FAILC
+    DIR_DST=/tmp/shall-dir-canary
+    rm -rf "$DIR_DST"
+    printf 'dir:%s @mode=0700\n' "$DIR_DST" >> "$_limp"
+    ok "the dir target does not exist before sync" test ! -e "$DIR_DST"
+    ok "sync creates a declared dir" lx -y sync
+    ok "the declared dir is on disk" test -d "$DIR_DST"
+    ok "the declared dir has its mode" test "$(stat -c %a "$DIR_DST")" = 700
+    grep -v -F "dir:$DIR_DST" "$_limp" > "$_limp.tmp" 2>/dev/null
+    mv "$_limp.tmp" "$_limp"
+    ok "sync tears down a dir whose declaration is gone" lx -y sync
+    gone_ok "the dir is gone from disk" dir-dst test -e "$DIR_DST"
+    [ "$FAILC" = "$_dep_f1" ] && echo dir >> "$LEDGER/be-life"
 fi
 
 # ==========================================================================

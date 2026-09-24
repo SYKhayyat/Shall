@@ -112,7 +112,7 @@ pub fn home_for_user(user: &str) -> Result<PathBuf> {
             user
         )));
     }
-    let line = String::from_utf8_lossy(&output.stdout);
+    let line = crate::utils::text::sanitize(&String::from_utf8_lossy(&output.stdout));
     let home = line
         .split(':')
         .nth(5)
@@ -135,8 +135,8 @@ fn uid_gid_for_user(user: &str) -> Result<(u32, u32)> {
             user
         )));
     }
-    let line = String::from_utf8_lossy(&output.stdout);
-    let parts: Vec<&str> = line.trim().split(':').collect();
+    let line = crate::utils::text::sanitize(&String::from_utf8_lossy(&output.stdout));
+    let parts: Vec<&str> = line.split(':').collect();
     if parts.len() < 4 {
         return Err(Error::Other(format!(
             "could not parse uid/gid for `{}` from getent output",
@@ -619,7 +619,7 @@ impl LinkBackendCore {
 ///
 /// `$user` and `$home` are not hardcoded — they are resolved from the process environment,
 /// with a fallback for hosts that do not set `$USER`. A `link:` whose `@template=true` sees
-/// the same variables `shall variables` prints.
+/// the same variables as the program's variables output.
 ///
 /// When `user_home` is provided (U71 — per-user `@target=` with `@user=NAME`), it overrides
 /// the HOME and USER variables for that particular link.

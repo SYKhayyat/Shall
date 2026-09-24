@@ -139,6 +139,7 @@ const EVERY_KEYWORD: &[&str] = &[
     "generate",
     "dotfiles",
     "firewall",
+    "dir",
     "use",
     "param",
     "exclude",

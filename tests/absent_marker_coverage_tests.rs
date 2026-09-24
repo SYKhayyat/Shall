@@ -74,6 +74,7 @@ const CANNOT_REPORT_A_MISSING_NAME: &[&str] = &[
     "appimage",
     "asdf",
     "btrfs",
+    "dir",
     // NOT a gap - measured 2026-08-21 and left alone. `conda install <absent>` and
     // `conda install six=99.99.99` both answer `PackagesNotFoundInChannelsError: The following
     // packages are not available from current channels`. One sentence, two facts, and no line

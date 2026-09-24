@@ -143,6 +143,13 @@ const HAND_WRITTEN: &[HandWritten] = &[
               boot. That ordering cannot live in an argv table.",
         proof: "\"umount\"",
     },
+    HandWritten {
+        module: "dir.rs",
+        why: "creates and removes filesystem directories, including parent creation, permissions, \
+              ownership, and an empty-only teardown; `ManagerConfig` is an argv table and this \
+              backend has no package-manager command to template.",
+        proof: "tokio::fs::remove_dir",
+    },
     // ---- Package managers whose shape the generic machinery does not yet cover.
     HandWritten {
         module: "nix.rs",

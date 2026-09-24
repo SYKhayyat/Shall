@@ -102,6 +102,7 @@ const UNIVERSE: &[&str] = &[
     "composer",
     "conda",
     "dnf",
+    "dir",
     "dotnet",
     "emacs",
     "emerge",

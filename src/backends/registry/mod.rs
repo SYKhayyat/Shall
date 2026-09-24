@@ -1327,6 +1327,17 @@ mod tests {
                 NoCommand("removes the file it wrote, through the same filesystem layer."),
             ),
             ArgvCase::shaped(
+                "dir",
+                &|r, e| crate::backends::dir::register(r, e, &Config::default()),
+                "/tmp/shall-probe-dir",
+                &[],
+                NoCommand(
+                    "creates a directory through the filesystem layer. It runs no package-manager command, \
+                     so there is no argv to check.",
+                ),
+                NoCommand("removes an empty directory through the filesystem layer."),
+            ),
+            ArgvCase::shaped(
                 "web",
                 &|r, e| crate::backends::web::register(r, e, &Config::default()),
                 "https://example.invalid/probe.tar.gz",

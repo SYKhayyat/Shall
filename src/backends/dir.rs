@@ -123,9 +123,9 @@ impl Installable for DirInstallable {
             if !path.exists() {
                 continue;
             }
-            match std::fs::read_dir(&path) {
+            match tokio::fs::read_dir(&path).await {
                 Ok(mut rd) => {
-                    if rd.next().is_some() {
+                    if rd.next_entry().await.map_err(Error::from)?.is_some() {
                         tracing::warn!("Dir: {:?} is not empty — skipping removal", path);
                         continue;
                     }
