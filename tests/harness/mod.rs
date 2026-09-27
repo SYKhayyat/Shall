@@ -111,16 +111,21 @@ impl Fixture {
     /// Put rows into the applied-extras ledger, so a test can start from "this was already
     /// placed" without placing it. Two files had this, byte for byte.
     pub fn seed_ledger(&self, keys: &[&str]) {
+        use shall::core::extras_lock::ExtraRecord;
+        use shall::core::LockFile;
+
         let locks = self.cfg().join("locks");
         std::fs::create_dir_all(&locks).unwrap();
-        let body = format!(
-            "applied = [{}]\n",
+        let mut ledger = shall::core::ExtrasLedger::new();
+        ledger.record(
             keys.iter()
-                .map(|k| format!("{:?}", k))
-                .collect::<Vec<_>>()
-                .join(", ")
+                .map(|wire| {
+                    ExtraRecord::parse(wire)
+                        .unwrap_or_else(|e| panic!("`{wire}` is not a ledger row: {e}"))
+                })
+                .collect(),
         );
-        std::fs::write(locks.join("extras.toml"), body).unwrap();
+        ledger.save(&locks.join("extras.toml")).unwrap();
     }
 }
 

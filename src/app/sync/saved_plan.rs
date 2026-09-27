@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 /// Bump when the on-disk plan format changes incompatibly.
-pub const PLAN_SCHEMA: u32 = 1;
+pub const PLAN_SCHEMA: u32 = 2;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct PlanRemoval {
@@ -38,6 +38,8 @@ pub struct PlanResources {
     /// Applied before and declared nowhere now.
     #[serde(default)]
     pub undo: Vec<String>,
+    #[serde(default)]
+    pub place_intents: Vec<crate::app::apply::ResourceIntent>,
 }
 
 impl PlanResources {
@@ -47,6 +49,14 @@ impl PlanResources {
 
     pub fn len(&self) -> usize {
         self.place.len() + self.undo.len()
+    }
+
+    pub fn intent_attributes(&self, key: &str) -> &[String] {
+        self.place_intents
+            .iter()
+            .find(|intent| intent.key == key)
+            .map(|intent| intent.attributes.as_slice())
+            .unwrap_or(&[])
     }
 }
 
@@ -94,6 +104,7 @@ impl SavedPlan {
         let resources = PlanResources {
             place: resources.place.clone(),
             undo: resources.undo.clone(),
+            place_intents: resources.place_intents.clone(),
         };
         let desired_hash = hash_plan(&installs, &removals, &resources);
         Self {
@@ -145,6 +156,9 @@ pub fn hash_plan(
     }
     for key in &resources.undo {
         keys.push(format!("U:{}", key));
+    }
+    for intent in &resources.place_intents {
+        keys.push(format!("D:{}:{}", intent.key, intent.attributes.join(",")));
     }
     keys.sort();
 
@@ -215,7 +229,7 @@ mod tests {
     fn a_plan_with_no_vars_field_deserializes_to_empty() {
         // The field is `serde(default)`, so a plan written before it existed still reads.
         let raw =
-            r#"{"schema":1,"created_at":null,"desired_hash":"x","installs":[],"removals":[]}"#;
+            r#"{"schema":2,"created_at":null,"desired_hash":"x","installs":[],"removals":[]}"#;
         let plan: SavedPlan = serde_json::from_str(raw).unwrap();
         assert!(plan.vars.is_empty());
     }
@@ -240,6 +254,190 @@ mod tests {
         assert_ne!(
             hash_plan(&base, &[], &PlanResources::default()),
             with_removal
+        );
+    }
+
+    fn resources_for(statement: &crate::config::grammar::Statement) -> PlanResources {
+        use crate::app::apply::desired_state_attributes;
+        let key = crate::core::extras_lock::extra_key(statement)
+            .expect("the declaration keys")
+            .expect("it is a resource");
+        let attributes = desired_state_attributes(statement, key.kind);
+        PlanResources {
+            place: vec![key.to_string()],
+            place_intents: vec![crate::app::apply::ResourceIntent {
+                key: key.to_string(),
+                attributes,
+            }],
+            ..Default::default()
+        }
+    }
+
+    fn dir(path: &str, options: &[(&str, &str)]) -> crate::config::grammar::Statement {
+        let mut opts = crate::config::grammar::Options::default();
+        for (name, value) in options {
+            opts.set(*name, *value);
+        }
+        crate::config::grammar::Statement::Dir(path.to_string(), opts)
+    }
+
+    fn link(path: &str, options: &[(&str, &str)]) -> crate::config::grammar::Statement {
+        let mut opts = crate::config::grammar::Options::default();
+        for (name, value) in options {
+            opts.set(*name, *value);
+        }
+        opts.set("target", path);
+        crate::config::grammar::Statement::Link("source".to_string(), opts)
+    }
+
+    fn artifact(resources: &PlanResources) -> String {
+        serde_json::to_string(&SavedPlan {
+            schema: PLAN_SCHEMA,
+            created_at: None,
+            desired_hash: hash_plan(&[], &[], resources),
+            installs: vec![],
+            removals: vec![],
+            resources: resources.clone(),
+            vars: Default::default(),
+        })
+        .expect("a plan serialises")
+    }
+
+    #[test]
+    fn a_directories_mode_is_part_of_the_plan_and_not_only_its_key() {
+        let path = "/srv/state";
+        let tight = resources_for(&dir(path, &[("mode", "0700")]));
+        let loose = resources_for(&dir(path, &[("mode", "0750")]));
+
+        assert_eq!(
+            tight.place, loose.place,
+            "the mode is not the key's business, and the key must not widen to hold it: the \
+             ledger addresses a directory by where it is"
+        );
+        assert_ne!(
+            tight.intent_attributes(tight.place[0].as_str()),
+            loose.intent_attributes(loose.place[0].as_str()),
+            "0700 and 0750 froze the same attributes"
+        );
+        assert_ne!(
+            hash_plan(&[], &[], &tight),
+            hash_plan(&[], &[], &loose),
+            "a plan that cannot tell 0700 from 0750 passes its own drift check on a changed mode"
+        );
+        assert_ne!(artifact(&tight), artifact(&loose));
+    }
+
+    #[test]
+    fn a_directories_owner_is_part_of_the_plan_and_not_only_its_key() {
+        let path = "/srv/state";
+        let alice = resources_for(&dir(path, &[("owner", "alice")]));
+        let bob = resources_for(&dir(path, &[("owner", "bob")]));
+
+        assert_eq!(alice.place, bob.place, "the owner widened the key");
+        assert_ne!(artifact(&alice), artifact(&bob));
+    }
+
+    #[test]
+    fn a_links_owner_is_part_of_the_plan_and_not_only_its_key() {
+        let path = "/etc/ssh/ssh_config";
+        let alice = resources_for(&link(path, &[("owner", "alice")]));
+        let bob = resources_for(&link(path, &[("owner", "bob")]));
+
+        assert_eq!(alice.place, bob.place, "the owner widened the key");
+        assert_ne!(artifact(&alice), artifact(&bob));
+    }
+
+    #[test]
+    fn an_unchanged_declaration_freezes_a_byte_identical_plan() {
+        let path = "/srv/state";
+        let first = artifact(&resources_for(&dir(
+            path,
+            &[("mode", "0700"), ("owner", "alice")],
+        )));
+        let second = artifact(&resources_for(&dir(
+            path,
+            &[("mode", "0700"), ("owner", "alice")],
+        )));
+        assert_eq!(first, second, "an untouched tree froze two different plans");
+    }
+
+    #[test]
+    fn the_options_a_key_already_carries_are_not_repeated_in_the_fingerprint() {
+        let account = crate::core::account::Account::current()
+            .expect("the invoking account has a passwd entry")
+            .name()
+            .to_string();
+        for (statement, key_fragments, uncarried) in [
+            (
+                {
+                    let mut opts = crate::config::grammar::Options::default();
+                    opts.set("value", "prefer-dark");
+                    opts.set("scope", "system");
+                    opts.set("user", &account);
+                    opts.set("owner", "the-owner");
+                    crate::config::grammar::Statement::Setting("org.gnome.x/theme".into(), opts)
+                },
+                vec!["@scope=system".to_string(), format!("@user={account}")],
+                vec!["owner=the-owner"],
+            ),
+            (
+                {
+                    let mut opts = crate::config::grammar::Options::default();
+                    opts.set("target", "/etc/motd");
+                    opts.set("owner", "the-owner");
+                    opts.set("user", &account);
+                    crate::config::grammar::Statement::Link("source".into(), opts)
+                },
+                vec!["/etc/motd".to_string()],
+                vec!["owner=the-owner"],
+            ),
+        ] {
+            let resources = resources_for(&statement);
+            let key = &resources.place[0];
+            let attributes = resources.intent_attributes(key.as_str());
+            for fragment in &key_fragments {
+                assert!(key.contains(fragment), "{fragment} is not in the key {key}");
+            }
+            for carried in ["scope", "user", "target"] {
+                assert!(
+                    !attributes.iter().any(|a| a.starts_with(&format!("{carried}="))),
+                    "{carried}= is in the key already, and the fingerprint repeated it: {attributes:?}"
+                );
+            }
+            for expected in &uncarried {
+                assert!(
+                    attributes.iter().any(|a| a == expected),
+                    "the option the key does not carry is missing: {expected:?} not in {attributes:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_payload_option_is_recorded_as_a_digest_and_never_as_its_text() {
+        let resources = resources_for(&crate::config::grammar::Statement::Link(
+            "source".to_string(),
+            {
+                let mut opts = crate::config::grammar::Options::default();
+                opts.set("target", "/etc/motd");
+                opts.set("content", "the secret body");
+                opts
+            },
+        ));
+        let text = artifact(&resources);
+        assert!(
+            !text.contains("the secret body"),
+            "a plan file a user leaves on disk carried the content it would write: {text}"
+        );
+        assert!(text.contains("content=#"), "{text}");
+    }
+
+    #[test]
+    fn the_plan_schema_is_bumped_so_an_artifact_without_attributes_is_refused() {
+        assert_eq!(
+            PLAN_SCHEMA, 2,
+            "a plan that cannot say what it would write is not this format; the number is the \
+             refusal, and it moved when the attributes arrived"
         );
     }
 }

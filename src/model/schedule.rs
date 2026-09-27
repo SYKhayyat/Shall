@@ -85,6 +85,7 @@ pub fn schedule_config(
         persistent: boolean(name, options, "persistent", origin)?,
         jitter: seconds(name, options, "jitter", origin)?,
         elevated: boolean(name, options, "elevated", origin)?,
+        user: options.one("user").map(str::to_string),
     })
 }
 

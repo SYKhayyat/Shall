@@ -43,14 +43,17 @@ fn declarations(f: &Fixture) -> (String, Vec<String>) {
 
     let mut module = format!(
         "link:{} @target={}\n\
+         dir:{} @mode=0750\n\
          service:shall-test-svc @enabled=false\n\
          setting:org.shall.test/key @value=1\n\
          shim:shall-test-shim\n",
         decl(&src),
-        decl(&dst)
+        decl(&dst),
+        decl(&f.root.join("dest").join("state"))
     );
     let mut keys = vec![
         format!("link:{}", decl(&dst)),
+        format!("dir:{}", decl(&f.root.join("dest").join("state"))),
         "service:shall-test-svc".to_string(),
         "setting:org.shall.test/key".to_string(),
         "shim:shall-test-shim".to_string(),
@@ -244,6 +247,36 @@ fn a_resource_that_cannot_be_read_back_is_named_rather_than_assumed() {
     assert!(
         !out.contains("to place"),
         "an unreadable resource was counted as work, which would make `check` red forever on \
-         any machine declaring a `setting:`:\n{out}"
+         any machine declaring a `setting:`\n{out}"
     );
+}
+
+#[test]
+fn a_directory_mode_edit_is_reported_and_then_converges() {
+    let f = setup("resource-family-dir-mode");
+    let dir = f.root.join("dest").join("state");
+    let write = |mode: &str| f.write_module(&format!("dir:{} @mode={mode}\n", decl(&dir)));
+
+    write("0750");
+    let (out, code) = f.run(&["sync", "-y"]);
+    assert_eq!(code, 0, "the first sync failed:\n{out}");
+    assert!(dir.is_dir(), "setup did not create the directory:\n{out}");
+
+    let (out, code) = f.run(&["check"]);
+    assert!(code == 0 || code == 2, "`check` failed ({code}):\n{out}");
+    assert!(out.contains("the machine matches your files"), "{out}");
+
+    write("0755");
+    let (out, code) = f.run(&["check"]);
+    assert!(code == 0 || code == 2, "`check` failed ({code}):\n{out}");
+    assert!(
+        out.contains("1 to place"),
+        "a mode edit was not work:\n{out}"
+    );
+
+    let (out, code) = f.run(&["sync", "-y"]);
+    assert_eq!(code, 0, "the mode repair failed:\n{out}");
+    let (out, code) = f.run(&["check"]);
+    assert!(code == 0 || code == 2, "`check` failed ({code}):\n{out}");
+    assert!(out.contains("the machine matches your files"), "{out}");
 }

@@ -13,12 +13,13 @@ which point nobody could find a decision in it and 84 of them had no recorded an
 | [`spec/why.md`](spec/why.md) | V | The reason behind every Part II rule — each one the scar of a real bug. | **Before changing any Part II rule.** |
 | [`spec/plan.md`](spec/plan.md) | III + IV | The work in dependency order, each phase with its exit condition; then the proofs. | When picking up work. |
 | [`spec/bugs.md`](spec/bugs.md) | VI | Bugs killed by this design, and bugs carried forward. | Before building anything. |
-| [`spec/decisions.md`](spec/decisions.md) | — | **All 234 decisions. 229 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN.** Counted, not typed — `scripts/decision-count.sh --check`. | Before proposing anything. |
+| [`spec/decisions.md`](spec/decisions.md) | — | **All 235 decisions. 230 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN.** Counted, not typed — `scripts/decision-count.sh --check`. | Before proposing anything. |
 | [`attic/lessons.md`](attic/lessons.md) | — | Thirty-one lessons, each the residue of a shipped defect. For a person, once. | **Never.** It says so at the top, and it means agents. |
 
 **Parts VIII–XIII were proposal documents — artifacts and channels (`D1`–`D17`), `when`
 variables (`W1`–`W14`), rebuild and caches (`K1`–`K18`), `firewall:` (`N1`–`N7`), secrets
-(`T1`–`T7`) and the next round (`U1`–`U39`). Every one of those decisions is ruled and every
+(`T1`–`T7`) and the next round (`U1`–`U43`, with `U71` — the per-user home layer — added to
+that series after the documents were deleted). Every one of those decisions is ruled and every
 rule they produced is in Part II, so the documents were deleted (`Y21`). The IDs still resolve:
 they are entries in the register.
 

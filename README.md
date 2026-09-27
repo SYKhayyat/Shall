@@ -153,8 +153,45 @@ repo:apt:ppa:foo/bar      # a repository
 shim:node                 # a PATH stand-in
 service:nginx             # a service
 link:./dotfiles/vimrc     # a managed file
+dir:~/projects            # a directory, created idempotently
 use editors               # pull in another module
 ```
+
+### Acting for another account
+
+A line can name the account it acts for, as `@user=`, or a block can scope a group of them. The
+block covers exactly six statements — `link:`, `dir:`, `shim:`, `setting:`, `service:`,
+`schedule:` — and anything else inside it is an error on that line; a `@user=` on a line inside
+the block wins over the block's.
+
+```
+use user:alice {
+  link:./dotfiles/gitconfig@target=~/.gitconfig   # the file comes from the repo,
+  dir:~/.local/share/alice                        # the destination is alice's home
+  shim:rg@source=cargo:ripgrep                    # shims land in her ~/.local/bin
+  setting:org.gnome.desktop.interface/theme@value=dark
+  schedule:nightly@cron=0 2 * * *,run=sync        # her user units, not the machine's
+}
+
+link:./dotfiles/vimrc@target=~/.vimrc,user=alice  # or one line at a time
+```
+
+`~` in a destination is that account's home, and a `@template=true` source renders `{{ USER }}`
+and `{{ HOME }}` as that account. **A `link:` source is still read from your repo** — only the
+destination moves. `@owner=` sets the owner on its own; where a line names only `@user=`, that
+account owns what the line placed, including any parent directory Shall has to create on the way.
+
+Two things are refused rather than approximated, both naming what is missing: a platform with no
+per-user domain for that kind (`service:` on OpenRC, SysV or `sc`; a `schedule:` for a named
+account on Windows, where `schtasks` needs that account's password), and a permission bit the
+platform has no word for (`dir: @mode` on Windows — ownership works there). **These are
+refusals at run time, not parse errors**, so one shared Linux manifest still parses on macOS and
+Windows; it simply reports what it could not do.
+
+`dir:` is idempotent and converges: run it twice and the second run reports nothing, change
+`@mode=` and the next run applies it. Undeclaring a directory **Shall created** removes it (only
+if it is empty — one you have started using is left alone and reported); a directory that was
+already there is never removed, and `locks/extras.toml` records which of the two it was.
 
 ## Commands
 

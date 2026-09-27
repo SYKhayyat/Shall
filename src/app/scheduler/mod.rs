@@ -1,4 +1,5 @@
 use crate::config::config::ScheduleConfig;
+use crate::core::executor::StdOutput;
 use crate::core::{CommandExecutor, Error, Result};
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
@@ -104,6 +105,53 @@ pub fn rotate_log_if_large() {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskTarget {
+    pub account: Option<crate::core::account::Account>,
+}
+
+impl TaskTarget {
+    pub fn resolve(user: Option<&str>) -> Result<Self> {
+        Ok(Self {
+            account: match user {
+                None => None,
+                Some(name) => Some(crate::core::account::Account::resolve(name)?),
+            },
+        })
+    }
+
+    pub fn account(&self) -> Result<crate::core::account::Account> {
+        match &self.account {
+            Some(account) => Ok(account.clone()),
+            None => crate::core::account::Account::current(),
+        }
+    }
+
+    pub fn is_scoped(&self) -> bool {
+        self.account.is_some()
+    }
+
+    pub fn can_register_for_another_account() -> bool {
+        !cfg!(windows)
+    }
+
+    pub fn refuse_no_user_domain(&self, what: &str, platform: &str, reason: &str) -> Error {
+        let Some(account) = &self.account else {
+            return Error::Unsupported(format!(
+                "this platform has no scheduler Shall can drive ({platform})"
+            ));
+        };
+        Error::Refused(format!(
+            "`{what}` is declared for the account `{}`, and Shall cannot reach a scheduler for \
+             another account here: {reason}. Nothing was written for `{}`, and Shall will not \
+             fall back to this account's scheduler — a task placed in the wrong account's \
+             domain reports as scheduled and runs as the wrong person.",
+            account.name(),
+            account.name(),
+        ))
+    }
+}
+
 #[async_trait]
 pub trait TaskProvisioner: Send + Sync {
     async fn add_task(
@@ -111,9 +159,20 @@ pub trait TaskProvisioner: Send + Sync {
         executor: &CommandExecutor,
         config: &ScheduleConfig,
         shall_path: &Path,
+        target: &TaskTarget,
     ) -> Result<()>;
-    async fn remove_task(&self, executor: &CommandExecutor, name: &str) -> Result<()>;
-    async fn is_task_active(&self, executor: &CommandExecutor, name: &str) -> bool;
+    async fn remove_task(
+        &self,
+        executor: &CommandExecutor,
+        name: &str,
+        target: &TaskTarget,
+    ) -> Result<()>;
+    async fn is_task_active(
+        &self,
+        executor: &CommandExecutor,
+        name: &str,
+        target: &TaskTarget,
+    ) -> bool;
 
     /// Refuse, by name, an option this scheduler cannot express.
     ///
@@ -128,40 +187,49 @@ pub trait TaskProvisioner: Send + Sync {
         &self,
         config: &ScheduleConfig,
         shall_bin: &Path,
+        target: &TaskTarget,
     ) -> std::result::Result<Provisioned, String>;
 
-    /// What this scheduler holds for `name` right now.
-    async fn read_task(&self, executor: &CommandExecutor, name: &str) -> Reading;
+    async fn read_task(
+        &self,
+        executor: &CommandExecutor,
+        name: &str,
+        target: &TaskTarget,
+    ) -> Reading;
 }
 
 pub struct SchedulerManager {
-    provisioner: Box<dyn TaskProvisioner>,
+    provisioner: std::sync::Arc<dyn TaskProvisioner>,
     shall_bin_path: PathBuf,
 }
 
 impl SchedulerManager {
     pub fn new() -> Result<Self> {
         debug!("Detecting system-native task runner.");
+        Self::with_provisioner(std::sync::Arc::from(Self::detect()?))
+    }
 
+    pub fn with_provisioner(provisioner: std::sync::Arc<dyn TaskProvisioner>) -> Result<Self> {
         let shall_bin_path = std::env::current_exe()
             .map_err(|e| Error::Io(format!("Failed to locate current Shall binary: {}", e)))?;
-
-        let provisioner: Box<dyn TaskProvisioner> = if cfg!(target_os = "linux") {
-            Box::new(LinuxSystemdProvisioner)
-        } else if cfg!(target_os = "macos") {
-            Box::new(MacLaunchdProvisioner)
-        } else if cfg!(target_os = "windows") {
-            Box::new(WindowsTaskProvisioner)
-        } else {
-            return Err(Error::UnsupportedPlatform(
-                "Native scheduling is not supported on this OS variant.".into(),
-            ));
-        };
-
         Ok(Self {
             provisioner,
             shall_bin_path,
         })
+    }
+
+    pub fn detect() -> Result<Box<dyn TaskProvisioner>> {
+        if cfg!(target_os = "linux") {
+            Ok(Box::new(LinuxSystemdProvisioner))
+        } else if cfg!(target_os = "macos") {
+            Ok(Box::new(MacLaunchdProvisioner))
+        } else if cfg!(target_os = "windows") {
+            Ok(Box::new(WindowsTaskProvisioner))
+        } else {
+            Err(Error::UnsupportedPlatform(
+                "Native scheduling is not supported on this OS variant.".into(),
+            ))
+        }
     }
 
     /// Register `cfg` with the OS scheduler (systemd/launchd/Task Scheduler) — the declarative
@@ -175,8 +243,9 @@ impl SchedulerManager {
         self.provisioner
             .refuse_unsupported(cfg)
             .map_err(|e| Error::Refused(format!("`schedule:{}`: {}", cfg.name, e)))?;
+        let target = TaskTarget::resolve(cfg.user.as_deref())?;
         self.provisioner
-            .add_task(executor, cfg, &self.shall_bin_path)
+            .add_task(executor, cfg, &self.shall_bin_path, &target)
             .await
     }
 
@@ -188,9 +257,11 @@ impl SchedulerManager {
         &self,
         executor: &CommandExecutor,
         name: &str,
+        user: Option<&str>,
         _reaped: crate::app::sync::guard::Reaped,
     ) -> Result<()> {
-        self.provisioner.remove_task(executor, name).await
+        let target = TaskTarget::resolve(user)?;
+        self.provisioner.remove_task(executor, name, &target).await
     }
 
     /// How this machine stands against one declaration — the read-back half of `schedule:`.
@@ -214,10 +285,20 @@ impl SchedulerManager {
         if self.provisioner.refuse_unsupported(cfg).is_err() {
             return Standing::Missing;
         }
-        let Ok(want) = self.provisioner.rendered(cfg, &self.shall_bin_path) else {
+        let Ok(target) = TaskTarget::resolve(cfg.user.as_deref()) else {
+            return Standing::Unknown;
+        };
+        let Ok(want) = self
+            .provisioner
+            .rendered(cfg, &self.shall_bin_path, &target)
+        else {
             return Standing::Missing;
         };
-        match self.provisioner.read_task(executor, &cfg.name).await {
+        match self
+            .provisioner
+            .read_task(executor, &cfg.name, &target)
+            .await
+        {
             Reading::Unreadable => Standing::Unknown,
             Reading::Absent => Standing::Missing,
             Reading::Holds(got) => {
@@ -261,8 +342,21 @@ impl LinuxSystemdProvisioner {
         format!("shall-{}", name)
     }
 
-    fn user_unit_dir() -> Option<PathBuf> {
-        Some(dirs::config_dir()?.join("systemd").join("user"))
+    fn unit_dir(target: &TaskTarget) -> Option<PathBuf> {
+        match &target.account {
+            Some(account) => account.systemd_user_dir().ok(),
+            None => Some(dirs::config_dir()?.join("systemd").join("user")),
+        }
+    }
+
+    fn log_path(target: &TaskTarget) -> PathBuf {
+        match target.account() {
+            Ok(account) => account
+                .data_dir()
+                .unwrap_or_else(|_| crate::utils::safe_data_dir())
+                .join("schedule.log"),
+            Err(_) => crate::utils::safe_data_dir().join("schedule.log"),
+        }
     }
 
     /// The `.service` unit, for both shapes a schedule can take.
@@ -271,8 +365,8 @@ impl LinuxSystemdProvisioner {
     /// overwriting the file the ordinary shape had just written, and the replacement dropped
     /// `StandardOutput=`/`StandardError=` — so an `@reboot` job's output went nowhere while
     /// every other job's was appended to `schedule.log`.
-    fn service_unit(config: &ScheduleConfig, shall_bin: &Path) -> String {
-        let log = crate::utils::safe_data_dir().join("schedule.log");
+    fn service_unit(config: &ScheduleConfig, shall_bin: &Path, target: &TaskTarget) -> String {
+        let log = Self::log_path(target);
         let mut unit = format!(
             "[Unit]\nDescription=Shall {kind}: {name}\n\n\
              [Service]\nType=oneshot\nExecStart={bin} {cmd}\n\
@@ -317,16 +411,55 @@ impl LinuxSystemdProvisioner {
         verb: &str,
         unit: &str,
         expect: &str,
+        target: &TaskTarget,
     ) -> bool {
-        match executor
-            .run("systemctl", &["--no-pager", "--user", verb, unit], false)
-            .await
-        {
-            Ok(out) => {
-                crate::utils::text::sanitize(&String::from_utf8_lossy(&out.stdout)) == expect
-            }
+        let args = ["--no-pager", "--user", verb, unit];
+        let out = match &target.account {
+            Some(account) => executor.run_output_as(account, "systemctl", &args).await,
+            None => executor.run_output("systemctl", &args, false).await,
+        };
+        match out {
+            Ok(text) => crate::utils::text::sanitize(&text) == expect,
             Err(_) => false,
         }
+    }
+
+    async fn systemctl_run(
+        &self,
+        executor: &CommandExecutor,
+        target: &TaskTarget,
+        args: &[&str],
+    ) -> Result<StdOutput> {
+        match &target.account {
+            Some(account) => executor.run_as(account, "systemctl", args, false).await,
+            None => executor.run("systemctl", args, false).await,
+        }
+    }
+
+    async fn user_manager_is_reachable(
+        &self,
+        executor: &CommandExecutor,
+        target: &TaskTarget,
+    ) -> Result<()> {
+        let account = match &target.account {
+            Some(account) => account,
+            None => return Ok(()),
+        };
+        let args = ["--no-pager", "--user", "daemon-reload"];
+        executor
+            .run_output_as(account, "systemctl", &args)
+            .await
+            .map(|_| ())
+            .map_err(|e| {
+                Error::Refused(format!(
+                    "`schedule:{}` is declared for the account `{}`, and there is no user manager \
+                     running for it — `systemctl --user` cannot connect to a bus for that account \
+                     ({e}). Nothing was written. A user unit fires only while its account has a \
+                     session, so Shall will not write one and report it as scheduled.",
+                    account.name(),
+                    account.name()
+                ))
+            })
     }
 
     fn map_cron_to_systemd(&self, cron: &str) -> String {
@@ -463,8 +596,9 @@ impl TaskProvisioner for LinuxSystemdProvisioner {
         &self,
         config: &ScheduleConfig,
         shall_bin: &Path,
+        target: &TaskTarget,
     ) -> std::result::Result<Provisioned, String> {
-        let mut spec = Self::service_unit(config, shall_bin);
+        let mut spec = Self::service_unit(config, shall_bin, target);
         if config.cron != "@reboot" {
             spec.push_str(UNIT_SEPARATOR);
             spec.push_str(&self.timer_unit(config));
@@ -475,8 +609,13 @@ impl TaskProvisioner for LinuxSystemdProvisioner {
         })
     }
 
-    async fn read_task(&self, executor: &CommandExecutor, name: &str) -> Reading {
-        let Some(dir) = Self::user_unit_dir() else {
+    async fn read_task(
+        &self,
+        executor: &CommandExecutor,
+        name: &str,
+        target: &TaskTarget,
+    ) -> Reading {
+        let Some(dir) = Self::unit_dir(target) else {
             return Reading::Unreadable;
         };
         let stem = Self::unit_stem(name);
@@ -496,7 +635,7 @@ impl TaskProvisioner for LinuxSystemdProvisioner {
         }
         Reading::Holds(Provisioned {
             spec,
-            armed: self.is_task_active(executor, name).await,
+            armed: self.is_task_active(executor, name, target).await,
         })
     }
 
@@ -505,9 +644,17 @@ impl TaskProvisioner for LinuxSystemdProvisioner {
         executor: &CommandExecutor,
         config: &ScheduleConfig,
         shall_bin: &Path,
+        target: &TaskTarget,
     ) -> Result<()> {
-        let systemd_dir = Self::user_unit_dir()
-            .ok_or_else(|| Error::Io("User configuration directory not found".into()))?;
+        self.user_manager_is_reachable(executor, target).await?;
+        let systemd_dir = Self::unit_dir(target).ok_or_else(|| {
+            target.refuse_no_user_domain(
+                &format!("schedule:{}", config.name),
+                "systemd",
+                "the account's home directory is not resolvable, so there is no per-user unit \
+                 directory to write into",
+            )
+        })?;
 
         crate::utils::file::ensure_dir(&systemd_dir)?;
 
@@ -520,7 +667,7 @@ impl TaskProvisioner for LinuxSystemdProvisioner {
         executor
             .write_atomic(
                 &systemd_dir.join(&service_unit),
-                &Self::service_unit(config, shall_bin),
+                &Self::service_unit(config, shall_bin, target),
             )
             .await?;
         if !boot_job {
@@ -529,12 +676,7 @@ impl TaskProvisioner for LinuxSystemdProvisioner {
                 .await?;
         }
 
-        executor
-            .run(
-                "systemctl",
-                &["--no-pager", "--user", "daemon-reload"],
-                false,
-            )
+        self.systemctl_run(executor, target, &["--no-pager", "--user", "daemon-reload"])
             .await?;
 
         // The unit that carries the schedule: the timer, or the service itself for a boot job.
@@ -547,19 +689,19 @@ impl TaskProvisioner for LinuxSystemdProvisioner {
                 args.push("--now");
             }
             args.push(carrier);
-            executor.run("systemctl", &args, false).await?;
+            self.systemctl_run(executor, target, &args).await?;
         } else {
             // Declared and deliberately silent. `disable --now` rather than "do not enable",
             // because the previous sync may have armed it and a declaration that changed has to
             // reach the machine.
-            let _ = executor
-                .run(
-                    "systemctl",
+            let _ = self
+                .systemctl_run(
+                    executor,
+                    target,
                     &["--no-pager", "--user", "disable", "--now", carrier],
-                    false,
                 )
                 .await;
-            if self.is_task_active(executor, &config.name).await {
+            if self.is_task_active(executor, &config.name, target).await {
                 return Err(Error::Io(format!(
                     "`schedule:{}` is declared `enabled = false` and its systemd unit is still \
                      active. Check `systemctl --user status {}`.",
@@ -571,34 +713,39 @@ impl TaskProvisioner for LinuxSystemdProvisioner {
         Ok(())
     }
 
-    async fn remove_task(&self, executor: &CommandExecutor, name: &str) -> Result<()> {
+    async fn remove_task(
+        &self,
+        executor: &CommandExecutor,
+        name: &str,
+        target: &TaskTarget,
+    ) -> Result<()> {
         let stem = Self::unit_stem(name);
         let timer_name = format!("{}.timer", stem);
         let service_name = format!("{}.service", stem);
 
-        let _ = executor
-            .run(
-                "systemctl",
+        let _ = self
+            .systemctl_run(
+                executor,
+                target,
                 &["--no-pager", "--user", "disable", "--now", &timer_name],
-                false,
             )
             .await;
-        let _ = executor
-            .run(
-                "systemctl",
+        let _ = self
+            .systemctl_run(
+                executor,
+                target,
                 &["--no-pager", "--user", "disable", "--now", &service_name],
-                false,
             )
             .await;
 
-        if let Some(systemd_dir) = Self::user_unit_dir() {
+        if let Some(systemd_dir) = Self::unit_dir(target) {
             remove_generated(&systemd_dir.join(&timer_name))?;
             remove_generated(&systemd_dir.join(&service_name))?;
         }
         // `disable` is allowed to fail — a unit that was never enabled reports failure — so
         // the end state is what gets asserted. A timer still running after this is a schedule
         // Shall would otherwise report as removed while it keeps firing.
-        if self.is_task_active(executor, name).await {
+        if self.is_task_active(executor, name, target).await {
             return Err(Error::Io(format!(
                 "the systemd timer for `{}` is still active after removal. Check \
                  `systemctl --user status {}`.",
@@ -615,16 +762,28 @@ impl TaskProvisioner for LinuxSystemdProvisioner {
     /// enabled — and asking only the first meant the end-state assertion in `remove_task` was
     /// vacuous for every boot job, which is precisely the case where a surviving unit runs the
     /// command again on the next boot.
-    async fn is_task_active(&self, executor: &CommandExecutor, name: &str) -> bool {
+    async fn is_task_active(
+        &self,
+        executor: &CommandExecutor,
+        name: &str,
+        target: &TaskTarget,
+    ) -> bool {
         let stem = Self::unit_stem(name);
-        self.systemctl_says(executor, "is-active", &format!("{}.timer", stem), "active")
-            .await
+        self.systemctl_says(
+            executor,
+            "is-active",
+            &format!("{}.timer", stem),
+            "active",
+            target,
+        )
+        .await
             || self
                 .systemctl_says(
                     executor,
                     "is-enabled",
                     &format!("{}.service", stem),
                     "enabled",
+                    target,
                 )
                 .await
     }
@@ -671,15 +830,37 @@ impl MacLaunchdProvisioner {
         format!("com.shall.{}", name)
     }
 
-    fn plist_path(name: &str) -> Option<PathBuf> {
-        Some(
-            dirs::home_dir()?
-                .join("Library/LaunchAgents")
-                .join(format!("{}.plist", Self::label(name))),
-        )
+    fn plist_path(name: &str, target: &TaskTarget) -> Option<PathBuf> {
+        let dir = match &target.account {
+            Some(account) => account.launch_agents_dir().ok()?,
+            None => dirs::home_dir()?.join("Library").join("LaunchAgents"),
+        };
+        Some(dir.join(format!("{}.plist", Self::label(name))))
     }
 
-    fn plist(&self, config: &ScheduleConfig, shall_bin: &Path) -> String {
+    fn log_path(target: &TaskTarget) -> PathBuf {
+        match target.account() {
+            Ok(account) => account
+                .data_dir()
+                .unwrap_or_else(|_| crate::utils::safe_data_dir())
+                .join("schedule.log"),
+            Err(_) => crate::utils::safe_data_dir().join("schedule.log"),
+        }
+    }
+
+    async fn launchctl(
+        &self,
+        executor: &CommandExecutor,
+        target: &TaskTarget,
+        args: &[&str],
+    ) -> Result<StdOutput> {
+        match &target.account {
+            Some(account) => executor.run_as(account, "launchctl", args, false).await,
+            None => executor.run("launchctl", args, false).await,
+        }
+    }
+
+    fn plist(&self, config: &ScheduleConfig, shall_bin: &Path, target: &TaskTarget) -> String {
         let label = Self::label(&config.name);
         let schedule_xml = if config.cron == "@reboot" {
             "<key>RunAtLoad</key><true/>".to_string()
@@ -714,7 +895,7 @@ impl MacLaunchdProvisioner {
             cmd = config.command,
             schedule = schedule_xml,
             disabled = disabled,
-            log = crate::utils::safe_data_dir().join("schedule.log").display()
+            log = Self::log_path(target).display()
         )
     }
 
@@ -807,21 +988,27 @@ impl TaskProvisioner for MacLaunchdProvisioner {
         &self,
         config: &ScheduleConfig,
         shall_bin: &Path,
+        target: &TaskTarget,
     ) -> std::result::Result<Provisioned, String> {
         Ok(Provisioned {
-            spec: self.plist(config, shall_bin),
+            spec: self.plist(config, shall_bin, target),
             armed: armed(config),
         })
     }
 
-    async fn read_task(&self, executor: &CommandExecutor, name: &str) -> Reading {
-        let Some(path) = Self::plist_path(name) else {
+    async fn read_task(
+        &self,
+        executor: &CommandExecutor,
+        name: &str,
+        target: &TaskTarget,
+    ) -> Reading {
+        let Some(path) = Self::plist_path(name, target) else {
             return Reading::Unreadable;
         };
         match std::fs::read_to_string(&path) {
             Ok(spec) => Reading::Holds(Provisioned {
                 spec,
-                armed: self.is_task_active(executor, name).await,
+                armed: self.is_task_active(executor, name, target).await,
             }),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Reading::Absent,
             Err(_) => Reading::Unreadable,
@@ -833,17 +1020,26 @@ impl TaskProvisioner for MacLaunchdProvisioner {
         executor: &CommandExecutor,
         config: &ScheduleConfig,
         shall_bin: &Path,
+        target: &TaskTarget,
     ) -> Result<()> {
-        let plist_path = Self::plist_path(&config.name)
-            .ok_or_else(|| Error::Io("Could not locate home directory".into()))?;
+        let plist_path = Self::plist_path(&config.name, target).ok_or_else(|| {
+            target.refuse_no_user_domain(
+                &format!("schedule:{}", config.name),
+                "launchd",
+                "the account's home directory is not resolvable, so there is no per-user \
+                 LaunchAgents directory to write into",
+            )
+        })?;
 
+        if let Some(parent) = plist_path.parent() {
+            crate::utils::file::ensure_dir(parent)?;
+        }
         executor
-            .write_atomic(&plist_path, &self.plist(config, shall_bin))
+            .write_atomic(&plist_path, &self.plist(config, shall_bin, target))
             .await?;
 
         if armed(config) {
-            executor
-                .run("launchctl", &["load", &plist_path.to_string_lossy()], false)
+            self.launchctl(executor, target, &["load", &plist_path.to_string_lossy()])
                 .await?;
             return Ok(());
         }
@@ -851,14 +1047,10 @@ impl TaskProvisioner for MacLaunchdProvisioner {
         // Declared silent: the `Disabled` key keeps it that way across a reboot, and an unload
         // takes it out of this session. An agent that was never loaded reports failure, so the
         // end state is what gets asserted rather than the exit code.
-        let _ = executor
-            .run(
-                "launchctl",
-                &["unload", &plist_path.to_string_lossy()],
-                false,
-            )
+        let _ = self
+            .launchctl(executor, target, &["unload", &plist_path.to_string_lossy()])
             .await;
-        if self.is_task_active(executor, &config.name).await {
+        if self.is_task_active(executor, &config.name, target).await {
             return Err(Error::Io(format!(
                 "`schedule:{}` is declared `enabled = false` and its launchd agent is still \
                  loaded. Check `launchctl list {}`.",
@@ -869,20 +1061,21 @@ impl TaskProvisioner for MacLaunchdProvisioner {
         Ok(())
     }
 
-    async fn remove_task(&self, executor: &CommandExecutor, name: &str) -> Result<()> {
-        if let Some(plist_path) = Self::plist_path(name) {
-            let _ = executor
-                .run(
-                    "launchctl",
-                    &["unload", &plist_path.to_string_lossy()],
-                    false,
-                )
+    async fn remove_task(
+        &self,
+        executor: &CommandExecutor,
+        name: &str,
+        target: &TaskTarget,
+    ) -> Result<()> {
+        if let Some(plist_path) = Self::plist_path(name, target) {
+            let _ = self
+                .launchctl(executor, target, &["unload", &plist_path.to_string_lossy()])
                 .await;
             remove_generated(&plist_path)?;
         }
         // `unload` is allowed to fail (an agent that was never loaded reports failure); a job
         // still listed after this one is a schedule that keeps firing.
-        if self.is_task_active(executor, name).await {
+        if self.is_task_active(executor, name, target).await {
             return Err(Error::Io(format!(
                 "the launchd agent for `{}` is still loaded after removal. Check \
                  `launchctl list {}`.",
@@ -893,14 +1086,18 @@ impl TaskProvisioner for MacLaunchdProvisioner {
         Ok(())
     }
 
-    async fn is_task_active(&self, executor: &CommandExecutor, name: &str) -> bool {
-        match executor
-            .run("launchctl", &["list", &Self::label(name)], false)
-            .await
-        {
-            Ok(o) => o.status.success(),
-            Err(_) => false,
-        }
+    async fn is_task_active(
+        &self,
+        executor: &CommandExecutor,
+        name: &str,
+        target: &TaskTarget,
+    ) -> bool {
+        let args = ["list", &Self::label(name)];
+        let out = match &target.account {
+            Some(account) => executor.run_output_as(account, "launchctl", &args).await,
+            None => executor.run_output("launchctl", &args, false).await,
+        };
+        out.is_ok()
     }
 }
 
@@ -1332,7 +1529,7 @@ fn when_from_xml(doc: &str) -> Option<String> {
 ///
 /// Pure, and separate from the query, so it can be asked about a **verbatim** document captured
 /// from a real Task Scheduler rather than only about documents this file made up.
-fn provisioned_from_xml(doc: &str) -> Option<Provisioned> {
+fn provisioned_from_xml(doc: &str, expected: Option<&str>) -> Option<Provisioned> {
     let exec = xml_element(doc, "Exec")?;
     let program = unescape_xml(xml_text(exec, "Command")?);
     let arguments = xml_text(exec, "Arguments")
@@ -1352,16 +1549,22 @@ fn provisioned_from_xml(doc: &str) -> Option<Provisioned> {
         .and_then(|s| xml_text(s, "Enabled"))
         .map(|v| v == "true")
         .unwrap_or(true);
+    let found = xml_element(doc, "Principals")
+        .and_then(|p| xml_text(p, "UserId"))
+        .filter(|user| !user.is_empty());
+    let principal = expected.map(|want| match found {
+        Some(found) if found == want => want.to_string(),
+        other => other.unwrap_or_default().to_string(),
+    });
 
     Some(Provisioned {
-        spec: schtasks_spec(&command, &when, elevated),
+        spec: schtasks_spec(&command, &when, elevated, principal.as_deref()),
         armed,
     })
 }
 
-/// The canonical record of a Windows task: what it runs, when, and at which privilege.
-fn schtasks_spec(command: &str, when: &str, elevated: bool) -> String {
-    format!(
+fn schtasks_spec(command: &str, when: &str, elevated: bool, account: Option<&str>) -> String {
+    let mut out = format!(
         "run: {}\nwhen: {}\nlevel: {}\n",
         command.trim(),
         when,
@@ -1370,7 +1573,11 @@ fn schtasks_spec(command: &str, when: &str, elevated: bool) -> String {
         } else {
             "LeastPrivilege"
         }
-    )
+    );
+    if let Some(user) = account {
+        out.push_str(&format!("account: {user}\n"));
+    }
+    out
 }
 
 /// Task Scheduler's `/XML` output, whichever width it came back in.
@@ -1398,6 +1605,11 @@ struct WindowsTaskProvisioner;
 impl WindowsTaskProvisioner {
     fn task_name(name: &str) -> String {
         format!("Shall_{}", name)
+    }
+
+    fn principal(target: &TaskTarget) -> Option<String> {
+        let account = target.account.as_ref()?;
+        Some(account.sid().unwrap_or_else(|| account.name().to_string()))
     }
 
     fn command_line(config: &ScheduleConfig, shall_bin: &Path) -> String {
@@ -1433,6 +1645,7 @@ impl TaskProvisioner for WindowsTaskProvisioner {
         &self,
         config: &ScheduleConfig,
         shall_bin: &Path,
+        target: &TaskTarget,
     ) -> std::result::Result<Provisioned, String> {
         let args = map_cron_to_schtasks(&config.cron)?;
         let when = schtasks_when(&args).ok_or_else(|| {
@@ -1446,12 +1659,18 @@ impl TaskProvisioner for WindowsTaskProvisioner {
                 &Self::command_line(config, shall_bin),
                 &when,
                 config.elevated == Some(true),
+                Self::principal(target).as_deref(),
             ),
             armed: armed(config),
         })
     }
 
-    async fn read_task(&self, executor: &CommandExecutor, name: &str) -> Reading {
+    async fn read_task(
+        &self,
+        executor: &CommandExecutor,
+        name: &str,
+        target: &TaskTarget,
+    ) -> Reading {
         let tn = Self::task_name(name);
         let queried = executor
             .run("schtasks", &["/Query", "/TN", &tn, "/XML"], false)
@@ -1474,7 +1693,7 @@ impl TaskProvisioner for WindowsTaskProvisioner {
             }
         };
 
-        match provisioned_from_xml(&doc) {
+        match provisioned_from_xml(&doc, Self::principal(target).as_deref()) {
             Some(held) => Reading::Holds(held),
             None => Reading::Unreadable,
         }
@@ -1485,6 +1704,7 @@ impl TaskProvisioner for WindowsTaskProvisioner {
         executor: &CommandExecutor,
         config: &ScheduleConfig,
         shall_bin: &Path,
+        target: &TaskTarget,
     ) -> Result<()> {
         let name = Self::task_name(&config.name);
         // Quoted for `/TR`, which takes one string and splits it itself; the read-back compares
@@ -1498,10 +1718,22 @@ impl TaskProvisioner for WindowsTaskProvisioner {
         let schedule = map_cron_to_schtasks(&config.cron)
             .map_err(|e| Error::Refused(format!("`schedule:{}`: {}", config.name, e)))?;
 
+        if target.is_scoped() && !TaskTarget::can_register_for_another_account() {
+            return Err(target.refuse_no_user_domain(
+                &format!("schedule:{}", config.name),
+                "Windows Task Scheduler",
+                "registering a task for another account needs that account's password, and \
+                 Shall does not hold it",
+            ));
+        }
+        let principal = Self::principal(target);
         let mut args: Vec<&str> = vec!["/Create", "/TN", &name, "/TR", &cmd, "/F"];
         args.extend(schedule.iter().map(String::as_str));
         if config.elevated == Some(true) {
             args.extend(["/RL", "HIGHEST"]);
+        }
+        if let Some(user) = principal.as_deref() {
+            args.extend(["/RU", user]);
         }
 
         // `ERROR: Access is denied.` is what Task Scheduler says when the shell is not
@@ -1531,14 +1763,19 @@ impl TaskProvisioner for WindowsTaskProvisioner {
         Ok(())
     }
 
-    async fn remove_task(&self, executor: &CommandExecutor, name: &str) -> Result<()> {
+    async fn remove_task(
+        &self,
+        executor: &CommandExecutor,
+        name: &str,
+        target: &TaskTarget,
+    ) -> Result<()> {
         let tn = Self::task_name(name);
         // `/Delete` on a task that does not exist exits non-zero, so the exit code cannot
         // tell "already gone" from "refused"; the end state can.
         let _ = executor
             .run("schtasks", &["/Delete", "/TN", &tn, "/F"], true)
             .await;
-        if self.is_task_active(executor, name).await {
+        if self.is_task_active(executor, name, target).await {
             return Err(Error::Io(format!(
                 "the scheduled task `{}` still exists after removal. Check \
                  `schtasks /Query /TN {}`.",
@@ -1548,7 +1785,12 @@ impl TaskProvisioner for WindowsTaskProvisioner {
         Ok(())
     }
 
-    async fn is_task_active(&self, executor: &CommandExecutor, name: &str) -> bool {
+    async fn is_task_active(
+        &self,
+        executor: &CommandExecutor,
+        name: &str,
+        _target: &TaskTarget,
+    ) -> bool {
         let tn = Self::task_name(name);
         match executor
             .run("schtasks", &["/Query", "/TN", &tn], false)
@@ -1574,7 +1816,19 @@ mod tests {
             persistent: None,
             jitter: None,
             elevated: None,
+            user: None,
         }
+    }
+
+    fn here() -> TaskTarget {
+        TaskTarget { account: None }
+    }
+
+    fn me() -> TaskTarget {
+        TaskTarget::resolve(Some(
+            crate::core::account::Account::current().unwrap().name(),
+        ))
+        .unwrap()
     }
 
     #[test]
@@ -1798,10 +2052,10 @@ mod tests {
         let _guard = crate::core::shall_data_dir_lock();
         let p = LinuxSystemdProvisioner;
         let bin = Path::new("/usr/local/bin/shall");
-        let a = p.rendered(&cfg("0 2 * * *"), bin).unwrap();
+        let a = p.rendered(&cfg("0 2 * * *"), bin, &here()).unwrap();
 
         // Assembled the way `read_task` assembles it from the two files on disk.
-        let mut from_disk = LinuxSystemdProvisioner::service_unit(&cfg("0 2 * * *"), bin);
+        let mut from_disk = LinuxSystemdProvisioner::service_unit(&cfg("0 2 * * *"), bin, &here());
         from_disk.push_str(UNIT_SEPARATOR);
         from_disk.push_str(&p.timer_unit(&cfg("0 2 * * *")));
         assert_eq!(a.spec, from_disk);
@@ -1809,10 +2063,13 @@ mod tests {
         // And an edit to either half moves it.
         let mut edited = cfg("0 3 * * *");
         edited.command = "sync".into();
-        assert_ne!(p.rendered(&edited, bin).unwrap().spec, a.spec);
+        assert_ne!(p.rendered(&edited, bin, &here()).unwrap().spec, a.spec);
         let mut other_command = cfg("0 2 * * *");
         other_command.command = "clean".into();
-        assert_ne!(p.rendered(&other_command, bin).unwrap().spec, a.spec);
+        assert_ne!(
+            p.rendered(&other_command, bin, &here()).unwrap().spec,
+            a.spec
+        );
     }
 
     /// A `@reboot` job keeps its log redirection. It did not: the boot shape was written by
@@ -1821,14 +2078,18 @@ mod tests {
     /// nowhere.
     #[test]
     fn a_boot_job_still_says_where_its_output_goes() {
-        let unit = LinuxSystemdProvisioner::service_unit(&cfg("@reboot"), Path::new("/bin/shall"));
+        let unit = LinuxSystemdProvisioner::service_unit(
+            &cfg("@reboot"),
+            Path::new("/bin/shall"),
+            &here(),
+        );
         assert!(unit.contains("StandardOutput=append:"), "{}", unit);
         assert!(unit.contains("StandardError=append:"), "{}", unit);
         assert!(unit.contains("WantedBy=default.target"), "{}", unit);
         // And it has no timer to be installed into.
         let p = LinuxSystemdProvisioner;
         assert!(!p
-            .rendered(&cfg("@reboot"), Path::new("/bin/shall"))
+            .rendered(&cfg("@reboot"), Path::new("/bin/shall"), &here())
             .unwrap()
             .spec
             .contains("OnCalendar="));
@@ -1860,18 +2121,28 @@ mod tests {
         let bin = Path::new("/bin/shall");
         assert!(
             !LinuxSystemdProvisioner
-                .rendered(&silent, bin)
+                .rendered(&silent, bin, &here())
                 .unwrap()
                 .armed
         );
-        assert!(!MacLaunchdProvisioner.rendered(&silent, bin).unwrap().armed);
-        assert!(!WindowsTaskProvisioner.rendered(&silent, bin).unwrap().armed);
+        assert!(
+            !MacLaunchdProvisioner
+                .rendered(&silent, bin, &here())
+                .unwrap()
+                .armed
+        );
+        assert!(
+            !WindowsTaskProvisioner
+                .rendered(&silent, bin, &here())
+                .unwrap()
+                .armed
+        );
         // launchd carries it in the file as well, so a reboot does not arm it behind us.
         assert!(MacLaunchdProvisioner
-            .plist(&silent, bin)
+            .plist(&silent, bin, &here())
             .contains("<key>Disabled</key><true/>"));
         assert!(!MacLaunchdProvisioner
-            .plist(&cfg("0 2 * * *"), bin)
+            .plist(&cfg("0 2 * * *"), bin, &here())
             .contains("Disabled"));
     }
 
@@ -2185,9 +2456,11 @@ mod tests {
         elevated.elevated = Some(true);
         let bin = Path::new("C:\\Program Files\\shall\\shall.exe");
         let plain = WindowsTaskProvisioner
-            .rendered(&cfg("0 3 * * *"), bin)
+            .rendered(&cfg("0 3 * * *"), bin, &here())
             .unwrap();
-        let raised = WindowsTaskProvisioner.rendered(&elevated, bin).unwrap();
+        let raised = WindowsTaskProvisioner
+            .rendered(&elevated, bin, &here())
+            .unwrap();
         assert!(plain.spec.contains("LeastPrivilege"), "{}", plain.spec);
         assert!(raised.spec.contains("HighestAvailable"), "{}", raised.spec);
         assert!(plain.spec.contains("daily at 03:00"), "{}", plain.spec);
@@ -2217,11 +2490,11 @@ mod tests {
             xml_text(exec, "Command").unwrap().trim_matches('"'),
             xml_text(exec, "Arguments").unwrap()
         );
-        let read = schtasks_spec(&command, &when_from_xml(&doc).unwrap(), false);
+        let read = schtasks_spec(&command, &when_from_xml(&doc).unwrap(), false, None);
 
         let bin = Path::new("C:\\Program Files\\shall\\shall.exe");
         let rendered = WindowsTaskProvisioner
-            .rendered(&cfg("0 3 * * *"), bin)
+            .rendered(&cfg("0 3 * * *"), bin, &here())
             .unwrap();
         assert_eq!(read, rendered.spec);
     }
@@ -2272,13 +2545,15 @@ mod tests {
 
     #[test]
     fn a_real_task_scheduler_document_reads_the_way_the_fixtures_say_it_does() {
-        let held = provisioned_from_xml(REAL_TASK_XML).expect("a real document must be readable");
+        let held =
+            provisioned_from_xml(REAL_TASK_XML, None).expect("a real document must be readable");
         assert_eq!(
             held.spec,
             schtasks_spec(
                 "c:\\Program Files (x86)\\Corel\\CUH\\v2\\CUH.exe /t",
                 "daily at 13:56",
-                false
+                false,
+                None
             )
         );
         // No `<Enabled>` anywhere in `<Settings>`, and the task is not disabled — so absent has
@@ -2288,6 +2563,148 @@ mod tests {
         assert!(xml_element(REAL_TASK_XML, "Settings")
             .expect("settings")
             .contains("IdleSettings"));
+    }
+
+    #[test]
+    fn a_named_accounts_schedule_lives_in_that_accounts_own_directory() {
+        let account = crate::core::account::Account::current().unwrap();
+        let target = me();
+        assert!(target.is_scoped());
+        assert_eq!(target.account().unwrap(), account);
+
+        let dir = LinuxSystemdProvisioner::unit_dir(&target).unwrap();
+        assert_eq!(dir, account.systemd_user_dir().unwrap());
+        assert!(
+            dir.starts_with(account.home()),
+            "{dir:?} is not in the account's home"
+        );
+
+        let log = LinuxSystemdProvisioner::log_path(&target);
+        assert!(
+            log.starts_with(account.home()),
+            "{log:?} is not in the account's home"
+        );
+        assert!(LinuxSystemdProvisioner::service_unit(
+            &cfg("0 2 * * *"),
+            Path::new("/bin/shall"),
+            &target
+        )
+        .contains(&log.display().to_string()));
+    }
+
+    #[test]
+    fn an_unscoped_schedule_uses_what_it_always_used() {
+        let _env = crate::core::shall_data_dir_lock();
+        let here = TaskTarget::resolve(None).unwrap();
+        assert!(!here.is_scoped());
+        assert_eq!(
+            LinuxSystemdProvisioner::unit_dir(&here).unwrap(),
+            dirs::config_dir().unwrap().join("systemd").join("user")
+        );
+        assert_eq!(
+            LinuxSystemdProvisioner::log_path(&here),
+            crate::utils::safe_data_dir().join("schedule.log")
+        );
+        assert!(here.account().is_ok());
+    }
+
+    #[test]
+    fn the_same_target_drives_the_render_the_read_and_the_removal() {
+        let account = crate::core::account::Account::current().unwrap();
+        let target = me();
+        let bin = Path::new("/usr/local/bin/shall");
+
+        let p = LinuxSystemdProvisioner;
+        let spec = p.rendered(&cfg("0 2 * * *"), bin, &target).unwrap();
+        let mut from_disk = LinuxSystemdProvisioner::service_unit(&cfg("0 2 * * *"), bin, &target);
+        from_disk.push_str(UNIT_SEPARATOR);
+        from_disk.push_str(&p.timer_unit(&cfg("0 2 * * *")));
+        assert_eq!(
+            spec.spec, from_disk,
+            "the rendered spec and the spec read back from the account's own directory disagree"
+        );
+
+        let plist = MacLaunchdProvisioner
+            .rendered(&cfg("0 2 * * *"), bin, &target)
+            .unwrap();
+        let path = MacLaunchdProvisioner::plist_path("nightly", &target).unwrap();
+        assert_eq!(
+            path,
+            account
+                .launch_agents_dir()
+                .unwrap()
+                .join("com.shall.nightly.plist"),
+            "the plist is not in the account's own LaunchAgents"
+        );
+        assert!(plist.spec.contains("com.shall.nightly"));
+    }
+
+    #[test]
+    fn a_schedule_for_an_account_that_does_not_exist_is_refused() {
+        let err = TaskTarget::resolve(Some("shall-no-such-account-71"))
+            .expect_err("an unresolvable account must be refused")
+            .to_string();
+        assert!(err.contains("shall-no-such-account-71"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn an_account_with_no_user_manager_is_refused_before_anything_is_written() {
+        use crate::core::executor::MockExecutor;
+        use dashmap::DashMap;
+        use std::sync::Arc;
+
+        let vfs = Arc::new(DashMap::new());
+        let mock = Arc::new(MockExecutor::new(vfs.clone()));
+        mock.set_response(
+            "systemctl --no-pager --user daemon-reload",
+            Err(Error::CommandFailed {
+                message: "Failed to connect to bus: No medium found".into(),
+                retry: crate::core::Retryability::Permanent,
+                absent_name: false,
+            }),
+        );
+        let exec =
+            CommandExecutor::with_layer(false, false, mock.clone(), vfs, Arc::new(DashMap::new()));
+        let account = crate::core::account::Account::current().unwrap();
+        let target = me();
+        let err = LinuxSystemdProvisioner
+            .add_task(
+                &exec,
+                &cfg("0 2 * * *"),
+                Path::new("/usr/local/bin/shall"),
+                &target,
+            )
+            .await
+            .expect_err("no user manager must be refused");
+        let err = err.to_string();
+        assert!(
+            err.contains(account.name()),
+            "the refusal names no account: {err}"
+        );
+        assert!(
+            err.contains("user manager"),
+            "the refusal does not say what is missing: {err}"
+        );
+        assert!(err.contains("Nothing was written"), "{err}");
+
+        let calls = mock.get_calls().await;
+        assert_eq!(calls.len(), 1, "a refused schedule ran {calls:?}");
+        assert!(calls[0].contains("daemon-reload"), "{calls:?}");
+    }
+
+    #[test]
+    fn two_accounts_get_two_distinct_unit_paths() {
+        let account = crate::core::account::Account::current().unwrap();
+        let theirs = me();
+        let mine = TaskTarget::resolve(None).unwrap();
+        assert_eq!(
+            LinuxSystemdProvisioner::unit_dir(&mine).unwrap(),
+            dirs::config_dir().unwrap().join("systemd").join("user")
+        );
+        assert_eq!(
+            LinuxSystemdProvisioner::unit_dir(&theirs).unwrap(),
+            account.systemd_user_dir().unwrap()
+        );
     }
 
     #[test]

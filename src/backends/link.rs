@@ -1,4 +1,4 @@
-﻿use crate::config::Config;
+use crate::config::Config;
 use crate::core::{
     BackendCore, CommandExecutor, Error, Installable, MetadataProvider, PackageSpec, Result,
 };
@@ -19,60 +19,49 @@ pub struct LinkBackendCore {
 /// Where a `@target=` value lands on disk. The install path and the pre-sync confirmation
 /// must answer this the same way, or the run confirms one destination and writes another.
 pub fn resolve_target(target: &str) -> Result<PathBuf> {
-    let home = || dirs::home_dir().ok_or_else(|| Error::Other("Could not find home".into()));
-    if let Some(rest) = target.strip_prefix("~/") {
-        Ok(home()?.join(rest))
-    } else if target == "~" {
-        home()
-    } else {
-        Ok(PathBuf::from(target))
-    }
+    crate::core::account::Account::current()?.expand_home(target)
+}
+
+pub fn resolve_target_for_user(target: &str, user: &str) -> Result<PathBuf> {
+    crate::core::account::Account::resolve(user)?.expand_home(target)
 }
 
 /// Where a declared source file lives on disk — the `link:` name, or a `dotfiles:` tree.
-///
-/// **A relative source is relative to the config repo.** Not to the process's working
-/// directory, and emphatically not to the directory holding the link: a symlink stores its
-/// destination as a string and resolves it against its own location on every open, so
-/// `link:./dotfiles/vimrc@target=/root/.vimrc` written verbatim produced `/root/.vimrc ->
-/// ./dotfiles/vimrc`, which means `/root/dotfiles/vimrc`. That file does not exist. The dotfile
-/// could not be read at all, by anything, and `check` filed the whole state under `ok` (B0b).
-///
-/// The config repo is the only reading that makes the declaration portable, and it is what
-/// `dotfiles:` has always done with the identical string — which is why this is one function
-/// and not two. **Every caller that touches a declared source must come through here**: the
-/// installer, the readback that decides whether a resource is in effect, and the tree walk.
-/// A source resolved one way when it is written and another way when it is read is how a
-/// dangling link comes to look verified.
 pub fn resolve_source(config: &Config, declared: &str) -> Result<PathBuf> {
-    let expanded = resolve_target(declared)?;
-    Ok(match expanded.is_absolute() {
-        true => expanded,
-        false => config.config_root().join(expanded),
-    })
+    resolve_source_for_user(config, declared, None)
+}
+
+pub fn resolve_source_for_user(
+    config: &Config,
+    declared: &str,
+    _user: Option<&str>,
+) -> Result<PathBuf> {
+    let path = PathBuf::from(declared);
+    if path.is_absolute() {
+        return Ok(path);
+    }
+    if declared == "~" || declared.starts_with("~/") {
+        return resolve_target(declared);
+    }
+    Ok(config.config_root().join(path))
 }
 
 /// Whether a `link:` line reads its source file at all.
-///
-/// `@content=` declares the bytes inline and never opens the name; every other mode — a plain
-/// symlink, `@template=true`, `@decrypt=` — needs the file to be there.
 pub fn reads_its_source(opts: &crate::config::grammar::Options) -> bool {
     opts.one("content").is_none()
 }
 
 /// [`resolve_source`], refusing when the file is not on disk.
-///
-/// **A `link:` whose source does not exist cannot be placed, and placing it anyway is worse
-/// than refusing.** `symlink` happily writes a pointer to nothing: the result exists, satisfies
-/// an `-L` test, and reads back as *"Shall cannot read back"* — a sentence `check` then filed
-/// under `ok`. So the failure mode of not asking this question is a green health check over a
-/// dotfile that no program can open (B0b).
-///
-/// `dotfiles:` has refused the same way since it was written — *"is not a directory"* — on the
-/// identical string. This is its twin answering the same question the same way, which is the
-/// whole of what went wrong: one idea, two implementations, one of them right.
 pub fn resolve_existing_source(config: &Config, declared: &str) -> Result<PathBuf> {
-    let resolved = resolve_source(config, declared)?;
+    resolve_existing_source_for_user(config, declared, None)
+}
+
+pub fn resolve_existing_source_for_user(
+    config: &Config,
+    declared: &str,
+    user: Option<&str>,
+) -> Result<PathBuf> {
+    let resolved = resolve_source_for_user(config, declared, user)?;
     if resolved.exists() {
         return Ok(resolved);
     }
@@ -86,108 +75,27 @@ pub fn resolve_existing_source(config: &Config, declared: &str) -> Result<PathBu
     )))
 }
 
-/// Where a `@target=` value lands on disk for a specific user (U71). Resolves `~/` to
-/// that user's home via `getent passwd`, falling back to the process home if the user
-/// cannot be looked up (which the parser should have already refused).
-pub fn resolve_target_for_user(target: &str, user: &str) -> Result<PathBuf> {
-    let home = home_for_user(user)?;
-    if let Some(rest) = target.strip_prefix("~/") {
-        Ok(home.join(rest))
-    } else if target == "~" {
-        Ok(home)
-    } else {
-        Ok(PathBuf::from(target))
+pub async fn chown_to_user(
+    path: &Path,
+    user: &str,
+    executor: &CommandExecutor,
+    follow: bool,
+) -> Result<()> {
+    let account = crate::core::account::Account::resolve(user)?;
+    let owns = match std::fs::symlink_metadata(path) {
+        Ok(_) => account.owns(path, follow)?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(error) => return Err(Error::from(error)),
+    };
+    if owns {
+        return Ok(());
     }
-}
-
-/// Look up a user's home directory via `getent passwd`, returning the fifth field.
-pub fn home_for_user(user: &str) -> Result<PathBuf> {
-    let output = std::process::Command::new("getent")
-        .args(["passwd", user])
-        .output()
-        .map_err(|e| Error::Other(format!("getent passwd failed: {}", e)))?;
-    if !output.status.success() {
-        return Err(Error::Other(format!(
-            "user `{}` not found (getent passwd failed)",
-            user
-        )));
-    }
-    let line = crate::utils::text::sanitize(&String::from_utf8_lossy(&output.stdout));
-    let home = line
-        .split(':')
-        .nth(5)
-        .ok_or_else(|| Error::Other(format!(
-            "could not parse home for `{}` from getent output",
-            user
-        )))?;
-    Ok(PathBuf::from(home))
-}
-
-/// Look up uid and gid for a user via `getent passwd`.
-fn uid_gid_for_user(user: &str) -> Result<(u32, u32)> {
-    let output = std::process::Command::new("getent")
-        .args(["passwd", user])
-        .output()
-        .map_err(|e| Error::Other(format!("getent passwd failed: {}", e)))?;
-    if !output.status.success() {
-        return Err(Error::Other(format!(
-            "user `{}` not found (getent passwd failed)",
-            user
-        )));
-    }
-    let line = crate::utils::text::sanitize(&String::from_utf8_lossy(&output.stdout));
-    let parts: Vec<&str> = line.split(':').collect();
-    if parts.len() < 4 {
-        return Err(Error::Other(format!(
-            "could not parse uid/gid for `{}` from getent output",
-            user
-        )));
-    }
-    let uid = parts[2]
-        .parse::<u32>()
-        .map_err(|_| Error::Other(format!("invalid uid for `{}`", user)))?;
-    let gid = parts[3]
-        .parse::<u32>()
-        .map_err(|_| Error::Other(format!("invalid gid for `{}`", user)))?;
-    Ok((uid, gid))
-}
-
-/// Change ownership of a path to a named user. Uses `chown(2)` on Unix.
-pub async fn chown_to_user(path: &Path, user: &str, executor: &CommandExecutor) -> Result<()> {
     if executor.dry_run {
         crate::would!("Link: would chown {:?} to {}", path, user);
         return Ok(());
     }
-    let (uid, gid) = uid_gid_for_user(user)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        let meta = tokio::fs::metadata(path)
-            .await
-            .map_err(Error::from)?;
-        let current_uid = meta.uid();
-        let current_gid = meta.gid();
-        if current_uid == uid && current_gid == gid {
-            return Ok(());
-        }
-        use std::os::unix::ffi::OsStrExt;
-        let c_path = std::ffi::CString::new(path.as_os_str().as_bytes())
-            .map_err(|_| Error::Other(format!("path {:?} contains null byte", path)))?;
-        let ret = unsafe { libc::chown(c_path.as_ptr(), uid, gid) };
-        if ret != 0 {
-            return Err(Error::Other(format!(
-                "chown {:?} to {} failed: {}",
-                path,
-                user,
-                std::io::Error::last_os_error()
-            )));
-        }
-        info!("Link: chown {:?} to {}", path, user);
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = (uid, gid);
-    }
+    account.apply_owner(path, follow)?;
+    info!("Link: chown {:?} to {}", path, user);
     Ok(())
 }
 
@@ -196,23 +104,45 @@ async fn apply_declared_owner(
     spec: &PackageSpec,
     executor: &CommandExecutor,
 ) -> Result<()> {
-    if let Some(owner) = spec.options.one("owner") {
-        chown_to_user(path, owner, executor).await?;
+    if let Some(owner) = spec
+        .options
+        .one("owner")
+        .or_else(|| spec.options.one("user"))
+    {
+        let follow = spec.options.contains("content")
+            || spec.options.contains("decrypt")
+            || spec.options.one("template") == Some("true");
+        chown_to_user(path, owner, executor, follow).await?;
     }
     Ok(())
 }
 
-/// Create parent directories for a target path if they don't exist. Idempotent.
-pub async fn ensure_parent_dir(path: &Path, executor: &CommandExecutor) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            if executor.dry_run {
-                crate::would!("Link: would create parent {:?}", parent);
-            } else {
-                tokio::fs::create_dir_all(parent)
-                    .await
-                    .map_err(Error::from)?;
-            }
+pub async fn ensure_parent_dir_for_user(
+    path: &Path,
+    executor: &CommandExecutor,
+    user: Option<&str>,
+) -> Result<()> {
+    let Some(parent) = path.parent() else {
+        return Ok(());
+    };
+    let mut missing = Vec::new();
+    let mut current = parent;
+    while !current.exists() {
+        missing.push(current.to_path_buf());
+        current = current
+            .parent()
+            .ok_or_else(|| Error::Validation(format!("cannot find a parent for {:?}", path)))?;
+    }
+    if executor.dry_run {
+        for path in missing.iter().rev() {
+            crate::would!("Link: would create parent {:?}", path);
+        }
+        return Ok(());
+    }
+    for path in missing.iter().rev() {
+        tokio::fs::create_dir(path).await.map_err(Error::from)?;
+        if let Some(user) = user {
+            chown_to_user(path, user, executor, true).await?;
         }
     }
     Ok(())
@@ -335,15 +265,16 @@ pub fn refuse_target_in_repo(config: &Config, resolved: &Path) -> Result<()> {
     )))
 }
 
-/// Whether a resolved `@target` lands outside the user's home directory. An unknown home
-/// counts as outside: the point of the question is that the destination is not one of the
-/// dotfiles the link backend exists for, and a machine that cannot say where home is
-/// cannot say the path is under it.
 pub fn is_outside_home(resolved: &Path) -> bool {
-    match dirs::home_dir() {
-        Some(home) => !resolved.starts_with(home),
-        None => true,
-    }
+    is_outside_home_for_user(resolved, None).unwrap_or(true)
+}
+
+pub fn is_outside_home_for_user(resolved: &Path, user: Option<&str>) -> Result<bool> {
+    let account = match user {
+        Some(user) => crate::core::account::Account::resolve(user)?,
+        None => crate::core::account::Account::current()?,
+    };
+    Ok(!resolved.starts_with(account.home()))
 }
 
 /// The argument list for a decrypt tool. `-i` takes the identity as its value, so it stays
@@ -683,8 +614,17 @@ pub fn render_template_text(
     user: Option<&str>,
 ) -> Result<String> {
     let user_home = user
-        .and_then(|u| home_for_user(u).ok().map(|h| (u, h.to_string_lossy().into_owned())));
-    let user_home_ref = user_home.as_ref().map(|(u, h)| (&**u, h.as_str()));
+        .map(|name| {
+            let account = crate::core::account::Account::resolve(name)?;
+            let home = account.home().to_str().ok_or_else(|| {
+                Error::Other("the selected account home is not valid UTF-8".into())
+            })?;
+            Ok::<_, Error>((name, home.to_string()))
+        })
+        .transpose()?;
+    let user_home_ref = user_home
+        .as_ref()
+        .map(|(name, home)| (*name, home.as_str()));
     let mut tera = Tera::default();
     tera.add_raw_template("config", text)
         .map_err(|e| Error::Other(format!("Tera Parse Error in {:?}: {}", source, e)))?;
@@ -876,14 +816,18 @@ impl Installable for LinkInstallable {
                 .ok_or_else(|| Error::Other("Link requires @target".into()))?;
 
             // U71: when @user=NAME is present, resolve ~/ to that user's home.
-            let target_path = match spec.options.one("user") {
+            let user = spec.options.one("user");
+            let target_path = match user {
                 Some(u) => resolve_target_for_user(target_str, u)?,
                 None => resolve_target(target_str)?,
             };
+            if let Some(owner) = spec.options.one("owner") {
+                crate::core::account::Account::resolve(owner)?;
+            }
 
             // U71: create parent directories if auto_create_parent_dirs is enabled.
             if self.core.config.link.auto_create_parent_dirs {
-                ensure_parent_dir(&target_path, &self.core.executor).await?;
+                ensure_parent_dir_for_user(&target_path, &self.core.executor, user).await?;
             }
             let backup = wants_backup(spec);
 
@@ -954,7 +898,8 @@ impl Installable for LinkInstallable {
 
             // Mode B: Rendered template read from a source file.
             if spec.options.one("template") == Some("true") {
-                let rendered = self.core
+                let rendered = self
+                    .core
                     .render_template(&source, spec.options.one("user"))
                     .await?;
                 self.core
@@ -1204,6 +1149,13 @@ mod tests {
 
         let mut options = crate::config::grammar::Options::default();
         options.set("target", target.to_string_lossy().to_string());
+        options.set(
+            "user",
+            crate::core::account::Account::current()
+                .unwrap()
+                .name()
+                .to_string(),
+        );
         let spec = PackageSpec {
             name: "./dotfiles/vimrc".into(),
             backend: "link".into(),
@@ -1279,6 +1231,12 @@ mod tests {
                  working directory and not from the directory holding the link"
             );
         }
+
+        let account = crate::core::account::Account::current().unwrap();
+        assert_eq!(
+            resolve_source_for_user(&cfg, "./dotfiles/vimrc", Some(account.name())).unwrap(),
+            root.join("./dotfiles/vimrc")
+        );
 
         // An absolute source is already an answer and must not be re-rooted.
         #[cfg(windows)]
@@ -1357,6 +1315,31 @@ mod tests {
         assert!(is_outside_home(&resolve_target(system).unwrap()));
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn plain_symlink_ownership_does_not_modify_its_source() {
+        use std::os::unix::fs::MetadataExt;
+        let dir = tempdir().unwrap();
+        let source = dir.path().join("source");
+        let target = dir.path().join("target");
+        std::fs::write(&source, "source").unwrap();
+        let source_before = std::fs::symlink_metadata(&source).unwrap();
+        let account = crate::core::account::Account::current().unwrap();
+        let mut options = crate::config::grammar::Options::default();
+        options.set("target", target.to_string_lossy().to_string());
+        options.set("user", account.name());
+        let spec = PackageSpec {
+            name: source.to_string_lossy().to_string(),
+            backend: "link".into(),
+            options,
+            requires: vec![],
+            present: true,
+        };
+        installer().install(&[spec], false).await.unwrap();
+        let source_metadata = std::fs::symlink_metadata(&source).unwrap();
+        assert_eq!(source_metadata.uid(), source_before.uid());
+        assert_eq!(source_metadata.gid(), source_before.gid());
+    }
     #[tokio::test]
     async fn backs_up_preexisting_file_then_writes_managed_content() {
         let dir = tempdir().unwrap();
@@ -1573,6 +1556,27 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_per_user_template_and_target_use_the_same_account_home() {
+        let account = crate::core::account::Account::current().unwrap();
+        let facts = crate::config::parser::HostFacts::current();
+        let rendered = render_template_text(
+            Path::new("per-user.tmpl"),
+            "{{ USER }}|{{ HOME }}",
+            &facts,
+            &Config::default(),
+            Some(account.name()),
+        )
+        .unwrap();
+        assert_eq!(
+            rendered,
+            format!("{}|{}", account.name(), account.home().display())
+        );
+        assert_eq!(
+            resolve_target_for_user("~/config", account.name()).unwrap(),
+            account.home().join("config")
+        );
+    }
     #[tokio::test]
     async fn decrypt_dry_run_writes_nothing() {
         let dir = tempdir().unwrap();

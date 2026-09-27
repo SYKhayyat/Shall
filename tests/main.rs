@@ -180,6 +180,7 @@ mod the_rollup_counts_the_same_machine_as_the_detail_view_tests;
 mod the_scheduler_hands_out_a_generation_at_a_time_tests;
 mod the_stated_lifecycle_coverage_matches_the_ratchet_tests;
 mod time_travel_tests;
+mod two_accounts_are_two_resources_tests;
 mod unknown_backend_family_tests;
 mod verbs_are_reachable_tests;
 mod wal_enumeration_tests;

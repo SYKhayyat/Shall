@@ -17,6 +17,7 @@
 //! floor below moved down to match. `only_one_place_asks_for_a_yes_or_no` is what replaces the
 //! coverage: a scan that guards N sites is worth less than a rule that says there is one.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 /// Every `src/**/*.rs` file, so a prompt cannot hide in a module nobody listed.
@@ -140,5 +141,63 @@ fn only_one_place_asks_for_a_yes_or_no() {
     assert!(
         sites[0].starts_with("prompt.rs:"),
         "the one confirm moved out of `core::prompt`: {sites:?}"
+    );
+}
+
+#[test]
+fn one_function_answers_the_outside_home_question_and_both_commands_ask_it() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+
+    let mut definitions: Vec<String> = Vec::new();
+    let mut callers: Vec<(String, usize)> = Vec::new();
+    for path in sources() {
+        let body = std::fs::read_to_string(&path).unwrap_or_default();
+        for (i, line) in body.lines().enumerate() {
+            if line.trim_start().starts_with("//") || !line.contains("confirm_outside_home") {
+                continue;
+            }
+            let at = format!("{}:{}", path.display(), i + 1);
+            if line.contains("fn confirm_outside_home") {
+                definitions.push(at);
+            } else {
+                callers.push((at, i + 1));
+            }
+        }
+    }
+    assert_eq!(
+        definitions.len(),
+        1,
+        "the outside-home question has {} answers: {definitions:?}. Two functions asking it are \
+         two functions that can disagree about what it means to place a file into /etc.",
+        definitions.len()
+    );
+
+    let mut asked_by: BTreeSet<String> = BTreeSet::new();
+    for (at, _) in &callers {
+        let file = at.split(':').next().unwrap_or_default();
+        asked_by.insert(file.rsplit('/').next().unwrap_or_default().to_string());
+    }
+    for verb in ["sync.rs", "plan.rs"] {
+        assert!(
+            asked_by.contains(verb),
+            "`{}` never asks about an outside-home destination. SEC3 exists because a \
+             confirmation offered after the file is placed is a notification. Callers found: \
+             {callers:?}",
+            verb.trim_end_matches(".rs")
+        );
+    }
+
+    let plan =
+        std::fs::read_to_string(src.join("verbs/plan.rs")).expect("verbs/plan.rs is readable");
+    let asked = plan
+        .find("confirm_outside_home")
+        .expect("apply asks the question");
+    let places = plan
+        .find("apply_non_package_phases(")
+        .expect("apply places resources");
+    assert!(
+        asked < places,
+        "`apply` asks about outside-home destinations at byte {asked}, after the resource \
+         phases at byte {places} that write the files."
     );
 }

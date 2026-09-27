@@ -32,6 +32,12 @@ pub enum ServiceAction {
 /// Every action is a *sequence* of commands, because some inits have no native restart and
 /// express it as stop-then-start (launchd, Windows `sc`). An action a provider cannot express is
 /// an empty list, reported by name, never a silent success.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Domain {
+    System,
+    User,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct InitProvider {
     pub name: String,
@@ -99,6 +105,26 @@ pub struct InitProvider {
     /// [`start_benign_exits`](Self::start_benign_exits).
     #[serde(default)]
     pub stop_benign_exits: Vec<i32>,
+    #[serde(default)]
+    pub user_enable: Vec<Vec<String>>,
+    #[serde(default)]
+    pub user_disable: Vec<Vec<String>>,
+    #[serde(default)]
+    pub user_start: Vec<Vec<String>>,
+    #[serde(default)]
+    pub user_stop: Vec<Vec<String>>,
+    #[serde(default)]
+    pub user_restart: Vec<Vec<String>>,
+    #[serde(default)]
+    pub user_list: Vec<String>,
+    #[serde(default)]
+    pub user_list_pattern: Option<String>,
+    #[serde(default)]
+    pub user_list_strip_suffix: Option<String>,
+    #[serde(default)]
+    pub user_list_skip_lines: usize,
+    #[serde(default)]
+    pub user_status: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -114,38 +140,87 @@ impl InitProvider {
         adapter::fill(cmd, &[("{name}", name)])
     }
 
-    /// The ordered list of concrete commands that realize `action` for `name`, each paired with
-    /// the action it carries out. Empty when this init cannot express the action, so the caller
-    /// reports "cannot" rather than reporting done.
-    ///
-    /// A derived restart is a `Stop` followed by a `Start`, and each half must be labelled as
-    /// itself: the two halves have opposite ideas of which exit code means "already there".
-    pub fn plan(&self, action: ServiceAction, name: &str) -> Vec<(ServiceAction, Vec<String>)> {
-        let seq = match action {
-            ServiceAction::Enable => &self.enable,
-            ServiceAction::Disable => &self.disable,
-            ServiceAction::Start => &self.start,
-            ServiceAction::Stop => &self.stop,
-            ServiceAction::Restart => {
-                if self.restart.is_empty() {
-                    // Derived stop-then-start for an init with no native restart verb.
-                    let mut out: Vec<(ServiceAction, Vec<String>)> = Vec::new();
-                    out.extend(
-                        self.stop
-                            .iter()
-                            .map(|c| (ServiceAction::Stop, Self::fill(c, name))),
-                    );
-                    out.extend(
-                        self.start
-                            .iter()
-                            .map(|c| (ServiceAction::Start, Self::fill(c, name))),
-                    );
-                    return out;
+    pub fn has_user_scope(&self) -> bool {
+        !self.user_start.is_empty() && !self.user_stop.is_empty()
+    }
+
+    fn seq_for(&self, action: ServiceAction, domain: Domain) -> &Vec<Vec<String>> {
+        let user = matches!(domain, Domain::User);
+        match action {
+            ServiceAction::Enable => {
+                if user {
+                    &self.user_enable
+                } else {
+                    &self.enable
                 }
-                &self.restart
             }
-        };
-        seq.iter().map(|c| (action, Self::fill(c, name))).collect()
+            ServiceAction::Disable => {
+                if user {
+                    &self.user_disable
+                } else {
+                    &self.disable
+                }
+            }
+            ServiceAction::Start => {
+                if user {
+                    &self.user_start
+                } else {
+                    &self.start
+                }
+            }
+            ServiceAction::Stop => {
+                if user {
+                    &self.user_stop
+                } else {
+                    &self.stop
+                }
+            }
+            ServiceAction::Restart => {
+                if user {
+                    &self.user_restart
+                } else {
+                    &self.restart
+                }
+            }
+        }
+    }
+
+    fn stop_seq(&self, domain: Domain) -> &Vec<Vec<String>> {
+        self.seq_for(ServiceAction::Stop, domain)
+    }
+
+    fn start_seq(&self, domain: Domain) -> &Vec<Vec<String>> {
+        self.seq_for(ServiceAction::Start, domain)
+    }
+
+    pub fn plan_in(
+        &self,
+        action: ServiceAction,
+        name: &str,
+        domain: Domain,
+    ) -> Vec<(ServiceAction, Vec<String>)> {
+        if action == ServiceAction::Restart && self.seq_for(action, domain).is_empty() {
+            let mut out: Vec<(ServiceAction, Vec<String>)> = Vec::new();
+            out.extend(
+                self.stop_seq(domain)
+                    .iter()
+                    .map(|c| (ServiceAction::Stop, Self::fill(c, name))),
+            );
+            out.extend(
+                self.start_seq(domain)
+                    .iter()
+                    .map(|c| (ServiceAction::Start, Self::fill(c, name))),
+            );
+            return out;
+        }
+        self.seq_for(action, domain)
+            .iter()
+            .map(|c| (action, Self::fill(c, name)))
+            .collect()
+    }
+
+    pub fn plan(&self, action: ServiceAction, name: &str) -> Vec<(ServiceAction, Vec<String>)> {
+        self.plan_in(action, name, Domain::System)
     }
 
     /// The exit codes that mean "already in the state `action` asks for" — success for a
@@ -165,6 +240,22 @@ impl InitProvider {
         self.parse_with(output, self.list_pattern.as_deref())
     }
 
+    fn parse_user_list(&self, output: &str) -> Vec<Package> {
+        let skip = self.user_list_skip_lines;
+        let stripped = self
+            .user_list_strip_suffix
+            .as_deref()
+            .or(self.list_strip_suffix.as_deref());
+        self.parse_with_shape(
+            output,
+            self.user_list_pattern
+                .as_deref()
+                .or(self.list_pattern.as_deref()),
+            skip,
+            stripped,
+        )
+    }
+
     /// The same reader over `list_enabled`, which usually differs from `list` only in the
     /// shape of one column.
     fn parse_enabled(&self, output: &str) -> Vec<Package> {
@@ -177,6 +268,21 @@ impl InitProvider {
     }
 
     fn parse_with(&self, output: &str, pattern: Option<&str>) -> Vec<Package> {
+        self.parse_with_shape(
+            output,
+            pattern,
+            self.list_skip_lines,
+            self.list_strip_suffix.as_deref(),
+        )
+    }
+
+    fn parse_with_shape(
+        &self,
+        output: &str,
+        pattern: Option<&str>,
+        skip_lines: usize,
+        strip_suffix: Option<&str>,
+    ) -> Vec<Package> {
         let Some(pattern) = pattern else {
             return Vec::new();
         };
@@ -188,14 +294,14 @@ impl InitProvider {
             return Vec::new();
         };
         let mut out = Vec::new();
-        for line in output.lines().skip(self.list_skip_lines) {
+        for line in output.lines().skip(skip_lines) {
             let Some(caps) = re.captures(line) else {
                 continue;
             };
             let Some(m) = caps.get(1) else { continue };
             let mut name = m.as_str().to_string();
-            if let Some(suffix) = &self.list_strip_suffix {
-                name = name.trim_end_matches(suffix.as_str()).to_string();
+            if let Some(suffix) = strip_suffix {
+                name = name.trim_end_matches(suffix).to_string();
             }
             out.push(Package::new(&name, "service"));
         }
@@ -316,12 +422,58 @@ impl ServiceBackendCore {
         )
     }
 
-    /// Run the concrete commands for one action, propagating the first failure.
-    async fn apply(&self, action: ServiceAction, name: &str, sudo: bool) -> Result<()> {
+    fn init_for(&self, user: Option<&str>, name: &str) -> Result<Option<(&InitProvider, Domain)>> {
         let Some(init) = self.detect_init() else {
+            return Ok(None);
+        };
+        match user {
+            None => Ok(Some((init, Domain::System))),
+            Some(_) if init.has_user_scope() => Ok(Some((init, Domain::User))),
+            Some(account) => Err(Error::Unsupported(format!(
+                "`service:{}` is declared for the account `{}`, and the `{}` init this machine \
+                 drives has no per-user service domain: it can only manage services for the \
+                 whole machine, where they run as the system and not as `{}`. Nothing was \
+                 changed — enabling it here would start it for every account rather than the one \
+                 the line names. A per-user service needs an init whose user domain Shall can \
+                 address (systemd's `--user`, or a launchd agent), and this host has none.",
+                name, account, init.name, account
+            ))),
+        }
+    }
+
+    pub async fn list_user(
+        &self,
+        executor: &CommandExecutor,
+        user: &str,
+    ) -> Result<Option<Vec<Package>>> {
+        let account = crate::core::account::Account::resolve(user)?;
+        let Some((init, _)) = self.init_for(Some(user), "user-listing")? else {
+            return Ok(None);
+        };
+        if init.user_list.is_empty() {
+            return Ok(None);
+        }
+        let (prog, args) = init
+            .user_list
+            .split_first()
+            .expect("user_list is non-empty here");
+        let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        let out = executor.run_output_as(&account, prog, &arg_refs).await?;
+        Ok(Some(init.parse_user_list(&out)))
+    }
+
+    async fn apply_in(
+        &self,
+        action: ServiceAction,
+        name: &str,
+        sudo: bool,
+        user: Option<&str>,
+    ) -> Result<()> {
+        let Some((init, domain)) = self.init_for(user, name)? else {
             return Ok(());
         };
-        for (step, cmd) in init.plan(action, name) {
+        let account = self.account_for(user)?;
+        for (step, cmd) in init.plan_in(action, name, domain) {
             // **Empty is a row the loader's floor lets through, not an impossibility** — so
             // it is refused here by name instead of trusted away with an `expect`. This used
             // to panic on the first `service:` line against such a row.
@@ -333,11 +485,24 @@ impl ServiceBackendCore {
                 )));
             };
             let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-            self.executor_for(init, step)
-                .run(prog, &arg_refs, sudo)
-                .await?;
+            match &account {
+                None => {
+                    self.executor_for(init, step)
+                        .run(prog, &arg_refs, sudo)
+                        .await?;
+                }
+                Some(account) => {
+                    self.executor_for(init, step)
+                        .run_as(account, prog, &arg_refs, sudo)
+                        .await?;
+                }
+            }
         }
         Ok(())
+    }
+
+    fn account_for(&self, user: Option<&str>) -> Result<Option<crate::core::account::Account>> {
+        user.map(crate::core::account::Account::resolve).transpose()
     }
 }
 
@@ -385,18 +550,23 @@ impl Installable for ServiceInstallable {
         for spec in specs {
             let enabled = spec.options.one("enabled");
             let status = spec.options.one("status");
+            let user = spec.options.one("user");
             let actions = actions_for(enabled, status);
             for action in &actions {
-                self.core.apply(*action, &spec.name, sudo).await?;
+                self.core.apply_in(*action, &spec.name, sudo, user).await?;
             }
             info!(
-                "Service {}: applied {:?} (init={})",
+                "Service {}: applied {:?} (init={}, {})",
                 spec.name,
                 actions,
                 self.core
                     .detect_init()
                     .map(|p| p.name.as_str())
                     .unwrap_or("none"),
+                match user {
+                    None => "system domain".to_string(),
+                    Some(account) => format!("user domain of `{account}`"),
+                },
             );
         }
         Ok(())
@@ -416,14 +586,27 @@ impl Installable for ServiceInstallable {
         // still attempts every name, so one broken unit does not strand the rest behind it.
         let mut failures: Vec<String> = Vec::new();
         for name in names {
-            if let Err(e) = self.core.apply(ServiceAction::Stop, name, sudo).await {
+            let (bare, user) = crate::core::extras_lock::split_removal(
+                crate::config::grammar::ResourceKind::Service,
+                name,
+            )?;
+            let name = bare.as_str();
+            if let Err(e) = self
+                .core
+                .apply_in(ServiceAction::Stop, name, sudo, user.as_deref())
+                .await
+            {
                 warn!(
                     "service {} could not be stopped during removal: {}",
                     name, e
                 );
                 failures.push(format!("stop {}: {}", name, e));
             }
-            if let Err(e) = self.core.apply(ServiceAction::Disable, name, sudo).await {
+            if let Err(e) = self
+                .core
+                .apply_in(ServiceAction::Disable, name, sudo, user.as_deref())
+                .await
+            {
                 warn!(
                     "service {} could not be disabled during removal: {}",
                     name, e
@@ -467,6 +650,17 @@ impl Queryable for ServiceQueryable {
             .run_output(prog, &arg_refs, false)
             .await?;
         Ok(init.parse_list(&out))
+    }
+
+    async fn list_installed_for(&self, user: Option<&str>) -> Result<Vec<Package>> {
+        let Some(user) = user else {
+            return self.list_installed().await;
+        };
+        Ok(self
+            .core
+            .list_user(&self.core.executor, user)
+            .await?
+            .unwrap_or_default())
     }
 
     /// Every running service. Not "the ones you chose" — no init records that — but a service
@@ -1081,6 +1275,176 @@ stop = [["evil"]]
         let all = providers(file.init);
         let sd = all.iter().find(|p| p.name == "systemd").unwrap();
         assert_eq!(sd.start[0][0], "systemctl", "the built-in systemd must win");
+    }
+
+    #[test]
+    fn the_shipped_table_says_which_inits_have_a_per_user_domain() {
+        for (name, capable) in [
+            ("systemd", true),
+            ("launchd", true),
+            ("openrc", false),
+            ("sysvinit", false),
+            ("windows-sc", false),
+        ] {
+            let p = shipped(name);
+            assert_eq!(
+                p.has_user_scope(),
+                capable,
+                "{name}: the per-user capability is not what the table says"
+            );
+        }
+    }
+
+    #[test]
+    fn the_per_user_domain_is_expressed_the_way_each_init_needs() {
+        let actions = [
+            ServiceAction::Enable,
+            ServiceAction::Disable,
+            ServiceAction::Start,
+            ServiceAction::Stop,
+            ServiceAction::Restart,
+        ];
+        let sd = shipped("systemd");
+        for action in actions {
+            let user = sd.plan_in(action, "thing", Domain::User);
+            assert!(!user.is_empty(), "systemd/{action:?}: no per-user argv");
+            assert_ne!(
+                sd.plan(action, "thing"),
+                user,
+                "systemd/{action:?}: the per-user action is the system one, so it would act on \
+                 the machine rather than on the account"
+            );
+            for (_, cmd) in &user {
+                assert!(
+                    cmd.iter().any(|a| a == "--user"),
+                    "systemd/{action:?} does not reach a per-user bus: {cmd:?}"
+                );
+            }
+        }
+        let ld = shipped("launchd");
+        for action in actions {
+            let user = ld.plan_in(action, "thing", Domain::User);
+            assert!(
+                !user.is_empty(),
+                "launchd/{action:?}: no per-user argv, so a `@user=` line is refused by name"
+            );
+        }
+    }
+
+    #[test]
+    fn a_derived_restart_derives_from_the_domain_it_is_in() {
+        let toml = r#"
+[[init]]
+name = "dinit"
+detect = "dinitctl"
+enable = [["dinitctl", "enable", "{name}"]]
+disable = [["dinitctl", "disable", "{name}"]]
+start = [["dinitctl", "start", "{name}"]]
+stop = [["dinitctl", "stop", "{name}"]]
+user_start = [["dinitctl", "--user", "start", "{name}"]]
+user_stop = [["dinitctl", "--user", "stop", "{name}"]]
+"#;
+        let file: InitProviderFile = toml::from_str(toml).unwrap();
+        let dinit = providers(file.init)
+            .into_iter()
+            .find(|p| p.name == "dinit")
+            .expect("dinit loads");
+        let system = dinit.plan(ServiceAction::Restart, "web");
+        let user = dinit.plan_in(ServiceAction::Restart, "web", Domain::User);
+        assert!(system.iter().all(|(_, c)| !c.iter().any(|a| a == "--user")));
+        assert!(user.iter().all(|(_, c)| c.iter().any(|a| a == "--user")));
+    }
+
+    #[tokio::test]
+    async fn an_init_with_no_per_user_domain_refuses_a_named_account_by_name() {
+        let account = crate::core::account::Account::current().unwrap();
+        for name in ["openrc", "sysvinit", "windows-sc"] {
+            let toml: InitProviderFile = toml::from_str(&format!(
+                r#"
+[[init]]
+name = "{name}"
+detect = "probe-detect"
+enable = [["probe-enable", "{{name}}"]]
+disable = [["probe-disable", "{{name}}"]]
+start = [["probe-start", "{{name}}"]]
+stop = [["probe-stop", "{{name}}"]]
+"#
+            ))
+            .unwrap();
+            let (mock, exec) = service_layer(&[]);
+            let core = ServiceBackendCore::with_providers(exec, toml.init);
+            let err = core
+                .apply_in(ServiceAction::Start, "web", false, Some(account.name()))
+                .await
+                .expect_err("a per-user line against a system-only init must be refused");
+            let err = err.to_string();
+            assert!(
+                err.contains(name),
+                "the refusal does not name the init: {err}"
+            );
+            assert!(err.contains(account.name()), "no account named: {err}");
+            assert!(err.contains("Nothing was changed"), "{err}");
+            assert!(
+                mock.get_calls().await.is_empty(),
+                "a refused per-user line still ran {:?}",
+                mock.get_calls().await
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_per_user_listing_comes_from_the_per_user_row() {
+        let toml = r#"
+[[init]]
+name = "probe"
+detect = "probe-detect"
+start = [["probe-start", "{name}"]]
+stop = [["probe-stop", "{name}"]]
+user_start = [["probe-start-user", "{name}"]]
+user_stop = [["probe-stop-user", "{name}"]]
+list = ["probe-list-system", "--type=service"]
+list_pattern = '^(\S+)'
+list_strip_suffix = ".service"
+user_list = ["probe-list-user", "--user", "--type=service"]
+user_list_pattern = '^(\S+)'
+user_list_strip_suffix = ".service"
+"#;
+        let file: InitProviderFile = toml::from_str(toml).unwrap();
+        let mock = std::sync::Arc::new(MockExecutor::new(Arc::new(DashMap::new())));
+        let account = crate::core::account::Account::current().unwrap();
+        let mut alice = exit_of(0).unwrap();
+        alice.stdout = b"alice.service loaded\n".to_vec();
+        mock.set_response("probe-list-user --user --type=service", Ok(alice));
+        let mut machine = exit_of(0).unwrap();
+        machine.stdout = b"machine.service loaded\n".to_vec();
+        mock.set_response("probe-list-system --type=service", Ok(machine));
+        let exec = CommandExecutor::with_layer(
+            false,
+            false,
+            mock.clone(),
+            Arc::new(DashMap::new()),
+            Arc::new(DashMap::new()),
+        );
+        let core = ServiceBackendCore::with_providers(exec.clone(), file.init);
+        let q = ServiceQueryable {
+            core: Arc::new(core),
+        };
+
+        let per_user = q.list_installed_for(Some(account.name())).await.unwrap();
+        assert!(
+            per_user.iter().any(|p| p.name == "alice"),
+            "{per_user:?}: the per-user listing did not come from the per-user row"
+        );
+        assert!(
+            !per_user.iter().any(|p| p.name == "machine"),
+            "{per_user:?}: the per-user listing answered with the machine's services"
+        );
+
+        let system = q.list_installed_for(None).await.unwrap();
+        assert!(
+            system.iter().any(|p| p.name == "machine"),
+            "{system:?}: the system listing did not come from the system row"
+        );
     }
 
     #[test]

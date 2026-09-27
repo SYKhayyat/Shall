@@ -41,6 +41,7 @@ pub struct ResourceChanges {
     /// about. Named rather than assumed converged — a resource nobody can check is a bound on
     /// what `check` means, and an unstated bound is the thing this whole assessment is about.
     pub unverifiable: Vec<String>,
+    pub place_intents: Vec<crate::app::apply::ResourceIntent>,
 }
 
 impl ResourceChanges {
@@ -59,13 +60,64 @@ impl ResourceChanges {
     pub fn summary(&self) -> String {
         format!("{} to place, {} to undo", self.place.len(), self.undo.len())
     }
+
+    pub fn place_resource(&mut self, key: String, attributes: Vec<String>) {
+        self.place.push(key.clone());
+        self.place_intents
+            .push(crate::app::apply::ResourceIntent { key, attributes });
+    }
+
+    pub fn intent_attributes(&self, key: &str) -> Option<&[String]> {
+        self.place_intents
+            .iter()
+            .find(|intent| intent.key == key)
+            .map(|intent| intent.attributes.as_slice())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ResourceIntent {
+    pub key: String,
+    pub attributes: Vec<String>,
+}
+
+const PAYLOAD_OPTIONS: &[&str] = &["content", "value"];
+
+pub fn desired_state_attributes(
+    statement: &Statement,
+    kind: crate::config::grammar::ResourceKind,
+) -> Vec<String> {
+    let carried = crate::core::extras_lock::options_carried_by_key(kind);
+    let Some(options) = statement.options() else {
+        return Vec::new();
+    };
+    let mut out: Vec<String> = Vec::new();
+    for (name, values) in options.iter() {
+        if carried.contains(&name) {
+            continue;
+        }
+        out.push(match PAYLOAD_OPTIONS.contains(&name) {
+            true => format!("{name}=#{}", digest(values)),
+            false => format!("{name}={}", values.join("\u{1}")),
+        });
+    }
+    out.sort();
+    out
+}
+
+fn digest(values: &[String]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    for value in values {
+        hasher.update(value.as_bytes());
+        hasher.update(b"\x01");
+    }
+    hex::encode(hasher.finalize())[..16].to_string()
 }
 
 impl Extras<'_> {
-    /// The shim directory's manager. Built from the same field `App` builds it from; a shim
-    /// is a file on disk, so nothing else is needed to reach one.
-    async fn shim_manager(&self) -> Result<crate::app::ShimManager> {
-        crate::app::ShimManager::with_bin_dir(self.config.bin_dir.clone()).await
+    async fn shim_manager_for(&self, user: Option<&str>) -> Result<crate::app::ShimManager> {
+        crate::app::ShimManager::for_user(&self.config.bin_dir, user).await
     }
 
     /// The `link:` lines the declared `dotfiles:` trees stand for (U22), which are extras like
@@ -97,24 +149,28 @@ impl Extras<'_> {
         use crate::core::extras_lock::ExtrasLedger;
 
         let trees = self.tree_links(state)?;
-        let declared = declared_extras(state.extras.iter().chain(trees.iter()));
+        let declared = declared_extras(state.extras.iter().chain(trees.iter()))?;
         let path = ExtrasLedger::path_in(&self.config.layout().locks_dir());
         let ledger = ExtrasLedger::load(&path)?;
 
         let mut changes = ResourceChanges {
-            undo: ledger.drift(&declared),
+            undo: ledger
+                .drift(&declared)
+                .iter()
+                .map(|record| record.wire())
+                .collect(),
             ..Default::default()
         };
         // By key, so a line declared twice is one entry and the order is the file's — the same
         // set `declared_extras` builds, carrying the statement each key came from because the
         // probe needs the source a `link:` was written from.
-        let by_key: std::collections::BTreeMap<crate::core::extras_lock::ExtraKey, &Statement> =
-            state
-                .extras
-                .iter()
-                .chain(trees.iter())
-                .filter_map(|(s, _)| crate::core::extras_lock::extra_key(s).map(|k| (k, s)))
-                .collect();
+        let mut by_key: std::collections::BTreeMap<crate::core::extras_lock::ExtraKey, &Statement> =
+            Default::default();
+        for (statement, _) in state.extras.iter().chain(trees.iter()) {
+            if let Some(key) = crate::core::extras_lock::extra_key(statement)? {
+                by_key.insert(key, statement);
+            }
+        }
         for (key, stmt) in by_key {
             // The probe first and the ledger only after it. `Dependents::apply` has never
             // consulted the ledger — it skips whatever the probe reports in effect — so a
@@ -126,12 +182,17 @@ impl Extras<'_> {
             // machine cannot be queried for has been applied, or it has not, and only one of
             // those is work.
             let answer = in_effect(self.config, self.registry, self.executor, stmt, &key).await;
-            let key = key.to_string();
+            let recorded = ledger.is_applied(&key);
+            let wire = key.to_string();
             match answer {
                 Some(true) => {}
-                Some(false) => changes.place.push(key),
-                None if !ledger.applied().contains(&key) => changes.place.push(key),
-                None => changes.unverifiable.push(key),
+                Some(false) => {
+                    changes.place_resource(wire, desired_state_attributes(stmt, key.kind))
+                }
+                None if !recorded => {
+                    changes.place_resource(wire, desired_state_attributes(stmt, key.kind))
+                }
+                None => changes.unverifiable.push(wire),
             }
         }
         Ok(changes)
@@ -152,20 +213,36 @@ impl Extras<'_> {
         state: &crate::model::DesiredState,
         scope: guard::GuardScope,
     ) -> Result<usize> {
-        use crate::core::extras_lock::{ExtraKey, ExtrasLedger};
+        use crate::core::extras_lock::{ExtraRecord, ExtrasLedger};
 
         let trees = self.tree_links(state)?;
-        let declared = declared_extras(state.extras.iter().chain(trees.iter()));
+        let declared = declared_extras(state.extras.iter().chain(trees.iter()))?;
 
         let path = ExtrasLedger::path_in(&self.config.layout().locks_dir());
-        let ledger = ExtrasLedger::load(&path)?;
+        let mut ledger = ExtrasLedger::load(&path)?;
         let drift = ledger.drift(&declared);
+        let drift_count = drift.len();
+
+        let made_here = self.created_dirs();
+
+        let mut recorded: Vec<ExtraRecord> = Vec::with_capacity(declared.len());
+        for key in &declared {
+            let created = if key.kind == crate::config::grammar::ResourceKind::Dir {
+                Some(Self::dir_origin(&ledger, key, &made_here))
+            } else {
+                None
+            };
+            recorded.push(ExtraRecord::new(key).with_created(created)?);
+        }
 
         // Nothing drifted and the record already matches — no work and, crucially, no write, so
         // an ordinary no-op sync does not churn `locks/extras.toml` on every run.
-        if drift.is_empty() && ledger.applied() == &declared {
+        if drift.is_empty() && ledger.records() == recorded.as_slice() {
             return Ok(0);
         }
+
+        let (removing, preserved): (Vec<&ExtraRecord>, Vec<&ExtraRecord>) =
+            drift.iter().partition(|record| record.owns_removal());
 
         // Before the first resource is torn down, and before the dry-run branch: a preview that
         // skipped the guard would report a teardown the real run then refuses, and the two must
@@ -174,14 +251,19 @@ impl Extras<'_> {
         // the `if` cannot be widened into a path that skips the call: there would be nothing to
         // pass. Before it existed, `enforce_extras` was a statement whose absence a reader had
         // to notice.
-        let reaped = if drift.is_empty() {
+        let reaped = if removing.is_empty() {
             None
         } else {
             Some(
                 guard::enforce_extras(
                     self.config,
                     self.registry,
-                    &guard::extra_removal_pairs(&drift),
+                    &guard::extra_removal_pairs(
+                        &removing
+                            .iter()
+                            .map(|record| record.wire())
+                            .collect::<Vec<String>>(),
+                    ),
                     self.reaping,
                     scope,
                 )
@@ -192,61 +274,95 @@ impl Extras<'_> {
         // Said with `warn!` rather than `info!`: a deletion the user cannot see coming is the
         // wrong shape, and `info!` is below the default filter, which is why this teardown
         // could delete five files under a summary reading `already up to date`.
-        for key in &drift {
+        for record in &removing {
             if self.config.dry_run {
-                crate::would_warn!("`{}` is no longer declared — sync would undo it.", key);
+                crate::would_warn!(
+                    "`{}` is no longer declared — sync would undo it.",
+                    record.wire()
+                );
             } else {
-                warn!("`{}` is no longer declared — undoing it.", key);
+                warn!("`{}` is no longer declared — undoing it.", record.wire());
+            }
+        }
+        for record in &preserved {
+            let message = format!(
+                "`{}` is no longer declared, and Shall did not create it — the declaration is \
+                 forgotten and the directory is left alone.",
+                record.wire()
+            );
+            if self.config.dry_run {
+                crate::would_warn!("{message}");
+            } else {
+                warn!("{message}");
             }
         }
 
-        // An undo that failed leaves the extra in place, so its key stays in the ledger and
         // the next sync tries again. Dropping it would turn one warning into a service or
         // timer Shall has permanently forgotten it owns.
-        let mut still_applied = std::collections::BTreeSet::new();
-        for key in &drift {
-            // A key whose kind the grammar does not have is a ledger row Shall cannot act on.
-            // Skipped rather than dropped — `still_applied` keeps it, so the next sync reports
-            // it again instead of quietly forgetting a resource that is still in effect.
-            let Ok(parsed) = key.parse::<ExtraKey>() else {
+        let mut still_applied: Vec<ExtraRecord> = Vec::new();
+        for record in &removing {
+            let parsed = record.key();
+            let key = record.wire();
+            let Ok(parsed) = parsed else {
                 warn!(
-                    "`{}` is in the extras ledger under a kind this build does not have; it is \
+                    "`{}` is in the extras ledger under a name this build cannot read; it is \
                      left in place and kept on the ledger.",
                     key
                 );
-                still_applied.insert(key.clone());
+                still_applied.push((*record).clone());
                 continue;
             };
             if self.config.dry_run {
                 continue;
             }
             let Some(reaped) = reaped else {
-                // Unreachable: `drift` is non-empty inside this loop, so the guard ran above.
-                // Written as a skip rather than an `unwrap` because an effector that removes is
-                // the wrong place to learn that an invariant was wrong.
                 continue;
             };
-            if let Err(e) = self.undo_extra(parsed.kind, &parsed.subject, reaped).await {
+            if let Err(e) = self.undo_extra(&parsed, reaped).await {
                 warn!(
                     "could not undo `{}` ({}); it is still in place and the next sync will \
                      try again.",
                     key, e
                 );
-                still_applied.insert(key.clone());
+                still_applied.push((*record).clone());
             }
         }
+        recorded.append(&mut still_applied);
 
         // Record what is declared now (even in dry-run? no — a dry run changes nothing, so
         // the ledger must not move, or the next real run would miss the drift).
         if !self.config.dry_run {
-            let mut ledger = ledger;
-            let mut recorded = declared;
-            recorded.append(&mut still_applied);
             ledger.record(recorded);
             ledger.save(&path)?;
         }
-        Ok(drift.len())
+        Ok(drift_count)
     }
+
+    fn created_dirs(&self) -> std::collections::BTreeSet<std::path::PathBuf> {
+        let Some(backend) = self.registry.get("dir") else {
+            return Default::default();
+        };
+        let Some(installable) = backend.as_installable() else {
+            return Default::default();
+        };
+        installable.created_paths().into_iter().collect()
+    }
+
+    fn dir_origin(
+        ledger: &crate::core::extras_lock::ExtrasLedger,
+        key: &crate::core::extras_lock::ExtraKey,
+        made_here: &std::collections::BTreeSet<std::path::PathBuf>,
+    ) -> crate::core::extras_lock::DirOrigin {
+        use crate::core::extras_lock::DirOrigin;
+        if made_here.contains(std::path::Path::new(&key.subject)) {
+            return DirOrigin::ShallCreated;
+        }
+        match ledger.record_for(key) {
+            Some(record) => record.created.unwrap_or(DirOrigin::PreExisting),
+            None => DirOrigin::PreExisting,
+        }
+    }
+
     /// Execute the undo for one drifted extra, dispatched on its kind (S20). Each arm uses the
     /// same removal path the imperative command would.
     ///
@@ -258,20 +374,30 @@ impl Extras<'_> {
     /// compile until this function says what undoing it means.
     async fn undo_extra(
         &self,
-        kind: crate::config::grammar::ResourceKind,
-        id: &str,
+        key: &crate::core::extras_lock::ExtraKey,
         reaped: guard::Reaped,
     ) -> Result<()> {
         use crate::config::grammar::ResourceKind as K;
+        let kind = key.kind;
+        let id = key.subject.as_str();
         match kind {
-            K::Shim => self.shim_manager().await?.remove_shim(id, reaped).await,
-            K::Schedule => self.scheduler.deprovision(self.executor, id, reaped).await,
+            K::Shim => {
+                self.shim_manager_for(key.account_suffix())
+                    .await?
+                    .remove_shim(id, reaped)
+                    .await
+            }
+            K::Schedule => {
+                self.scheduler
+                    .deprovision(self.executor, id, key.account_suffix(), reaped)
+                    .await
+            }
             K::Service | K::Link | K::Dir | K::Setting => {
-                let kind = kind.as_str();
-                let Some(b) = self.registry.get(kind) else {
+                let keyword = kind.as_str();
+                let Some(b) = self.registry.get(keyword) else {
                     return Err(Error::BackendNotFound(format!(
                         "the `{}` backend is not available to undo `{}:{}`",
-                        kind, kind, id
+                        keyword, keyword, id
                     )));
                 };
                 // The twin of `Dependents::apply_through_backend`'s check, and it had the twin
@@ -282,16 +408,16 @@ impl Extras<'_> {
                     return Err(Error::Validation(format!(
                         "the `{}` backend is registered but cannot remove, so `{}:{}` could not \
                          be undone. This is a wiring fault in Shall.",
-                        kind, kind, id
+                        keyword, keyword, id
                     )));
                 };
-                inst.remove(
-                    std::slice::from_ref(&id.to_string()),
-                    b.sudo_for_write(),
-                    reaped,
-                )
-                .await
-                .map(|_| ())
+                let mut name = id.to_string();
+                if let Some(user) = key.account_suffix() {
+                    name = crate::core::extras_lock::qualify_removal(kind, id, Some(user))?;
+                }
+                inst.remove(std::slice::from_ref(&name), b.sudo_for_write(), reaped)
+                    .await
+                    .map(|_| ())
             }
             K::Repo => {
                 // A repo key is `repo:<backend>:<spec>`; `id` here is `<backend>:<spec>`.
@@ -362,6 +488,7 @@ pub(crate) async fn in_effect(
     use crate::config::grammar::{ResourceKind as K, Statement};
 
     let id = key.subject.as_str();
+    let account = key.account_suffix();
     match key.kind {
         // A running service is a state the init can be asked about, and asking costs one
         // cached listing for the whole run. Left unasked, every `service:` line was
@@ -379,7 +506,7 @@ pub(crate) async fn in_effect(
             let running = registry
                 .get("service")?
                 .as_queryable()?
-                .list_installed()
+                .list_installed_for(account)
                 .await
                 .ok()?
                 .iter()
@@ -444,7 +571,7 @@ pub(crate) async fn in_effect(
                             &text,
                             &crate::config::parser::HostFacts::current(),
                             config,
-                            None,
+                            opts.one("user"),
                         ) {
                             Ok(rendered) => (rendered.into_bytes(), false),
                             Err(_) => return None,
@@ -466,6 +593,18 @@ pub(crate) async fn in_effect(
                     Err(_) => return Some(false),
                 }
             };
+            if let Some(owner) = opts.one("owner").or_else(|| opts.one("user")) {
+                let account = match crate::core::account::Account::resolve(owner) {
+                    Ok(account) => account,
+                    Err(_) => return None,
+                };
+                if !account
+                    .owns(dest, !link_counts || !dest.is_symlink())
+                    .unwrap_or(false)
+                {
+                    return Some(false);
+                }
+            }
             // The source is known readable by now, so a link pointing at it is genuinely in
             // effect — the comparison could not say that before, and a dangling one would have
             // passed it.
@@ -481,7 +620,7 @@ pub(crate) async fn in_effect(
             Some(std::fs::read(dest).is_ok_and(|got| got == want))
         }
         K::Shim => Some(
-            crate::app::ShimManager::with_bin_dir(config.bin_dir.clone())
+            crate::app::ShimManager::for_user(&config.bin_dir, account)
                 .await
                 .ok()?
                 .is_in_effect(id)
@@ -507,7 +646,7 @@ pub(crate) async fn in_effect(
                 executor.clone(),
                 crate::backends::setting::adapters(crate::backends::setting::user_adapters(config)),
             )
-            .holds(name, want, opts.one("scope"))
+            .holds(name, want, opts.one("scope"), account)
             .await
         }
         // A schedule is read back out of the scheduler that holds it — the three adapters `J2`'s
@@ -542,6 +681,45 @@ pub(crate) async fn in_effect(
                 .await
                 .in_effect()
         }
+        K::Dir => {
+            let Statement::Dir(_, opts) = stmt else {
+                return None;
+            };
+            let path = std::path::Path::new(id);
+            let metadata = match std::fs::symlink_metadata(path) {
+                Ok(metadata) if metadata.is_dir() => metadata,
+                Ok(_) => return Some(false),
+                Err(_) => return Some(false),
+            };
+            if let Some(mode) = opts.one("mode") {
+                let expected = match crate::backends::dir::parse_mode(mode) {
+                    Ok(value) => value,
+                    Err(_) => return Some(false),
+                };
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    if metadata.permissions().mode() & 0o7777 != expected {
+                        return Some(false);
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = expected;
+                    return Some(false);
+                }
+            }
+            if let Some(owner) = opts.one("owner").or_else(|| opts.one("user")) {
+                let account = match crate::core::account::Account::resolve(owner) {
+                    Ok(account) => account,
+                    Err(_) => return None,
+                };
+                if !account.owns(path, true).unwrap_or(false) {
+                    return Some(false);
+                }
+            }
+            Some(true)
+        }
         // **Each of these says `None` for a reason, and the reason is written down.** `None` is
         // *unverifiable*, which places — so a kind that lands here is re-applied on every sync
         // for ever, and that is a cost worth stating rather than inheriting from a `_` arm.
@@ -558,18 +736,21 @@ pub(crate) async fn in_effect(
         //   own diff against what is in force; a per-line probe here would be a second opinion.
         // - `exec:`, `generate:` and `dotfiles:` never reach here — `extra_key` returns `None`
         //   for all three — and are listed so the compiler keeps that true.
-        K::Repo | K::Firewall | K::Dir => None,
+        K::Repo | K::Firewall => None,
         K::Exec | K::Generate | K::Dotfiles => None,
     }
 }
 
 fn declared_extras<'a>(
     statements: impl Iterator<Item = &'a Declared>,
-) -> std::collections::BTreeSet<String> {
-    statements
-        .filter_map(|(s, _)| crate::core::extras_lock::extra_key(s))
-        .map(|k| k.to_string())
-        .collect()
+) -> Result<std::collections::BTreeSet<crate::core::extras_lock::ExtraKey>> {
+    let mut out = std::collections::BTreeSet::new();
+    for (statement, _) in statements {
+        if let Some(key) = crate::core::extras_lock::extra_key(statement)? {
+            out.insert(key);
+        }
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -773,10 +954,48 @@ list_pattern = 'SERVICE_NAME:\s+(\S+)'
         );
     }
 
-    /// #69: a rendered template is read back rendered, not raw. `check` renders through
-    /// the same constructor the installer uses, so the destination holding the *source*
-    /// bytes is drift (`Some(false)`), not in-effect — and a template that will not
-    /// render is unverifiable (`None`), never a quiet ok.
+    #[tokio::test]
+    async fn a_directory_participates_in_convergence_for_type_mode_and_owner() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("state");
+        let account = crate::core::account::Account::current().unwrap();
+        let mut options = Options::default();
+        options.set("mode", "0700");
+        options.set("owner", account.name());
+        let statement = Statement::Dir(path.to_string_lossy().to_string(), options);
+        let key = ExtraKey::new(
+            crate::config::grammar::ResourceKind::Dir,
+            path.display().to_string(),
+        );
+        let config = Arc::new(crate::config::Config::default());
+        let registry = BackendRegistry::new();
+        let executor = CommandExecutor::new(false, false);
+        std::fs::create_dir(&path).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        assert_eq!(
+            in_effect(&config, &registry, &executor, &statement, &key).await,
+            Some(true)
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        assert_eq!(
+            in_effect(&config, &registry, &executor, &statement, &key).await,
+            Some(false)
+        );
+        std::fs::remove_dir(&path).unwrap();
+        std::fs::write(&path, "not a directory").unwrap();
+        assert_eq!(
+            in_effect(&config, &registry, &executor, &statement, &key).await,
+            Some(false)
+        );
+    }
     #[tokio::test]
     async fn a_rendered_template_is_read_back_rendered_not_raw() {
         let dir = tempfile::tempdir().unwrap();

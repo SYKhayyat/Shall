@@ -1,3 +1,4 @@
+use crate::core::account::Account;
 #[cfg(windows)]
 use crate::core::launch::windows_effective_command;
 use crate::core::launch::{describe, forget_path_lookups, program_exists};
@@ -12,7 +13,7 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 #[cfg(windows)]
 use std::process::Command as StdCommand;
-use std::process::Output as StdOutput;
+pub use std::process::Output as StdOutput;
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::Command;
@@ -974,7 +975,7 @@ impl Drop for MockExecutor {
 /// What one read-and-retry pass produced. `Answerless` carries the classified error rather
 /// than having been returned, so the caller — and only the caller — decides whether "ran,
 /// failed, said nothing" is a failure or a declared silence.
-enum ReadOutcome {
+pub enum ReadOutcome {
     Output(String),
     Answerless(Error),
 }
@@ -995,7 +996,7 @@ pub struct CommandExecutor {
     /// the preview wrong. `apt-cache search jq` answered from a stub is an empty answer,
     /// which reads as "apt does not have jq" and hands the name to whichever manager
     /// answers over the network instead.
-    reader: Arc<dyn ExecutionLayer>,
+    pub(crate) reader: Arc<dyn ExecutionLayer>,
     vfs: Arc<DashMap<PathBuf, String>>,
     lock_map: Arc<DashMap<String, Arc<Mutex<()>>>>,
     /// What this backend's manager means by its exit codes and its complaints. Empty until a
@@ -1138,37 +1139,23 @@ impl CommandExecutor {
     /// is frequently a normal answer there — an empty search, a "not installed" query, an
     /// inactive service unit. Mutating callers must use `run`/`run_exclusive` instead.
     async fn run_raw(&self, cmd: &str, args: &[&str], sudo: bool) -> Result<StdOutput> {
-        self.run_on(&self.inner, cmd, args, sudo).await
+        self.run_on(&self.inner, cmd, args, sudo, None).await
     }
 
     /// The same primitive, aimed at the layer that never stubs. Reads only.
     async fn read_raw(&self, cmd: &str, args: &[&str], sudo: bool) -> Result<StdOutput> {
-        self.run_on(&self.reader, cmd, args, sudo).await
+        self.run_on(&self.reader, cmd, args, sudo, None).await
     }
 
-    async fn run_on(
+    pub(crate) async fn run_on(
         &self,
         layer: &Arc<dyn ExecutionLayer>,
         cmd: &str,
         args: &[&str],
         sudo: bool,
+        as_account: Option<&Account>,
     ) -> Result<StdOutput> {
-        let mut final_cmd = cmd.to_string();
-        let mut final_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-
-        if Self::escalates(sudo) {
-            // **The password is asked for here or nowhere** (`S88`). Every escalated command
-            // runs `sudo -n`, so no manager invocation can ever sit on a prompt: sudo reads a
-            // password from `/dev/tty` and not from stdin, so a null stdin does not stop it
-            // waiting, and a terminal with nobody at it — or one wrong password — wedged Shall
-            // for the full command idle bound, fifteen minutes, with no message. Priming the
-            // timestamp first, once, under a bound of its own, is what keeps the interactive
-            // case working while making the hang structurally impossible.
-            self.ensure_sudo_credentials(layer).await?;
-            final_args.insert(0, final_cmd);
-            final_args.insert(0, "-n".to_string());
-            final_cmd = "sudo".to_string();
-        }
+        let escalate = Self::escalates(sudo);
 
         // `apt install`, run by a sync that already holds the data-directory lock, fires the
         // `DPkg::Post-Invoke` hook Shall installed — which is another `shall`, and it would
@@ -1181,6 +1168,19 @@ impl CommandExecutor {
         );
         Self::suppress_pagers(&mut env);
 
+        if let Some(account) = as_account {
+            for (key, value) in account.session_env() {
+                env.insert(key, value);
+            }
+        }
+        let target = self.account_target(cmd, as_account)?;
+
+        if escalate {
+            self.ensure_sudo_credentials(layer).await?;
+        }
+
+        let (final_cmd, final_args) = Self::account_argv(cmd, args, escalate, target, &env);
+
         // Every manager invocation funnels through this one call, which is what makes
         // `--timings` a breakdown of the whole run rather than of whichever verbs remembered
         // to instrument themselves.
@@ -1188,6 +1188,19 @@ impl CommandExecutor {
         let result = layer.execute(&final_cmd, &final_args, &env).await;
         crate::core::timing::end(timing, &final_cmd, &final_args);
         result
+    }
+
+    pub(crate) fn is_benign_exit(&self, code: Option<i32>) -> bool {
+        self.exit_policy.is_benign(code)
+    }
+
+    pub(crate) fn can_become(&self) -> bool {
+        #[cfg(unix)]
+        {
+            Self::is_root() && self.command_exists_sync("sudo")
+        }
+        #[cfg(not(unix))]
+        false
     }
 
     /// Stop a child from piping itself into a pager.
@@ -1249,7 +1262,7 @@ impl CommandExecutor {
     /// measured case is a cold-start collision that a warm winget does not reproduce, so the
     /// second attempt is usually the entire fix.
     pub async fn run_output(&self, cmd: &str, args: &[&str], sudo: bool) -> Result<String> {
-        match self.read_with_retry(cmd, args, sudo).await? {
+        match self.read_with_retry_as(None, cmd, args, sudo).await? {
             ReadOutcome::Output(s) => Ok(s),
             ReadOutcome::Answerless(e) => Err(e),
         }
@@ -1270,7 +1283,7 @@ impl CommandExecutor {
         args: &[&str],
         sudo: bool,
     ) -> Result<Option<String>> {
-        match self.read_with_retry(cmd, args, sudo).await? {
+        match self.read_with_retry_as(None, cmd, args, sudo).await? {
             ReadOutcome::Output(s) => Ok(Some(s)),
             ReadOutcome::Answerless(_) => Ok(None),
         }
@@ -1280,7 +1293,13 @@ impl CommandExecutor {
     /// exit, both streams empty — retries while transient and then becomes
     /// [`ReadOutcome::Answerless`], carrying the classified error for whoever decides whether
     /// that means failure or silence.
-    async fn read_with_retry(&self, cmd: &str, args: &[&str], sudo: bool) -> Result<ReadOutcome> {
+    pub(crate) async fn read_with_retry_as(
+        &self,
+        account: Option<&Account>,
+        cmd: &str,
+        args: &[&str],
+        sudo: bool,
+    ) -> Result<ReadOutcome> {
         let attempts = read_retry_attempts();
         let initial = std::time::Duration::from_millis(200);
         // The same cap the mutation retry uses (`TransactionConfig::max_backoff`): a cap is
@@ -1290,7 +1309,10 @@ impl CommandExecutor {
         let max = std::time::Duration::from_secs(30);
         let mut backoff = initial;
         for attempt in 1..=attempts {
-            let output = self.read_raw(cmd, args, sudo).await?;
+            let output = match account {
+                Some(account) => self.read_raw_as(account, cmd, args, sudo).await?,
+                None => self.read_raw(cmd, args, sudo).await?,
+            };
             let stdout = crate::utils::text::sanitize(&String::from_utf8_lossy(&output.stdout));
             let benign =
                 output.status.success() || self.exit_policy.is_benign(output.status.code());
@@ -1346,7 +1368,7 @@ impl CommandExecutor {
     ///
     /// Carries the manager's own words when it left any, and its retryability, so the retry
     /// loop does not have to read the sentence back to decide what to do.
-    fn answerless_read(&self, cmd: &str, args: &[&str], output: &StdOutput) -> Error {
+    pub(crate) fn answerless_read(&self, cmd: &str, args: &[&str], output: &StdOutput) -> Error {
         let code = output
             .status
             .code()
@@ -1509,7 +1531,7 @@ impl CommandExecutor {
 
     /// Forget everything memoised for the length of a run that a mutation could have changed:
     /// what is on `PATH`, and what each manager has installed.
-    fn forget_run_scoped_answers(&self) {
+    pub(crate) fn forget_run_scoped_answers(&self) {
         forget_path_lookups();
         self.installed.forget_all();
     }
@@ -1584,7 +1606,7 @@ impl CommandExecutor {
     /// read off this executor's [`ExitPolicy`] rather than matched on the program's name
     /// here. An executor with no policy is the honest default: every non-zero exit fails and
     /// nothing is classified, which is what the retry loop already assumed.
-    fn ensure_status(&self, cmd: &str, output: StdOutput) -> Result<StdOutput> {
+    pub(crate) fn ensure_status(&self, cmd: &str, output: StdOutput) -> Result<StdOutput> {
         let status_ok = output.status.success() || self.exit_policy.is_benign(output.status.code());
         // One lowercased join of both streams for all three marker questions below. Each used
         // to build its own, so a command's whole transcript was copied and lowercased three
@@ -2734,7 +2756,7 @@ mod search_read_tests {
 mod exit_status_tests {
     use super::{fabricate_status, CommandExecutor};
     use crate::core::{exit_policy, Error, ExitPolicy, Retryability};
-    use std::process::Output as StdOutput;
+    pub use std::process::Output as StdOutput;
 
     fn finished(code: i32, stdout: &str, stderr: &str) -> StdOutput {
         StdOutput {

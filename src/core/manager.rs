@@ -159,6 +159,10 @@ pub trait Installable: Send + Sync {
         false
     }
 
+    fn created_paths(&self) -> Vec<std::path::PathBuf> {
+        Vec::new()
+    }
+
     /// Whether this manager can be *asked* for an exact version at install time (`Q53`).
     ///
     /// **Not "does a version mean anything here" — "will this backend send one".** A lockfile
@@ -207,6 +211,10 @@ pub trait Queryable: Send + Sync {
     /// these when one finishes.
     async fn list_installed(&self) -> Result<Vec<Package>> {
         Ok((*self.installed_listing().await?).clone())
+    }
+
+    async fn list_installed_for(&self, _user: Option<&str>) -> Result<Vec<Package>> {
+        self.list_installed().await
     }
 
     /// The same listing, as a shared handle rather than a copy.

@@ -890,7 +890,10 @@ impl Installable for NixosInstallable {
         }
         // Resolve any `${secret:name}` references in config_text values before rendering.
         if !module.config_text.is_empty() {
-            let secrets = self.core.resolve_template_secrets(&module.config_text).await?;
+            let secrets = self
+                .core
+                .resolve_template_secrets(&module.config_text)
+                .await?;
             module.resolve_secrets(&secrets)?;
         }
         self.core.write_and_switch(&module).await
@@ -908,7 +911,10 @@ impl Installable for NixosInstallable {
         }
         // Resolve secrets before rendering, even on removal (the config_text may have changed).
         if !module.config_text.is_empty() {
-            let secrets = self.core.resolve_template_secrets(&module.config_text).await?;
+            let secrets = self
+                .core
+                .resolve_template_secrets(&module.config_text)
+                .await?;
             module.resolve_secrets(&secrets)?;
         }
         self.core.write_and_switch(&module).await
@@ -1549,11 +1555,8 @@ mod tests {
             substitute_secrets("password = ${secret:api_key};", &secrets).expect("substitutes");
         assert_eq!(result, "password = s3cret;");
 
-        let result = substitute_secrets(
-            "${secret:api_key}:${secret:db_pass}",
-            &secrets,
-        )
-        .expect("substitutes");
+        let result = substitute_secrets("${secret:api_key}:${secret:db_pass}", &secrets)
+            .expect("substitutes");
         assert_eq!(result, "s3cret:hunter2");
     }
 
@@ -1630,10 +1633,7 @@ mod tests {
             ..Module::default()
         };
         module.resolve_secrets(&secrets).expect("resolves");
-        assert_eq!(
-            module.config_text[0].1, "\"admin\"",
-            "first entry resolved"
-        );
+        assert_eq!(module.config_text[0].1, "\"admin\"", "first entry resolved");
         assert_eq!(
             module.config_text[1].1, "\"s3cret\"",
             "second entry resolved"

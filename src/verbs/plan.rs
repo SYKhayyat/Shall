@@ -73,6 +73,7 @@ pub async fn handle_status(app: &App, out: Output) -> Result<()> {
             "resources_to_place": resources.place,
             "resources_to_undo": resources.undo,
             "resources_unverifiable": resources.unverifiable,
+            "resource_place_intents": resources.place_intents,
             // The packages half of `resources_unverifiable`, which had no counterpart. Without
             // it a script consuming this document could not tell "no drift" from "three
             // managers never answered" — the distinction this codebase exists to make, lost at
@@ -162,6 +163,9 @@ pub async fn handle_status(app: &App, out: Output) -> Result<()> {
         );
         for key in &resources.place {
             println!("    {}", key);
+            for attribute in resources.intent_attributes(key).into_iter().flatten() {
+                println!("        {}", attribute);
+            }
         }
     }
     if !resources.undo.is_empty() {
@@ -301,6 +305,9 @@ pub async fn handle_plan(app: &App, out: &str) -> Result<()> {
         );
         for key in &plan.resources.place {
             println!("  + {}", key);
+            for attribute in plan.resources.intent_attributes(key) {
+                println!("      {}", attribute);
+            }
         }
         for key in &plan.resources.undo {
             println!("  - {} (no longer declared)", key);
@@ -394,9 +401,13 @@ pub async fn handle_apply(app: &App, plan_path: &str, yes: bool) -> Result<()> {
 
     if plan.schema != crate::app::sync::PLAN_SCHEMA {
         anyhow::bail!(
-            "plan schema {} is unsupported (this shall speaks schema {})",
+            "this plan was written in schema {} and this shall speaks schema {}. It is not \
+             read, because a plan that cannot say what it would write is not a plan this \
+             command may apply. Re-capture it: `shall plan --out {}`, then `shall apply {}`.",
             plan.schema,
-            crate::app::sync::PLAN_SCHEMA
+            crate::app::sync::PLAN_SCHEMA,
+            plan_path,
+            plan_path
         );
     }
     // Integrity: refuse a hand-edited plan unless forced.
@@ -503,6 +514,8 @@ pub async fn handle_apply(app: &App, plan_path: &str, yes: bool) -> Result<()> {
             return Ok(());
         }
     }
+
+    app.dotfiles().confirm_outside_home(&now.state)?;
 
     // **The frozen plan is executed by the engine that executes every other plan.**
     //

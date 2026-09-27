@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **229** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **230** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 234 are accounted
-for: **229 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 235 are accounted
+for: **230 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -227,7 +227,7 @@ there). It is when the question stopped being open, not when the code landed.
 | **T6** | Must there be a way to opt out of `backup_once`, or bound how many pile up? | 2026-07-23 |
 | **T7** | Runtime injection of secrets into process memory — reopened. | 2026-07-24 |
 
-### U — the next round (Part XIII) — 43
+### U — the next round (Part XIII) — 44
 
 | | question | answered |
 |---|---|---|
@@ -274,6 +274,7 @@ there). It is when the question stopped being open, not when the code landed.
 | **U41** | What does a rollback do when the guard refuses one of its compensating removals? | 2026-07-27 |
 | **U42** | Do the overlapping command clusters get consolidated? | 2026-07-27 |
 | **U43** | How much does an ordinary run say about itself? | 2026-07-27 |
+| **U71** | A per-user home layer: whose account does a declaration act for? | 2026-09-20 |
 
 ### Q — the production-readiness round and the grading rounds after it — 55
 
@@ -9710,16 +9711,106 @@ pins. Rule `II.62`, rationale `V.205`.
 
 ## U71
 
-**Status: ANSWERED 2026-09-20, built.** Per-user home layer: per-user manifests, ownership, idempotent directories.
+**Status: ANSWERED 2026-09-20, built.** A per-user home layer: per-user manifests, ownership, and
+idempotent directories. Rule `II.63`, rationale `V.208`.
 
-**Two scoping forms:** `use user:NAME { ... }` block AND `@user=NAME` on individual statements. Both add `@user=NAME` to resource statements that carry options.
+**Two scoping forms, and the exact set the block covers.** `use user:NAME { ... }` and
+`@user=NAME` on a single line. The block scopes **six** kinds and no others — `link:`, `dir:`,
+`shim:`, `setting:`, `service:`, `schedule:` (`statement::USER_SCOPABLE_KINDS`). Anything else
+inside it is a **parse error naming the line and the kind** (`apt:curl` in a `use user:` block
+is refused at its own line number), and a nested block is refused by name. **An inner `@user=`
+overrides the block's**: the block fills a `user` the line does not already carry, so one
+exception inside a scoped block is scoped to itself rather than being an error.
 
-**`@user=NAME` resolution:** Resolves `~/` in `@target=` to `/home/NAME/` via `getent passwd`. `$HOME` in templates resolves the same way. Parent directory created idempotently if `auto_create_parent_dirs = true`.
+**A capability this platform lacks is a refusal at resolve/apply, never a parse failure.** One
+shared Linux manifest has to keep parsing on macOS and Windows, so what differs between the
+platforms is whether the declaration is *actionable here*, and that is asked where the action
+would be taken. Every such case refuses **by name, before anything is written**: `service:` at
+an init with no per-user domain, `schedule:` for a named account on Windows, `dir: @mode` on
+Windows. None of them falls back to the machine-wide domain — the fallback is the failure this
+exists to prevent, because it produces an action that is placed, reads back as converged, and
+belongs to the wrong account.
 
-**`@owner=NAME`:** Separate from `@user=`. Controls explicit ownership (chown). `@owner=` without `@user=` is legal.
+**The account is the machine's answer, not a text file's.** `core::account::Account` resolves
+`getpwnam_r`/`getpwuid_r` on Unix and macOS (growing its buffer on `ERANGE`, refusing a home
+that is empty or relative), and on Windows `LookupAccountNameW` for the SID, the account's
+`ProfileImagePath` under `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList`, and
+`ExpandEnvironmentStringsW` for the tail of it. Ownership is uid/gid on Unix, and the security
+descriptor's owner on Windows (`GetNamedSecurityInfoW`/`SetNamedSecurityInfoW`, or the
+reparse-point handle variants for a pointer). **The first build shelled out to `getent passwd`
+and split its output on `:`; there is no subprocess and no such parsing now, and there never was
+a `users` crate to fall back on.** An account that does not exist is refused where it is
+resolved — once — and every operation afterwards works from a value known to exist.
 
-**`dir:PATH`:** New statement for idempotent directory creation with ownership and permissions. Teardown removes only if empty. Phase: Dependents.
+**What the account changes, per kind.**
 
-**`auto_create_parent_dirs`:** Config setting in `[link]`, default `true`. Gates automatic parent directory creation for `dir:` and `@user=` targets.
+- **`link:`, `dir:`** — `~` in `@target=`/`PATH` is that account's home. **Source paths stay
+  config-root-relative**: `link:./vimrc@target=~/.vimrc,user=alice` reads the file from your repo
+  and writes into alice's home, and a template renders `{{ USER }}`/`{{ HOME }}` as *that*
+  account, through the one context the installer and the checker share.
+- **`shim:`** — the named account's own `~/.local/bin`, not the configured `bin_dir`, and the
+  deployed shim is owned by them.
+- **`setting:`** — the store command **runs as the account**: `sudo -n -u NAME -- env HOME=…
+  USER=… XDG_… DBUS_SESSION_BUS_ADDRESS=… <cmd>` (USERPROFILE/USERNAME/APPDATA/LOCALAPPDATA on
+  Windows), because these tools decide whose answer to give from the environment and the
+  session. The bus address names the account's own runtime directory whether or not a socket is
+  there — an inherited address is the *invoking* account's, and a tool that reached it would
+  answer about the invoking account. When this process cannot become another account at all, the
+  run **refuses** rather than changing this account's settings under the other's row. On
+  Windows `HKCU` cannot address another account either, so the row is filled to
+  `HKEY_USERS\<SID>` and a platform with no SIDs refuses `@user=` by name.
+- **`service:`** — the per-user domain is **data in `init_providers.toml`**: `user_enable`,
+  `user_disable`, `user_start`, `user_stop`, `user_restart`, `user_list`(+pattern, strip
+  suffix, skip lines) and `user_status`. **The argv being present *is* the capability** — a
+  boolean would have had to be answered in one place and the spelling in another, and those two
+  answers could disagree. systemd (`systemctl --user`) and launchd have it; **openrc, sysvinit
+  and windows-sc deliberately have none**, so `@user=` there is refused by name.
+- **`schedule:`** — `~/.config/systemd/user` units and `~/Library/LaunchAgents` plists, with the
+  log in that account's data directory, and the read-back asked of the same domain so apply and
+  compare cannot disagree. **A named account with no reachable user manager is refused before
+  the unit file is written** — an inert unit reads as "provisioned" and never fires.
+  **Windows named-user schedules are refused: `schtasks /Create /RU <other>` needs that
+  account's password**, and a sync must not ask for a credential to do what the line asked for.
 
-**Ownership lookup:** Via `getent passwd` (no `users` crate available). Unknown user is a parse-time error.
+**Ownership applies to the deployed object, and never to the file in your repo.** `@owner=` is
+separate from `@user=` and legal without it; where a line carries only `@user=`, that is the
+owner. For a **plain `link:`** — a symlink — the owner is the symlink itself (`lchown`, and the
+`FILE_FLAG_OPEN_REPARSE_POINT` handle on Windows), because a plain link's only deployed object
+is the pointer. **The first build followed it**, so chowning a plain link changed the uid/gid of
+the *source file inside the config repo*: a git-tracked file of yours, silently re-owned by a
+sync. With `@content=`, `@decrypt=` or `@template=true` the owner is the file the line wrote.
+**Parent components Shall creates itself for a `@user=` target are created one at a time and
+owned by that account**, so alice's `~/.config/app` is reachable by alice.
+
+**`dir:` is idempotent and path-resolved; mode and owner are convergence axes, not install-time
+trivia.** A directory already present is re-chowned and re-chmodded when they differ, a `dir:`
+whose path holds a file is refused rather than replaced, and parent creation is gated by
+`[link] auto_create_parent_dirs` (**default `true`**). Applied in the dependents phase beside
+the other extras.
+
+**The extras ledger is schema 2 with typed records, and a schema-1 file is refused, not
+migrated.** A row is `{kind, subject, user?, created?}`. `link:` and `dir:` are keyed by **the
+path they resolved to** — which already says whose home it is in, so they carry no account
+field; `shim:`, `setting:`, `service:` and `schedule:` are keyed by `<subject>@user=<name>`, so
+**one name in two accounts is two rows**, and the teardown name carries the account through the
+same codec that wrote it. A `setting:`'s `@scope=` stays in the subject and the account rides
+beside it, so four ways of declaring one key are four rows. A row whose account cannot be read
+back is kept and reported, never guessed at. **A `dir:` row records `created =
+"shall-created" | "pre-existing"`**, and undeclaring removes only a Shall-created directory
+**and only when it is empty**: a directory that cannot be emptied is an error naming it, its row
+is **kept**, and the next sync tries again — a teardown that warned and returned `Ok` reported the
+undo done, dropped the row, and forgot that Shall owned the path. A preserved directory is not a
+removal, so it is not charged against `max_extra_removals`. Migrating schema 1 would have
+migrated its ambiguity: `applied = [...]` cannot say who made a thing, and the only teardown left
+for such a row is "remove it if it is empty", which deletes a directory the user made.
+
+**One defect the ledger work found in the old `link:` key, which is the ruling's sharpest
+half.** `extra_key` resolved a `link:`'s `@target=` with `resolve_target`, which expands `~/`
+against **the invoking account** — so for `link:./vimrc@target=~/.vimrc,user=alice` the row
+named *this* user's `.vimrc`. The drift diff then compared a declaration against a path nobody
+declared, and a teardown removed a file in the wrong home while the declared one stayed. The key
+is computed from the **selected** account now, which is the same value the writer used.
+
+**The first entry for this decision was wrong in three places and is corrected above:** there is
+no `getent` and no parse-time user lookup, a template renders `USER`/`HOME` rather than `$HOME`,
+and the platform questions are runtime refusals rather than parse failures.

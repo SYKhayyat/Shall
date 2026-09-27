@@ -361,6 +361,6 @@ mod exec_tests {
     #[test]
     fn an_exec_is_not_an_extra_with_a_teardown_key() {
         let stmt = pv("exec:./bin/enroll-tpm.sh").unwrap();
-        assert_eq!(crate::core::extra_key(&stmt), None);
+        assert_eq!(crate::core::extra_key(&stmt).unwrap(), None);
     }
 }

@@ -3829,3 +3829,101 @@ exists**, naming each pinned package, with `--ignore-pins` as the explicit escap
 lockfile record is not a pin for this purpose: records are observations, the whole-system
 upgrade is exactly the command allowed to move them, and it re-records where things landed -
 so the gate reads only declarations, never injected records.
+
+## II.63 A declaration can act for a named account, and what a platform cannot do is a refusal (`U71`, V.208)
+
+**A manifest names an account, and the machine is asked which one.** One shared Linux repo has
+to describe a laptop, a build box and a second person's account on it, and the account is a
+value the machine reports rather than a path each line spells out.
+
+### The two scoping forms, and the six kinds
+
+`use user:NAME { ... }` and `@user=NAME` on one line. **The block scopes exactly `link:`,
+`dir:`, `shim:`, `setting:`, `service:` and `schedule:`** — the six statements that can mean
+something in somebody else's world. A statement the block cannot scope is a **parse error
+naming its own line and its kind**, a nested block is refused by name, and **an inner `@user=`
+overrides the block's**: the block fills a `user` the line does not carry, so one exception
+inside a scoped block is scoped to itself rather than being an error. `@owner=` is a separate
+key, legal without `@user=`, and is the owner wherever a line carries only `@user=`.
+
+### The account, and what it changes
+
+An account is the machine's own answer: `getpwnam_r` on Unix and macOS, and on Windows the SID
+from `LookupAccountNameW` with the home read from that account's `ProfileList` entry. **No
+subprocess parses a helper's output to decide it**, and an account that does not exist is
+refused where it is resolved, once, so every operation afterwards works from a value known to
+exist.
+
+- **`link:`, `dir:`** — `~` in the destination is that account's home, and a template renders
+  `USER`/`HOME` as that account through the one context the installer and the checker share.
+  **Source paths stay config-root-relative**: the file comes from your repo, the destination
+  goes to the account's home, and a `link:` that names `@user=` still needs a `@target=`.
+- **`shim:`** — the named account's own `~/.local/bin`, not the configured `bin_dir`, owned by
+  them.
+- **`setting:`** — the store command **runs as the account**, with that account's home, name,
+  XDG and session-bus variables in the environment. **The bus address names the account's own
+  runtime directory whether or not a socket is there**, because an inherited address is the
+  *invoking* account's and a tool that reached it would answer about the invoking account. When
+  this process cannot become another account, the run **refuses** rather than writing this
+  account's value under the other's declaration. On Windows a `setting:` is addressed as
+  `HKEY_USERS\<SID>`, because `HKCU` cannot name another account.
+- **`service:`** — the per-user domain is **data in `init_providers.toml`**
+  (`user_enable`/`user_disable`/`user_start`/`user_stop`/`user_restart`, `user_list` and its
+  reader, `user_status`), and **the argv being present is the capability**. systemd and launchd
+  carry it; openrc, sysvinit and Windows `sc` carry none, and a `@user=` line there is refused
+  by name.
+- **`schedule:`** — `~/.config/systemd/user` units and `~/Library/LaunchAgents` plists, the log
+  in that account's data directory, and the read-back asked of the same domain the unit was
+  written into, because a comparison that resolves the account twice cannot be relied on to
+  resolve it the same way twice.
+
+### A capability this platform lacks is a refusal, and it is asked late
+
+**A parse failure would be the wrong shape.** The same manifest is read on Linux, on macOS and
+on Windows; refusing it at parse time would make one machine's declarations unreadable on
+another, which is the portable-config answer `Y15` gives, not this one. So the question is asked
+where the action would be taken, and each answer is **a refusal by name, before anything is
+written**: a `service:` at an init with no per-user domain, a `schedule:` for a named account on
+Windows (`schtasks /Create /RU` needs that account's password), a `dir: @mode` on Windows, a
+schedule whose account has no reachable user manager, a `setting:` Shall cannot run as. **None
+of them falls back to the machine-wide domain** — the fallback is the failure this rule exists
+to prevent, because it produces an action that is placed, reads back as converged, and belongs
+to somebody else. On Windows ownership **is** supported; a mode word is not, and a row that asks
+for one there is refused by name.
+
+### Ownership is the deployed object, and never a file in your repo
+
+A plain `link:` is a symlink, and **the symlink is what Shall placed**, so that is what it
+owns: `lchown`, and the reparse-point handle on Windows. A `link:` that wrote content — with
+`@content=`, `@decrypt=` or `@template=true` — is owned at the file it wrote. **A plain link's
+source is a file in your config repo, and Shall never changes its ownership.** Parent components
+Shall itself creates for a `@user=` target are created one at a time and owned by that account,
+so the path is reachable by the person it is for. An owner is only applied when it differs.
+
+### `dir:` is idempotent, path-resolved, and converges on mode and owner
+
+**Mode and owner are convergence axes, not install-time trivia**: a directory that is already
+there is re-chowned and re-chmodded when they differ, so an edited `@mode=` is work rather than
+silence. A `dir:` whose path holds something that is not a directory is **refused**, never
+replaced. Parent creation is gated by `[link] auto_create_parent_dirs` (default `true`).
+
+### The extras ledger is schema 2, and a `dir:` records who made it
+
+Rows are typed — `{kind, subject, user?, created?}` — and `locks/extras.toml` carries its
+`schema`. **Schema 1 is refused by name, not migrated**: `applied = [...]` cannot say whether
+Shall made a thing, and a migrated row would arrive claiming a provenance nobody wrote down.
+
+- **`link:` and `dir:` are keyed by the path they resolved to**, which already says whose home
+  it is in; they carry no account field, because a second copy of the account is a second thing
+  to keep agreeing with the path.
+- **`shim:`, `setting:`, `service:` and `schedule:` are keyed by `<subject>@user=<name>`.** One
+  name in two accounts is two resources and two rows, and the teardown name carries the account
+  through the same codec that wrote it. A `setting:`'s `@scope=` stays in the subject, so scope
+  and account are four distinct rows rather than one. **A row whose account cannot be read back
+  is kept and reported, never acted on** — acting on it would mean choosing an account to
+  change.
+- **A `dir:` row records `created = "shall-created" | "pre-existing"`, and undeclaring removes
+  only a Shall-created directory, and only an empty one.** A directory that cannot be emptied
+  is **an error naming it, with its row kept**, so the next sync tries again; a row carrying no
+  answer is treated as the user's own. A preserved directory is **not a removal**, so it is not
+  charged against `max_extra_removals`.

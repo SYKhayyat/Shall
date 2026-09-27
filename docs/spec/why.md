@@ -7340,3 +7340,72 @@ then drift rather than `unverifiable`, which is the whole of what `#69` asked `c
 do. Decrypt stays unverifiable: its transform needs the secret tool run, and running a
 decrypt inside a read-only check would make previewing a secret the same act as
 materialising it.
+
+**V.208 — Why a declaration can name an account, and why the row that undoes it must name the same one. *(U71; 2026-09-20)***
+
+The first build of the per-user layer was four defects wearing one coat, and three of them were
+deletions or a silent wrong answer rather than a missing feature.
+
+**The ledger key for a `link:` was resolved against the wrong account.** `extra_key` computed a
+link's row from `@target=` through the resolver that expands `~/` for *this process*, so
+`link:./vimrc@target=~/.vimrc,user=alice` recorded a row naming the invoking user's `.vimrc`.
+Every consequence follows from that one string: the drift diff compared a declaration against a
+path nobody had declared, so an edited target looked like drift and an undeclared line did not;
+and the teardown removed a file in the wrong home while the file alice was promised stayed
+exactly where it was, under a report saying the resource had been undone. **A ledger key must be
+built from the value the writer used, not from a second resolution of the same text** — the same
+lesson as V.161's one-producer rule, on a field rather than a format.
+
+**Ownership followed the symlink and reached into the config repo.** A plain `link:` deploys a
+pointer, and the chown used `chown` (and `std::fs::metadata`, which follows) rather than
+`lchown`, so asking for a file to belong to an account changed the uid and gid of the **source
+file inside your git-tracked repo**. Git does not record ownership, so nothing showed the change;
+what it cost was a working tree that `git status` calls clean while one file in it belongs to
+somebody else, and a first `git clone` that silently disagreed with the machine it came from.
+The rule that follows is not "be careful with chown": **ownership applies to the object the
+declaration deployed, and a plain link's deployed object is the pointer.** A line that wrote
+content owns the file it wrote.
+
+**One row for two accounts undid one and reported the other.** `shim:`, `setting:`, `service:`
+and `schedule:` were keyed by name alone, so `shim:rg@user=alice` and `shim:rg@user=bob` were
+one resource with one row. Deleting alice's line tore down whichever copy the row named, said
+the resource was removed, and left the other one in place — reported as a success. It is the
+B0b shape exactly: one identity standing for two subjects, on a file whose whole job is to name
+what Shall put in place. `link:` and `dir:` are the deliberate exception, keyed by resolved path
+rather than by account, because the path already carries the account and two copies of one fact
+are two things to keep agreeing.
+
+**The schema-1 ledger could not say who made a directory, so its only `dir:` teardown deleted
+the user's.** `applied = [...]` is a set of strings. A `dir:` line naming a directory the user
+made by hand, then deleted, left exactly one teardown that could be written from that record:
+remove it if it is empty — which removes a directory the user had, under a summary saying the
+declaration was undone. So the ledger is **schema 2 with typed records, and a `dir:` row records
+`shall-created` or `pre-existing`**, and schema 1 is refused by name rather than migrated,
+because a migration would carry the ambiguity forward as a claim of provenance nobody ever wrote
+down. The row with no answer is treated as the user's own for the same reason: a crash between
+`create_dir` and the ledger write leaves a directory nobody accounts for, and the only reading of
+it that cannot end in a deletion is "not ours".
+
+**And the teardown that could not finish returned success.** A `dir:` that had acquired contents
+warned and returned `Ok`, and `Ok` at that level means *the undo is done* to the caller — which
+then dropped the row and never retried, so Shall forgot it owned a path the user was using. A
+directory left behind is a failure, its row is kept, and every name is attempted so the error
+names the ones that stayed.
+
+**The platform questions are refusals, and refusing is what the shape of the question is for.**
+An init with no per-user service manager, `schtasks /Create /RU` needing a password, a mode word
+Windows does not have, a `setting:` Shall cannot run as: each of these has a fallback, and the
+fallback is the answer that *looks* like success — the machine's service enabled instead of
+alice's, a unit file written where no user manager will ever read it, this account's setting
+changed under alice's declaration. Each refuses **by name and before writing anything**, which is
+also why none of them is a parse error: the same manifest is read on every platform, and
+`Y15`'s portable-config answer is "skipped and reported", not "unreadable elsewhere".
+
+**And the account is the machine's answer.** The first lookup shelled out to `getent passwd` and
+took field five of its output, or fields three and four for the uid/gid — a text format parsed by
+position, for a fact libc answers directly, with no Windows path at all (so ownership there was a
+silent no-op). `getpwnam_r` and `LookupAccountNameW` are the two answers this program needs, and
+the reason a per-account `setting:` runs with the account's session variables rather than just
+its name in argv is the same one: these tools decide whose answer to give from the environment,
+and the bus address is named for the account whether or not a socket is there, because an
+inherited one belongs to whoever typed the command.

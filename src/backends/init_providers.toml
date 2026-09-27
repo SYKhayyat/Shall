@@ -50,6 +50,17 @@ status = ["systemctl", "--no-pager", "status", "--", "{name}"]
 list_enabled = ["systemctl", "--no-pager", "list-unit-files", "--type=service", "--state=enabled", "--no-legend"]
 list_enabled_pattern = '^(\S+)\.service'
 
+user_enable  = [["systemctl", "--no-pager", "--user", "enable", "--", "{name}"]]
+user_disable = [["systemctl", "--no-pager", "--user", "disable", "--", "{name}"]]
+user_start   = [["systemctl", "--no-pager", "--user", "start", "--", "{name}"]]
+user_stop    = [["systemctl", "--no-pager", "--user", "stop", "--", "{name}"]]
+user_restart = [["systemctl", "--no-pager", "--user", "restart", "--", "{name}"]]
+user_list = ["systemctl", "--no-pager", "--user", "list-units", "--type=service", "--state=running", "--no-legend"]
+user_list_pattern = '^(\S+)'
+user_list_strip_suffix = ".service"
+user_status = ["systemctl", "--no-pager", "--user", "status", "--", "{name}"]
+
+
 
 [[init]]
 name = "openrc"
@@ -94,6 +105,13 @@ stop    = [["launchctl", "stop", "--", "{name}"]]
 list = ["launchctl", "list"]
 list_pattern = '^\S+\s+\S+\s+(\S+)'
 list_skip_lines = 1
+user_enable  = [["launchctl", "load", "-w", "--", "{name}"]]
+user_disable = [["launchctl", "unload", "-w", "--", "{name}"]]
+user_start   = [["launchctl", "start", "--", "{name}"]]
+user_stop    = [["launchctl", "stop", "--", "{name}"]]
+user_list = ["launchctl", "list"]
+user_list_pattern = '^\S+\s+\S+\s+(\S+)'
+user_list_skip_lines = 1
 
 [[init]]
 name = "windows-sc"

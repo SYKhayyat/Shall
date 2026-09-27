@@ -310,7 +310,7 @@ impl Statement {
             Statement::Generate(n, _) => format!("generate:{}", n),
             Statement::Dotfiles(n, _) => format!("dotfiles:{}", n),
             Statement::Firewall(n, _) => format!("firewall:{}", n),
-        Statement::Dir(n, _) => format!("dir:{}", n),
+            Statement::Dir(n, _) => format!("dir:{}", n),
             Statement::Use(r, _) => format!("use {}", r.name()),
             Statement::Param { name, .. } => format!("param {}", name),
             Statement::Exclude(r) => format!("exclude {}", r.name()),
@@ -340,7 +340,7 @@ impl Statement {
             Statement::Generate(..) => ResourceKind::Generate,
             Statement::Dotfiles(..) => ResourceKind::Dotfiles,
             Statement::Firewall(..) => ResourceKind::Firewall,
-        Statement::Dir(..) => ResourceKind::Dir,
+            Statement::Dir(..) => ResourceKind::Dir,
             Statement::Package(_)
             | Statement::Absent(_)
             | Statement::Use(..)
@@ -351,6 +351,22 @@ impl Statement {
             | Statement::Expr(_)
             | Statement::Var { .. } => return None,
         })
+    }
+
+    pub fn options(&self) -> Option<&Options> {
+        match self {
+            Statement::Shim(_, opts)
+            | Statement::Schedule(_, opts)
+            | Statement::Service(_, opts)
+            | Statement::Link(_, opts)
+            | Statement::Setting(_, opts)
+            | Statement::Exec(_, opts)
+            | Statement::Generate(_, opts)
+            | Statement::Dotfiles(_, opts)
+            | Statement::Firewall(_, opts)
+            | Statement::Dir(_, opts) => Some(opts),
+            _ => None,
+        }
     }
 
     /// What this statement names, without its keyword: `nginx` for `service:nginx`.
@@ -1517,9 +1533,7 @@ pub fn validate(origin: &Origin, stmt: &Statement) -> Result<()> {
             validate_extra_options(origin, OptionKind::Dotfiles, name, o, None)
         }
         Statement::Firewall(name, o) => validate_firewall(origin, name, o),
-        Statement::Dir(name, o) => {
-            validate_extra_options(origin, OptionKind::Dir, name, o, None)
-        }
+        Statement::Dir(name, o) => validate_extra_options(origin, OptionKind::Dir, name, o, None),
         Statement::Repo { .. }
         | Statement::Use(..)
         | Statement::Param { .. }
@@ -1610,6 +1624,7 @@ pub const SCHEDULE_OPTION_KEYS: &[&str] = &[
     "persistent",
     "jitter",
     "elevated",
+    "user",
 ];
 pub const SETTING_OPTION_KEYS: &[&str] = &["value", "scope", "user"];
 /// `target` is where the tree is mirrored to; absent means the home directory, which is what a
@@ -1620,6 +1635,49 @@ pub const DOTFILES_OPTION_KEYS: &[&str] = &["target"];
 /// options: `firewall:22/tcp` is the whole declaration.
 pub const FIREWALL_OPTION_KEYS: &[&str] = &["value"];
 pub const DIR_OPTION_KEYS: &[&str] = &["user", "owner", "mode"];
+
+pub const USER_SCOPABLE_KINDS: &[ResourceKind] = &[
+    ResourceKind::Link,
+    ResourceKind::Dir,
+    ResourceKind::Shim,
+    ResourceKind::Setting,
+    ResourceKind::Service,
+    ResourceKind::Schedule,
+];
+
+pub fn set_user_scope(origin: &Origin, stmt: &mut Statement, user: &str) -> Result<()> {
+    let kind = stmt.kind();
+    if !kind.is_some_and(|kind| USER_SCOPABLE_KINDS.contains(&kind)) {
+        return Err(GrammarError::new(
+            origin.clone(),
+            format!(
+                "`use user:NAME {{ ... }}` does not support `{}` statements",
+                stmt.kind().map_or("this", ResourceKind::as_str)
+            ),
+        ));
+    }
+    let options = match stmt {
+        Statement::Link(_, options)
+        | Statement::Dir(_, options)
+        | Statement::Shim(_, options)
+        | Statement::Setting(_, options)
+        | Statement::Service(_, options)
+        | Statement::Schedule(_, options) => options,
+        _ => {
+            return Err(GrammarError::new(
+                origin.clone(),
+                format!(
+                    "`use user:NAME {{ ... }}` does not support `{}` statements",
+                    stmt.kind().map_or("this", ResourceKind::as_str)
+                ),
+            ))
+        }
+    };
+    if !options.contains("user") {
+        options.set("user", user);
+    }
+    Ok(())
+}
 
 /// The option keys that answer to ONE value, across every kind.
 ///
@@ -3814,6 +3872,7 @@ mod firewall_tests {
         let stmt = pv("firewall:22/tcp").unwrap();
         assert_eq!(
             crate::core::extra_key(&stmt)
+                .unwrap()
                 .map(|k| k.to_string())
                 .as_deref(),
             Some("firewall:22/tcp")

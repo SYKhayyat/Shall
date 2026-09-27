@@ -497,6 +497,7 @@ pub struct ScheduleConfig {
     pub jitter: Option<u32>,
     /// Whether the task runs with the highest privileges the account holds.
     pub elevated: Option<bool>,
+    pub user: Option<String>,
 }
 
 /// Refusals and behaviour: `<config_root>/preferences.toml` (II.1).
@@ -512,7 +513,9 @@ pub struct LinkSettings {
 
 impl Default for LinkSettings {
     fn default() -> Self {
-        Self { auto_create_parent_dirs: true }
+        Self {
+            auto_create_parent_dirs: true,
+        }
     }
 }
 

@@ -134,7 +134,13 @@ winapi = { version = "0.3", features = [
     "handleapi", 
     "winbase", 
     "fileapi", 
-    "shlobj"
+    "shlobj",
+    "winreg",
+    "accctrl",
+    "aclapi",
+    "errhandlingapi",
+    "processenv",
+    "sddl"
 ] }
 
 [dev-dependencies]

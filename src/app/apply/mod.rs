@@ -19,7 +19,7 @@ pub use bootstrap::Bootstrap;
 pub use dependents::Dependents;
 pub use dotfiles::Dotfiles;
 pub use execs::Execs;
-pub use extras::{Extras, ResourceChanges};
+pub use extras::{desired_state_attributes, Extras, ResourceChanges, ResourceIntent};
 pub use firewall::Firewall;
 pub use nixos::SystemConfig;
 pub use prereq::Prereqs;

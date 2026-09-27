@@ -406,22 +406,12 @@ fn parse_items(
                 for item in body {
                     match item {
                         Item::Statement(mut stmt, stmt_origin) => {
-                            // Add @user=NAME to resource statements that carry options.
-                            match &mut stmt {
-                                Statement::Link(_, opts)
-                                | Statement::Service(_, opts)
-                                | Statement::Shim(_, opts)
-                                | Statement::Setting(_, opts)
-                                | Statement::Dir(_, opts) => {
-                                    opts.set("user", user_name.clone());
-                                }
-                                _ => {}
-                            }
+                            statement::set_user_scope(&stmt_origin, &mut stmt, &user_name)?;
                             items.push(Item::Statement(stmt, stmt_origin));
                         }
-                        Item::Block(..) => {
+                        Item::Block(_, block_origin) => {
                             return Err(GrammarError::new(
-                                origin.clone(),
+                                block_origin,
                                 "`use user:NAME { ... }` cannot contain blocks",
                             )
                             .with_hint(
@@ -570,7 +560,7 @@ fn merge_options(stmt: &mut Statement, extra: Options, origin: &Origin) -> Resul
         | Statement::Service(_, o)
         | Statement::Link(_, o)
         | Statement::Setting(_, o)
-        |         Statement::Exec(_, o)
+        | Statement::Exec(_, o)
         | Statement::Dotfiles(_, o)
         | Statement::Firewall(_, o)
         | Statement::Dir(_, o) => o,
@@ -971,6 +961,41 @@ mod tests {
     }
 
     #[test]
+    fn use_user_block_supports_all_six_scopable_statements() {
+        let out = stmts(
+            "use user:alice {\n  link:./vimrc@target=~/vimrc\n  dir:~/logs@mode=0755\n  shim:jq@source=cargo:jq\n  setting:org.example/key@value=1\n  service:nginx@status=running\n  schedule:nightly@cron=@daily,run=sync\n}\n",
+        );
+        assert_eq!(out.len(), 6);
+        for statement in &out {
+            let user = match statement {
+                Statement::Link(_, options)
+                | Statement::Dir(_, options)
+                | Statement::Shim(_, options)
+                | Statement::Setting(_, options)
+                | Statement::Service(_, options)
+                | Statement::Schedule(_, options) => options.one("user"),
+                _ => None,
+            };
+            assert_eq!(user, Some("alice"));
+        }
+    }
+
+    #[test]
+    fn use_user_block_rejects_unsupported_statements() {
+        let err = doc("use user:alice {\n  apt:curl\n}\n").unwrap_err();
+        assert!(err.to_string().contains("does not support"), "{}", err);
+        assert_eq!(err.origin.line, 2);
+    }
+
+    #[test]
+    fn an_inner_user_overrides_the_block_user() {
+        let out = stmts("use user:alice {\n  link:./vimrc@target=~/vimrc,user=bob\n}\n");
+        let Statement::Link(_, options) = &out[0] else {
+            panic!()
+        };
+        assert_eq!(options.one("user"), Some("bob"));
+    }
+    #[test]
     fn individual_user_and_owner_options_are_validated() {
         let out = stmts("link:./vimrc@target=~/.vimrc,user=alice,owner=alice\n");
         let Statement::Link(_, opts) = &out[0] else {
@@ -981,22 +1006,13 @@ mod tests {
     }
     #[test]
     fn use_user_block_rejects_nested_blocks() {
-        let err = doc("use user:alice {\n  module fancy {\n    apt:neovim\n  }\n}\n")
-            .unwrap_err();
-        assert!(
-            err.to_string().contains("cannot contain blocks"),
-            "{}",
-            err
-        );
+        let err = doc("use user:alice {\n  module fancy {\n    apt:neovim\n  }\n}\n").unwrap_err();
+        assert!(err.to_string().contains("cannot contain blocks"), "{}", err);
     }
 
     #[test]
     fn use_user_block_rejects_empty_username() {
         let err = doc("use user: {\n  link:./vimrc@target=~/vimrc\n}\n").unwrap_err();
-        assert!(
-            err.to_string().contains("no username"),
-            "{}",
-            err
-        );
+        assert!(err.to_string().contains("no username"), "{}", err);
     }
 }

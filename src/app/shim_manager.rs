@@ -1,3 +1,4 @@
+use crate::core::account::Account;
 use crate::core::{Error, Result};
 use std::path::{Path, PathBuf};
 use tokio::fs;
@@ -29,6 +30,20 @@ async fn bytes_contain_marker(path: &Path) -> bool {
 /// (`attempt_shim_hijack`). The shim's NAME is therefore the entire mechanism.
 pub struct ShimManager {
     bin_dir: PathBuf,
+    account: Option<Account>,
+}
+
+pub fn shim_target(
+    config_bin_dir: &Path,
+    user: Option<&str>,
+) -> Result<(PathBuf, Option<Account>)> {
+    match user {
+        None => Ok((config_bin_dir.to_path_buf(), None)),
+        Some(name) => {
+            let account = Account::resolve(name)?;
+            Ok((account.bin_dir()?, Some(account)))
+        }
+    }
 }
 
 impl ShimManager {
@@ -36,12 +51,25 @@ impl ShimManager {
     /// resolved `~/.local/bin` itself is a second answer to "where do shims go", and it is
     /// the answer a sandbox cannot move.
     pub async fn with_bin_dir(bin_dir: PathBuf) -> Result<Self> {
+        Self::build(bin_dir, None).await
+    }
+
+    pub async fn for_user(config_bin_dir: &Path, user: Option<&str>) -> Result<Self> {
+        let (bin_dir, account) = shim_target(config_bin_dir, user)?;
+        Self::build(bin_dir, account).await
+    }
+
+    async fn build(bin_dir: PathBuf, account: Option<Account>) -> Result<Self> {
         if !tokio::fs::try_exists(&bin_dir).await.unwrap_or(false) {
             debug!("Creating shim directory at {:?}", bin_dir);
             crate::utils::file::ensure_dir_async(&bin_dir).await?;
         }
 
-        Ok(Self { bin_dir })
+        Ok(Self { bin_dir, account })
+    }
+
+    pub fn bin_dir(&self) -> &Path {
+        &self.bin_dir
     }
 
     /// Whether `path` is a shim Shall deployed, i.e. the shall binary under another name.
@@ -175,6 +203,13 @@ impl ShimManager {
             fs::copy(&current_exe, &target_path)
                 .await
                 .map_err(Error::from)?;
+        }
+
+        if let Some(account) = &self.account {
+            if let Err(e) = account.apply_owner(&target_path, false) {
+                let _ = fs::remove_file(&target_path).await;
+                return Err(e);
+            }
         }
 
         Ok(())
@@ -385,6 +420,94 @@ mod tests {
         .unwrap();
 
         assert!(!shim.exists(), "a real shim must still be removable");
+    }
+
+    #[tokio::test]
+    async fn a_named_accounts_shim_lands_in_that_accounts_own_bin_directory() {
+        let tmp = tempdir().unwrap();
+        let configured = tmp.path().join("configured-bin");
+        let account = Account::current().unwrap();
+        let expected = account.bin_dir().unwrap();
+
+        let (dir, owner) = shim_target(&configured, Some(account.name())).unwrap();
+        assert_eq!(dir, expected, "the target is not the account's own bin dir");
+        assert!(owner.is_some(), "no account came back to own the file");
+        assert_ne!(
+            dir, configured,
+            "a named account resolved to Shall's configured bin dir"
+        );
+
+        let mgr = ShimManager::for_user(&configured, Some(account.name()))
+            .await
+            .unwrap();
+        assert_eq!(mgr.bin_dir(), expected);
+
+        let (dir, owner) = shim_target(&configured, None).unwrap();
+        assert_eq!(dir, configured);
+        assert!(owner.is_none());
+    }
+
+    #[tokio::test]
+    async fn deploy_read_and_remove_agree_for_a_named_account() {
+        let tmp = tempdir().unwrap();
+        let configured = tmp.path().join("configured-bin");
+        let account = Account::current().unwrap();
+        let here = ShimManager::for_user(&configured, None).await.unwrap();
+        let there = ShimManager::for_user(&configured, Some(account.name()))
+            .await
+            .unwrap();
+
+        there.create_shim("ripgrep").await.unwrap();
+        let deployed = there.shim_path("ripgrep");
+        assert!(
+            deployed.exists(),
+            "the shim was not deployed where the manager says it goes: {deployed:?}"
+        );
+        assert!(there.is_in_effect("ripgrep").await);
+        assert!(
+            !here.is_in_effect("ripgrep").await,
+            "a shim deployed for an account is not in effect in Shall's own bin dir, and \
+             reporting it there would place a second copy"
+        );
+
+        there
+            .remove_shim(
+                "ripgrep",
+                crate::app::sync::guard::Reaped::for_reason(
+                    crate::app::sync::guard::GuardScope::Remove,
+                    "a unit test of the effector itself",
+                ),
+            )
+            .await
+            .unwrap();
+        assert!(!deployed.exists(), "removal looked somewhere else");
+        assert!(!there.is_in_effect("ripgrep").await);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_shim_deployed_for_an_account_is_owned_by_that_account() {
+        let tmp = tempdir().unwrap();
+        let configured = tmp.path().join("configured-bin");
+        let account = Account::current().unwrap();
+        let mgr = ShimManager::for_user(&configured, Some(account.name()))
+            .await
+            .unwrap();
+        mgr.create_shim("ripgrep").await.unwrap();
+        let deployed = mgr.shim_path("ripgrep");
+        assert!(
+            account.owns(&deployed, true).unwrap(),
+            "the deployed shim is owned by somebody other than the account it is for"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_shim_for_an_account_that_does_not_exist_is_refused_by_name() {
+        let tmp = tempdir().unwrap();
+        let err = shim_target(&tmp.path().join("bin"), Some("shall-no-such-account-71"))
+            .expect_err("an account that cannot be resolved must be refused");
+        let err = err.to_string();
+        assert!(err.contains("shall-no-such-account-71"), "{err}");
     }
 
     #[tokio::test]

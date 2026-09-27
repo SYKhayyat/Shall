@@ -105,7 +105,9 @@ fn a_links_ledger_key_is_its_destination_not_its_source() {
 
     let mut opts = Options::default();
     opts.insert("target".to_string(), "~/.gitconfig");
-    let key = extra_key(&Statement::Link("dotfiles/gitconfig".into(), opts)).unwrap();
+    let key = extra_key(&Statement::Link("dotfiles/gitconfig".into(), opts))
+        .unwrap()
+        .unwrap();
 
     let want = super::link::resolve_target("~/.gitconfig").unwrap();
     assert_eq!(key.kind, crate::config::grammar::ResourceKind::Link);

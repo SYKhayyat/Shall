@@ -207,6 +207,8 @@ ext = "vscode"
 
 # Managed config files are declared with a `link:` line in a module, not here — a file you
 # want on this machine is a declaration, and declarations live in modules/ (II.1).
+[link]
+auto_create_parent_dirs = true
 
 # Retention: how long to keep filesystem snapshots. Rules combine as a UNION — a snapshot
 # is kept if it matches ANY rule — and the single most-recent one is always kept, so a

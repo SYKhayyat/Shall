@@ -86,7 +86,7 @@ impl HostFacts {
 /// with `resolve_target` by construction rather than by luck — a `$home` in content and a
 /// `~/` in a target name the same directory. `None` where neither answers.
 fn detect_home() -> Option<String> {
-    dirs::home_dir().map(|p| p.to_string_lossy().into_owned())
+    dirs::home_dir()?.to_str().map(str::to_owned)
 }
 
 /// The running user's login name, from the environment. `USER` on Unix, `USERNAME` on

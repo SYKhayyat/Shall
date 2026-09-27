@@ -125,6 +125,7 @@ async fn test_systemd_oncalendar_translation_logic() {
                 persistent: None,
                 jitter: None,
                 elevated: None,
+                user: None,
             },
         )
         .await
@@ -183,6 +184,7 @@ async fn test_launchd_plist_translation_logic() {
                 persistent: None,
                 jitter: None,
                 elevated: None,
+                user: None,
             },
         )
         .await
@@ -236,6 +238,7 @@ async fn test_scheduler_reboot_mapping_fidelity() {
                 persistent: None,
                 jitter: None,
                 elevated: None,
+                user: None,
             },
         )
         .await

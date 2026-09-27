@@ -17,7 +17,7 @@ pub mod recording_backend;
 use async_trait::async_trait;
 use chrono::{Duration as ChronoDuration, Utc};
 use dashmap::DashMap;
-use shall::app::scheduler::{Provisioned, Reading, TaskProvisioner};
+use shall::app::scheduler::{Provisioned, Reading, TaskProvisioner, TaskTarget};
 use shall::app::App;
 use shall::config::config::ScheduleConfig;
 use shall::config::Config;
@@ -286,6 +286,20 @@ impl MockTaskProvisioner {
     }
 }
 
+fn account_marker(target: &TaskTarget) -> String {
+    match &target.account {
+        None => String::new(),
+        Some(account) => format!(" @user={}", account.name()),
+    }
+}
+
+pub fn mock_task_key(name: &str, target: &TaskTarget) -> String {
+    match &target.account {
+        None => name.to_string(),
+        Some(account) => format!("{name}@user={}", account.name()),
+    }
+}
+
 #[async_trait]
 impl TaskProvisioner for MockTaskProvisioner {
     async fn add_task(
@@ -293,19 +307,30 @@ impl TaskProvisioner for MockTaskProvisioner {
         _executor: &CommandExecutor,
         config: &ScheduleConfig,
         _shall_path: &Path,
+        target: &TaskTarget,
     ) -> Result<()> {
         let mut map = self.active_tasks.lock().await;
-        map.insert(config.name.clone(), config.clone());
+        map.insert(mock_task_key(&config.name, target), config.clone());
         Ok(())
     }
-    async fn remove_task(&self, _executor: &CommandExecutor, name: &str) -> Result<()> {
+    async fn remove_task(
+        &self,
+        _executor: &CommandExecutor,
+        name: &str,
+        target: &TaskTarget,
+    ) -> Result<()> {
         let mut map = self.active_tasks.lock().await;
-        map.remove(name);
+        map.remove(&mock_task_key(name, target));
         Ok(())
     }
-    async fn is_task_active(&self, _executor: &CommandExecutor, name: &str) -> bool {
+    async fn is_task_active(
+        &self,
+        _executor: &CommandExecutor,
+        name: &str,
+        target: &TaskTarget,
+    ) -> bool {
         let map = self.active_tasks.lock().await;
-        map.contains_key(name)
+        map.contains_key(&mock_task_key(name, target))
     }
     /// The mock scheduler expresses everything, so nothing is refused here. A refusal belongs
     /// to the OS that cannot hold the option, and inventing one for the mock would make a test
@@ -319,17 +344,23 @@ impl TaskProvisioner for MockTaskProvisioner {
         &self,
         config: &ScheduleConfig,
         _shall_bin: &Path,
+        target: &TaskTarget,
     ) -> std::result::Result<Provisioned, String> {
         Ok(Provisioned {
-            spec: format!("{:?}", config),
+            spec: format!("{:?}{}", config, account_marker(target)),
             armed: config.enabled.unwrap_or(true),
         })
     }
-    async fn read_task(&self, _executor: &CommandExecutor, name: &str) -> Reading {
+    async fn read_task(
+        &self,
+        _executor: &CommandExecutor,
+        name: &str,
+        target: &TaskTarget,
+    ) -> Reading {
         let map = self.active_tasks.lock().await;
-        match map.get(name) {
+        match map.get(&mock_task_key(name, target)) {
             Some(config) => Reading::Holds(Provisioned {
-                spec: format!("{:?}", config),
+                spec: format!("{:?}{}", config, account_marker(target)),
                 armed: config.enabled.unwrap_or(true),
             }),
             None => Reading::Absent,

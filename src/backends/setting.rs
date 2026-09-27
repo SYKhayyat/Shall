@@ -71,18 +71,74 @@ pub struct SettingStoreFile {
 /// same loader a user's row does.
 const BUILTIN_STORES: &str = include_str!("setting_stores.toml");
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoreTarget {
+    pub account: Option<crate::core::account::Account>,
+}
+
+impl StoreTarget {
+    pub fn hive(&self) -> String {
+        match &self.account {
+            None => "HKCU".to_string(),
+            Some(account) => match account.sid() {
+                Some(sid) => format!("HKEY_USERS\\{sid}"),
+                None => String::new(),
+            },
+        }
+    }
+
+    pub fn is_addressable(&self, adapter: &SettingAdapter) -> bool {
+        if self.account.is_none() {
+            return true;
+        }
+        if !adapter.addresses_by_hive() {
+            return true;
+        }
+        !self.hive().is_empty()
+    }
+}
+
 impl SettingAdapter {
-    fn fill(args: &[String], schema: &str, key: &str, value: &str) -> Vec<String> {
+    pub fn addresses_by_hive(&self) -> bool {
+        [
+            &self.read,
+            &self.write,
+            &self.reset,
+            &self.system_read,
+            &self.system_write,
+        ]
+        .iter()
+        .any(|cmd| cmd.iter().any(|arg| arg.contains("{hive}")))
+    }
+
+    fn fill(
+        args: &[String],
+        schema: &str,
+        key: &str,
+        value: &str,
+        target: &StoreTarget,
+    ) -> Vec<String> {
         adapter::fill(
             args,
-            &[("{schema}", schema), ("{key}", key), ("{value}", value)],
+            &[
+                ("{schema}", schema),
+                ("{key}", key),
+                ("{value}", value),
+                ("{hive}", &target.hive()),
+            ],
         )
     }
 
     /// Split filled argv into the program and its arguments. A row with an empty command is
     /// refused at load, so this never has to invent one.
-    fn command(args: &[String], schema: &str, key: &str, value: &str) -> (String, Vec<String>) {
-        adapter::program_and_args(Self::fill(args, schema, key, value))
+    fn command(
+        args: &[String],
+        schema: &str,
+        key: &str,
+        value: &str,
+        target: &StoreTarget,
+    ) -> (String, Vec<String>) {
+        adapter::program_and_args(Self::fill(args, schema, key, value, target))
             .expect("an empty adapter command was loaded")
     }
 
@@ -104,7 +160,7 @@ impl SettingAdapter {
     }
 
     pub fn read_command(&self, scope: Scope, schema: &str, key: &str) -> (String, Vec<String>) {
-        Self::command(self.argv_for(scope).0, schema, key, "")
+        self.read_command_for(scope, schema, key, &StoreTarget { account: None })
     }
 
     pub fn write_command(
@@ -114,11 +170,42 @@ impl SettingAdapter {
         key: &str,
         value: &str,
     ) -> (String, Vec<String>) {
-        Self::command(self.argv_for(scope).1, schema, key, value)
+        self.write_command_for(scope, schema, key, value, &StoreTarget { account: None })
     }
 
     pub fn reset_command(&self, scope: Scope, schema: &str, key: &str) -> (String, Vec<String>) {
-        Self::command(self.argv_for(scope).2, schema, key, "")
+        self.reset_command_for(scope, schema, key, &StoreTarget { account: None })
+    }
+
+    pub fn read_command_for(
+        &self,
+        scope: Scope,
+        schema: &str,
+        key: &str,
+        target: &StoreTarget,
+    ) -> (String, Vec<String>) {
+        Self::command(self.argv_for(scope).0, schema, key, "", target)
+    }
+
+    pub fn write_command_for(
+        &self,
+        scope: Scope,
+        schema: &str,
+        key: &str,
+        value: &str,
+        target: &StoreTarget,
+    ) -> (String, Vec<String>) {
+        Self::command(self.argv_for(scope).1, schema, key, value, target)
+    }
+
+    pub fn reset_command_for(
+        &self,
+        scope: Scope,
+        schema: &str,
+        key: &str,
+        target: &StoreTarget,
+    ) -> (String, Vec<String>) {
+        Self::command(self.argv_for(scope).2, schema, key, "", target)
     }
 }
 
@@ -257,6 +344,27 @@ impl SettingBackendCore {
             .ok_or_else(|| Error::Validation(format!("`{}` is not `SCHEMA/KEY`", spec_name)))
     }
 
+    pub fn refuse_system_scope_for_a_named_account(
+        &self,
+        name: &str,
+        scope: Scope,
+        user: Option<&str>,
+    ) -> Result<()> {
+        if scope != Scope::System || user.is_none() {
+            return Ok(());
+        }
+        Err(Error::Validation(format!(
+            "`setting:{}` asks for `@scope=system` and for the account `{}` at the same time. \
+             A machine-wide value is one value for every account and a named account's value \
+             is that account's alone, so there is nothing to write that is both. Drop \
+             `@scope=system` to set it for `{}` only, or drop `@user=` to set it for every \
+             account.",
+            name,
+            user.unwrap_or_default(),
+            user.unwrap_or_default()
+        )))
+    }
+
     /// What scope this line means, refusing rather than pretending when the store cannot do
     /// it (P7: a refusal beats a pretence).
     ///
@@ -268,8 +376,10 @@ impl SettingBackendCore {
         adapter: &SettingAdapter,
         written: Option<&str>,
         name: &str,
+        user: Option<&str>,
     ) -> Result<Scope> {
         let scope = Scope::resolve(written, Scope::User);
+        self.refuse_system_scope_for_a_named_account(name, scope, user)?;
         if scope == Scope::System && !adapter.has_system_scope() {
             return Err(Error::Validation(format!(
                 "`setting:{}` asks for scope=system, and the `{}` store Shall found here has \
@@ -283,8 +393,54 @@ impl SettingBackendCore {
         Ok(scope)
     }
 
-    /// Whether the store already holds `want` for `SCHEMA/KEY`, read in the scope the
-    /// declaration names.
+    pub fn target_of(
+        &self,
+        adapter: &SettingAdapter,
+        user: Option<&str>,
+        name: &str,
+    ) -> Result<StoreTarget> {
+        let target = StoreTarget {
+            account: match user {
+                None => None,
+                Some(account) => Some(crate::core::account::Account::resolve(account)?),
+            },
+        };
+        if !target.is_addressable(adapter) {
+            return Err(Error::Refused(format!(
+                "`setting:{}` asks for the account `{}`, and this `{}` store has no address for a \
+                 named account on this platform: its commands name a hive or a session that only \
+                 exists for the account running Shall. Writing the invoking account's value \
+                 instead would apply your setting to one person while the line names another, so \
+                 nothing was written. Name the account's store address in this row, or drop \
+                 `@user=`.",
+                name,
+                user.unwrap_or_default(),
+                adapter.name
+            )));
+        }
+        Ok(target)
+    }
+
+    async fn read_for(&self, target: &StoreTarget, prog: &str, args: &[String]) -> Result<String> {
+        let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        match &target.account {
+            Some(account) => self.executor.probe_output_as(account, prog, &refs).await,
+            None => self.executor.probe_output(prog, &refs).await,
+        }
+    }
+
+    async fn write_for(&self, target: &StoreTarget, prog: &str, args: &[String]) -> Result<()> {
+        let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        match &target.account {
+            Some(account) => self
+                .executor
+                .run_as(account, prog, &refs, false)
+                .await
+                .map(|_| ()),
+            None => self.executor.run(prog, &refs, false).await.map(|_| ()),
+        }
+    }
+
     ///
     /// **`None` is "Shall could not ask", and it is never `Some(false)`.** A read fails for
     /// reasons that have nothing to do with the value: a schema `gsettings` has never heard of,
@@ -300,13 +456,19 @@ impl SettingBackendCore {
     /// machine-wide commands has no readable state at all, and answering from the *user* key
     /// would compare the wrong setting — which is exactly the bug `@scope=` was carried into
     /// the ledger to fix. `scope_of` refuses it by name at apply time; here it is unanswerable.
-    pub async fn holds(&self, spec_name: &str, want: &str, scope: Option<&str>) -> Option<bool> {
+    pub async fn holds(
+        &self,
+        spec_name: &str,
+        want: &str,
+        scope: Option<&str>,
+        user: Option<&str>,
+    ) -> Option<bool> {
         let (schema, key) = Self::split(spec_name).ok()?;
         let adapter = self.adapter()?;
-        let scope = self.scope_of(adapter, scope, spec_name).ok()?;
-        let (prog, args) = adapter.read_command(scope, schema, key);
-        let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-        let current = self.executor.probe_output(&prog, &refs).await.ok()?;
+        let scope = self.scope_of(adapter, scope, spec_name, user).ok()?;
+        let target = self.target_of(adapter, user, spec_name).ok()?;
+        let (prog, args) = adapter.read_command_for(scope, schema, key, &target);
+        let current = self.read_for(&target, &prog, &args).await.ok()?;
         Some(already_set(&current, want))
     }
 
@@ -368,27 +530,34 @@ impl Installable for SettingInstallable {
             let Some(adapter) = self.core.adapter() else {
                 return Err(self.core.no_adapter(&spec.name));
             };
-            let scope = self
+            let scope = self.core.scope_of(
+                adapter,
+                spec.options.one("scope"),
+                &spec.name,
+                spec.options.one("user"),
+            )?;
+            let target = self
                 .core
-                .scope_of(adapter, spec.options.one("scope"), &spec.name)?;
+                .target_of(adapter, spec.options.one("user"), &spec.name)?;
 
             // Read before write: only touch the store when it does not already hold `want`,
             // so a settled sync runs no command at all. Through the same probe `plan` and
-            // `check` ask — one read, one comparison, one set of scope rules — because two
-            // answers to "is this key already right" is how the reporting half came to say
-            // *nothing to do* about a key this half was rewriting.
             if self
                 .core
-                .holds(&spec.name, want, spec.options.one("scope"))
+                .holds(
+                    &spec.name,
+                    want,
+                    spec.options.one("scope"),
+                    spec.options.one("user"),
+                )
                 .await
                 == Some(true)
             {
                 continue;
             }
 
-            let (prog, args) = adapter.write_command(scope, schema, key, want);
-            let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-            self.core.executor.run(&prog, &refs, false).await?;
+            let (prog, args) = adapter.write_command_for(scope, schema, key, want, &target);
+            self.core.write_for(&target, &prog, &args).await?;
             info!("Setting {}/{} = {}", schema, key, want);
         }
         Ok(())
@@ -407,8 +576,14 @@ impl Installable for SettingInstallable {
             // line that carried `@scope=` is gone. Before this the removal always reset
             // `Scope::User`, so deleting a system-scoped line reset the *user* key and left the
             // machine-wide value in place, reporting success.
-            let (bare, scope) = split_scope(name);
+            let (bare, user) = crate::core::extras_lock::split_removal(
+                crate::config::grammar::ResourceKind::Setting,
+                name,
+            )?;
+            let (bare, scope) = split_scope(&bare);
             let (schema, key) = SettingBackendCore::split(bare)?;
+            self.core
+                .refuse_system_scope_for_a_named_account(bare, scope, user.as_deref())?;
             // A store with no adapter never held the value, so there is nothing to reset and
             // nothing to fail on.
             let Some(adapter) = self.core.adapter() else {
@@ -420,14 +595,21 @@ impl Installable for SettingInstallable {
             if scope == Scope::System && !adapter.has_system_scope() {
                 continue;
             }
-            let (prog, args) = adapter.reset_command(scope, schema, key);
-            let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-            self.core.executor.run(&prog, &refs, false).await?;
+            let target = self.core.target_of(adapter, user.as_deref(), bare)?;
+            let (prog, args) = adapter.reset_command_for(scope, schema, key, &target);
+            self.core.write_for(&target, &prog, &args).await?;
             info!(
-                "Setting {}/{} reset to its default ({} scope)",
+                "Setting {}/{} reset to its default ({} scope, {})",
                 schema,
                 key,
-                scope.as_str()
+                scope.as_str(),
+                target
+                    .account
+                    .as_ref()
+                    .map_or("this account".to_string(), |a| format!(
+                        "account `{}`",
+                        a.name()
+                    ))
             );
         }
         Ok(())
@@ -666,7 +848,7 @@ mod tests {
         // that checked first.
         let core = SettingBackendCore::new(CommandExecutor::new(true, false), adapters(vec![]));
         let err = core
-            .scope_of(&gsettings(), Some("system"), "org.gnome.x/k")
+            .scope_of(&gsettings(), Some("system"), "org.gnome.x/k", None)
             .expect_err("system scope on a user-only store must be refused")
             .to_string();
         assert!(err.contains("gsettings"), "{}", err);
@@ -680,14 +862,80 @@ mod tests {
         let core = SettingBackendCore::new(CommandExecutor::new(true, false), adapters(vec![]));
         let g = gsettings();
         assert_eq!(
-            core.scope_of(&g, Some("user"), "org.gnome.x/k").unwrap(),
+            core.scope_of(&g, Some("user"), "org.gnome.x/k", None)
+                .unwrap(),
             Scope::User
         );
         // And omitting it means the same thing.
         assert_eq!(
-            core.scope_of(&g, None, "org.gnome.x/k").unwrap(),
+            core.scope_of(&g, None, "org.gnome.x/k", None).unwrap(),
             Scope::User
         );
+    }
+
+    #[test]
+    fn a_machine_wide_scope_named_at_one_account_is_refused() {
+        let core = SettingBackendCore::new(CommandExecutor::new(true, false), adapters(vec![]));
+        let registry = registry_like();
+        let name = "org.gnome.x/theme";
+
+        for (scope, user) in [
+            (Scope::System, Some("alice")),
+            (Scope::System, Some("someone-else")),
+        ] {
+            let err = core
+                .refuse_system_scope_for_a_named_account(name, scope, user)
+                .expect_err("a machine-wide value cannot also be one account's")
+                .to_string();
+            assert!(err.contains(name), "{err}");
+            assert!(err.contains(user.unwrap()), "{err}");
+            assert!(err.contains("@scope=system"), "{err}");
+            assert!(err.contains("@user="), "{err}");
+        }
+
+        for (scope, user) in [
+            (Scope::System, None),
+            (Scope::User, Some("alice")),
+            (Scope::User, None),
+        ] {
+            assert!(
+                core.refuse_system_scope_for_a_named_account(name, scope, user)
+                    .is_ok(),
+                "({scope:?}, {user:?}) is not a contradiction"
+            );
+        }
+
+        let err = core
+            .scope_of(&registry, Some("system"), name, Some("alice"))
+            .expect_err("the apply must not reach the store with this line")
+            .to_string();
+        assert!(err.contains("nothing to write that is both"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn a_teardown_of_a_contradictory_row_is_refused_before_it_resets_anything() {
+        let core = Arc::new(SettingBackendCore::new(
+            CommandExecutor::new(false, false),
+            adapters(vec![registry_like()]),
+        ));
+        let installable = SettingInstallable { core: core.clone() };
+        let err = installable
+            .remove(
+                &["org.gnome.x/theme@scope=system@user=alice".to_string()],
+                false,
+                crate::app::sync::guard::Reaped::for_reason(
+                    crate::app::sync::guard::GuardScope::Sync,
+                    "a unit test of the teardown itself",
+                ),
+            )
+            .await
+            .expect_err("a row that was never written must not be reset");
+        let message = err.to_string();
+        assert!(
+            message.contains("nothing to write that is both"),
+            "{message}"
+        );
+        assert!(message.contains("alice"), "{message}");
     }
 
     #[test]
@@ -745,6 +993,7 @@ mod tests {
             core.holds(
                 "org.gnome.desktop.interface/color-scheme",
                 "prefer-dark",
+                None,
                 None
             )
             .await,
@@ -754,6 +1003,7 @@ mod tests {
             core.holds(
                 "org.gnome.desktop.interface/color-scheme",
                 "prefer-light",
+                None,
                 None
             )
             .await,
@@ -776,7 +1026,7 @@ mod tests {
         };
         let core = SettingBackendCore::new(CommandExecutor::new(false, false), vec![a]);
         assert_eq!(
-            core.holds("org.gnome.x/k", "anything", None).await,
+            core.holds("org.gnome.x/k", "anything", None, None).await,
             None,
             "a refused read must not be reported as a value that differs"
         );
@@ -788,10 +1038,10 @@ mod tests {
     #[tokio::test]
     async fn a_machine_with_no_store_and_a_name_with_no_key_are_both_unanswerable() {
         let none = SettingBackendCore::new(CommandExecutor::new(false, false), vec![]);
-        assert_eq!(none.holds("org.gnome.x/k", "v", None).await, None);
+        assert_eq!(none.holds("org.gnome.x/k", "v", None, None).await, None);
 
         let core = store_reading("prefer-dark");
-        assert_eq!(core.holds("dark", "prefer-dark", None).await, None);
+        assert_eq!(core.holds("dark", "prefer-dark", None, None).await, None);
     }
 
     /// U19's rule, on the reading side: a `@scope=system` line against a store with no
@@ -802,16 +1052,145 @@ mod tests {
     async fn system_scope_on_a_user_only_store_is_unanswerable() {
         let core = store_reading("prefer-dark");
         assert_eq!(
-            core.holds("org.gnome.x/k", "prefer-dark", Some("system"))
+            core.holds("org.gnome.x/k", "prefer-dark", Some("system"), None)
                 .await,
             None
         );
         // ...and the same store answers the scope it does have.
         assert_eq!(
-            core.holds("org.gnome.x/k", "prefer-dark", Some("user"))
+            core.holds("org.gnome.x/k", "prefer-dark", Some("user"), None)
                 .await,
             Some(true)
         );
+    }
+
+    #[test]
+    fn the_registry_row_addresses_a_hive_rather_than_a_literal_hkcu() {
+        let reg = adapters(vec![])
+            .into_iter()
+            .find(|a| a.name == "windows-registry")
+            .expect("the registry row must ship");
+        for argv in [&reg.read, &reg.write, &reg.reset] {
+            assert!(
+                argv.iter().any(|a| a.contains("{hive}")),
+                "{argv:?} does not name a hive, so it can only ever address the invoking account"
+            );
+            assert!(
+                !argv.iter().any(|a| a == "HKCU\\{schema}"),
+                "{argv:?} still addresses a literal HKCU"
+            );
+        }
+        let (_, args) = reg.read_command_for(
+            Scope::User,
+            "Software\\X",
+            "k",
+            &StoreTarget { account: None },
+        );
+        assert!(
+            args.iter().any(|a| a.contains("HKCU")),
+            "an unscoped registry read is not HKCU: {args:?}"
+        );
+    }
+
+    #[test]
+    fn a_store_that_cannot_address_a_named_account_refuses_before_writing() {
+        let core = SettingBackendCore::new(CommandExecutor::new(true, false), adapters(vec![]));
+        let account = crate::core::account::Account::current().unwrap();
+        let target = StoreTarget {
+            account: Some(account.clone()),
+        };
+        let addressable = target.is_addressable(&registry());
+        if addressable {
+            let hive = target.hive();
+            assert!(hive.starts_with("HKEY_USERS"), "{hive}");
+            assert!(hive.contains(&account.sid().expect("a SID on this platform")));
+            assert!(core
+                .target_of(&registry(), Some(account.name()), "X/k")
+                .is_ok());
+        } else {
+            let err = core
+                .target_of(&registry(), Some(account.name()), "X/k")
+                .expect_err("a store with no address for a named account must refuse")
+                .to_string();
+            assert!(err.contains(account.name()), "{err}");
+            assert!(err.contains("nothing was written"), "{err}");
+            assert!(err.contains("windows-registry"), "{err}");
+        }
+    }
+
+    fn registry() -> SettingAdapter {
+        adapters(vec![])
+            .into_iter()
+            .find(|a| a.name == "windows-registry")
+            .expect("the registry row must ship")
+    }
+
+    #[tokio::test]
+    async fn a_read_is_asked_in_the_account_the_line_named() {
+        let account = crate::core::account::Account::current().unwrap();
+        let read = if cfg!(windows) {
+            vec!["cmd".into(), "/C".into(), "echo %USERNAME%".into()]
+        } else {
+            vec!["sh".into(), "-c".into(), "printf '%s' \"$USER\"".into()]
+        };
+        let mut a = row("probe", if cfg!(windows) { "cmd" } else { "sh" });
+        a.read = read;
+        let core = SettingBackendCore::new(CommandExecutor::new(false, false), vec![a]);
+
+        let mine = core
+            .holds("org.gnome.x/k", account.name(), None, Some(account.name()))
+            .await;
+        assert_eq!(
+            mine,
+            Some(true),
+            "a read for the account the line named did not answer from that account"
+        );
+        assert_eq!(
+            core.holds("org.gnome.x/k", account.name(), None, None)
+                .await,
+            Some(true),
+            "the unscoped read and the self-named read disagree about the same account"
+        );
+        assert_eq!(
+            core.holds("org.gnome.x/k", "not-the-value", None, Some(account.name()))
+                .await,
+            Some(false),
+            "a read that succeeded reported no comparison rather than a difference"
+        );
+    }
+
+    #[test]
+    fn a_command_driven_store_is_addressed_by_where_it_runs_and_a_registry_one_by_its_argv() {
+        let gs = gsettings();
+        let unscoped = StoreTarget { account: None };
+        let here = StoreTarget {
+            account: Some(crate::core::account::Account::current().unwrap()),
+        };
+        for (label, target) in [("unscoped", &unscoped), ("this account", &here)] {
+            let (_, user) = gs.read_command_for(Scope::User, "org.gnome.x", "k", target);
+            let (_, system) = gs.read_command_for(Scope::System, "org.gnome.x", "k", target);
+            assert_eq!(user, vec!["get", "org.gnome.x", "k"], "{label}");
+            assert_eq!(system, user, "{label}: gsettings has no machine-wide store");
+        }
+
+        let reg = registry();
+        let (_, plain) = reg.read_command_for(Scope::User, "Software\\X", "k", &unscoped);
+        let (_, named) = reg.read_command_for(Scope::User, "Software\\X", "k", &here);
+        assert!(
+            plain.iter().any(|a| a.contains("HKCU")),
+            "an unscoped registry read is not HKCU: {plain:?}"
+        );
+        if here.is_addressable(&reg) {
+            assert_ne!(
+                plain, named,
+                "a registry read for a named account is byte-identical to the unscoped one, so \
+                 it would address the invoking account's hive"
+            );
+            assert!(
+                named.iter().any(|a| a.contains("HKEY_USERS")),
+                "a named registry read does not address that account's own hive: {named:?}"
+            );
+        }
     }
 
     /// The refusal names what Shall looked for, so a machine running an unlisted store learns

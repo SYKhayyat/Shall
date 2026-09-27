@@ -36,19 +36,31 @@ impl Dotfiles<'_> {
     pub fn outside_home_links<'a>(
         statements: impl Iterator<Item = &'a (Statement, Origin)>,
         exists: &dyn Fn(&std::path::Path) -> bool,
-    ) -> Vec<(String, std::path::PathBuf)> {
-        statements
-            .filter_map(|(stmt, _)| {
-                let Statement::Link(name, opts) = stmt else {
-                    return None;
-                };
-                // An unresolvable target is the install path's error to report, with its own
-                // message; swallowing it here would turn it into a silent skip.
-                let resolved = crate::backends::link::resolve_target(opts.one("target")?).ok()?;
-                (crate::backends::link::is_outside_home(&resolved) && !exists(&resolved))
-                    .then_some((format!("link:{}", name), resolved))
-            })
-            .collect()
+    ) -> Result<Vec<(String, std::path::PathBuf)>> {
+        let mut out = Vec::new();
+        for (stmt, _) in statements {
+            let Statement::Link(name, opts) = stmt else {
+                continue;
+            };
+            let resolved = match opts.one("user") {
+                Some(user) => crate::backends::link::resolve_target_for_user(
+                    opts.one("target").ok_or_else(|| {
+                        Error::Validation("`link:` with @user= requires @target=".into())
+                    })?,
+                    user,
+                )?,
+                None => crate::backends::link::resolve_target(
+                    opts.one("target")
+                        .ok_or_else(|| Error::Validation("`link:` requires @target=".into()))?,
+                )?,
+            };
+            if crate::backends::link::is_outside_home_for_user(&resolved, opts.one("user"))?
+                && !exists(&resolved)
+            {
+                out.push((format!("link:{}", name), resolved));
+            }
+        }
+        Ok(out)
     }
     /// Ask about those destinations before anything is applied.
     ///
@@ -59,7 +71,7 @@ impl Dotfiles<'_> {
         let trees = self.links(state)?;
         let targets = Self::outside_home_links(state.extras.iter().chain(trees.iter()), &|p| {
             p.exists() || p.is_symlink()
-        });
+        })?;
         if targets.is_empty() {
             return Ok(());
         }
@@ -134,9 +146,8 @@ impl Dotfiles<'_> {
             // previous sync recorded, and a symlink still counts for a tree placed before the
             // row existed. Narrowing this to the ledger alone would turn every such
             // destination into a fresh U23 refusal on the sync after an upgrade.
-            let owned = |p: &std::path::Path| {
-                p.is_symlink() || placed.applied().contains(&ExtraKey::link(p).to_string())
-            };
+            let owned =
+                |p: &std::path::Path| p.is_symlink() || placed.is_applied(&ExtraKey::link(p));
             let plan = crate::model::dotfiles::plan(
                 &root,
                 &target,
@@ -338,6 +349,36 @@ mod tests {
     }
 
     #[test]
+    fn outside_home_uses_the_selected_user_home() {
+        let account = crate::core::account::Account::current().unwrap();
+        let mut options = Options::default();
+        options.set("target", "~/.config/selected");
+        options.set("user", account.name());
+        let statement = (
+            Statement::Link("dotfiles/selected".into(), options),
+            Origin::new("modules/files.txt", 1),
+        );
+        assert!(
+            Dotfiles::outside_home_links(std::iter::once(&statement), &|_| false)
+                .unwrap()
+                .is_empty()
+        );
+
+        let mut options = Options::default();
+        options.set("target", "/etc/shall-selected");
+        options.set("user", account.name());
+        let statement = (
+            Statement::Link("dotfiles/system".into(), options),
+            Origin::new("modules/files.txt", 1),
+        );
+        assert_eq!(
+            Dotfiles::outside_home_links(std::iter::once(&statement), &|_| false)
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+    #[test]
     fn only_a_new_link_outside_home_is_asked_about() {
         #[cfg(windows)]
         let system = r"C:\ProgramData\shall\hosts";
@@ -349,14 +390,16 @@ mod tests {
             link("cron/backup", system),
         ]);
 
-        let asked = Dotfiles::outside_home_links(state.extras.iter(), &|_| false);
+        let asked = Dotfiles::outside_home_links(state.extras.iter(), &|_| false).unwrap();
         assert_eq!(asked.len(), 1);
         assert_eq!(asked[0].0, "link:cron/backup");
         assert_eq!(asked[0].1, std::path::PathBuf::from(system));
 
         // The destination is already there: it was agreed to on the run that placed it, and a
         // re-converge that asks again is a prompt on every sync.
-        assert!(Dotfiles::outside_home_links(state.extras.iter(), &|_| true).is_empty());
+        assert!(Dotfiles::outside_home_links(state.extras.iter(), &|_| true)
+            .unwrap()
+            .is_empty());
     }
 
     /// SEC3 asks about a tree's files too, because a tree is the `link:` lines it stands for.
@@ -385,7 +428,7 @@ mod tests {
             },
         }]);
 
-        let asked = Dotfiles::outside_home_links(expanded.iter(), &|_| false);
+        let asked = Dotfiles::outside_home_links(expanded.iter(), &|_| false).unwrap();
         assert_eq!(
             asked.len(),
             1,
@@ -395,6 +438,8 @@ mod tests {
 
         // And the same rule as a hand-written line: an existing destination was agreed to on
         // the run that placed it, so it is not asked about again.
-        assert!(Dotfiles::outside_home_links(expanded.iter(), &|_| true).is_empty());
+        assert!(Dotfiles::outside_home_links(expanded.iter(), &|_| true)
+            .unwrap()
+            .is_empty());
     }
 }

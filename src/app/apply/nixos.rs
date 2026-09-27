@@ -75,6 +75,9 @@ pub fn declared(state: &crate::model::DesiredState) -> Result<Declared> {
             continue;
         };
         out.any = true;
+        if opts.one("user").is_some() {
+            continue;
+        }
         let (enable, _restart) =
             crate::backends::nixos::service_routing(opts.one("enabled"), opts.one("status"))
                 .map_err(|e| Error::Validation(format!("{}: `service:{}` {}", origin, name, e)))?;

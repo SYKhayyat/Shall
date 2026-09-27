@@ -1077,3 +1077,36 @@ scoped upgrades, makes parallelism configurable, and adds first-class applicatio
 - **A `link:` names one content mode.** Inline `@content=`, a `@template=true` source,
   a `@decrypt=` source, or a plain symlink; a line naming two is refused where it is
   written, and `@template=` is `true` or `false`.
+
+### A declaration can act for a named account, and `dir:` is a statement
+
+- **`use user:NAME { ... }` scopes a block to an account, and `@user=NAME` does it for one
+  line.** The block covers exactly `link:`, `dir:`, `shim:`, `setting:`, `service:` and
+  `schedule:`; any other statement inside it is an error on its own line, and a `@user=` on a
+  line inside the block wins over the block's. `~` in a destination is that account's home and a
+  template renders `USER`/`HOME` as that account, while a `link:` source is still read from your
+  repo. Accounts are resolved by the machine — `getpwnam_r`, or the account's SID and profile on
+  Windows — never by parsing a helper's output.
+- **What a `setting:` or a per-user `service:` is needs the account, not just its name.** The
+  store command runs *as* the account with that account's session environment (and is addressed
+  `HKEY_USERS\<SID>` on Windows, because `HKCU` cannot name another account), a `shim:` lands in
+  that account's `~/.local/bin`, a systemd user unit or a LaunchAgent is written into their unit
+  directory, and the read-back is asked of the same domain.
+- **What a platform cannot do is refused by name, at run time rather than at parse.** OpenRC,
+  SysV and Windows `sc` have no per-user service domain, a named-account `schedule:` is refused
+  on Windows because `schtasks` needs that account's password, and `dir: @mode` is refused there
+  while ownership is supported. One shared Linux manifest still parses on macOS and Windows; it
+  reports what it could not do rather than refusing to be read.
+- **`dir:PATH` is new**: created idempotently, with mode and owner as things the next run
+  converges on rather than install-time trivia. Undeclaring removes a directory **Shall
+  created**, and only while it is empty — one you have started using is left alone and named,
+  with its row kept so the next sync tries again. A directory that was already there is never
+  removed.
+- **`locks/extras.toml` is schema 2 with typed rows.** One name in two accounts is two rows for a
+  `shim:`, `setting:`, `service:` or `schedule:`, and a `link:`/`dir:` row is keyed by the path
+  it resolved to, which already says whose home it is in. A `dir:` row records whether Shall made
+  the directory. **A schema-1 file is refused by name, not migrated** — delete it and run
+  `shall sync -y` once to start a fresh one; nothing on the machine is removed by doing so.
+- **Ownership applies to what the line deployed.** A plain `link:` is a symlink, and the symlink
+  is what Shall placed, so that is what it owns — the file inside your config repo is never
+  chowned. Parent directories Shall creates for a `@user=` target belong to that account.

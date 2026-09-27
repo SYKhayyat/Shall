@@ -365,11 +365,7 @@ async fn a_failed_undo_stays_in_the_extras_ledger() {
     // `no-such-backend` cannot be resolved, so its teardown fails for a reason no host can
     // fix by luck. Nothing declares it, so it is drift the moment the ledger is read.
     let mut ledger = shall::core::ExtrasLedger::new();
-    ledger.record(
-        ["repo:no-such-backend:ppa/example".to_string()]
-            .into_iter()
-            .collect(),
-    );
+    ledger.record(vec![row("repo:no-such-backend:ppa/example")]);
     ledger.save(&path).unwrap();
 
     let state = shall::model::DesiredState::default();
@@ -381,10 +377,10 @@ async fn a_failed_undo_stays_in_the_extras_ledger() {
         .expect("a failed undo is reported, not fatal");
 
     let after = shall::core::ExtrasLedger::load(&path).unwrap();
+    let wires: Vec<String> = after.records().iter().map(|r| r.wire()).collect();
     assert!(
-        after.applied().contains("repo:no-such-backend:ppa/example"),
-        "the failed teardown was dropped from the ledger: {:?}",
-        after.applied()
+        wires.contains(&"repo:no-such-backend:ppa/example".to_string()),
+        "the failed teardown was dropped from the ledger: {wires:?}"
     );
 }
 
@@ -405,7 +401,7 @@ async fn a_successful_undo_leaves_the_extras_ledger() {
     // so this test was pinning the bug as the expected behaviour, which is exactly the shape
     // `S16` records. An unreadable row is now kept, and the test needed a real success.
     let mut ledger = shall::core::ExtrasLedger::new();
-    ledger.record(["shim:no-such-shim".to_string()].into_iter().collect());
+    ledger.record(vec![row("shim:no-such-shim")]);
     ledger.save(&path).unwrap();
 
     let state = shall::model::DesiredState::default();
@@ -418,8 +414,217 @@ async fn a_successful_undo_leaves_the_extras_ledger() {
 
     let after = shall::core::ExtrasLedger::load(&path).unwrap();
     assert!(
-        after.applied().is_empty(),
+        after.is_empty(),
         "a successful teardown was left recorded: {:?}",
-        after.applied()
+        after.records()
     );
+}
+
+use crate::harness::{decl, Fixture};
+use shall::core::extras_lock::DirOrigin;
+
+fn row(wire: &str) -> shall::core::extras_lock::ExtraRecord {
+    shall::core::extras_lock::ExtraRecord::parse(wire).expect("a well-formed row")
+}
+
+fn ledger_body(f: &Fixture) -> String {
+    std::fs::read_to_string(f.cfg().join("locks").join("extras.toml"))
+        .expect("a sync that placed a resource records it")
+}
+
+fn origin_of(body: &str, subject: &str) -> Option<DirOrigin> {
+    let wanted = format!("subject = {subject:?}");
+    body.lines()
+        .find(|line| *line == wanted)
+        .and_then(|_| {
+            body.lines()
+                .skip_while(|line| *line != wanted)
+                .find_map(|line| line.strip_prefix("created = "))
+        })
+        .map(|spelled| match spelled.trim_matches('"') {
+            "shall-created" => DirOrigin::ShallCreated,
+            "pre-existing" => DirOrigin::PreExisting,
+            other => panic!("`{other}` is not an origin this build knows"),
+        })
+}
+
+#[test]
+fn a_directory_shall_created_is_recorded_as_its_own_and_removed_on_undeclare() {
+    let f = Fixture::new("extras-dir-shall-created");
+    let dir = f.root.join("shall-made");
+    f.write_module(&format!("dir:{}\n", decl(&dir)));
+
+    let (out, code) = f.run(&["sync", "-y"]);
+    assert_eq!(code, 0, "the first sync failed:\n{out}");
+    assert!(dir.is_dir(), "setup did not create {}", dir.display());
+
+    let body = ledger_body(&f);
+    assert!(
+        body.contains("schema = 2"),
+        "the ledger is not written to the schema this build reads:\n{body}"
+    );
+    assert_eq!(
+        origin_of(&body, &dir.display().to_string()),
+        Some(DirOrigin::ShallCreated),
+        "a directory Shall made was not recorded as Shall's, so nothing on undeclare would be \
+         authorized to remove it:\n{body}"
+    );
+
+    f.write_module("");
+    let (out, code) = f.run(&["sync", "-y"]);
+    assert_eq!(code, 0, "the undeclaring sync failed:\n{out}");
+    assert!(
+        !dir.exists(),
+        "{} was Shall's own and was left behind",
+        dir.display()
+    );
+    assert!(
+        !ledger_body(&f).contains("subject = "),
+        "a successful teardown left its row recorded"
+    );
+}
+
+#[test]
+fn a_pre_existing_empty_directory_is_recorded_as_the_users_and_preserved() {
+    let f = Fixture::new("extras-dir-pre-existing");
+    let dir = f.root.join("already-there");
+    std::fs::create_dir(&dir).unwrap();
+    f.write_module(&format!("dir:{}\n", decl(&dir)));
+
+    let (out, code) = f.run(&["sync", "-y"]);
+    assert_eq!(code, 0, "the first sync failed:\n{out}");
+
+    let body = ledger_body(&f);
+    assert_eq!(
+        origin_of(&body, &dir.display().to_string()),
+        Some(DirOrigin::PreExisting),
+        "a directory that was already on the machine was recorded as Shall's own:\n{body}"
+    );
+
+    f.write_module("");
+    let (out, code) = f.run(&["sync", "-y"]);
+    assert_eq!(code, 0, "the undeclaring sync failed:\n{out}");
+    assert!(
+        dir.is_dir(),
+        "{} existed before the line named it, and was deleted by the line leaving",
+        dir.display()
+    );
+    assert!(
+        !ledger_body(&f).contains("subject = "),
+        "a preserved directory is no longer declared and must not be retried for ever"
+    );
+}
+
+#[test]
+fn a_shall_created_directory_with_contents_is_preserved_and_its_row_kept() {
+    let f = Fixture::new("extras-dir-in-use");
+    let dir = f.root.join("in-use");
+    f.write_module(&format!("dir:{}\n", decl(&dir)));
+
+    let (out, code) = f.run(&["sync", "-y"]);
+    assert_eq!(code, 0, "the first sync failed:\n{out}");
+    assert!(dir.is_dir(), "setup did not create {}", dir.display());
+    std::fs::write(dir.join("the-users-data"), "keep me\n").unwrap();
+
+    f.write_module("");
+    let (out, code) = f.run(&["sync", "-y"]);
+    assert_eq!(code, 0, "the undeclaring sync failed:\n{out}");
+
+    assert!(
+        dir.join("the-users-data").exists(),
+        "a non-empty directory had its contents destroyed by a teardown"
+    );
+    let body = ledger_body(&f);
+    assert_eq!(
+        origin_of(&body, &dir.display().to_string()),
+        Some(DirOrigin::ShallCreated),
+        "a teardown that left the directory in place must keep its row, or the next sync has \
+         forgotten that Shall owns the path:\n{body}"
+    );
+}
+
+#[test]
+fn two_directories_keep_separate_rows_and_separate_origins() {
+    let f = Fixture::new("extras-dir-two");
+    let made = f.root.join("one");
+    let found = f.root.join("two");
+    std::fs::create_dir(&found).unwrap();
+    f.write_module(&format!("dir:{}\ndir:{}\n", decl(&made), decl(&found)));
+
+    let (out, code) = f.run(&["sync", "-y"]);
+    assert_eq!(code, 0, "the first sync failed:\n{out}");
+    assert!(made.is_dir(), "setup did not create {}", made.display());
+
+    let body = ledger_body(&f);
+    assert_ne!(made, found, "two directories wrote one row");
+    assert_eq!(
+        origin_of(&body, &made.display().to_string()),
+        Some(DirOrigin::ShallCreated)
+    );
+    assert_eq!(
+        origin_of(&body, &found.display().to_string()),
+        Some(DirOrigin::PreExisting)
+    );
+
+    f.write_module("");
+    let (out, code) = f.run(&["sync", "-y"]);
+    assert_eq!(code, 0, "the undeclaring sync failed:\n{out}");
+    assert!(!made.exists(), "{} was Shall's own", made.display());
+    assert!(
+        found.is_dir(),
+        "{} was not Shall's to remove",
+        found.display()
+    );
+}
+
+#[test]
+fn a_ledger_in_the_old_format_is_refused_and_an_absent_one_is_empty() {
+    use shall::core::LockFile;
+
+    let f = Fixture::bare("extras-ledger-format");
+    let path = shall::core::ExtrasLedger::path_in(&f.cfg().join("locks"));
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    assert!(
+        shall::core::ExtrasLedger::load(&path).unwrap().is_empty(),
+        "a machine that has never synced has an empty ledger, not an error"
+    );
+
+    std::fs::write(&path, "applied = [\"shim:rg\"]\n").unwrap();
+    let err = shall::core::ExtrasLedger::load(&path).expect_err("the old format is refused");
+    let err = err.to_string();
+    assert!(err.contains("schema-1"), "{err}");
+    assert!(
+        err.contains("shall sync -y"),
+        "the refusal must say how to start a fresh one: {err}"
+    );
+    assert!(
+        path.exists(),
+        "the refusal must not have rewritten the file"
+    );
+}
+
+#[test]
+fn no_other_kind_of_row_carries_a_creation_origin() {
+    for wire in [
+        "shim:rg",
+        "service:nginx",
+        "link:/home/u/.vimrc",
+        "setting:org.gnome.x/theme@user=alice",
+    ] {
+        assert!(
+            row(wire)
+                .with_created(Some(DirOrigin::ShallCreated))
+                .is_err(),
+            "{wire} accepted a creation origin"
+        );
+        assert!(
+            row(wire).owns_removal(),
+            "{wire}: a teardown that removes a declaration is not gated on provenance"
+        );
+    }
+    let dir = row("dir:/var/lib/shall")
+        .with_created(Some(DirOrigin::ShallCreated))
+        .unwrap();
+    assert!(dir.owns_removal());
+    assert!(!row("dir:/home/u/state").owns_removal());
 }

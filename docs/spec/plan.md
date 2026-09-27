@@ -300,6 +300,57 @@ build and what is deferred to hardware.**
 18. ~~**U34 — `shall repl`**~~ **BUILT** (session 2026-07-27; `app/repl.rs` over the one resolver
     — `resolve_spec`, `eval_when`, `resolve_vars`/`resolve_model`; read-only, no locks).
 
+### Tier 5 — the per-user home layer (U71, `PLAN.md` #71): BUILT, with the two-account rows unproven
+
+19. ~~**U71 — a manifest can act for a named account.**~~ **BUILT (ruling 2026-09-20).** Two scoping
+    forms — `use user:NAME { ... }` over the six statements that can mean something in another
+    person's world, and `@user=` on a line — over one account value the machine reports
+    (`core::account::Account`: `getpwnam_r` on Unix, `LookupAccountNameW` plus the account's
+    `ProfileList` home on Windows). It carries the whole dependent axis at once, which is why it
+    is one item and not six: `shim:` lands in that account's `~/.local/bin`; `setting:` runs *as*
+    that account and is addressed `HKEY_USERS\<SID>` on Windows; `service:` takes its per-user
+    argv from `init_providers.toml` as **data**, so systemd and launchd have the capability and
+    openrc, sysvinit and `sc` refuse by name; `schedule:` writes a user unit or a LaunchAgent and
+    refuses a named account on Windows, where `schtasks /Create /RU` needs that account's
+    password. `dir:` is new: idempotent, path-resolved, mode and owner as convergence axes, and
+    the extras ledger moves to **schema 2** so a `dir:` row can record whether Shall made the
+    directory. Rule `II.63`, rationale `V.208`.
+
+    **Exit — the clauses, and which of them something actually drives today:**
+
+    - a `use user:` block carrying one of each of the six kinds parses, and each line comes out
+      carrying that user; a seventh kind in the block is refused **at its own line**, and an
+      inner `@user=` wins over the block's (`src/config/grammar/mod.rs`);
+    - a `dir:` Shall created is recorded `shall-created` and undeclaring removes it; one the user
+      made is recorded `pre-existing` and survives it; two directories keep two rows with two
+      origins; a Shall-made one that has acquired contents is left alone, named, and **its row
+      kept** so the next sync tries again; a schema-1 `locks/extras.toml` is refused by name and
+      not rewritten (`tests/feature_logic_tests.rs`);
+    - the ledger holds two rows for one name in two accounts, and removing one account's line
+      drifts only that account's row; the teardown name carries the account through the codec
+      that wrote it, and a row whose account cannot be read is refused rather than guessed at
+      (`tests/two_accounts_are_two_resources_tests.rs`);
+    - a `link:` and a `dir:` row carry no account, because their path already does;
+    - a plain `link:`'s source keeps its uid and gid after a `@user=` sync, and an invalid
+      `@mode=` is refused before a directory is created
+      (`backends/link.rs`, `backends/dir.rs` unit tests).
+
+    **The one clause in the rule that nothing drives end to end, named rather than assumed:**
+    mode and owner as *convergence axes* — a `dir:` already present is re-chowned and re-chmodded
+    when they differ, so an edited `@mode=` is work and not silence. The unit tests cover the
+    refusal and the creation receipt; the second-run convergence is asserted by neither the
+    hermetic suite nor the harness, and it should be, because "already there, so nothing to do"
+    is the failure mode this axis exists to remove.
+
+    **What the exit does not reach, and the exit does not claim:** nothing here has run against a
+    machine with two real accounts. `systemctl --user` reaching *another* account's user manager,
+    `sudo -u` under the sessions a desktop actually has, a `LaunchAgent` firing as its owner, and
+    the Windows refusals driving `schtasks` at all are the same hardware boundary the NixOS and
+    btrfs rows sit behind, and the hermetic suite says so in the file's own header rather than
+    asserting a cross-account action it cannot perform. A capability this platform lacks is a
+    **refusal at apply**, never a parse failure, precisely so one shared Linux manifest still
+    parses everywhere; that half is proven on any host.
+
 ### Deferred by ruling (build later, on a trigger — not now)
 
 - **K18 — atomic-swap option**: lands with the first backend that actually exposes atomic swap;

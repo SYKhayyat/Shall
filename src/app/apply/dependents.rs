@@ -10,10 +10,8 @@ pub struct Dependents<'a> {
 }
 
 impl Dependents<'_> {
-    /// The shim directory's manager. Built from the same field `App` builds it from; a shim
-    /// is a file on disk, so nothing else is needed to reach one.
-    async fn shim_manager(&self) -> Result<crate::app::ShimManager> {
-        crate::app::ShimManager::with_bin_dir(self.config.bin_dir.clone()).await
+    async fn shim_manager_for(&self, user: Option<&str>) -> Result<crate::app::ShimManager> {
+        crate::app::ShimManager::for_user(&self.config.bin_dir, user).await
     }
 
     /// Apply the dependent extras — shims, services and links — AFTER the package plan has
@@ -47,7 +45,7 @@ impl Dependents<'_> {
         let declared_by_nixos = crate::app::apply::nixos::owns_extras(self.registry);
 
         for (stmt, origin) in state.dependents() {
-            if let Some(key) = crate::core::extras_lock::extra_key(stmt) {
+            if let Some(key) = crate::core::extras_lock::extra_key(stmt)? {
                 if crate::app::apply::extras::in_effect(
                     self.config,
                     self.registry,
@@ -81,15 +79,15 @@ impl Dependents<'_> {
                             origin, name
                         )));
                     }
+                    let user = opts.one("user");
                     if self.config.dry_run {
                         crate::would!("would deploy shim `{}`", name);
                         continue;
                     }
                     info!("deploying `{}` ({})", name, origin);
-                    self.shim_manager().await?.create_shim(name).await?;
+                    self.shim_manager_for(user).await?.create_shim(name).await?;
                     // A shim in a directory nobody's PATH names is a file, not a command —
                     // the same event as E6c's install, and it needs saying here too because
-                    // `shim:` never reaches the package plan that says it there.
                     if let Some(msg) = crate::app::reachable::unreachable_warning(
                         "shim",
                         self.config,
@@ -101,6 +99,7 @@ impl Dependents<'_> {
                     }
                 }
                 Statement::Service(name, opts) => {
+                    let declared_by_nixos = declared_by_nixos && opts.one("user").is_none();
                     let opts = if declared_by_nixos {
                         match crate::app::apply::nixos::imperative_remainder(opts) {
                             // A restart is a transition no attribute can express, so the init
