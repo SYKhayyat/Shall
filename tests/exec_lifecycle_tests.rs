@@ -679,10 +679,11 @@ async fn lock_approves_the_scripts_beside_a_catalogued_step_and_asks_nothing_of_
 /// own comment says it: *"No early return when nothing is declared: deleting the LAST `exec:` line
 /// is a real change, and a teardown that only runs when something is still declared can never undo
 /// the last one (S20 taught this for extras; it is the same shape here)."* And
-/// `verbs::sync::reconcile` returns early when `changes.is_empty() && !state.has_non_package_work()`
-/// — a branch that reconciles the extras ledger, so a deleted `link:` is undone, and never reaches
-/// the execs phase at all. Delete the only `exec:` line on an otherwise converged machine and the
-/// undo silently does not happen.
+/// `verbs::sync::reconcile` used to return early when `changes.is_empty() &&
+/// !state.has_non_package_work()` — a branch that reconciled the extras ledger, so a deleted
+/// `link:` is undone, and never reached the execs phase at all. Delete the only `exec:` line on an
+/// otherwise converged machine and the undo silently did not happen. That branch now goes through
+/// `apply_non_package_phases`, so this test is what keeps it going through it.
 ///
 /// `removing_an_exec_runs_the_undo_it_declared` above passes over the same state, because it calls
 /// `execs().apply()` itself. That is exactly how this hid: the unit test drives the function that

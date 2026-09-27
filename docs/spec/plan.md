@@ -335,12 +335,13 @@ build and what is deferred to hardware.**
       `@mode=` is refused before a directory is created
       (`backends/link.rs`, `backends/dir.rs` unit tests).
 
-    **The one clause in the rule that nothing drives end to end, named rather than assumed:**
+    **The one clause in the rule that the hermetic suite now drives, named rather than assumed:**
     mode and owner as *convergence axes* — a `dir:` already present is re-chowned and re-chmodded
-    when they differ, so an edited `@mode=` is work and not silence. The unit tests cover the
-    refusal and the creation receipt; the second-run convergence is asserted by neither the
-    hermetic suite nor the harness, and it should be, because "already there, so nothing to do"
-    is the failure mode this axis exists to remove.
+    when they differ, so an edited `@mode=` is work and not silence
+    (`tests/resource_plan_family_tests.rs::a_directory_mode_edit_is_reported_and_then_converges`,
+    over the plan/check pair rather than the unit's own `chmod`, so the axis is proven where a
+    user meets it). The refusal and the creation receipt are covered by the unit tests. What the
+    harness still does not drive is a second run against a real `dir:` on a real account.
 
     **What the exit does not reach, and the exit does not claim:** nothing here has run against a
     machine with two real accounts. `systemctl --user` reaching *another* account's user manager,
@@ -350,6 +351,21 @@ build and what is deferred to hardware.**
     asserting a cross-account action it cannot perform. A capability this platform lacks is a
     **refusal at apply**, never a parse failure, precisely so one shared Linux manifest still
     parses everywhere; that half is proven on any host.
+
+### Tier 6 — one list of phases, and the converged path on it (`PLAN.md` #34): BUILT
+
+20. ~~**A converged `sync` runs the phases, not a copy of the phases that had a teardown.**~~
+    **BUILT.** The "nothing to do" branch of `verbs::sync::reconcile` called `extras().changes`,
+    `extras().reconcile` and `execs().apply` itself, and reached nothing else — so on the one
+    path every settled machine takes, `dependents:`, `dotfiles:`, `firewall:` and `schedule:` did
+    not run, and neither did a converged `sync --dry-run` preview them. The branch now calls
+    `apply_non_package_phases`, and `Phase::Execs` returns its undo count so the summary on that
+    path still counts a teardown (`tests/phase_is_the_sync_order_tests.rs::
+    the_converged_fast_path_goes_through_the_one_phase_list` scans the branch for a second
+    implementation, and `tests/exec_lifecycle_tests.rs::
+    deleting_the_last_exec_line_runs_its_undo_through_the_sync_verb` drives the behaviour the
+    branch exists for). Maintenance stays where it was: a run that changed nothing still does not
+    expire leases or autocommit.
 
 ### Deferred by ruling (build later, on a trigger — not now)
 

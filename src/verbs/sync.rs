@@ -171,31 +171,16 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
     // `schedule:` line). That is still work, so the "nothing to do" exit has to account for
     // every phase after the package plan — which it now asks `Phase` for rather than listing.
     if changes.is_empty() && !state.has_non_package_work() {
-        // Even with no packages/dependents/schedules to apply, an extra may have been
-        // *removed* — deleting the last `service:` line is a real change (S20). Reconcile the
-        // applied-extras ledger so that undo still happens; it is a cheap no-op otherwise.
-        //
-        // The count is returned rather than dropped: a teardown is work, and reporting `already
-        // up to date` over five deleted files is the summary disagreeing with the machine. The
-        // placement half is counted here too — `repo:` is phase 1 and was applied above, so a
-        // run that reaches this line can still have put a resource in place.
-        let resources = app.extras().changes(&state).await?;
-        let undone = app.extras().reconcile(&state, opts.scope).await?;
-        // **And the `exec:` teardown, for exactly the reason the paragraph above gives.** That
-        // reasoning was applied to extras here and to `exec:` inside `Execs::apply` — whose own
-        // comment says *"deleting the LAST `exec:` line is a real change, and a teardown that
-        // only runs when something is still declared can never undo the last one"* — and then
-        // this branch skipped the phase that contains it. Delete the only `exec:` line on an
-        // otherwise converged machine and the `@undo=` silently did not run: measured on the
-        // ubuntu and slackware images, both reporting the sync as exit 0.
-        //
-        // A no-op when nothing departed, and the call is cheap: it reads two lock files.
-        let undone_execs = app
-            .execs()
-            .apply(&state, crate::model::exec::Verb::Sync, None)
-            .await?;
+        // Nothing is declared and nothing is in place, so the only work left is the teardown of
+        // what *was*: deleting the last `link:`, `service:` or `exec:` line is a real change
+        // (S20). It runs through the one phase list, and it used to run through a private copy
+        // of the phases that had a teardown — which is how this branch came to reconcile extras
+        // and `exec:` while skipping `dependents:`, `dotfiles:`, `firewall:` and `schedule:`, and
+        // how it came to skip the list the next statement kind would be added to. A converged
+        // `--dry-run` previewed the same partial list for the same reason.
+        let applied = apply_non_package_phases(app, &state, opts.scope).await?;
         return Ok(Reconciled {
-            applied: resources.place.len() + undone + undone_execs,
+            applied,
             left_in_place: changes.skipped.len(),
             not_installed: not_installed_of(&changes.skipped),
         });
@@ -396,6 +381,7 @@ pub async fn apply_non_package_phases(
         .await?;
     }
 
+    let mut undone_execs = 0;
     for phase in Phase::all() {
         match phase {
             // Not this list's, and each for a reason rather than by omission: `Resolution` is
@@ -428,12 +414,15 @@ pub async fn apply_non_package_phases(
             // Phase 4 (S21): provision the declared schedules onto the OS scheduler.
             Phase::Schedules => app.schedules().apply(state).await?,
             // Phase 4b (XIII.3): the declared `exec:` scripts, after the packages and
-            // dependents a script is likely to lean on. A verb, so it has no teardown phase.
-            // The undo count is dropped here and read in the converged branch above: on this
-            // path `applied` is the package plan's own total, and folding a teardown into it
-            // would make one number mean two things.
+            // dependents a script is likely to lean on. A verb, so it has no teardown phase of
+            // its own — but its UNDO count is this function's to return, because on the converged
+            // path this list is the only thing that runs, and a summary reading zero over a
+            // script whose `@undo=` just fired is the summary disagreeing with the machine.
+            // Scripts that RUN are not counted: `Reconciled::applied` is the package plan's own
+            // total on every path that has one.
             Phase::Execs => {
-                app.execs()
+                undone_execs += app
+                    .execs()
                     .apply(state, crate::model::exec::Verb::Sync, None)
                     .await?;
             }
@@ -448,7 +437,7 @@ pub async fn apply_non_package_phases(
     // to `max_port_closures`, resources to `max_extra_removals` — but `app.reaping` carries both
     // into this call, because they still spend one `max_total_changes` between them.
     let undone = app.extras().reconcile(state, scope).await?;
-    Ok(resources.place.len() + undone)
+    Ok(resources.place.len() + undone + undone_execs)
 }
 
 /// `shall rebuild` — remove and reinstall what is declared, one backend at a time (X.1, K1).

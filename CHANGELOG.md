@@ -1110,3 +1110,15 @@ scoped upgrades, makes parallelism configurable, and adds first-class applicatio
 - **Ownership applies to what the line deployed.** A plain `link:` is a symlink, and the symlink
   is what Shall placed, so that is what it owns — the file inside your config repo is never
   chowned. Parent directories Shall creates for a `@user=` target belong to that account.
+
+### A converged `sync` runs the same phases a changing one does
+
+- **`sync` on a machine with nothing to do now runs the phase list rather than its own copy of
+  it.** The "nothing to do" branch used to reconcile the extras ledger and run `exec:` teardowns
+  itself, and reached nothing else — so `dependents:`, `dotfiles:`, `firewall:` and `schedule:`
+  did not run there, and a converged `sync --dry-run` previewed the same partial list. A statement
+  kind added to the phase order is now reached on that path without anyone remembering to add it
+  twice.
+- **A teardown is still counted.** Deleting the last `exec:` line on an otherwise settled machine
+  still runs its `@undo=` and still reports the change, because the phase that runs it returns
+  its count.

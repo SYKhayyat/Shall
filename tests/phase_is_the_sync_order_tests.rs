@@ -136,6 +136,49 @@ fn syncs_dispatch_names_every_phase_after_the_packages() {
     );
 }
 
+/// The converged fast-path runs the same list, rather than a copy of the phases that had a
+/// teardown when the copy was written.
+///
+/// `sync` answers "nothing to do" through a branch that keeps its own calls, and that branch is
+/// the one a converged machine takes on every run — so a phase added to `Phase` and to
+/// `apply_non_package_phases` and to nothing else is invisible exactly where there is most work
+/// to miss. It has happened: the branch reconciled extras and `exec:` and skipped `dependents:`,
+/// `dotfiles:`, `firewall:` and `schedule:`, and a converged `--dry-run` previewed the same
+/// partial list.
+#[test]
+fn the_converged_fast_path_goes_through_the_one_phase_list() {
+    let source = std::fs::read_to_string(root().join("src/verbs/sync.rs"))
+        .expect("src/verbs/sync.rs must be readable");
+    let start = source
+        .find("if changes.is_empty() && !state.has_non_package_work()")
+        .expect("the converged fast-path must still be findable — the answer is in what it calls");
+    let branch = &source[start..];
+    let end = branch.find("\n    }").expect("the branch must be closed");
+    let branch = &branch[..end];
+
+    assert!(
+        branch.contains("apply_non_package_phases("),
+        "the converged fast-path does not call the one phase list:\n{branch}\n\
+         A phase reached only through `Phase` and `apply_non_package_phases` does not run on a \
+         converged machine, and a converged `--dry-run` does not preview it."
+    );
+    for private_copy in [
+        "extras()",
+        "execs()",
+        "schedules()",
+        "firewall()",
+        "dependents()",
+    ] {
+        assert!(
+            !branch.contains(private_copy),
+            "the converged fast-path calls `{private_copy}` itself, so it is running a second \
+             implementation of the phase list:\n{branch}\n\
+             Whatever that call does is a phase a later change to `apply_non_package_phases` will \
+             not reach."
+        );
+    }
+}
+
 /// Whether `body` dispatches `phase` to actual work.
 ///
 /// **Three ways to look dispatched without being dispatched, and it must catch all three.** A
