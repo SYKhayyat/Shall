@@ -166,14 +166,44 @@ fn sid_text(sid: &[u32]) -> Option<String> {
     Some(out)
 }
 
-#[cfg(not(windows))]
-fn data_dir_under(home: &Path) -> PathBuf {
-    home.join(".local").join("share").join("shall")
+/// Where a named account's data lives, by platform convention.
+///
+/// **macOS is not `~/.local/share`, and the difference is a real path on a real machine.** The
+/// account's data directory is what `dirs::data_dir()` answers for the invoking user, so an
+/// account that is handed the Linux answer gets a second, shall-only tree that nothing else on
+/// the machine knows about — while an *unscoped* schedule still logs where it always logged. Two
+/// schedules, two logs, and a reader with no way to tell which is which.
+///
+/// **The platform is an argument rather than a `cfg` at each arm**, so the convention every
+/// platform uses is assertable from any host. A `#[cfg(target_os = "macos")]` test runs on
+/// exactly the machine whose bug this was and nowhere else, which is a gate that reports nothing
+/// until the day it is the only gate left.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Platform {
+    Unix,
+    MacOs,
+    Windows,
 }
 
-#[cfg(windows)]
+fn host_platform() -> Platform {
+    if cfg!(target_os = "macos") {
+        Platform::MacOs
+    } else if cfg!(windows) {
+        Platform::Windows
+    } else {
+        Platform::Unix
+    }
+}
+
 fn data_dir_under(home: &Path) -> PathBuf {
-    home.join("AppData").join("Local").join("shall")
+    match host_platform() {
+        Platform::MacOs => home
+            .join("Library")
+            .join("Application Support")
+            .join("shall"),
+        Platform::Unix => home.join(".local").join("share").join("shall"),
+        Platform::Windows => home.join("AppData").join("Local").join("shall"),
+    }
 }
 
 fn validate_home(home: &Path) -> Result<()> {
@@ -690,6 +720,34 @@ mod tests {
         let account = Account::current().unwrap();
         assert!(!account.name().is_empty());
         assert!(!account.home().as_os_str().is_empty());
+    }
+
+    /// **Every platform's convention, asserted from any host.** The macOS leg of this is the one
+    /// that was wrong, and a `#[cfg(target_os = "macos")]` test would have caught it only on the
+    /// machine that reported it.
+    #[test]
+    fn a_named_accounts_data_directory_is_the_platforms_own() {
+        let home = Path::new("/home/somebody");
+        assert_eq!(
+            data_dir_under(home),
+            match host_platform() {
+                Platform::MacOs => home.join("Library/Application Support/shall"),
+                Platform::Unix => home.join(".local/share/shall"),
+                Platform::Windows => home.join("AppData/Local/shall"),
+            }
+        );
+        // The two conventions that differ, named rather than left to the host's cfg.
+        assert_eq!(
+            data_dir_under(home),
+            if cfg!(target_os = "macos") {
+                home.join("Library/Application Support/shall")
+            } else if cfg!(windows) {
+                home.join("AppData/Local/shall")
+            } else {
+                home.join(".local/share/shall")
+            },
+            "an account's data directory is not the platform's data directory convention"
+        );
     }
 
     #[test]

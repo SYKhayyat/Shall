@@ -127,6 +127,25 @@ impl TaskTarget {
         }
     }
 
+    /// Where this target's schedules append their output.
+    ///
+    /// **A scoped target logs into its own account's data directory; an unscoped one keeps the
+    /// path it has always used.** That is not the same value: `safe_data_dir` is a function of
+    /// the environment (`XDG_DATA_HOME` moves it) and of the platform (`dirs` answers
+    /// `~/Library/Application Support` on macOS), while an account's data directory is its home
+    /// plus a convention. One function rather than the copy each provisioner carried, because the
+    /// two copies disagreed on exactly the case that mattered — a macOS unscoped schedule wrote
+    /// to a shall-only `.local/share` tree that no `dirs` caller would ever look in.
+    pub fn log_path(&self) -> PathBuf {
+        let dir = match &self.account {
+            Some(account) => account
+                .data_dir()
+                .unwrap_or_else(|_| crate::utils::safe_data_dir()),
+            None => crate::utils::safe_data_dir(),
+        };
+        dir.join("schedule.log")
+    }
+
     pub fn is_scoped(&self) -> bool {
         self.account.is_some()
     }
@@ -349,16 +368,6 @@ impl LinuxSystemdProvisioner {
         }
     }
 
-    fn log_path(target: &TaskTarget) -> PathBuf {
-        match target.account() {
-            Ok(account) => account
-                .data_dir()
-                .unwrap_or_else(|_| crate::utils::safe_data_dir())
-                .join("schedule.log"),
-            Err(_) => crate::utils::safe_data_dir().join("schedule.log"),
-        }
-    }
-
     /// The `.service` unit, for both shapes a schedule can take.
     ///
     /// One renderer, because there were two and they disagreed: the boot shape was written by
@@ -366,7 +375,7 @@ impl LinuxSystemdProvisioner {
     /// `StandardOutput=`/`StandardError=` — so an `@reboot` job's output went nowhere while
     /// every other job's was appended to `schedule.log`.
     fn service_unit(config: &ScheduleConfig, shall_bin: &Path, target: &TaskTarget) -> String {
-        let log = Self::log_path(target);
+        let log = target.log_path();
         let mut unit = format!(
             "[Unit]\nDescription=Shall {kind}: {name}\n\n\
              [Service]\nType=oneshot\nExecStart={bin} {cmd}\n\
@@ -838,16 +847,6 @@ impl MacLaunchdProvisioner {
         Some(dir.join(format!("{}.plist", Self::label(name))))
     }
 
-    fn log_path(target: &TaskTarget) -> PathBuf {
-        match target.account() {
-            Ok(account) => account
-                .data_dir()
-                .unwrap_or_else(|_| crate::utils::safe_data_dir())
-                .join("schedule.log"),
-            Err(_) => crate::utils::safe_data_dir().join("schedule.log"),
-        }
-    }
-
     async fn launchctl(
         &self,
         executor: &CommandExecutor,
@@ -895,7 +894,7 @@ impl MacLaunchdProvisioner {
             cmd = config.command,
             schedule = schedule_xml,
             disabled = disabled,
-            log = Self::log_path(target).display()
+            log = target.log_path().display()
         )
     }
 
@@ -2579,7 +2578,7 @@ mod tests {
             "{dir:?} is not in the account's home"
         );
 
-        let log = LinuxSystemdProvisioner::log_path(&target);
+        let log = target.log_path();
         assert!(
             log.starts_with(account.home()),
             "{log:?} is not in the account's home"
@@ -2602,8 +2601,10 @@ mod tests {
             dirs::config_dir().unwrap().join("systemd").join("user")
         );
         assert_eq!(
-            LinuxSystemdProvisioner::log_path(&here),
-            crate::utils::safe_data_dir().join("schedule.log")
+            here.log_path(),
+            crate::utils::safe_data_dir().join("schedule.log"),
+            "an unscoped schedule writes where it has always written, whatever the platform's \
+             data directory is"
         );
         assert!(here.account().is_ok());
     }
