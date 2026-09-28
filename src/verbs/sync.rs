@@ -777,33 +777,6 @@ pub async fn handle_sync(app: &App, mode: SyncMode, out: Output) -> Result<()> {
 
 /// A cheap fingerprint of the manifest directory: (path, size, mtime) for every `*.txt`. If it
 /// changes between ticks, a manifest was edited. Best-effort — errors just yield an empty sig.
-/// A fingerprint of every wish-list manifest, so `watch` notices an edit.
-///
-pub async fn manifest_signature(dir: &std::path::Path) -> Vec<(String, u64, i64)> {
-    let mut sig = Vec::new();
-    {
-        let Ok(mut rd) = tokio::fs::read_dir(dir).await else {
-            return sig;
-        };
-        while let Ok(Some(entry)) = rd.next_entry().await {
-            let path = entry.path();
-            if path.extension().map(|e| e == "txt").unwrap_or(false) {
-                if let Ok(meta) = entry.metadata().await {
-                    let mtime = meta
-                        .modified()
-                        .ok()
-                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                        .map(|d| d.as_secs() as i64)
-                        .unwrap_or(0);
-                    sig.push((path.to_string_lossy().into_owned(), meta.len(), mtime));
-                }
-            }
-        }
-    }
-    sig.sort();
-    sig
-}
-
 /// One unattended reconcile pass. `watch` is unattended by definition, so it never asks —
 /// that flag is the only thing separating it from `sync`, which is why both go through the
 /// same [`reconcile`].
@@ -847,7 +820,11 @@ pub async fn handle_watch(
         if pull { " (git pull each tick)" } else { "" },
         if on_change { " (on change only)" } else { "" },
     );
-    let mut last_sig = manifest_signature(&app.config.config_root().join("modules")).await;
+    // **The whole config repo, by content** (`watch_signature`). It was `modules/*.txt` by size
+    // and mtime, which missed a profile switch, a `priority` reorder, a `vars/` edit, an
+    // `adapters/` row and `preferences.toml` — and a watcher that misses the edit looks exactly
+    // like a watcher working.
+    let mut last_sig = crate::verbs::watch_signature::signature(&app.config.config_root()).await;
     let mut first = true;
     let mut failed: Option<anyhow::Error> = None;
     loop {
@@ -860,13 +837,17 @@ pub async fn handle_watch(
                 }
             }
         }
-        let sig = manifest_signature(&app.config.config_root().join("modules")).await;
-        let changed = sig != last_sig;
+        let sig = crate::verbs::watch_signature::signature(&app.config.config_root()).await;
+        let moved = crate::verbs::watch_signature::changed(&last_sig, &sig);
+        let changed = !moved.is_empty();
         // Reconcile on the first pass and whenever something changed; with --on-change we skip
         // ticks where nothing moved (the manifests and, after a pull, the repo are unchanged).
         if first || changed || !on_change {
             if changed && !first {
-                println!("watch: manifests changed — reconciling.");
+                println!(
+                    "watch: {} changed — reconciling.",
+                    crate::verbs::watch_signature::say(&moved)
+                );
             }
             match watch_reconcile(app).await {
                 // `not_installed` is in the first arm's condition for the same reason

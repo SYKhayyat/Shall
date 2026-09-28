@@ -1175,3 +1175,23 @@ scoped upgrades, makes parallelism configurable, and adds first-class applicatio
   `core::validator` already used for forbidden system paths — so it is one implementation, and it
   lives next to the Windows verbatim-prefix fix that makes a prefix match work there at all. A
   guard that cannot resolve either side **refuses** rather than answering "not inside".
+
+### `watch` sees the whole config repo, and says what it reacted to
+
+- **`watch --on-change` was watching one folder.** It fingerprinted `modules/*.txt` by size and
+  mtime, so switching a profile on, moving a manager up `priority`, editing `vars/`, adding an
+  adapter row, changing `preferences.toml` or a hook all changed what Shall does and woke
+  nothing. A watcher that misses the edit is indistinguishable from a watcher working, which is
+  the one thing a watcher cannot be.
+- **It now fingerprints the whole repo, by content.** A hash of the bytes rather than size and
+  mtime, so an edit that preserves the length is still a change — and a `git pull` that brought
+  nothing new is still *not* one. `.git/` is excluded (a pull rewrites it constantly) and so is
+  `locks/`, because that folder is written by the sync the daemon is running: counting it would
+  make every tick see the previous tick's writes and reconcile for ever.
+- **You can say what should not wake it.** A `.shall-watchignore` in the repo: one glob per line,
+  `#` for a comment, a trailing `/` for a directory, `**` across directories, and a leading or
+  interior `/` to anchor to the repo root — the same language as `.gitignore`, minus negation,
+  which is a rule with precedence and this file has none. A line it cannot read is reported rather
+  than quietly ignored.
+- **It tells you what it reacted to**: `watch: active, profiles/Work changed — reconciling.`, up
+  to five names and then `and 12 more`, because a pull that brings forty files is one event.

@@ -13,6 +13,7 @@ pub mod portable;
 pub mod setup;
 pub mod sync;
 pub mod upgrade;
+pub mod watch_signature;
 
 /// Write a file in the config repo — unless this run only says what it would do.
 ///

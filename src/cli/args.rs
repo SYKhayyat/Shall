@@ -217,7 +217,8 @@ pub enum Commands {
         #[arg(long, default_value = "30")]
         interval: u64,
 
-        /// Only reconcile when a manifest file changed since the last tick (otherwise every tick)
+        /// Only reconcile when something in the config repo changed since the last tick —
+        /// any file, not just the package lists (and never `locks/`, which Shall writes itself)
         #[arg(long)]
         on_change: bool,
 

@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **232** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **233** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 237 are accounted
-for: **232 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 238 are accounted
+for: **233 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -512,6 +512,12 @@ deliberately no longer has.*
 | | question | answered |
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
+
+### C — the config-change round of 2026-09-28 (what `watch` counts, and what it says) — 1
+
+| | question | answered |
+|---|---|---|
+| **C1** | `watch --on-change` fingerprinted `modules/*.txt` by size and mtime, so a profile switch, a `priority` reorder, a `vars/` edit, an `adapters/` row, `preferences.toml` or a hook changed what Shall does and never woke the daemon — and a watcher that misses the edit looks exactly like a watcher working. What counts as a change, and should the tick say what it saw? — RULED 2026-09-28: **any file in the config repo, by content hash, except `.git/` and `locks/`** (the second because the sync `watch` runs writes it — hashing it makes the daemon reconcile for ever), **plus the user's own `.shall-watchignore`** in a deliberate subset of `.gitignore`'s language with no negation, where a line that cannot be read is refused rather than skipped. And the tick **names what changed, up to five, then the count**. (II.66, V.212) | 2026-09-28 |
 
 ---
 
@@ -9902,3 +9908,39 @@ machine still running the last good version produce the same "the transfer faile
 one of them is silent about what is still there. The note goes on the payload rather than into a
 new variant because the variant carries the exit code, and a permanent refusal that becomes
 retryable sends a retry loop back to spend the whole transfer.
+
+## C1
+
+**Status: ANSWERED 2026-09-28, built.** What `watch` counts as a change, and what it says when it
+reacts. Rule in **II.66**, rationale in **V.212**.
+
+**Any file in the config repo, hashed, except two folders.** The whole root rather than a
+hand-kept list of inputs, because `Layout`'s own comment records that this list said *three* names
+for as long as there were *eight* and nothing noticed — a list of inputs cannot be kept complete
+without something checking it, and a list of *exceptions* can. `.git/` is git's bookkeeping.
+**`locks/` is the one that matters**: it is generated by the sync the daemon is running, so
+hashing it makes every tick see the previous tick's writes, reconcile, write the locks, and
+reconcile again — a loop that only a `--on-change` daemon left running overnight would ever
+expose, because plain `watch` reconciles on a timer and looks fine either way. The name comes
+from `Layout::locks_dir` and a test holds the two together, because a rename that moved one and
+not the other is that same loop arriving later.
+
+**Content, not `(len, mtime)`.** Size and mtime misses an edit that preserves both, and it makes
+a `git pull` that brought nothing new look like a change. A hash of the bytes answers the only
+question there is.
+
+**`.shall-watchignore`: a subset of `.gitignore`, deliberately.** Globs, `#` comments, a trailing
+`/` for a directory, `**` across directories, and anchoring on a leading *or interior* slash — the
+rule `.gitignore` uses, which the first version got wrong and a test caught. **No negation**: a
+pattern that reads as an exception and is honoured as a plain match is worse than a refusal,
+because the user believes they have scoped the file. **A line that is not a pattern is said and
+not honoured**, so an ignore file that appears to work and does not is at least loud.
+
+**The tick names what it reacted to, five at a time.** `watch: active, profiles/Work changed —
+reconciling.` A pull bringing forty files is one event, and forty paths on one line is a line
+nobody reads — which is where the daemon's only output was.
+
+**A symlink is hashed as the pointer.** Following it would make a change in a directory outside
+the repo a change in the repo, which is not what `watch` watches; re-pointing one is a change to
+what the repo declares. A **removed** file is a change: deleting the last profile is a change to
+what Shall does.

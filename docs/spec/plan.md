@@ -352,6 +352,18 @@ build and what is deferred to hardware.**
     **refusal at apply**, never a parse failure, precisely so one shared Linux manifest still
     parses everywhere; that half is proven on any host.
 
+### Tier 10 — `watch` watches the repo (`PLAN.md` #77): BUILT
+
+24. ~~**`watch --on-change` is blind to everything but `modules/`.**~~ **BUILT (ruling
+    2026-09-28).** `manifest_signature` took a `modules` directory and compared size and mtime,
+    so a profile switch, a `priority` reorder, a `vars/` edit, an `adapters/` row,
+    `preferences.toml` and hooks changed the machine's behaviour and none of them woke the
+    daemon. **Any file in the config repo, hashed**, minus `.git/` and `locks/` — the second
+    because the sync `watch` runs writes it, and a fingerprint that includes it is a daemon that
+    reconciles for ever — plus the user's own `.shall-watchignore` in a deliberate subset of
+    `.gitignore`'s language. The tick **names what changed**, five at a time. Rule `II.66`,
+    rationale `V.212`, decision `C1`.
+
 ### Tier 9 — a path guard asks where the path lands (`PLAN.md` #76): BUILT
 
 23. ~~**The secret-into-the-repo guard is bypassable through a symlinked parent.**~~ **BUILT.**
