@@ -352,6 +352,18 @@ build and what is deferred to hardware.**
     **refusal at apply**, never a parse failure, precisely so one shared Linux manifest still
     parses everywhere; that half is proven on any host.
 
+### Tier 9 — a path guard asks where the path lands (`PLAN.md` #76): BUILT
+
+23. ~~**The secret-into-the-repo guard is bypassable through a symlinked parent.**~~ **BUILT.**
+    `refuse_target_in_repo` canonicalized the destination only when the file existed, and a first
+    install is the only time a new line runs — so the case that needed resolving compared strings,
+    and `link:@decrypt=@target=/tmp/shortcut/token` with `/tmp/shortcut` a symlink into the repo
+    put a plaintext where `sync` would commit it. **`is_outside_home_for_user` had the same
+    comparison with the opposite polarity**, so the outside-home confirmation was skipped for a
+    write into the user's own dotfiles. Both now resolve the deepest existing ancestor and keep
+    the rest, through `Validator::resolves_within` — the walk `core::validator` already used for
+    forbidden paths — and **fail closed**. Rule `II.65`, rationale `V.211`.
+
 ### Tier 8 — a download is staged, and a failure keeps the artifact (`PLAN.md` #75): BUILT
 
 22. ~~**A transfer that dies part-way must not remove the binary that was working.**~~ **BUILT

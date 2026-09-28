@@ -3993,3 +3993,37 @@ claims fails the other way — and every name outside `DRIVEN` must carry a rece
 `tests/a_backend_is_a_row_tests.rs` joins the two ledgers: every `UNVERIFIED` row reads unproven
 **in those words**, and at least ten rows with captured bytes *and* a lifecycle read proven, so
 the first check cannot be satisfied by refusing everything.
+
+## II.65 A path guard asks where the path lands, not where it was written (`#76`, V.211)
+
+**Two gates compare a path the user wrote against a directory Shall has a rule about, and both
+now resolve the symlinks in the path's existing prefix first.**
+
+- **The in-repo refusal (T2)** — a `link:@decrypt=` destination inside the config repo is
+  refused, because the repo is git and `sync` commits it, and a secret in git history is a
+  rotated secret rather than a deleted one.
+- **The outside-home confirmation** — a destination outside the account's home is placed only
+  after the user is asked.
+
+**Why the resolution is the rule.** A path can be written one way and land in another.
+`/tmp/shortcut/token` reads as outside the config repo and lands inside it the moment
+`/tmp/shortcut` is a symlink into it — the ordinary shape for a `link:` target whose parent
+somebody made a shortcut. The old in-repo guard canonicalized the destination **only when the
+file already existed**, and the case where it does not is a first install, so exactly the case
+that needed resolving was the one comparing strings.
+
+**Resolved means the deepest existing ancestor, canonicalized, with the rest kept on the end.**
+Not the whole path (it does not exist yet) and not the string (it says nothing about where the
+bytes go). Every intermediate prefix is checked too, because a *future* `sub/shadow` is as
+forbidden as a present one.
+
+**A guard that cannot look answers by refusing.** `Validator::resolves_within` returns an error
+rather than `false` when either side will not resolve, and both callers treat an error as a
+refusal: a gate that answers "not inside" because it could not tell is a gate that has stopped
+gating.
+
+**One implementation.** The resolution is the one `core::validator` already used for forbidden
+system paths, and it is where it stayed: it is also where the comparison that makes a prefix
+match work on Windows lives (`canonicalize` answers `\\?\…`, and `Path::starts_with` compares
+prefix *kinds* before anything else, so a `starts_with` on two canonicalized Windows paths can
+miss — V.165's bug, in the same file).

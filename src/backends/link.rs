@@ -245,15 +245,16 @@ pub fn wants_backup(spec: &PackageSpec) -> bool {
 /// in history — and a secret in git history is a rotated secret, which is unrecoverable rather
 /// than merely bad. The refusal names both paths, because "somewhere inside your repo" is not
 /// something a reader can act on.
+///
+/// **Where it lands, not where it is written.** The comparison resolves the symlinks in the
+/// destination's existing prefix, because a first install has no file to canonicalize and a
+/// string comparison is what was there: `link:./token@target=/tmp/x/token,decrypt=age` with
+/// `/tmp/x` a symlink into the repo passed, and the plaintext landed in a tree the next `sync`
+/// commits. `resolves_within` fails closed if either side cannot be resolved, because a guard
+/// that answers "outside" because it could not look has stopped guarding.
 pub fn refuse_target_in_repo(config: &Config, resolved: &Path) -> Result<()> {
     let root = config.config_root();
-    let inside = match (resolved.canonicalize(), root.canonicalize()) {
-        // Canonicalising the target fails when it does not exist yet, which is the ordinary
-        // case for a first install — so compare the paths as written when it does.
-        (Ok(t), Ok(r)) => t.starts_with(r),
-        _ => resolved.starts_with(&root),
-    };
-    if !inside {
+    if !crate::core::validator::Validator::resolves_within(resolved, &root)? {
         return Ok(());
     }
     Err(Error::Refused(format!(
@@ -269,12 +270,21 @@ pub fn is_outside_home(resolved: &Path) -> bool {
     is_outside_home_for_user(resolved, None).unwrap_or(true)
 }
 
+/// Whether this destination is outside the account's home, and so needs the confirmation.
+///
+/// **The same resolution, for the same reason.** A destination written as `/tmp/x/.vimrc` is
+/// outside the home as text and inside it on disk when `/tmp/x` is a symlink into it, and the
+/// question this answers is the one a user is asked before Shall writes outside their home. An
+/// answer that cannot see the symlink is an answer that skips the ask.
 pub fn is_outside_home_for_user(resolved: &Path, user: Option<&str>) -> Result<bool> {
     let account = match user {
         Some(user) => crate::core::account::Account::resolve(user)?,
         None => crate::core::account::Account::current()?,
     };
-    Ok(!resolved.starts_with(account.home()))
+    Ok(!crate::core::validator::Validator::resolves_within(
+        resolved,
+        account.home(),
+    )?)
 }
 
 /// The argument list for a decrypt tool. `-i` takes the identity as its value, so it stays

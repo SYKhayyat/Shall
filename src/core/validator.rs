@@ -268,35 +268,44 @@ impl Validator {
     /// This preserves the unresolved suffix for callers that want to create/read it, while
     /// still refusing a future path nested below a forbidden directory.
     fn validate_path_blocking(path: &Path) -> Result<PathBuf> {
-        if path.exists() {
-            let canonical = path
-                .canonicalize()
-                .map_err(|e| Error::Validation(format!("Path resolution failed: {}", e)))?;
-            Self::refuse_forbidden(&canonical)?;
-            return Ok(canonical);
-        }
-
-        let mut missing = Vec::new();
-        let mut ancestor = path;
-        while !ancestor.exists() {
-            let Some(parent) = ancestor.parent() else {
-                return Ok(path.to_path_buf());
-            };
-            if let Some(name) = ancestor.file_name() {
-                missing.push(name.to_os_string());
-            }
-            ancestor = parent;
-        }
-
-        let mut candidate = ancestor
-            .canonicalize()
-            .map_err(|e| Error::Validation(format!("Path resolution failed: {}", e)))?;
-        Self::refuse_forbidden(&candidate)?;
-        for component in missing.iter().rev() {
-            candidate.push(component);
+        for candidate in resolved_prefixes(path)? {
             Self::refuse_forbidden(&candidate)?;
         }
-        Ok(candidate)
+        resolved_prefixes(path)?
+            .pop()
+            .ok_or_else(|| Error::Validation(format!("cannot resolve {}", path.display())))
+    }
+
+    /// Whether `path` lands inside `root`, **with the symlinks in `path`'s existing prefix
+    /// followed**.
+    ///
+    /// **A lexical comparison cannot answer this, and the gap is a hole in two security gates.**
+    /// Both callers here ask whether a path the user wrote is inside a directory Shall has a
+    /// rule about, and a path can be written one way and land in another: `/tmp/outside/token`
+    /// is outside the config repo as text and inside it on disk the moment `/tmp/outside` is a
+    /// symlink into the repo, which is the ordinary case for a `link:` target whose parent
+    /// directory somebody made a shortcut. The old guard canonicalized only when the target
+    /// *existed*, so the first install — the case where it does not — compared strings and let
+    /// a plaintext secret through into a git-tracked tree.
+    ///
+    /// Resolving the existing prefix and keeping the rest is what closes it, and it is the same
+    /// resolution [`Validator::validate_path`] already does for a different question, so there is
+    /// one implementation of "where does this path actually land".
+    ///
+    /// **Fails closed.** An unresolvable side is an error rather than `false`: every caller here
+    /// is a guard, and a guard that answers "no" because it could not look is a guard that has
+    /// stopped guarding. (The two guards ask opposite questions — is this inside the repo, is
+    /// this outside the home — and both treat an error as "refuse".)
+    pub fn resolves_within(path: &Path, root: &Path) -> Result<bool> {
+        let landed = resolved_prefixes(path)?
+            .pop()
+            .ok_or_else(|| Error::Validation(format!("cannot resolve {}", path.display())))?;
+        let base = resolved_prefixes(root)?
+            .pop()
+            .ok_or_else(|| Error::Validation(format!("cannot resolve {}", root.display())))?;
+        let landed = comparable_path(&landed);
+        let base = comparable_path(&base);
+        Ok(landed.len() >= base.len() && landed[..base.len()] == base[..])
     }
 
     fn refuse_forbidden(canonical: &Path) -> Result<()> {
@@ -313,6 +322,40 @@ impl Validator {
         }
         Ok(())
     }
+}
+
+/// Every prefix of `path` from the fully resolved existing one down to `path` itself.
+///
+/// The existing ancestor is canonicalized (which follows the symlinks in it), and each
+/// unresolved component is pushed back on in turn, so the caller can ask about *any* of them —
+/// which is what a forbidden-path check needs, since a future `sub/shadow` is as forbidden as a
+/// present one. The list is ordered outermost first, so the last element is the path itself.
+fn resolved_prefixes(path: &Path) -> Result<Vec<PathBuf>> {
+    if let Ok(canonical) = path.canonicalize() {
+        return Ok(vec![canonical]);
+    }
+
+    let mut missing = Vec::new();
+    let mut ancestor = path;
+    while !ancestor.exists() {
+        let Some(parent) = ancestor.parent() else {
+            return Ok(vec![path.to_path_buf()]);
+        };
+        if let Some(name) = ancestor.file_name() {
+            missing.push(name.to_os_string());
+        }
+        ancestor = parent;
+    }
+
+    let mut candidate = ancestor
+        .canonicalize()
+        .map_err(|e| Error::Validation(format!("Path resolution failed: {}", e)))?;
+    let mut out = vec![candidate.clone()];
+    for component in missing.iter().rev() {
+        candidate.push(component);
+        out.push(candidate.clone());
+    }
+    Ok(out)
 }
 
 /// A canonical path reduced to comparable segments, with the Windows verbatim marker removed.

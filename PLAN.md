@@ -1,7 +1,7 @@
 # PLAN — Shall (work top to bottom, one issue per worker session)
 
 Worker loop: top unchecked item only, fix + resolving test, commit, check off, stop.
-Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75.
+Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76.
 
 ## SKIP — duplicates of one event, do not re-work
 - #32 DUP of #23+#24; #48 DUP of #32; #49 DUP of #33; #45 DUP of #26 (same file:line, same fix).
@@ -15,12 +15,17 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 
 ## Phase 2 — Safety Criticals/Highs
 - [x] #75 download truncates live PATH binary → temp+rename. (Critical)
-- [ ] #76 symlink guard bypass via parent. (High)
+- [x] #76 symlink guard bypass via parent. (High)
 - [ ] #77 watch blind to profiles/vars. (High)
 - [ ] #78 single info() failure aborts whole plan. (High)
 - [ ] #35 Reaped self-attestation token. (High)
 - [ ] #39 harness half-totem (mutation survival). (High)
 - [ ] #40 two oracles that cannot fail. (Medium)
+- [ ] #96 CI: the 8 distro integration images are red on the container harness's `dir:` check (a
+  check that never observes what it asserts). (High — the matrix is the only thing that reaches a
+  real manager)
+- [ ] #97 CI: `Advisories and licences` and the MSVC build are red on `main`; the MSVC one means
+  the `#71` Windows code has never been compiled by anything. (High)
 
 ## Phase 3 — Correctness Mediums
 - [ ] #79 forget_all wipes all caches, #80 probe storm, #81 Mutex across --help, #82 batch deadline, #83 vars JSON fragile, #84 fan-out uncapped, #85 pool race, #86 zip sum wraps, #87 dir-symlink Windows.

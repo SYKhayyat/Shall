@@ -1158,3 +1158,20 @@ scoped upgrades, makes parallelism configurable, and adds first-class applicatio
   planted in its own test.
 - **A staged file left by a `SIGKILL` is removed** when the next attempt at that artifact starts,
   so a killed run cannot leave litter beside the artifact forever.
+
+### A secret cannot be decrypted into the repo through a symlinked parent
+
+- **`link:@decrypt=` destinations are refused for where they land, not for where they are
+  written.** The guard canonicalized the destination only when the file already existed — and a
+  first install is the only time a new line runs, so the one case that needed resolving compared
+  strings. `link:./token@target=/tmp/shortcut/token` with `/tmp/shortcut` a symlink into the
+  config repo passed, and the plaintext landed in a tree `sync` commits: a secret in git history
+  is a rotated secret.
+- **The outside-home confirmation resolves the same way**, and that one failed the other
+  direction: a destination written as `/tmp/shortcut/.vimrc` with the parent pointing into the
+  home reported *outside*, so the question was never asked before Shall wrote into your own
+  dotfiles.
+- **Both now resolve the deepest existing ancestor and keep the rest**, which is the resolution
+  `core::validator` already used for forbidden system paths — so it is one implementation, and it
+  lives next to the Windows verbatim-prefix fix that makes a prefix match work there at all. A
+  guard that cannot resolve either side **refuses** rather than answering "not inside".

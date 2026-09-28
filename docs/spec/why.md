@@ -7506,3 +7506,40 @@ silent unless something says it. The note is appended with `Error::with_note` ra
 rebuilt into another variant, because the variant carries the exit code — a permanent refusal has
 to stay permanent, or a retry loop starts spending the whole transfer again to reach the same
 answer.
+
+**V.211 — Why a path guard resolves the symlinks in the path's existing prefix, and why it
+refuses when it cannot. *(`#76`; 2026-09-27)***
+
+The guard asked *is this path inside the config repo*, and answered by canonicalizing the target
+**if the target existed** and comparing strings otherwise. The existence check was there for a
+good reason — a first install has no file to canonicalize, and `canonicalize` on a path that is
+not there is an error rather than an answer — and the fallback is where the hole was. A first
+install is the *only* time this guard runs for a new line, so the case that needed resolving was
+the one case that never resolved.
+
+**A string cannot answer a question about the filesystem.** `link:./token@target=/tmp/x/token`
+with `decrypt=age` is outside the config repo as written and inside it on disk when `/tmp/x` is a
+symlink into the repo. That is not an exotic arrangement: a symlinked parent directory is how
+people organise dotfiles, and the parent of a secret target is exactly the directory somebody
+might have made one. The plaintext then lands in a tree `sync` commits, which makes the secret a
+rotated secret — unrecoverable, not merely untidy. The same shape, with the opposite polarity,
+was live in the other guard: `is_outside_home_for_user` asked whether a destination lands outside
+the account's home and compared the same two strings, so a path written as `/tmp/x/.vimrc` with
+`/tmp/x` pointing into the home reported *outside* and the user was never asked before Shall
+wrote into their own dotfiles. Two guards, one mistake, one fix.
+
+**Why the existing prefix and not the whole path.** The path does not exist yet — that is the
+ordinary case, not an edge case — and `canonicalize` on a missing path is an error. The answer is
+to walk up to the deepest ancestor that does exist, canonicalize *that* (which follows the
+symlinks in it), and push the unresolved components back on. This is not a new idea in this
+tree: `core::validator` already did exactly this walk for the forbidden-path list, where a future
+`sub/shadow` matters as much as a present one. So the fix was to extract that walk and have both
+callers use it, rather than to write a second one — and the comparison stayed in the same file,
+because that is where the Windows verbatim-prefix bug was already fixed once.
+
+**Why the answer fails closed.** Every caller of a path guard here is a security question, and the
+two ask opposite things: is this inside the repo (refuse), is this outside the home (ask). Both
+treat "I could not tell" as the cautious answer, and the function returns an error rather than a
+`false` so that neither caller can accidentally read it the other way. A guard that answers "no"
+because it could not look is a guard that has been switched off by a filesystem it did not expect
+— which is a quieter failure than the bug being fixed.
