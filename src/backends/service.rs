@@ -832,7 +832,7 @@ mod tests {
     }
 
     fn removal_token() -> crate::app::sync::guard::Reaped {
-        crate::app::sync::guard::Reaped::for_reason(
+        crate::app::sync::guard::reaped_for_a_unit_test(
             crate::app::sync::guard::GuardScope::Sync,
             "unit test drives the effector directly",
         )

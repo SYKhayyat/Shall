@@ -7641,3 +7641,48 @@ over a mixed list is wrong for every row it does not describe. The existing `Ins
 *"install the manager they name, or drop the declaration on this host"* — which sends somebody to
 install a manager that is installed and working. The count that matters is the same, so both kinds
 feed `not_installed`; the heading and the advice are separate because the fix is separate.
+
+**V.214 — Why the removal token carries the guard's answer and cannot be minted, and why a rollback
+asks a different question rather than none. *(`C3`; 2026-09-28)***
+
+`Reaped`'s doc said the private field was load-bearing and that "the token cannot be minted by a
+caller who would rather not ask". Twenty lines below, `Reaped::for_reason(scope, _why)` was
+public, ignored the reason, and had 44 call sites. The claim and the code were both true and
+contradictory: the type could not be built with a struct literal, and anyone could ask for one.
+
+**A reason the type never reads is worse than no reason.** `_why` was named `_why` — the
+underscore is the compiler saying the value is unused — and its doc sold the constructor as
+searchable: *"`grep -rn "Reaped::for_reason"` is the list of places that do not ask, which is
+exactly the list a reviewer wants."* So the hole had a review procedure attached to it. And that
+procedure had already failed once, which is the finding the old gate existed to catch: on
+2026-08-21 `heal`'s escape was justified by "each interrupted removal is enforced individually in
+`heal_interrupted_removals`", a function that does not exist, cited by three strings and satisfied
+by nothing. The gate that caught it was a scan of *sentences* — because the constructor took a
+sentence. **The fix is not a better sentence. It is that the argument is gone**, because the
+constructor is gone, and a gate that asks "can anything outside this module build one?" is a
+question about types rather than about prose.
+
+**The token now carries a number, because "the guard ran" is not a fact worth carrying.** `scope`
+alone said which command asked. What a removal path needs to know is whether *this* token
+authorises *this* removal, and that is `allowed()` — the size of the set the guard cleared. A
+token that cleared nothing authorises nothing, so a removal handed one is refused rather than
+performed. That is a property of the value rather than a convention about calling code, which is
+the whole difference between the two versions.
+
+**A rollback is a removal and needs a token; it asks a different question.** The owner's answer to
+"why does rollback not need a token" was the right one and it changed the design: if undoing your
+own work is a removal, then a mint-free path for it is exactly the hole with a friendly name on
+it. So the rollback asks — `enforce_own_work` — and gets a real answer, on the two things that are
+not "are you sure": `protected_packages` and the OS-essential list. It does **not** consult the
+ceilings, because `max_removals` bounds how much of the user's software one command may take
+away, and a rollback is giving back what that same command took. Charging it would mean a sync
+that installed five packages and then failed could be refused mid-unwind, which is the one state
+this whole mechanism exists to avoid: a machine half-changed, mid-transaction, with the reason
+being a limit the user set for a different question.
+
+**All or nothing, because the alternative is a state nobody would believe.** A per-pair answer
+would leave the machine holding the one protected install and not the four it undid — a
+configuration neither the manifest nor the user described, produced by a mechanism whose entire
+purpose is to describe what the machine holds. The coarse answer leaves everything in place and
+names what could not be undone, which is a sentence a user can act on. It is the same reasoning as
+`purge-undeclared` refusing rather than removing what it cannot classify, one layer down.

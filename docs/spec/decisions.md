@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **234** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **235** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 239 are accounted
-for: **234 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 240 are accounted
+for: **235 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -513,12 +513,13 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28 (a watcher's inputs, and a manager that cannot answer) — 2
+### C — the round of 2026-09-28 (a watcher's inputs, a mute manager, and the removal token) — 3
 
 | | question | answered |
 |---|---|---|
 | **C1** | `watch --on-change` fingerprinted `modules/*.txt` by size and mtime, so a profile switch, a `priority` reorder, a `vars/` edit, an `adapters/` row, `preferences.toml` or a hook changed what Shall does and never woke the daemon — and a watcher that misses the edit looks exactly like a watcher working. What counts as a change, and should the tick say what it saw? — RULED 2026-09-28: **any file in the config repo, by content hash, except `.git/` and `locks/`** (the second because the sync `watch` runs writes it — hashing it makes the daemon reconcile for ever), **plus the user's own `.shall-watchignore`** in a deliberate subset of `.gitignore`'s language with no negation, where a line that cannot be read is refused rather than skipped. And the tick **names what changed, up to five, then the count**. (II.66, V.212) | 2026-09-28 |
 | **C2** | `spec_is_missing` returned `Err` when a manager could not say whether a package is installed, and its fan-out `?`\ d that into the plan — so one manager having a bad moment meant no declaration on the machine was planned and the command exited 1 having applied nothing, against II.7b's "one broken manager does not fail a sync". And the issue's suggested repair — read the failure as *absent* — schedules an install for every package that manager holds, which is a transaction of no-op successes one unrelated failure rolls back. What should the third answer be, what should the command exit, and should Shall ask again? — RULED 2026-09-28: **a third answer, its own skip row** (`CouldNotAsk`) that schedules nothing and is named; **exit 0**, with the count in "declarations this run could not act on" beside the missing-manager rows; the removals half **unchanged** (an unreadable manager is read as present, because the opposite guess leaves software nothing can account for); and **retries are a number in config, default 0**, applying to the planner's reads and not to writes. (II.67, V.213) | 2026-09-28 |
+| **C3** | `Reaped`'s doc said the private field made the token unmintable, while `Reaped::for_reason(scope, _why)` was a public constructor that ignored its reason and had 44 call sites — so "the guard ran" was a convention any caller could decline, with a review procedure (grep the call sites) attached to it that had already caught one of those sites naming a function which did not exist. Two cases were called legitimate: a rollback undoing its own work, and unit tests. What should the escape hatch be, and what does a rollback actually ask? — RULED 2026-09-28: **no escape hatch in production at all.** The fields stay private and gain `allowed`, the count the guard cleared, with `authorises(n)` for the question a removal path asks. Rollbacks and `heal` **ask the guard** through `enforce_own_work`, which checks `protected_packages` and the OS-essential list but **not the ceilings** (undoing Shall's own work is not removing the user's software, and a compensation refused for exceeding `max_removals` would strand the machine half-changed) and is **all-or-nothing**: a protected package refuses the whole unwind, the install stays, and the transaction says so. Unit tests use a `#[cfg(test)]` constructor that does not ship; the integration suite asks the guard for real. (II.10, V.214) | 2026-09-28 |
 
 ---
 
@@ -9981,3 +9982,33 @@ the "two of everything" this repo keeps refusing.
 is a registered backend with **no `Queryable` at all** — the mute case, which never reaches the
 line where a read fails. `Unreadable` is queryable, fails, and counts its asks, which is what
 makes the retry count testable rather than asserted.
+
+## C3
+
+**Status: ANSWERED 2026-09-28, built.** The removal guard's proof token. Rule amended in
+**II.10**, rationale in **V.214**.
+
+**No public constructor.** `Reaped`'s fields are private; the only code that builds one is
+`guard.rs`; the token carries `allowed`, the number of removals the guard cleared, and
+`authorises(n)` is the question a removal path asks before it acts. `Reaped::for_reason` and its
+ignored reason string are gone, and with them the claim that a grep was "the list of places that do
+not ask" — a review procedure that had already caught one of those sites citing a function that
+did not exist.
+
+**A rollback asks, with a different question.** `enforce_own_work` consults `protected_packages`,
+`undeclarable` and the OS-essential list, and **skips the ceilings and the ledger**: `max_removals`
+bounds how much of the user's software one command may take away, and a rollback gives back what
+that same command took. Charging it would let a sync that installed five packages and then failed
+be refused mid-unwind.
+
+**All or nothing.** One protected package refuses the whole unwind. The machine keeps what the
+transaction installed, the refusal names the package, and the transaction reports that it could not
+fully unwind. `heal` asks the same question over the survivors of its per-removal checks.
+
+**Tests.** The library's unit tests use a `#[cfg(test)]` constructor — not compiled into a build
+that ships — and the integration suite asks the guard for real through
+`tests/harness::reaped_for_a_test`, because it links the release-shaped library and cannot see the
+test-only one. `tests/a_removal_token_cannot_be_minted_tests` replaced
+`an_escape_hatch_names_something_that_exists_tests`, whose subject no longer exists: the old gate
+scanned the *reasons* given to a constructor that is gone, and the new one asks whether anything
+outside `guard.rs` can build a token at all — a question about types rather than about prose.

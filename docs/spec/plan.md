@@ -352,6 +352,20 @@ build and what is deferred to hardware.**
     **refusal at apply**, never a parse failure, precisely so one shared Linux manifest still
     parses everywhere; that half is proven on any host.
 
+### Tier 12 — the removal token cannot be minted (`PLAN.md` #35): BUILT
+
+26. ~~**`Reaped::for_reason` is a public mint that ignores its reason.**~~ **BUILT (ruling
+    2026-09-28).** 44 call sites, and the doc's "grep for it: the list of places that do not ask"
+    was a review procedure over a constructor that anyone could call. The fields stay private and
+    gain `allowed` — the count the guard cleared — with `authorises(n)` for the question a removal
+    path asks. **Rollback and `heal` ask the guard** through `enforce_own_work`: protection and
+    OS-essentials apply, the ceilings do not (a compensation refused for exceeding `max_removals`
+    strands the machine half-changed), and the answer is all-or-nothing with the refusal naming
+    the package. Unit tests use a `#[cfg(test)]` constructor; the integration suite asks for real.
+    `an_escape_hatch_names_something_that_exists_tests` is replaced by
+    `a_removal_token_cannot_be_minted_tests`, which asks a question about types rather than about
+    prose. Rule amended in `II.10`, rationale `V.214`, decision `C3`.
+
 ### Tier 11 — a read that failed is its own answer (`PLAN.md` #78): BUILT
 
 25. ~~**One `info()` failure aborts the whole plan.**~~ **BUILT (ruling 2026-09-28).**

@@ -1721,6 +1721,35 @@ opinion about the packages that keep the machine running.
 
 All in `[guard]` in `preferences.toml`. One decision function.
 
+**The token carries the fact, and nothing else can mint it.** A `Reaped` is the guard's answer
+handed to a removal: it names the command that asked (`scope()`) and **how many removals the guard
+cleared** (`allowed()`), and `authorises(n)` is the question a removal path asks immediately
+before it acts. Its fields are private and the only code that builds one is `guard.rs`, so a
+caller who would rather not ask cannot get a token at all.
+
+*What that replaced.* The type's own doc said the private field was load-bearing and "the token
+cannot be minted by a caller who would rather not ask", and the module below it handed out
+`Reaped::for_reason(scope, why)` to anyone who asked — with the reason string thrown away. It had
+44 call sites. "Cannot be minted" was a convention every caller could decline, and a reason the
+type never read is worse than no reason, because it reads like an argument the guard considered.
+
+**A rollback asks the guard, and the question it asks is not `max_removals`.** A transaction
+compensating its own failed work calls `enforce_own_work`, which checks `protected_packages`,
+`undeclarable` and the OS-essential list — and **does not consult the ceilings or write to the
+ledger**. Undoing what Shall installed thirty seconds ago is not a removal of the user's software,
+and a compensation that could be refused for exceeding `max_removals` would strand a machine
+half-changed. **All or nothing**: one protected package in the set refuses the whole unwind, so
+the machine keeps everything the transaction installed, the refusal names the package, and the
+transaction says it could not fully unwind. The alternative — removing something the user said
+never to remove because Shall put it there a minute ago — is the guard's exact failure with a
+sympathetic story attached.
+
+**Tests ask too.** The library's own unit tests use a `#[cfg(test)]` constructor that is not
+compiled into a build that ships; the integration suite, which links the release-shaped library
+and cannot see it, **asks the guard for real** with a default config and an empty registry, which
+runs no subprocess. `tests/a_removal_token_cannot_be_minted_tests` holds the property: no file
+outside `guard.rs` may build a token in code that ships.
+
 **A protection that changes the plan says so, in the same run.** A `protected_packages` rule on a
 managed package nothing declares does not stop a `sync`; it removes that one removal from the
 plan — and the plan then *names it and says why*, in `sync`, in the preview, in `plan`/`status`

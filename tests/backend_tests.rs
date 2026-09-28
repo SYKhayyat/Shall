@@ -42,10 +42,7 @@ async fn run_capability_test(backend: Arc<BackendCapabilities>, package_name: &s
         .remove(
             &[package_name.to_string()],
             backend.needs_root(),
-            shall::app::sync::guard::Reaped::for_reason(
-                shall::app::sync::guard::GuardScope::Remove,
-                "a unit test of the effector itself",
-            ),
+            crate::harness::reaped_for_a_test(shall::app::sync::guard::GuardScope::Remove).await,
         )
         .await;
     assert!(
@@ -240,10 +237,7 @@ async fn test_link_backend_vfs_integrity() {
         .remove(
             &[target_path.to_string_lossy().to_string()],
             false,
-            shall::app::sync::guard::Reaped::for_reason(
-                shall::app::sync::guard::GuardScope::Remove,
-                "a unit test of the effector itself",
-            ),
+            crate::harness::reaped_for_a_test(shall::app::sync::guard::GuardScope::Remove).await,
         )
         .await
         .expect("Link purge failed");

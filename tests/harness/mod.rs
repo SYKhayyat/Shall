@@ -138,6 +138,33 @@ pub fn decl(p: &Path) -> String {
     p.to_string_lossy().replace('\\', "/")
 }
 
+/// A removal token for a test, obtained the way production obtains one: **by asking the guard**.
+///
+/// The library's own unit tests use a `#[cfg(test)]` constructor, which an integration test
+/// cannot see — it links the release-shaped library. So this asks for real, with a default
+/// `Config` (no `protected_packages`, a generous `max_removals`) and an empty registry, which
+/// means no manager is consulted and no subprocess runs: the answer is "yes, one removal" in
+/// under a millisecond.
+///
+/// The alternative was a `#[doc(hidden)]` public constructor, and that is the hole `#35` closed:
+/// a mint any code can call is a mint the guard does not vouch for, whatever its name.
+pub async fn reaped_for_a_test(
+    scope: shall::app::sync::guard::GuardScope,
+) -> shall::app::sync::guard::Reaped {
+    let config = shall::config::Config::default();
+    let registry = std::sync::Arc::new(shall::backends::BackendRegistry::new());
+    let reaping = shall::app::sync::guard::Reaping::default();
+    shall::app::sync::guard::enforce(
+        &config,
+        &registry,
+        &[("test-manager".to_string(), "test-package".to_string())],
+        &reaping,
+        scope,
+    )
+    .await
+    .expect("the test's own removal is not one the guard refuses")
+}
+
 /// The registry's source, which is a **directory** rather than a file.
 ///
 /// `src/backends/registry.rs` was 4,237 lines of which 1,800 were `fn register_*` bodies in

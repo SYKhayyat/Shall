@@ -203,10 +203,7 @@ async fn deprovisioning_a_schedule_takes_the_account_from_the_row() {
             &executor,
             "nightly",
             Some(account.name()),
-            shall::app::sync::guard::Reaped::for_reason(
-                shall::app::sync::guard::GuardScope::Sync,
-                "a unit test of the teardown itself",
-            ),
+            crate::harness::reaped_for_a_test(shall::app::sync::guard::GuardScope::Sync).await,
         )
         .await
         .unwrap();

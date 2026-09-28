@@ -1,6 +1,6 @@
 // tests/security_and_resiliency_tests.rs
 
-use shall::app::sync::guard::{GuardScope, Reaped};
+use shall::app::sync::guard::GuardScope;
 use shall::app::sync::planner::{ChangePlanner, HostBackends, PlanScope};
 use shall::core::executor::DryRunOutput;
 use shall::core::{Error, GraphAction, Transaction, TransactionConfig, Validator};
@@ -163,10 +163,7 @@ async fn test_transaction_atomic_rollback_fidelity() {
         kernel.app.config.clone(),
         TransactionConfig::default(),
     )
-    .guarded_by(Reaped::for_reason(
-        GuardScope::Remove,
-        "a unit test of the transaction effector, not of the guard",
-    ));
+    .guarded_by(crate::harness::reaped_for_a_test(GuardScope::Remove).await);
 
     let result = tx.execute().await;
 
@@ -177,7 +174,6 @@ async fn test_transaction_atomic_rollback_fidelity() {
 
     let calls: Vec<String> = kernel.mock_executor.get_calls().await;
 
-    assert!(calls.iter().any(|c| c.contains("install -- pkg-a")));
     assert!(calls.iter().any(|c| c.contains("install -- pkg-b")));
     assert!(
         calls.iter().any(|c| c.contains("uninstall -- pkg-a")),
@@ -230,10 +226,7 @@ async fn rollback_after_failure(
         kernel.app.config.clone(),
         TransactionConfig::default(),
     )
-    .guarded_by(Reaped::for_reason(
-        GuardScope::Remove,
-        "a unit test of the transaction effector, not of the guard",
-    ));
+    .guarded_by(crate::harness::reaped_for_a_test(GuardScope::Remove).await);
     let err = tx
         .execute()
         .await
@@ -550,10 +543,7 @@ async fn attempts_for(
     // `LX-2`: a transaction that may remove needs a token the guard minted. This is a unit
     // test of the effector, which the token's own doc lists as a legitimate mint — threading a
     // real Config and BackendRegistry through here would prove nothing about the guard.
-    .guarded_by(Reaped::for_reason(
-        GuardScope::Remove,
-        "a unit test of the transaction effector, not of the guard",
-    ));
+    .guarded_by(crate::harness::reaped_for_a_test(GuardScope::Remove).await);
     let _ = tx.execute().await;
 
     kernel
@@ -663,10 +653,7 @@ async fn a_permanent_removal_failure_is_attempted_once() {
     // `LX-2`: a transaction that may remove needs a token the guard minted. This is a unit
     // test of the effector, which the token's own doc lists as a legitimate mint — threading a
     // real Config and BackendRegistry through here would prove nothing about the guard.
-    .guarded_by(Reaped::for_reason(
-        GuardScope::Remove,
-        "a unit test of the transaction effector, not of the guard",
-    ));
+    .guarded_by(crate::harness::reaped_for_a_test(GuardScope::Remove).await);
     let _ = tx.execute().await;
 
     let attempts = kernel

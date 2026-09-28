@@ -14,7 +14,7 @@
 
 use std::path::PathBuf;
 
-use shall::app::sync::guard::{GuardScope, Reaped};
+use shall::app::sync::guard::GuardScope;
 use shall::backends::{appimage, github, web};
 use shall::core::{CommandExecutor, Installable, Queryable};
 
@@ -75,10 +75,7 @@ async fn an_appimage_is_reported_under_the_url_its_state_is_keyed_by() {
     i.remove(
         &[URL.to_string()],
         false,
-        Reaped::for_reason(
-            GuardScope::Sync,
-            "an identity test for the effector, not for the guard",
-        ),
+        crate::harness::reaped_for_a_test(GuardScope::Sync).await,
     )
     .await
     .expect("removing a recorded AppImage");
@@ -120,10 +117,7 @@ async fn a_web_resource_is_reported_under_the_url_its_state_is_keyed_by() {
     i.remove(
         &[URL.to_string()],
         false,
-        Reaped::for_reason(
-            GuardScope::Sync,
-            "an identity test for the effector, not for the guard",
-        ),
+        crate::harness::reaped_for_a_test(GuardScope::Sync).await,
     )
     .await
     .expect("removing a recorded web resource");
@@ -169,10 +163,7 @@ async fn a_github_package_is_reported_under_the_repo_its_state_is_keyed_by() {
     i.remove(
         &[repo.to_string()],
         false,
-        Reaped::for_reason(
-            GuardScope::Sync,
-            "an identity test for the effector, not for the guard",
-        ),
+        crate::harness::reaped_for_a_test(GuardScope::Sync).await,
     )
     .await
     .expect("removing a recorded GitHub package");

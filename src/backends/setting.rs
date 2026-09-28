@@ -923,7 +923,7 @@ mod tests {
             .remove(
                 &["org.gnome.x/theme@scope=system@user=alice".to_string()],
                 false,
-                crate::app::sync::guard::Reaped::for_reason(
+                crate::app::sync::guard::reaped_for_a_unit_test(
                     crate::app::sync::guard::GuardScope::Sync,
                     "a unit test of the teardown itself",
                 ),

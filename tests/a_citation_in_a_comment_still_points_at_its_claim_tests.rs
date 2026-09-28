@@ -2,12 +2,13 @@
 //!
 //! **What was found.** Comments in this tree cited each other by line number, and on 2026-08-13
 //! **29 of 37 such citations no longer landed within four lines of the symbol they named**; one
-//! named `e2e_tests.rs`, a file the repository had deleted. Two were load-bearing: `guard.rs`'s
-//! `Reaped::for_reason` doc says *"`grep -rn "Reaped::for_reason"` is the list of places that do
-//! not ask"*, and each of the two production entries on that list justified itself by naming the
-//! line where the guard is enforced instead. Both numbers were wrong — by 214 and 269 lines —
-//! and both landed in unrelated code that read plausibly enough to be mistaken for the thing
-//! cited. A reviewer auditing the removal guard was sent to the wrong place, twice.
+//! named `e2e_tests.rs`, a file the repository had deleted. Two were load-bearing, and both were
+//! in the removal guard: its escape-hatch doc claimed a grep was "the list of places that do not
+//! ask", and each of the two production entries on that list justified itself by naming the line
+//! where the guard is enforced instead. Both numbers were wrong — by 214 and 269 lines — and both
+//! landed in unrelated code that read plausibly enough to be mistaken for the thing cited. A
+//! reviewer auditing the removal guard was sent to the wrong place, twice. (That escape hatch is
+//! gone as of 2026-09-28; `a_removal_token_cannot_be_minted_tests` is the gate that replaced it.)
 //!
 //! **Why a number and not a name.** A line number is the one citation that goes stale with
 //! nobody touching it: the refactor of 2026-08-12 moved 1,800 lines and everything below it
@@ -152,12 +153,11 @@ fn resolve<'a>(target: &str, files: &'a [PathBuf], root: &Path) -> Option<&'a Pa
 ///
 /// This gate used to ask the weaker question — *of the symbols a citing comment names, does at
 /// least one still appear within ±4 lines of the cited number* — and on 2026-08-13 it answered
-/// **29 of 37 do not**. Two of those were load-bearing: `Reaped::for_reason`'s doc says
-/// *"`grep -rn "Reaped::for_reason"` is the list of places that do not ask"*, and both production
-/// entries on that list justified themselves by naming the line where the guard is enforced.
-/// Both numbers were wrong — by 214 and 269 lines — and both landed in unrelated code that read
-/// plausibly enough to be mistaken for the thing cited. A reviewer auditing the guard was sent to
-/// the wrong place, twice.
+/// **29 of 37 do not**. Two of those were load-bearing, and both sat in the removal guard, whose
+/// escape-hatch doc pointed a reviewer at a list of places that did not ask — and the two
+/// production entries on that list cited the line where the guard is enforced. Both numbers were
+/// wrong by 214 and 269 lines, and both landed in unrelated code that read plausibly enough to
+/// be mistaken for the thing cited.
 ///
 /// **The fix was not to renumber them, so this is not the test that checks they were renumbered.**
 /// A line number is the one citation that rots with nobody editing it: the refactor of

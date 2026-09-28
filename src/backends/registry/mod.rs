@@ -1451,7 +1451,7 @@ mod tests {
                 .remove(
                     &[case.subject.to_string()],
                     false,
-                    crate::app::sync::guard::Reaped::for_reason(
+                    crate::app::sync::guard::reaped_for_a_unit_test(
                         crate::app::sync::guard::GuardScope::Remove,
                         "a unit test of the effector itself",
                     ),
@@ -1867,7 +1867,7 @@ mod tests {
             rm.remove_repo(
                 "shallprobe",
                 false,
-                crate::app::sync::guard::Reaped::for_reason(
+                crate::app::sync::guard::reaped_for_a_unit_test(
                     crate::app::sync::guard::GuardScope::Remove,
                     "a unit test of the effector itself",
                 ),
@@ -1912,7 +1912,7 @@ mod tests {
                 rm.remove_repo(
                     escape,
                     false,
-                    crate::app::sync::guard::Reaped::for_reason(
+                    crate::app::sync::guard::reaped_for_a_unit_test(
                         crate::app::sync::guard::GuardScope::Remove,
                         "a unit test of the effector itself"
                     )
@@ -1931,7 +1931,7 @@ mod tests {
         rm.remove_repo(
             "epel",
             false,
-            crate::app::sync::guard::Reaped::for_reason(
+            crate::app::sync::guard::reaped_for_a_unit_test(
                 crate::app::sync::guard::GuardScope::Remove,
                 "a unit test of the effector itself",
             ),
@@ -2383,7 +2383,7 @@ mod tests {
         inst.remove(
             &["phx_new".to_string()],
             false,
-            crate::app::sync::guard::Reaped::for_reason(
+            crate::app::sync::guard::reaped_for_a_unit_test(
                 crate::app::sync::guard::GuardScope::Remove,
                 "a unit test of the effector itself",
             ),

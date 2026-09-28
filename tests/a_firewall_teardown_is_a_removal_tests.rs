@@ -17,31 +17,48 @@
 //! **Which is what makes it worse, not better.** Three custom guards were written rather than
 //! calling the one two hundred lines away that already counts, caps, protects and reports.
 
-use shall::app::sync::guard::{GuardScope, Reaped};
+use shall::app::sync::guard::GuardScope;
 
 /// The type is the fix, so the type is what this asserts first.
 ///
-/// A `Reaped` cannot be constructed from outside `guard.rs` except through `for_reason`, which
-/// is named and greppable. There is no `Reaped {}`, no `Default`, no `From`. If that ever
-/// changes, every other assertion in this file becomes decoration.
-#[test]
-fn the_token_cannot_be_minted_by_a_caller_who_would_rather_not_ask() {
-    // The only constructor reachable from here, and it demands a written reason.
-    let r = Reaped::for_reason(GuardScope::Sync, "a test asserting the token's own shape");
+/// **There is no constructor any more.** `Reaped`'s fields are private and the only code that
+/// builds one is `guard.rs`, so a caller who would rather not ask cannot get a token at all —
+/// there is nothing to get. This used to read "cannot be constructed from outside `guard.rs`
+/// except through `for_reason`, which is named and greppable", and `for_reason` was a public
+/// function that ignored the reason. What is left to assert at run time is the two doors a caller
+/// *should* have: a token from the guard, and a token from the test harness (which asks the
+/// guard, because an integration test cannot see the library's `#[cfg(test)]` one).
+#[tokio::test]
+async fn the_token_names_the_command_that_asked() {
+    let r = crate::harness::reaped_for_a_test(GuardScope::Sync).await;
     assert_eq!(r.scope(), GuardScope::Sync);
-
-    // The compile-time half cannot be written as a runtime assertion — `Reaped { scope: … }`
-    // from this crate is a private-field error, which is the point and is checked by the
-    // compiler on every build of this file. What is asserted here is that no *other* door was
-    // left open: no `Default`, and a scope that survives the crossing so a refusal can name the
-    // command a user typed.
+    // A scope that survives the crossing, so a refusal can name the command a user typed.
     assert_eq!(
-        Reaped::for_reason(
-            GuardScope::PurgeUndeclared,
-            "scope is carried, not inferred"
-        )
-        .scope(),
+        crate::harness::reaped_for_a_test(GuardScope::PurgeUndeclared)
+            .await
+            .scope(),
         GuardScope::PurgeUndeclared
+    );
+}
+
+/// **The token says how much the guard cleared**, which is the fact the type now carries and the
+/// one a removal path can check. A token that cleared nothing authorises nothing, so a removal
+/// handed one is refused rather than performed — the compile-time half is the private fields, and
+/// this is the run-time half.
+#[tokio::test]
+async fn a_token_says_how_many_removals_the_guard_cleared() {
+    let r = crate::harness::reaped_for_a_test(GuardScope::Sync).await;
+    assert!(
+        r.authorises(1),
+        "a token from the guard for one removal must authorise one removal"
+    );
+    assert!(
+        !r.authorises(0),
+        "authorising nothing is not what a token is for"
+    );
+    assert!(
+        !r.authorises(2),
+        "a token that cleared one removal does not authorise two"
     );
 }
 

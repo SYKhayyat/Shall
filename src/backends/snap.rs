@@ -676,7 +676,7 @@ mod tests {
             .remove(
                 &["code".to_string()],
                 false,
-                crate::app::sync::guard::Reaped::for_reason(
+                crate::app::sync::guard::reaped_for_a_unit_test(
                     crate::app::sync::guard::GuardScope::Remove,
                     "a unit test of the effector itself",
                 ),
@@ -728,7 +728,7 @@ mod tests {
             .remove(
                 &["code".to_string(), "firefox".to_string()],
                 false,
-                crate::app::sync::guard::Reaped::for_reason(
+                crate::app::sync::guard::reaped_for_a_unit_test(
                     crate::app::sync::guard::GuardScope::Remove,
                     "a unit test of the effector itself",
                 ),

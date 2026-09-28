@@ -3021,7 +3021,7 @@ installed ripgrep 15.2.0
         inst.remove(
             &["diff".to_string()],
             false,
-            crate::app::sync::guard::Reaped::for_reason(
+            crate::app::sync::guard::reaped_for_a_unit_test(
                 crate::app::sync::guard::GuardScope::Remove,
                 "a unit test of the effector itself",
             ),
@@ -3381,7 +3381,7 @@ installed ripgrep 15.2.0
             .remove(
                 &["ghc".to_string()],
                 false,
-                crate::app::sync::guard::Reaped::for_reason(
+                crate::app::sync::guard::reaped_for_a_unit_test(
                     crate::app::sync::guard::GuardScope::Remove,
                     "a unit test of the effector itself",
                 ),
@@ -3438,7 +3438,7 @@ installed ripgrep 15.2.0
         mgr.remove_repo(
             "https://dl-cdn.alpinelinux.org/alpine/edge/testing",
             false,
-            crate::app::sync::guard::Reaped::for_reason(
+            crate::app::sync::guard::reaped_for_a_unit_test(
                 crate::app::sync::guard::GuardScope::Remove,
                 "a unit test of the effector itself",
             ),
@@ -3468,7 +3468,7 @@ installed ripgrep 15.2.0
             .remove_repo(
                 "testing",
                 false,
-                crate::app::sync::guard::Reaped::for_reason(
+                crate::app::sync::guard::reaped_for_a_unit_test(
                     crate::app::sync::guard::GuardScope::Remove,
                     "a unit test of the effector itself",
                 ),
@@ -3504,7 +3504,7 @@ installed ripgrep 15.2.0
         mgr.remove_repo(
             "internal",
             false,
-            crate::app::sync::guard::Reaped::for_reason(
+            crate::app::sync::guard::reaped_for_a_unit_test(
                 crate::app::sync::guard::GuardScope::Remove,
                 "a unit test of the effector itself",
             ),
@@ -3535,7 +3535,7 @@ installed ripgrep 15.2.0
             .remove_repo(
                 "internal",
                 false,
-                crate::app::sync::guard::Reaped::for_reason(
+                crate::app::sync::guard::reaped_for_a_unit_test(
                     crate::app::sync::guard::GuardScope::Remove,
                     "a unit test of the effector itself",
                 ),

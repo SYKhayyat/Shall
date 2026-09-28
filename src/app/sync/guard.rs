@@ -40,13 +40,23 @@ use tracing::{debug, warn};
 /// technique better than this comment can: *"the case that reaps cannot be written without the
 /// list that bounds it."*
 ///
-/// **The private field is load-bearing.** `Reaped {}` from outside this module is a compile
-/// error, so the token cannot be minted by a caller who would rather not ask.
+/// **The private fields are load-bearing, and there is no public way around them.** `Reaped {}`
+/// from outside this module is a compile error and there is no constructor but the guard's own
+/// entry points, so a token cannot be minted by a caller who would rather not ask. This used to
+/// say the same thing and then hand out `Reaped::for_reason(scope, "…")` on the next screen, with
+/// the reason thrown away — so "cannot be minted" was delivered by a convention every caller
+/// could decline, and 44 places did. **The reason string is gone with the constructor**, because a
+/// reason that is not read is worse than no reason: it reads like an argument the guard
+/// considered and the type is the argument.
 #[derive(Debug, Clone, Copy)]
 pub struct Reaped {
     /// Which command's removal this authorises. Carried so an effector can name it, and so the
     /// token is not silently reusable across two different commands' plans.
     scope: GuardScope,
+    /// **How many removals the guard cleared**, which is the fact the token exists to carry. A
+    /// caller cannot read "yes" out of it: `allowed()` answers zero for a token that cleared
+    /// nothing, and the only way to get a non-zero one is to have asked with a real set.
+    allowed: usize,
 }
 
 impl Reaped {
@@ -55,23 +65,17 @@ impl Reaped {
         self.scope
     }
 
-    /// A removal that is not the user's machine changing state.
-    ///
-    /// The narrow, named escape for the two cases where asking is either impossible or already
-    /// done, so that neither has to reach for a wider one:
-    ///
-    /// - **A test double.** A unit test for an effector is testing the effector, and threading a
-    ///   real `Config` and `BackendRegistry` through it to mint a token proves nothing about the
-    ///   guard.
-    /// - **A rollback compensating its own transaction.** `transaction.rs` already calls
-    ///   `protection_of` before it removes, deliberately and correctly, and its removals are of
-    ///   packages this same run installed seconds ago.
-    ///
-    /// Named rather than derived, and searchable: `grep -rn "Reaped::for_reason"` is the list of
-    /// places that do not ask, which is exactly the list a reviewer wants and exactly what
-    /// `is_removal_call` could not produce.
-    pub fn for_reason(scope: GuardScope, _why: &'static str) -> Self {
-        Reaped { scope }
+    /// How many removals this token carries. Zero means the guard cleared none, and a removal
+    /// path that is about to remove something must refuse it (II.67's shape, one layer down).
+    pub fn allowed(&self) -> usize {
+        self.allowed
+    }
+
+    /// Whether this token authorises a removal of `count` things — the question a removal path
+    /// asks immediately before it acts, and the one that makes "the guard ran" a fact about the
+    /// size of the ask rather than a fact about having asked.
+    pub fn authorises(&self, count: usize) -> bool {
+        count > 0 && self.allowed >= count
     }
 }
 
@@ -1090,7 +1094,10 @@ async fn enforce_kind(
     // that was never allowed must not raise the total anything behind it is measured
     // against.
     reaping.record(kind, removals.len());
-    Ok(Reaped { scope })
+    Ok(Reaped {
+        scope,
+        allowed: removals.len(),
+    })
 }
 
 /// The guard's question, asked without spending: refuse or permit, record nothing.
@@ -1328,6 +1335,104 @@ pub(crate) fn enforce_total(
     ))
 }
 
+/// **A transaction undoing its own work asks here** (owner ruling, 2026-09-28).
+///
+/// The guard, for real: every pair is checked against `protected_packages` and the OS-essential
+/// list, and a refusal is a refusal. What it does *not* do is consult the ceilings or write to the
+/// ledger, because **undoing what this run installed thirty seconds ago is not a removal of the
+/// user's software** — and a compensation that could be refused for exceeding `max_removals`
+/// strands a machine half-unwound, which is the one state no part of this is trying to produce.
+///
+/// **All or nothing, and that is a choice.** One protected package in the set refuses the whole
+/// unwind, so the machine keeps everything the transaction installed and the caller says so. A
+/// per-pair answer would leave the machine holding one package the manifest asks for and not the
+/// nine it asked to undo — a state neither the user nor the manifest describes, and one nobody
+/// would believe a rollback had produced. The refusal names the package, so "we could not fully
+/// unwind" is answerable.
+/// A token for a unit test of an effector, and only for a unit test.
+///
+/// **`#[cfg(test)]`, so it does not exist in a build that ships.** This is the whole of what
+/// replaced `Reaped::for_reason`: a public constructor any code could call, with a reason string
+/// the type threw away, so "the token cannot be minted" was a convention 44 places opted out of. A
+/// unit test for "does removing work" should not have to build a `Config` and a `BackendRegistry`
+/// to get permission to ask a question that is not what the test is about — but the *integration*
+/// suite links the library without `cfg(test)` and so cannot see this, which is why those tests
+/// ask the real guard instead (`tests/harness::reaped_for_a_test`).
+///
+/// The count is 1, so `authorises(1)` holds and an effector that checks it behaves as though the
+/// guard had really cleared its ask. A test that wants a *refusal* asks about a pair the guard
+/// protects, which is a different test and says so.
+#[cfg(test)]
+pub(crate) fn reaped_for_a_unit_test(scope: GuardScope, why: &'static str) -> Reaped {
+    let _ = why;
+    Reaped { scope, allowed: 1 }
+}
+
+pub async fn enforce_own_work(
+    config: &Config,
+    registry: &Arc<BackendRegistry>,
+    removals: &[(String, String)],
+) -> Result<Reaped> {
+    let mut cache = EssentialsCache::default();
+    let mut report = inspect_removals(
+        config,
+        registry,
+        removals,
+        RemovalKind::Package,
+        // A ledger of its own, so a rollback's ask is measured against nothing. The ceilings are
+        // dropped below anyway; this is here so `inspect_removals` reads the same shape it always
+        // has rather than a special case threaded through it.
+        &Reaping::default(),
+        &mut cache,
+    )
+    .await;
+    // **The ceilings are this function's one difference, and it is a difference in what is
+    // asked, not in what is checked.** Protection and OS-essentials are not "are you sure" — they
+    // are the reason the guard exists — and a rollback that deleted a package the user said never
+    // to remove would be the guard's exact failure with a sympathetic story attached.
+    report
+        .objections
+        .retain(|o| !matches!(o, Objection::TooMany { .. }));
+    if !report.is_empty() {
+        return Err(refusal_for_own_work(report, removals));
+    }
+    Ok(Reaped {
+        scope: GuardScope::Sync,
+        allowed: removals.len(),
+    })
+}
+
+/// A rollback's refusal, in the shape the transaction needs: the package that is protected, and
+/// the sentence that says the machine kept what Shall installed.
+fn refusal_for_own_work(report: GuardReport, removals: &[(String, String)]) -> Error {
+    let protected: Vec<String> = report
+        .objections
+        .iter()
+        .filter_map(|o| match o {
+            Objection::Protected { key, reason } => Some(format!("{key} ({reason})")),
+            Objection::UnverifiedEssentials { key, backend } => Some(format!(
+                "{key}: {backend} could not be asked what it considers essential, so Shall is not \
+                 removing anything it owns"
+            )),
+            _ => None,
+        })
+        .collect();
+    Error::Refused(format!(
+        "not undoing this run's work: {}.\n  \
+         Shall installed these seconds ago as part of a transaction that then failed, and \
+         removing them again is exactly what the guard is for — but the ceilings that bound a \
+         real removal do not apply to undoing Shall's own work, and protection does.\n  \
+         What is on the machine now: {} package(s) this run installed, left in place and \
+         recorded as Shall's.",
+        if protected.is_empty() {
+            "the guard declined".to_string()
+        } else {
+            protected.join("; ")
+        },
+        removals.len()
+    ))
+}
+
 /// Charge a batch of mutations the model cannot name â€” `@undo=` shell commands above all â€”
 /// against the command's total, then record them.
 ///
@@ -1365,7 +1470,10 @@ pub async fn enforce_deliberate(
     // phase of a run that goes on to tear extras down, and the budget those answer to has
     // to know what has already gone.
     reaping.record(RemovalKind::Package, removals.len());
-    Ok(Reaped { scope })
+    Ok(Reaped {
+        scope,
+        allowed: removals.len(),
+    })
 }
 
 /// [`enforce_deliberate`]'s decision with the ledger write left out â€” [`vet`]'s twin for the

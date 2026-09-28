@@ -1455,6 +1455,11 @@ impl Transaction {
         // name, and return Err so the caller can say the rollback was incomplete.
         let mut failures: Vec<String> = Vec::new();
         let history = self.history.clone();
+        // **The installs this rollback will undo, gathered and then removed in one guarded
+        // pass.** It used to mint a token per package — `Reaped::for_reason` with a reason the
+        // type threw away — so "the guard ran" was true of nothing at all. The guard is asked
+        // below, for the whole set, and the token it returns says how many it cleared.
+        let mut to_undo: Vec<(String, String)> = Vec::new();
 
         // Recovery paths are removal paths, and they need the guard more than ordinary ones
         // because nobody is watching (V.64). These removals are issued at execution time and
@@ -1567,35 +1572,15 @@ impl Transaction {
                             let Some(b) = self.registry.get(&spec.backend) else {
                                 continue;
                             };
-                            let Some(h) = b.as_installable() else {
+                            if b.as_installable().is_none() {
                                 continue;
-                            };
-                            // Rollback asks `protection_of` itself, four lines above, and its
-                            // removals are of packages this same run installed seconds ago â€”
-                            // so it is one of the two named cases that do not re-ask.
-                            let reaped = crate::app::sync::guard::Reaped::for_reason(
-                                crate::app::sync::guard::GuardScope::Sync,
-                                "rollback checks `protection_of` itself, \
-                                 and compensates only work this run performed",
-                            );
-                            if let Err(e) = h
-                                .remove(
-                                    std::slice::from_ref(&spec.name),
-                                    b.sudo_for_write(),
-                                    reaped,
-                                )
-                                .await
-                            {
-                                error!(
-                                    "rollback could not remove {}:{} that this \
-                                     run installed â€” it remains on the system: {}",
-                                    spec.backend, spec.name, e
-                                );
-                                failures.push(format!(
-                                    "{}:{} (left installed)",
-                                    spec.backend, spec.name
-                                ));
                             }
+                            // `protection_of` above has already said whether this pair may be
+                            // removed, and the guard is asked once for the whole set below, so a
+                            // rollback is permitted by the guard rather than by a token it made
+                            // itself. The per-package message up there is what names the install
+                            // that was kept, which is why both are here.
+                            to_undo.push((spec.backend.clone(), spec.name.clone()));
                         }
                         // Not knowing whether the user already had it is not permission to
                         // delete it. Say so instead.
@@ -1652,6 +1637,67 @@ impl Transaction {
                 }
             }
         }
+        // **The guard, asked once, for everything this run installed and is now undoing.** It is
+        // a real ask with a real answer — `protected_packages` and the OS-essential list are
+        // consulted, and the token that comes back carries the number of packages it cleared — and
+        // it deliberately does not consult the ceilings, because undoing Shall's own work is not a
+        // removal of the user's software, and a compensation that could be refused for exceeding
+        // `max_removals` would strand the machine half-changed.
+        if !to_undo.is_empty() {
+            let pairs = to_undo.clone();
+            match crate::app::sync::guard::enforce_own_work(
+                &self.app_config,
+                &self.registry,
+                &pairs,
+            )
+            .await
+            {
+                Ok(reaped) => {
+                    debug_assert!(
+                        reaped.authorises(pairs.len()),
+                        "the guard cleared {} of the {} pairs it was asked about",
+                        reaped.allowed(),
+                        pairs.len()
+                    );
+                    for (backend, name) in &pairs {
+                        let Some(b) = self.registry.get(backend) else {
+                            continue;
+                        };
+                        let Some(h) = b.as_installable() else {
+                            continue;
+                        };
+                        if let Err(e) = h
+                            .remove(std::slice::from_ref(name), b.sudo_for_write(), reaped)
+                            .await
+                        {
+                            error!(
+                                "rollback could not remove {}:{} that this run installed — it \
+                                 remains on the system: {}",
+                                backend, name, e
+                            );
+                            failures.push(format!("{}:{} (left installed)", backend, name));
+                        }
+                    }
+                }
+                // The guard would not undo it. The machine keeps what the transaction installed,
+                // and says so — the alternative is removing software the user said never to
+                // remove because Shall put it there a minute ago.
+                Err(e) => {
+                    error!(
+                        "rollback is not undoing {} package(s) this run installed: {}",
+                        pairs.len(),
+                        e
+                    );
+                    for (backend, name) in &pairs {
+                        failures.push(format!(
+                            "{}:{} (left installed — the guard declined)",
+                            backend, name
+                        ));
+                    }
+                }
+            }
+        }
+
         if failures.is_empty() {
             Ok(())
         } else {
@@ -2684,7 +2730,7 @@ mod batching_tests {
         // without passing the guard. What they are measuring is how the executor *batches*,
         // and threading a real `Config` and `BackendRegistry` through a guard to measure that
         // would prove nothing about either.
-        .guarded_by(crate::app::sync::guard::Reaped::for_reason(
+        .guarded_by(crate::app::sync::guard::reaped_for_a_unit_test(
             crate::app::sync::guard::GuardScope::Sync,
             "a unit test measuring how the executor batches, not whether the guard ran",
         ));

@@ -1218,3 +1218,25 @@ scoped upgrades, makes parallelism configurable, and adds first-class applicatio
   Shall has always done. Raise it if your manager fails only sometimes; leave it if it is
   structurally silent, because `brew`, `snap` and `nixos` are asked per package, so a retry is a
   real command per declaration.
+
+### Nothing outside the guard can now mint a removal token
+
+- **The removal guard's proof token carries the guard's answer, and there is no way to make one
+  without asking.** The type's own comment said the private field was load-bearing and that
+  "the token cannot be minted by a caller who would rather not ask" — and the module below it
+  handed `Reaped::for_reason(scope, "…")` to anyone, throwing the reason away. 44 call sites used
+  it, and the constructor's doc sold a review procedure ("grep for it: that is the list of places
+  that do not ask") that had already caught one of those sites naming a function which did not
+  exist. The constructor is gone, so that procedure has nothing to review.
+- **A token now says how many removals the guard cleared**, and `authorises(n)` is what a removal
+  asks before it acts. A token that cleared nothing authorises nothing.
+- **A rollback asks the guard too.** It undoes what Shall installed seconds ago, but that is still
+  a removal, so it gets a real answer from a named ask (`enforce_own_work`) instead of a token it
+  made itself. That ask checks `protected_packages` and the OS-essential list and **does not**
+  charge your removal limits — undoing Shall's own work is not removing your software, and a
+  rollback that could be refused for exceeding `max_removals` would leave the machine
+  half-changed. If a package in the set is protected, the whole unwind is refused, nothing is
+  removed, and the transaction says which package it could not undo.
+- **Tests ask as well.** Unit tests use a `#[cfg(test)]` constructor that is not compiled into a
+  build you receive; the integration suite asks the guard for real. A new gate asserts that no file
+  outside the guard can build a token at all.

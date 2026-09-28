@@ -1,7 +1,7 @@
 # PLAN — Shall (work top to bottom, one issue per worker session)
 
 Worker loop: top unchecked item only, fix + resolving test, commit, check off, stop.
-Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78.
+Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35.
 
 ## SKIP — duplicates of one event, do not re-work
 - #32 DUP of #23+#24; #48 DUP of #32; #49 DUP of #33; #45 DUP of #26 (same file:line, same fix).
@@ -18,7 +18,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 - [x] #76 symlink guard bypass via parent. (High)
 - [x] #77 watch blind to profiles/vars. (High)
 - [x] #78 single info() failure aborts whole plan. (High)
-- [ ] #35 Reaped self-attestation token. (High)
+- [x] #35 Reaped self-attestation token. (High)
 - [ ] #39 harness half-totem (mutation survival). (High)
 - [ ] #40 two oracles that cannot fail. (Medium)
 - [ ] #96 CI: the 8 distro integration images are red on the container harness's `dir:` check (a

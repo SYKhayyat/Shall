@@ -254,10 +254,8 @@ async fn every_subcommand_shall_invokes_still_exists_upstream() {
                 .remove(
                     &["jq".to_string()],
                     false,
-                    shall::app::sync::guard::Reaped::for_reason(
-                        shall::app::sync::guard::GuardScope::Remove,
-                        "a unit test of the effector itself",
-                    ),
+                    crate::harness::reaped_for_a_test(shall::app::sync::guard::GuardScope::Remove)
+                        .await,
                 )
                 .await;
             // And the same install carrying `@unverified`, because that is where the

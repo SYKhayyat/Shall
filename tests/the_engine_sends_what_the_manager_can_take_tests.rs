@@ -14,7 +14,7 @@
 //! is not a version.
 
 use petgraph::stable_graph::StableDiGraph;
-use shall::app::sync::guard::{GuardScope, Reaped};
+use shall::app::sync::guard::GuardScope;
 use shall::backends::BackendRegistry;
 use shall::core::{GraphAction, PackageSpec, Transaction, TransactionConfig};
 use std::sync::Arc;
@@ -23,9 +23,10 @@ use std::time::Duration;
 use crate::mock_providers::recording_backend::{capabilities, shared_log, RecordingBackend};
 use crate::mock_providers::TestKernel;
 
-/// Why every transaction here authorises its own removals: none of them is testing the guard,
-/// and threading a real config and registry through to mint a token proves nothing about it.
-const NOT_THE_SUBJECT: &str = "these tests drive the executor's argv decisions, not the guard";
+/// These transactions authorise their own removals because none of them is testing the guard —
+/// they are testing the executor's argv decisions, and the guard has its own tests. They still
+/// **ask** for their token (`harness::reaped_for_a_test`), so a change to the guard cannot make
+/// these pass by never consulting it.
 
 fn spec(name: &str, backend: &str, version: Option<&str>) -> PackageSpec {
     let mut options = shall::config::grammar::Options::default();
@@ -200,7 +201,7 @@ async fn purging_needs_both_the_run_to_ask_and_the_manager_to_offer() {
             kernel.app.config.clone(),
             one_attempt(run_asks),
         )
-        .guarded_by(Reaped::for_reason(GuardScope::Sync, NOT_THE_SUBJECT));
+        .guarded_by(crate::harness::reaped_for_a_test(GuardScope::Sync).await);
         tx.execute().await.expect("the removal succeeds");
 
         assert_eq!(
@@ -251,7 +252,7 @@ async fn a_rolled_back_removal_comes_back_at_the_version_it_was_on() {
         kernel.app.config.clone(),
         one_attempt(false),
     )
-    .guarded_by(Reaped::for_reason(GuardScope::Sync, NOT_THE_SUBJECT));
+    .guarded_by(crate::harness::reaped_for_a_test(GuardScope::Sync).await);
 
     tx.execute()
         .await

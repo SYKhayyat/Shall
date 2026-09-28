@@ -748,7 +748,7 @@ mod tests {
     }
 
     fn reaped() -> Reaped {
-        Reaped::for_reason(
+        crate::app::sync::guard::reaped_for_a_unit_test(
             GuardScope::Remove,
             "a unit test for the effector, which is not a test of the guard",
         )

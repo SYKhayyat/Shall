@@ -1121,14 +1121,14 @@ impl SyncEngine {
     /// removal it will always refuse: recovery completes, and protection holds.
     ///
     /// **This existed as a name before it existed as a function, which is the reason it is one.**
-    /// `Reaped::for_reason`'s escape hatch is justified here by the sentence "each interrupted
-    /// removal is enforced individually in `heal_interrupted_removals`", and two ledger entries in
-    /// `tests/removal_guard_enumeration_tests.rs` cited the same name. Grep found it in exactly
-    /// those three strings and nowhere else. The mechanism was real and correct — inline in the
-    /// loop above — so only the pointer was fiction, but `Reaped::for_reason` tells a reviewer
-    /// that grepping for it "is exactly the list a reviewer wants", and a reviewer who followed
-    /// it arrived nowhere. `S24`'s lesson as a NAME rather than as a branch, and harder to catch,
-    /// because `guarded_by` is `#[allow(dead_code)]` prose no test can check.
+    /// `Reaped::for_reason`'s escape hatch used to be justified here by the sentence "each
+    /// interrupted removal is enforced individually in `heal_interrupted_removals`", and two
+    /// ledger entries in `tests/removal_guard_enumeration_tests.rs` cited the same name. Grep
+    /// found it in exactly those three strings and nowhere else — so the name pointed at a list of
+    /// places that did not ask, and the list was this one. The mechanism was real and correct,
+    /// inline in the loop above, which is why the fix is a real ask in `heal_interrupted_removals`
+    /// rather than a different name. `S24`'s lesson as a NAME rather than as a branch: the pointer
+    /// was fiction, and a reviewer who followed it arrived nowhere.
     async fn refuse_a_protected_heal_removal(
         &self,
         backend: &str,
@@ -1393,15 +1393,24 @@ impl SyncEngine {
                 })
                 .collect();
 
-            // Recovery guards each interrupted removal on its own, above, and drops the ones
-            // it refuses before they reach this graph — so the graph here contains only
-            // removals that already passed. Named rather than re-derived, because re-running
-            // the guard over the survivors would be asking a question already answered.
-            let heal_reaped = guard::Reaped::for_reason(
-                guard::GuardScope::Heal,
-                "each interrupted removal is enforced individually in `refuse_a_protected_heal_removal` and \
-                 refused ones never enter this graph",
-            );
+            // **The guard, asked again over exactly what is left.** Each interrupted removal was
+            // already checked on its own by `refuse_a_protected_heal_removal` above, which drops
+            // the ones it refuses before they reach this graph — but "already checked" was carried
+            // by a token this file minted for itself, which is the hole `#35` is about. Asking over
+            // the survivors costs one pass and buys a token whose `allowed()` is a number the guard
+            // produced. Undo is `enforce_own_work`'s question, not `enforce`'s: these removals
+            // finish an interrupted run rather than remove the user's software, so the ceilings
+            // are not what is being asked, while protection and the OS-essential list are.
+            let heal_pairs: Vec<(String, String)> = changes
+                .graph
+                .node_indices()
+                .filter_map(|idx| match &changes.graph[idx] {
+                    GraphAction::Remove { backend, name } => Some((backend.clone(), name.clone())),
+                    GraphAction::Install(_) => None,
+                })
+                .collect();
+            let heal_reaped =
+                guard::enforce_own_work(&self.config, &self.registry, &heal_pairs).await?;
             let mut tx = Transaction::with_config(
                 changes.graph.clone(),
                 self.registry.clone(),

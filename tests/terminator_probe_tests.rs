@@ -423,10 +423,8 @@ async fn every_terminator_claim_still_holds_where_the_tool_is_installed() {
                 .remove(
                     &[SENTINEL.to_string()],
                     false,
-                    shall::app::sync::guard::Reaped::for_reason(
-                        shall::app::sync::guard::GuardScope::Remove,
-                        "a unit test of the effector itself",
-                    ),
+                    crate::harness::reaped_for_a_test(shall::app::sync::guard::GuardScope::Remove)
+                        .await,
                 )
                 .await;
         }

@@ -64,10 +64,7 @@ async fn conda_calls(cfg: Config) -> Vec<String> {
     inst.remove(
         &["numpy".to_string()],
         false,
-        shall::app::sync::guard::Reaped::for_reason(
-            shall::app::sync::guard::GuardScope::Remove,
-            "a unit test of the effector itself, not of the guard",
-        ),
+        crate::harness::reaped_for_a_test(shall::app::sync::guard::GuardScope::Remove).await,
     )
     .await
     .expect("remove");

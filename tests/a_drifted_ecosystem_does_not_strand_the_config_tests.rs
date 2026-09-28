@@ -374,10 +374,9 @@ async fn narrow_a_removal(kernel: &TestKernel, recovery: BatchRecovery) -> Vec<S
         kernel.app.config.clone(),
         quartet(recovery),
     )
-    .guarded_by(shall::app::sync::guard::Reaped::for_reason(
-        shall::app::sync::guard::GuardScope::Remove,
-        "a unit test of batch narrowing over removals",
-    ));
+    .guarded_by(
+        crate::harness::reaped_for_a_test(shall::app::sync::guard::GuardScope::Remove).await,
+    );
     let _ = tx.execute_with_telemetry().await;
     backend.calls()
 }
