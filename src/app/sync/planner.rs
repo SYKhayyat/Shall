@@ -254,6 +254,12 @@ pub enum SkipKind {
     /// Declared for removal on a manager this machine lacks: the removal is withdrawn, and
     /// whatever that manager holds simply stays where it is.
     RemovalWithdrawn,
+    /// Declared, and its manager is here but **could not be asked** whether the package is
+    /// installed. Not the same row as [`InstallSkipped`](Self::InstallSkipped) and not the same
+    /// advice: that one says the manager is missing, which is fixed by installing it, and this
+    /// one is fixed by the manager answering. A shared sentence would send somebody to install a
+    /// manager that is installed and working.
+    CouldNotAsk,
 }
 
 impl SkipKind {
@@ -273,6 +279,11 @@ impl SkipKind {
                 "{} removal(s) this machine cannot act on, so nothing was removed",
                 n
             ),
+            Self::CouldNotAsk => format!(
+                "{} declaration(s) whose manager could not be asked, so Shall cannot say whether \
+                 they are installed",
+                n
+            ),
         }
     }
 
@@ -286,6 +297,11 @@ impl SkipKind {
             Self::RemovalWithdrawn => {
                 "the manager that owns them is absent here; remove them there, or drop the \
                  `absent:` declaration on this host"
+            }
+            Self::CouldNotAsk => {
+                "run the manager by hand to see what it says, or raise `[query] retries` if it \
+                 fails only sometimes — Shall asks once by default and does not act on what it \
+                 could not read"
             }
         }
     }
@@ -311,14 +327,46 @@ impl Skipped {
     /// Split a mixed list into its two kinds, in the order a reader wants them: what the machine
     /// keeps, then what it will not get.
     pub fn by_kind(rows: &[Skipped]) -> Vec<(SkipKind, Vec<&Skipped>)> {
-        [SkipKind::RemovalDeclined, SkipKind::InstallSkipped]
-            .into_iter()
-            .filter_map(|kind| {
-                let of_kind: Vec<&Skipped> = rows.iter().filter(|s| s.kind == kind).collect();
-                (!of_kind.is_empty()).then_some((kind, of_kind))
-            })
-            .collect()
+        [
+            SkipKind::RemovalDeclined,
+            SkipKind::InstallSkipped,
+            SkipKind::CouldNotAsk,
+        ]
+        .into_iter()
+        .filter_map(|kind| {
+            let of_kind: Vec<&Skipped> = rows.iter().filter(|s| s.kind == kind).collect();
+            (!of_kind.is_empty()).then_some((kind, of_kind))
+        })
+        .collect()
     }
+}
+
+/// What the planner concluded about one declaration.
+///
+/// **Three answers, not two, because a read that failed is not a package that is absent.** The
+/// middle one is the whole of issue #78: `spec_is_missing` returned `Err` when a manager could
+/// not say whether a package was installed, and the fan-out `?`\ d that into the plan — so one
+/// manager having a bad moment meant the whole machine's declarations went unplanned and the
+/// command reported a failure having applied nothing. Reading the failure as *absent* is just as
+/// wrong in the other direction: it schedules an install for every package that manager holds,
+/// and an install that finds the package already there is a no-op success in the transaction's
+/// history, so one later failure rolls back across the whole set.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Verdict {
+    /// It needs installing, or changing, or is a template whose render has drifted.
+    Missing,
+    /// It is installed and satisfies the line.
+    Satisfied,
+    /// The manager could not be asked, carrying the sentence to print. Nothing is planned for it
+    /// and it is reported by name.
+    Unanswerable(String),
+}
+
+/// What one pass of the install side produced: what to do, and what it could not find out.
+#[derive(Debug, Default)]
+struct Needed {
+    needed: Vec<PackageSpec>,
+    unanswerable: Vec<Skipped>,
 }
 
 /// Why a managed package was not scheduled for removal.
@@ -661,9 +709,27 @@ impl<'a> ChangePlanner<'a> {
         stream::iter(backends.iter().cloned())
             .map(|backend| {
                 let registry = self.registry.clone();
+                let retries = self.config.query.retries;
                 async move {
                     let b_cap = registry.get(&backend)?;
-                    let installed = b_cap.as_queryable()?.list_installed().await.ok()?;
+                    let queryable = b_cap.as_queryable()?;
+                    // **The same `[query] retries`, and it is cheap here**: one ask per manager,
+                    // not one per declaration. A manager that answers on the second try now
+                    // contributes a real set to `is_installed`, which is what keeps its removals
+                    // from being scheduled blind.
+                    let mut installed = None;
+                    for _ in 0..=retries {
+                        match queryable.list_installed().await {
+                            Ok(list) => {
+                                installed = Some(list);
+                                break;
+                            }
+                            Err(e) => {
+                                debug!("planner: `{}` could not list what it has: {e}", backend);
+                            }
+                        }
+                    }
+                    let installed = installed?;
                     Some((
                         backend,
                         installed
@@ -835,8 +901,17 @@ impl<'a> ChangePlanner<'a> {
         }
 
         // Installations and dependency graph
-        let target_specs = self.identify_needed_actions(&declared).await?;
+        //
+        // The rows a manager could not answer for go into the report beside the ones this machine
+        // cannot run at all (II.7c): both are declarations that will not be acted on, and both are
+        // named. What Shall *could* plan is still planned and still applied, so one unreadable
+        // manager costs its own declarations and nothing else.
+        let Needed {
+            needed: target_specs,
+            unanswerable,
+        } = self.identify_needed_actions(&declared).await;
         changes.add_installs(&target_specs);
+        changes.skipped.extend(unanswerable);
 
         // Stable order, for the same reason `generate_report` sorts: the crawl that produced
         // these follows a HashMap, so the same machine printed them differently each run.
@@ -970,11 +1045,8 @@ impl<'a> ChangePlanner<'a> {
         scopes.iter().any(|s| s.trim() == wanted)
     }
 
-    async fn identify_needed_actions(
-        &self,
-        expanded: &HashMap<String, PackageSpec>,
-    ) -> Result<Vec<PackageSpec>> {
-        use futures::stream::{self, StreamExt, TryStreamExt};
+    async fn identify_needed_actions(&self, expanded: &HashMap<String, PackageSpec>) -> Needed {
+        use futures::stream::{self, StreamExt};
 
         // Each spec's "is it already installed?" check is a separate query — usually a process
         // spawn (`apt list <pkg>`, `brew info <pkg>`). Done one after another this is the
@@ -982,43 +1054,63 @@ impl<'a> ChangePlanner<'a> {
         // at `max_parallel`; the futures borrow `&self` so this stays on one task (no spawn),
         // which is all that is needed since the time is spent waiting on child processes.
         let cap = self.config.max_parallel.max(1);
-        let needed: Vec<PackageSpec> = stream::iter(expanded.values())
-            .map(|spec| async move {
-                Ok::<_, Error>(self.spec_is_missing(spec).await?.then(|| spec.clone()))
-            })
+        // **Collected, not propagated.** This used to `?` out of the stream, which under
+        // `TryStreamExt` ends the whole plan on the first failure — so one manager that could not
+        // answer one package meant none of the machine's declarations were planned, and the
+        // command reported a failure with nothing applied. II.7b already rules the other way for
+        // the resolver ("a manager that could not answer has not said no… one broken manager
+        // does not fail a sync"); this is the same question one layer along.
+        let verdicts: Vec<Verdict> = stream::iter(expanded.values())
+            .map(|spec| async move { self.spec_is_missing(spec).await })
             .buffer_unordered(cap)
-            .try_filter_map(|opt| async move { Ok(opt) })
-            .try_collect()
-            .await?;
-        Ok(needed)
+            .collect()
+            .await;
+        let mut needed = Vec::new();
+        let mut unanswerable = Vec::new();
+        for (spec, verdict) in expanded.values().zip(verdicts) {
+            match verdict {
+                Verdict::Missing => needed.push(spec.clone()),
+                Verdict::Satisfied => {}
+                Verdict::Unanswerable(why) => unanswerable.push(Skipped {
+                    key: format!("{}:{}", spec.backend, spec.name),
+                    reason: why,
+                    kind: SkipKind::CouldNotAsk,
+                }),
+            }
+        }
+        Needed {
+            needed,
+            unanswerable,
+        }
     }
 
     /// Whether one desired spec needs an install/change action: absent, or present but not
     /// satisfying a `@version=`, or a template whose rendered content has drifted. Held-and-
     /// present packages are frozen. Extracted so the fan-out in `identify_needed_actions` and
     /// the decision are one thing described once.
-    async fn spec_is_missing(&self, spec: &PackageSpec) -> Result<bool> {
-        let b_cap = self
-            .registry
-            .get(&spec.backend)
-            .ok_or_else(|| Error::BackendNotFound(spec.backend.clone()))?;
-        let Some(q) = b_cap.as_queryable() else {
-            return Ok(true);
+    ///
+    /// **Three answers, because a read that failed is not a package that is absent.** See
+    /// [`Verdict`]; the short version is that "I could not ask" schedules nothing and is
+    /// reported, while reading it as absence schedules an install for a package that may well be
+    /// there — each one a trivial success in the transaction's history, so a single later failure
+    /// rolls back across the whole set.
+    async fn spec_is_missing(&self, spec: &PackageSpec) -> Verdict {
+        let Some(b_cap) = self.registry.get(&spec.backend) else {
+            // II.7c: the manager is not on this machine, which is `drop_what_this_machine_cannot_run`'s
+            // row and is reported before this is reached. Answering "unanswerable" here is the
+            // safe direction if it ever is: nothing is planned and the declaration is named.
+            return Verdict::Unanswerable(format!(
+                "`{}` is not a backend Shall uses on this machine",
+                spec.backend
+            ));
         };
-        let installed = match q.info(&spec.name).await {
+        let Some(q) = b_cap.as_queryable() else {
+            return Verdict::Missing;
+        };
+        let installed = match self.ask_about(q.as_ref(), &spec.name).await {
             Ok(Some(p)) => p,
-            Ok(None) => return Ok(true),
-            // "I could not ask" is not "it is not installed". Read as absence it schedules an
-            // Install node for every managed package — each one a trivial success that lands in
-            // the transaction's history, so a single later failure rolls back across the whole
-            // set. `search_output` already draws this distinction for the same reason (V.7c).
-            Err(e) => {
-                return Err(Error::Other(format!(
-                    "`{}` could not say whether {} is installed, so Shall cannot tell what \
-                     needs doing: {}",
-                    spec.backend, spec.name, e
-                )))
-            }
+            Ok(None) => return Verdict::Missing,
+            Err(e) => return Verdict::Unanswerable(e),
         };
         // A held package that is already installed is frozen: never schedule an upgrade or
         // version change for it, even if a manifest asks for a newer version. (Hold does not
@@ -1029,13 +1121,18 @@ impl<'a> ChangePlanner<'a> {
         // hold was accepted by the grammar, refused beside `@version` as a contradiction, and
         // then read by nothing.
         if self.state.is_held(&spec.backend, &spec.name) || spec.declares_hold() {
-            return Ok(false);
+            return Verdict::Satisfied;
         }
         if let Some(req_v) = spec.options.one("version") {
-            return Ok(installed
+            return if installed
                 .version
                 .as_deref()
-                .is_none_or(|inst_v| !self.satisfies_constraint(inst_v, req_v)));
+                .is_none_or(|inst_v| !self.satisfies_constraint(inst_v, req_v))
+            {
+                Verdict::Missing
+            } else {
+                Verdict::Satisfied
+            };
         }
         // D13: a `@channel` that differs from what the package is following needs a refresh —
         // otherwise a channel change is invisible and does nothing. Only acts when the current
@@ -1098,12 +1195,57 @@ impl<'a> ChangePlanner<'a> {
             }
         }
         if drifted {
-            return Ok(true);
+            return Verdict::Missing;
         }
         if spec.backend == "link" && spec.options.one("template") == Some("true") {
-            return Ok(self.template_needs_update(spec).await);
+            return if self.template_needs_update(spec).await {
+                Verdict::Missing
+            } else {
+                Verdict::Satisfied
+            };
         }
-        Ok(false)
+        Verdict::Satisfied
+    }
+
+    /// Ask a manager about one package, re-asking as `[query] retries` says to, and hand back the
+    /// failure as a sentence a reader can act on.
+    ///
+    /// **The retries are the config's, not this function's.** `0` — the default — means one ask,
+    /// which is the shipped behaviour: `brew`, `snap` and `nixos` are each asked *per package*
+    /// rather than in bulk, so a retry there is a real subprocess per declaration, and a user who
+    /// has turned retries up has said so knowing that. `list_installed` (one per manager) uses
+    /// the same count, because it is one subprocess and the answer is worth having.
+    async fn ask_about(
+        &self,
+        q: &dyn crate::core::Queryable,
+        name: &str,
+    ) -> std::result::Result<Option<crate::core::Package>, String> {
+        // The trait has no `name()`: a backend's name is the memo key it hands back from
+        // `installed_cache`, which is the same string the registry registered it under.
+        let backend = q.installed_cache().1.to_string();
+        let mut last = String::new();
+        for attempt in 0..=self.config.query.retries {
+            match q.info(name).await {
+                Ok(answer) => return Ok(answer),
+                Err(e) => {
+                    last = e.to_string();
+                    if attempt < self.config.query.retries {
+                        debug!(
+                            "planner: `{}` could not say whether {} is installed ({last}); \
+                             retry {}/{}",
+                            backend,
+                            name,
+                            attempt + 1,
+                            self.config.query.retries
+                        );
+                    }
+                }
+            }
+        }
+        Err(format!(
+            "`{backend}` could not say whether {name} is installed, so Shall is not acting on it: \
+             {last}"
+        ))
     }
 
     /// Every declared spec, keyed `backend:name`, with duplicates collapsed.
@@ -1514,6 +1656,256 @@ mod tests {
                 .build(),
         ));
         Arc::new(registry)
+    }
+
+    /// A manager that is **here**, is queryable, and **fails** — the case #78 is about, and the
+    /// one the fixture above cannot express: `Mute` has no `Queryable` at all, so the planner
+    /// never reaches the line where a read can fail.
+    ///
+    /// `fails` is the number of leading `info` calls that error before one answers, which is what
+    /// makes `[query] retries` testable: `fails: 1` with `retries: 1` converges, and with the
+    /// default `retries: 0` it does not.
+    struct Unreadable {
+        backend: String,
+        fails: usize,
+        asks: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        listings: crate::core::installed::InstalledListings,
+    }
+
+    impl Unreadable {
+        fn new(backend: &str, fails: usize) -> Arc<Self> {
+            Arc::new(Self {
+                backend: backend.to_string(),
+                fails,
+                asks: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+                listings: crate::core::installed::InstalledListings::new(),
+            })
+        }
+
+        fn asks(&self) -> usize {
+            self.asks.load(std::sync::atomic::Ordering::SeqCst)
+        }
+
+        fn core(&self) -> Arc<dyn crate::core::manager::BackendCore> {
+            struct Core(String);
+            impl crate::core::manager::BackendCore for Core {
+                fn name(&self) -> &str {
+                    &self.0
+                }
+                fn is_available(&self) -> bool {
+                    true
+                }
+                fn probes(&self) -> Vec<String> {
+                    Vec::new()
+                }
+                fn needs_root(&self) -> bool {
+                    false
+                }
+            }
+            Arc::new(Core(self.backend.clone()))
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl crate::core::manager::Queryable for Unreadable {
+        fn installed_cache(&self) -> (&crate::core::installed::InstalledListings, &str) {
+            // Its own memo, as `FakeInstalled` says in its own field: two fakes sharing one would
+            // answer each other's listing.
+            (&self.listings, &self.backend)
+        }
+
+        async fn fetch_installed(&self) -> crate::core::Result<Vec<crate::core::Package>> {
+            Err(crate::core::Error::Other(format!(
+                "{} refused to list what it has",
+                self.backend
+            )))
+        }
+
+        async fn list_manual(&self) -> crate::core::Result<Vec<crate::core::Package>> {
+            self.fetch_installed().await
+        }
+
+        async fn info(&self, _name: &str) -> crate::core::Result<Option<crate::core::Package>> {
+            let asked = self.asks.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if asked < self.fails {
+                return Err(crate::core::Error::Other(format!(
+                    "`brew` could not read its cellar: the daemon is not running ({asked})"
+                )));
+            }
+            Ok(None)
+        }
+    }
+
+    fn registry_with_unreadable(
+        unreadable: &Arc<Unreadable>,
+        installed: &[&str],
+    ) -> Arc<BackendRegistry> {
+        let mut registry = BackendRegistry::new();
+        register_fake(&mut registry, "generic-test", installed);
+        registry.register(Arc::new(
+            crate::core::manager::BackendCapabilities::builder(unreadable.core())
+                .with_queryable(unreadable.clone())
+                .build(),
+        ));
+        Arc::new(registry)
+    }
+
+    async fn plan_with(
+        registry: Arc<BackendRegistry>,
+        config: &Config,
+        hosts: &[&str],
+        wanted: &[(&str, &str)],
+    ) -> SyncChanges {
+        let state = StateRegistry::new(PathBuf::from("test-state.json"));
+        let desired: HashMap<String, Vec<PackageSpec>> = wanted
+            .iter()
+            .map(|(backend, name)| {
+                (
+                    backend.to_string(),
+                    vec![PackageSpec {
+                        name: (*name).into(),
+                        backend: (*backend).into(),
+                        ..PackageSpec::default()
+                    }],
+                )
+            })
+            .collect();
+        ChangePlanner::new(registry, &state, config)
+            .plan(
+                &desired,
+                PlanScope::Whole(HostBackends::from_priority(
+                    hosts.iter().map(|h| h.to_string()).collect(),
+                )),
+            )
+            .await
+            .expect("a manager that cannot answer must not fail the plan")
+    }
+
+    /// **The bug: one manager that could not answer cost the whole machine its sync.** The other
+    /// manager's declaration is planned, applied and reported; the unreadable one is named and
+    /// left alone. Before this, the `?` out of the fan-out ended the plan on the first failure —
+    /// the command exited 1 having applied nothing, over a manager that was merely having a bad
+    /// moment.
+    #[tokio::test]
+    async fn a_manager_that_cannot_answer_costs_only_its_own_declarations() {
+        let config = Config::default();
+        let unreadable = Unreadable::new("brew", usize::MAX);
+        let registry = registry_with_unreadable(&unreadable, &[]);
+
+        let changes = plan_with(
+            registry,
+            &config,
+            &["generic-test", "brew"],
+            &[("generic-test", "jq"), ("brew", "wget")],
+        )
+        .await;
+
+        assert_eq!(
+            changes.total_install(),
+            1,
+            "the manager that answered must still be planned"
+        );
+        let unanswerable: Vec<&crate::app::sync::planner::Skipped> = changes
+            .skipped
+            .iter()
+            .filter(|s| s.kind == crate::app::sync::planner::SkipKind::CouldNotAsk)
+            .collect();
+        assert_eq!(
+            unanswerable.len(),
+            1,
+            "the declaration that could not be read must be named: {:?}",
+            changes.skipped
+        );
+        assert_eq!(unanswerable[0].key, "brew:wget");
+        assert!(
+            unanswerable[0].reason.contains("brew"),
+            "the row names the manager, not just the package: {}",
+            unanswerable[0].reason
+        );
+        assert_eq!(unreadable.asks(), 1, "the default asks once and gives up");
+    }
+
+    /// **Not "could not ask" is not "is not installed".** A manager that fails must not schedule
+    /// an install for a package it may well already have: that is a transaction node for
+    /// nothing, and one later failure rolls back across the whole set.
+    #[tokio::test]
+    async fn a_manager_that_cannot_answer_schedules_no_install() {
+        let config = Config::default();
+        let unreadable = Unreadable::new("brew", usize::MAX);
+        let registry = registry_with_unreadable(&unreadable, &[]);
+        let changes = plan_with(registry, &config, &["brew"], &[("brew", "wget")]).await;
+        assert_eq!(
+            changes.total_install(),
+            0,
+            "Shall cannot see whether wget is installed, so it must not install it"
+        );
+    }
+
+    /// `[query] retries` is a number, and this is the number: one extra ask by default of nothing,
+    /// and enough of them to see through a manager that answers on the second try.
+    #[tokio::test]
+    async fn the_config_says_how_many_times_to_ask_again() {
+        let mut config = Config::default();
+
+        let once = Unreadable::new("brew", 1);
+        let registry = registry_with_unreadable(&once, &[]);
+        let changes = plan_with(registry, &config, &["brew"], &[("brew", "wget")]).await;
+        assert_eq!(once.asks(), 1, "the default asks exactly once");
+        assert_eq!(
+            changes.total_install(),
+            0,
+            "a manager that could not answer is not evidence that the package is absent"
+        );
+        assert_eq!(
+            changes
+                .skipped
+                .iter()
+                .filter(|s| s.kind == crate::app::sync::planner::SkipKind::CouldNotAsk)
+                .count(),
+            1,
+            "and the declaration is reported rather than dropped: {:?}",
+            changes.skipped
+        );
+
+        config.query.retries = 1;
+        let twice = Unreadable::new("brew", 1);
+        let registry = registry_with_unreadable(&twice, &[]);
+        let changes = plan_with(registry, &config, &["brew"], &[("brew", "wget")]).await;
+        assert_eq!(twice.asks(), 2, "one retry is one more ask");
+        assert_eq!(changes.total_install(), 1, "and the answer is believed");
+        assert!(
+            changes.skipped.is_empty(),
+            "a manager that answers on the retry is not reported as unreadable: {:?}",
+            changes.skipped
+        );
+    }
+
+    /// **The removal half is unchanged, and it is the half where guessing deletes software.**
+    /// A manager that cannot be listed still has its removals scheduled: `is_installed` reads an
+    /// unreadable manager as *present*, so the plan removes and lets the removal report its own
+    /// failure. The other direction — reading "could not ask" as "nothing to remove" — is the one
+    /// that quietly leaves software installed.
+    #[tokio::test]
+    async fn an_unreadable_manager_still_plans_its_removals() {
+        let unreadable = Unreadable::new("brew", usize::MAX);
+        let mut registry = BackendRegistry::new();
+        registry.register(Arc::new(
+            crate::core::manager::BackendCapabilities::builder(unreadable.core())
+                .with_queryable(unreadable.clone())
+                .build(),
+        ));
+        let state = StateRegistry::new(PathBuf::from("test-state.json"));
+        let desired: HashMap<String, Vec<PackageSpec>> =
+            [("brew".to_string(), vec![absent_spec("libreoffice", "brew")])]
+                .into_iter()
+                .collect();
+
+        let changes = ChangePlanner::new(Arc::new(registry), &state, &Config::default())
+            .plan(&desired, PlanScope::Whole(HostBackends::default()))
+            .await
+            .expect("an unreadable manager must not fail the plan")
+            .total_remove();
+        assert_eq!(changes, 1, "not knowing must never mean not removing");
     }
 
     async fn absent_removals(registry: Arc<BackendRegistry>, name: &str) -> usize {

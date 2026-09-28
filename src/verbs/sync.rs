@@ -51,9 +51,13 @@ pub struct Reconciled {
 /// have to be inferred from a sentence.
 fn not_installed_of(skipped: &[crate::app::sync::planner::Skipped]) -> usize {
     use crate::app::sync::planner::SkipKind;
+    // **Two kinds, because both are declarations that will not be installed this run**: one
+    // whose manager is not on this machine, and one whose manager is here and could not be
+    // asked. The summary says "could not be acted on", which is true of both, and counting only
+    // the first would let a sync report a clean result over declarations it never looked at.
     skipped
         .iter()
-        .filter(|s| s.kind == SkipKind::InstallSkipped)
+        .filter(|s| matches!(s.kind, SkipKind::InstallSkipped | SkipKind::CouldNotAsk))
         .count()
 }
 

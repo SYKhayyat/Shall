@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **233** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **234** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 238 are accounted
-for: **233 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 239 are accounted
+for: **234 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -513,11 +513,12 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the config-change round of 2026-09-28 (what `watch` counts, and what it says) — 1
+### C — the round of 2026-09-28 (a watcher's inputs, and a manager that cannot answer) — 2
 
 | | question | answered |
 |---|---|---|
 | **C1** | `watch --on-change` fingerprinted `modules/*.txt` by size and mtime, so a profile switch, a `priority` reorder, a `vars/` edit, an `adapters/` row, `preferences.toml` or a hook changed what Shall does and never woke the daemon — and a watcher that misses the edit looks exactly like a watcher working. What counts as a change, and should the tick say what it saw? — RULED 2026-09-28: **any file in the config repo, by content hash, except `.git/` and `locks/`** (the second because the sync `watch` runs writes it — hashing it makes the daemon reconcile for ever), **plus the user's own `.shall-watchignore`** in a deliberate subset of `.gitignore`'s language with no negation, where a line that cannot be read is refused rather than skipped. And the tick **names what changed, up to five, then the count**. (II.66, V.212) | 2026-09-28 |
+| **C2** | `spec_is_missing` returned `Err` when a manager could not say whether a package is installed, and its fan-out `?`\ d that into the plan — so one manager having a bad moment meant no declaration on the machine was planned and the command exited 1 having applied nothing, against II.7b's "one broken manager does not fail a sync". And the issue's suggested repair — read the failure as *absent* — schedules an install for every package that manager holds, which is a transaction of no-op successes one unrelated failure rolls back. What should the third answer be, what should the command exit, and should Shall ask again? — RULED 2026-09-28: **a third answer, its own skip row** (`CouldNotAsk`) that schedules nothing and is named; **exit 0**, with the count in "declarations this run could not act on" beside the missing-manager rows; the removals half **unchanged** (an unreadable manager is read as present, because the opposite guess leaves software nothing can account for); and **retries are a number in config, default 0**, applying to the planner's reads and not to writes. (II.67, V.213) | 2026-09-28 |
 
 ---
 
@@ -9944,3 +9945,39 @@ nobody reads — which is where the daemon's only output was.
 the repo a change in the repo, which is not what `watch` watches; re-pointing one is a change to
 what the repo declares. A **removed** file is a change: deleting the last profile is a change to
 what Shall does.
+
+## C2
+
+**Status: ANSWERED 2026-09-28, built.** A manager that could not be asked. Rule in **II.67**,
+rationale in **V.213**.
+
+**A third answer.** `Verdict` is `Missing | Satisfied | Unanswerable(String)`. The third schedules
+nothing and becomes a `Skipped` row, because **both** of the other two readings are wrong and
+the issue's suggested repair is the more dangerous of them: "absent" schedules an install for every
+package the manager holds, and each is a no-op success in the transaction's history, so one
+unrelated failure rolls back the whole set.
+
+**Its own `SkipKind`, and the reason is the advice.** `InstallSkipped` says *"install the manager
+they name"*, which is wrong advice for a manager that is installed and having a bad moment.
+`CouldNotAsk` counts into the same total — `not_installed_of` now matches both kinds, so
+`sync`/`watch` cannot report a clean result over declarations they never looked at — and `check`
+emits it as its own `skipped_unanswered` count, because a consumer summing the two is reading one
+number over two questions.
+
+**Exit 0.** The command did what it could and printed what it could not do. A non-zero exit would
+make a deployment script fail on one flaky manager over 250 packages that were fine.
+
+**The removal half is untouched.** `is_installed` still reads an unreadable manager as *present*,
+so removals stay scheduled and the removal reports its own failure. Making the two halves agree
+would have introduced the "leaves software nothing can account for" failure into one of them.
+
+**`[query] retries`, default `0`, reads only.** `0` means one ask in total, which is the shipped
+behaviour. It applies to the per-manager `list_installed` as well as the per-declaration `info`,
+because that is one subprocess and the answer is worth having — and it does not apply to writes,
+because `[sync] continue_past_transient` is the answer to that question and a second one would be
+the "two of everything" this repo keeps refusing.
+
+**The test fixture had to be new.** The planner's own fixture for "a manager that cannot answer"
+is a registered backend with **no `Queryable` at all** — the mute case, which never reaches the
+line where a read fails. `Unreadable` is queryable, fails, and counts its asks, which is what
+makes the retry count testable rather than asserted.

@@ -6,7 +6,7 @@ pub mod settings;
 
 pub use config::{
     CliOverrides, Config, ExecSettings, ExecTrust, GuardSettings, JournalSettings,
-    ProtectionAnswer, VarsSettings, PREFERENCES_FILE_NAME,
+    ProtectionAnswer, QuerySettings, VarsSettings, PREFERENCES_FILE_NAME,
 };
 pub use settings::{resolve_root, ResolvedRoot, RootSource, Settings};
 

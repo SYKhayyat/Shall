@@ -336,6 +336,28 @@ impl NixosSettings {
     }
 }
 
+/// The `[query]` table: what Shall does with a manager that could not answer.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct QuerySettings {
+    /// How many times to ask a manager again after it could not say whether a package is
+    /// installed. **Zero by default, and zero means one ask in total.**
+    ///
+    /// **A knob, not a behaviour, because the two answers are both defensible and the right one
+    /// is a property of the machine.** A manager holding a lock for a moment should be asked
+    /// again; a manager that is fundamentally unable to answer will be asked again for every
+    /// declaration on every run, and `brew`, `snap` and `nixos` are each asked **per package**,
+    /// so a retry is a real subprocess per declaration rather than one per manager. A user whose
+    /// manager is intermittently flaky sets `1`; a user on a large config with a manager that is
+    /// structurally silent leaves it at `0` and reads the list Shall prints instead.
+    ///
+    /// The count applies to the planner's reads — one `list_installed` per manager and one `info`
+    /// per declaration — and nowhere else: a *write* that fails is a different question, and
+    /// `[sync] continue_past_transient` is already the answer to that one.
+    #[serde(default)]
+    pub retries: usize,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LockSettings {
@@ -821,6 +843,11 @@ pub struct Config {
     #[serde(default)]
     pub lock: LockSettings,
 
+    /// The `[query]` table: what to do about a manager that could not answer.
+    /// See [`QuerySettings`].
+    #[serde(default)]
+    pub query: QuerySettings,
+
     /// The `[journal]` table: how many finished packages the WAL buffers before it flushes.
     /// See [`JournalSettings`].
     #[serde(default)]
@@ -1207,6 +1234,7 @@ impl Default for Config {
             allow_mass_install: false,
             guard: GuardSettings::default(),
             lock: LockSettings::default(),
+            query: QuerySettings::default(),
             journal: JournalSettings::default(),
             nixos: NixosSettings::default(),
             remove: RemoveSettings::default(),
@@ -1545,6 +1573,14 @@ mod tests {
     fn the_journal_table_defaults_to_what_shipped_before_it() {
         assert_eq!(JournalSettings::default().flush_every, 32);
         assert_eq!(Config::default().journal.flush_every, 32);
+    }
+
+    /// A default on a table the parent does not use is a default nothing reads, and `[query]`
+    /// is a table whose whole content is a number whose absence means "ask once".
+    #[test]
+    fn the_query_table_defaults_to_asking_once() {
+        assert_eq!(QuerySettings::default().retries, 0);
+        assert_eq!(Config::default().query.retries, 0);
     }
 
     /// `["*"]` is every manager; a named list is those managers and no others. Both directions,

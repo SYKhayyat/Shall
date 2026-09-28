@@ -420,6 +420,11 @@ pub async fn check_summary(app: &App, out: Output) -> Result<()> {
                     // summing them is reading one number over two questions.
                     ("skipped_removals", of_kind(SkipKind::RemovalDeclined)),
                     ("skipped_installs", of_kind(SkipKind::InstallSkipped)),
+                    // Counted apart from the one above because a consumer summing them is
+                    // reading one number over two questions: the manager is missing, or the
+                    // manager could not be asked. The first is fixed by installing it; the
+                    // second by the manager answering.
+                    ("skipped_unanswered", of_kind(SkipKind::CouldNotAsk)),
                     ("unverifiable", r.unverifiable.len()),
                 ];
 

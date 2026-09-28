@@ -352,6 +352,20 @@ build and what is deferred to hardware.**
     **refusal at apply**, never a parse failure, precisely so one shared Linux manifest still
     parses everywhere; that half is proven on any host.
 
+### Tier 11 — a read that failed is its own answer (`PLAN.md` #78): BUILT
+
+25. ~~**One `info()` failure aborts the whole plan.**~~ **BUILT (ruling 2026-09-28).**
+    `spec_is_missing` returned `Err` and its fan-out `?`\ d that out, so one manager having a bad
+    moment meant no declaration on the machine was planned — against II.7b, which already says a
+    manager that could not answer does not fail a sync. **Neither wrong answer is available**:
+    reading it as absent schedules an install for every package the manager holds (a transaction
+    of no-op successes one failure rolls back), and reading it as installed reports
+    `already up to date` over a declaration nobody looked at. So a third answer: schedule nothing,
+    name it, under a `CouldNotAsk` skip row with its own advice, counted in "declarations this
+    run could not act on". **Exit 0.** The removals half is unchanged, because that is where the
+    opposite guess is the safe one. **`[query] retries`, default 0**, on the planner's reads.
+    Rule `II.67`, rationale `V.213`, decision `C2`.
+
 ### Tier 10 — `watch` watches the repo (`PLAN.md` #77): BUILT
 
 24. ~~**`watch --on-change` is blind to everything but `modules/`.**~~ **BUILT (ruling

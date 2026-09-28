@@ -7594,3 +7594,50 @@ what it reacted to; a line that says "manifests changed" is not answerable when 
 `active`, which is the case this whole change is about. Five names and a count, because a `pull`
 bringing forty files is one event, and an event that prints forty paths is a line nobody reads —
 which is where the daemon's only output was before it named anything.
+
+**V.213 — Why a read that failed is neither "installed" nor "absent", and why the retry count is
+a setting. *(`C2`; 2026-09-28)***
+
+`spec_is_missing` returned `Err` when a manager could not say whether a package was installed, and
+its fan-out propagated that with `?`. Under `TryStreamExt` the first `Err` ends the stream, so one
+manager having a bad moment meant **no declaration on the machine was planned**, the transaction
+had nothing to do, and the command exited 1 saying a sync failed. The rule that says otherwise
+was already written — II.7b, "a manager that could not answer has not said no… one broken manager
+does not fail a sync" — and the planner is the one place that read it as the opposite. That is
+the shape this repo keeps finding: a rule stated once, honoured in one path, and *not honoured* in
+the path a different feature grew, with nothing that could see the difference.
+
+**There were two wrong answers available and the one in the code was the dangerous one.** Reading
+the failure as "absent" is what the issue suggested, and it schedules an install for every package
+the manager actually holds. Every one of those installs is a trivial success that lands in the
+transaction's history, so a single later failure rolls back across the whole set — a plan built
+entirely out of packages that were already installed, undone by an unrelated package. Reading it
+as "installed" is worse in a different register: nothing is scheduled, nothing is reported, and
+`sync` says `already up to date` over a declaration it never looked at, which is AU1's whole
+subject. The third answer — *could not be asked*, schedule nothing, name it — is the only one that
+is not a lie, and it is exactly what the removal half was already doing with the mirror-image
+question.
+
+**Why the removal half was left alone.** `is_installed` reads an unreadable manager as *present*,
+so its removals stay scheduled and the removal reports its own failure. The two halves are one
+question with opposite costs: guessing "absent" on the install side schedules pointless installs,
+and guessing "not installed" on the removal side leaves software that nothing can account for.
+The rule a guard wants is "never act on what you could not read", and the two halves resolve it
+in opposite directions because the actions are opposite. A "fix" that made them agree would have
+introduced the failure in one of them.
+
+**Why the retry count is a number in the config and not a behaviour in the code.** The two
+defensible answers depend on the machine, not on the design: a manager that trips over a lock
+should be asked again, and a manager that structurally cannot answer will spend a subprocess per
+declaration asking again on every run — and `brew`, `snap` and `nixos` are asked **per package**,
+not in bulk, which is the whole reason `installed_sets` exists. So the default is the cheap one
+(`0`, one ask) and the setting is there for the machine that needs it. It applies to the
+per-manager listing too, where it costs one subprocess and buys the real answer `is_installed`
+wants; and it applies to **reads only**, because a write that fails is a different question and
+`[sync] continue_past_transient` is already that answer.
+
+**Why a new skip kind rather than a shared sentence.** `SkipKind` exists because a fixed sentence
+over a mixed list is wrong for every row it does not describe. The existing `InstallSkipped` says
+*"install the manager they name, or drop the declaration on this host"* — which sends somebody to
+install a manager that is installed and working. The count that matters is the same, so both kinds
+feed `not_installed`; the heading and the advice are separate because the fix is separate.

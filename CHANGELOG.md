@@ -1195,3 +1195,26 @@ scoped upgrades, makes parallelism configurable, and adds first-class applicatio
   than quietly ignored.
 - **It tells you what it reacted to**: `watch: active, profiles/Work changed — reconciling.`, up
   to five names and then `and 12 more`, because a pull that brings forty files is one event.
+
+### One manager having a bad moment no longer fails the whole sync
+
+- **`shall sync`, `plan`, `check`, `status`, `upgrade`, `apply` and `watch` all keep going when a
+  manager cannot say whether a package is installed.** They did not: the planner's fan-out ended
+  on the first failed read, so one manager having a bad moment meant nothing on the machine was
+  planned, the transaction had no work, and the command exited 1 reporting a failed sync. The
+  rule that says otherwise — "a manager that could not answer has not said no" — was written for
+  the resolver and never applied here.
+- **A read that failed is now its own answer**, and its own line in the report: nothing is
+  scheduled for that declaration, and it is named. It deliberately is *not* treated as "not
+  installed": that would schedule an install for every package the manager holds, and each of
+  those is a no-op success in the transaction's history, so one unrelated failure rolls the whole
+  set back. It is not treated as "installed" either — that would report `already up to date` over
+  a declaration nobody looked at.
+- **Removals are unchanged on purpose.** A manager that cannot be listed is still read as
+  *present*, so its removals stay scheduled. The other guess would leave software installed that
+  nothing can account for.
+- **`[query] retries` is a new setting, default `0`** — the number of extra times to ask a manager
+  that could not answer, for the planner's reads. Zero means one ask in total, which is what
+  Shall has always done. Raise it if your manager fails only sometimes; leave it if it is
+  structurally silent, because `brew`, `snap` and `nixos` are asked per package, so a retry is a
+  real command per declaration.

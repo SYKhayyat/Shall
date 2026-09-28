@@ -4073,3 +4073,48 @@ meaning what it says.
 `watch: active, profiles/Work changed — reconciling.` — up to five names, then `and 12 more`. A
 pull that brings forty files is one event, and an event that prints forty paths is a line nobody
 reads.
+
+## II.67 A manager that could not be asked costs its own declarations, not the plan (`#78`, V.213)
+
+**One unreadable manager does not fail a sync.** II.7b already says a manager that could not
+answer *has not said no*; this is that rule on the planner's read, where it was not implemented.
+
+### Three answers to "is it installed", and the middle one is not the default
+
+- **Installed and satisfying the line** — nothing to do.
+- **Not installed** — schedule the install or the change.
+- **Could not be asked** — **schedule nothing, and name it.**
+
+Read as *absent*, a failed read schedules an install for every package that manager holds. Each
+of those is a no-op success in the transaction's history, so one later failure rolls back across
+the whole set — and the machine ends up where it started with a WAL full of successes. Read as
+*installed*, a failed read silently leaves a declaration uninstalled with nothing said. So the
+third answer is its own thing: a row in the same list a missing manager's declarations go in
+(II.7c), under its own heading and its own advice, because the two are fixed differently —
+**"install the manager" is wrong advice for a manager that is installed and having a bad
+moment.**
+
+**The count is in "declarations this run could not act on."** `not_installed` counts both kinds,
+so `sync` and `watch` cannot report a clean result over declarations they never looked at.
+
+**The removals half is unchanged, and that is deliberate.** A manager that cannot be listed is
+read as *present*, so its removals stay scheduled and the removal reports its own failure. The
+two halves are the same question with opposite costs: guessing "absent" schedules pointless
+installs, guessing "not installed" leaves software nobody can account for. The removal side keeps
+the direction that cannot delete silently.
+
+### `[query] retries` — a number, default 0
+
+How many times to ask a manager again after it could not answer, for the planner's reads: one
+`list_installed` per manager and one `info` per declaration. **`0` is the default, and `0` means
+one ask in total.**
+
+**A knob rather than a behaviour, because the right answer is a property of the machine.** A
+manager holding a lock for a moment should be asked again; a manager that structurally cannot
+answer will be asked again for every declaration on every run, and `brew`, `snap` and `nixos` are
+each asked **per package**, so a retry there is a real subprocess per declaration. The same count
+applies to the per-manager listing, where it costs one subprocess and buys a real answer for
+`is_installed`.
+
+**It is about reads only.** A *write* that fails is a different question, and
+`[sync] continue_past_transient` is already that answer.
