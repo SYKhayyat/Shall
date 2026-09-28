@@ -299,6 +299,98 @@ fn every_exemption_names_a_backend() {
     }
 }
 
+/// **The polarity, as a gate: absence from an exemption list must not read as proven.**
+///
+/// `UNPROVEN` used to be the whole of the answer, so a backend nobody had written anything about
+/// read proven — and a name in `builtin_backends.toml` whose row says `UNVERIFIED` read proven too,
+/// which is how `spack`, `krew`, `asdf` and `slackpkg` claimed a standing over a row admitting
+/// nobody has seen the tool's real output. `DRIVEN` is the positive list now, and this holds it to
+/// the same two harness tables the exemption gate reads, in both directions: a row claiming a
+/// lifecycle no harness drives fails, and a canary nobody claims fails the other way.
+#[test]
+fn the_driven_list_is_exactly_what_a_harness_drives() {
+    let labels = covered_somewhere();
+    let covered: BTreeSet<&str> = labels
+        .iter()
+        .map(String::as_str)
+        .filter(|name| UNIVERSE.contains(name))
+        .collect();
+    let claimed: BTreeSet<&str> = shall::backends::proving::DRIVEN.iter().copied().collect();
+
+    let unbacked: Vec<&&str> = claimed.difference(&covered).collect();
+    assert!(
+        unbacked.is_empty(),
+        "`DRIVEN` claims a lifecycle no harness drives: {unbacked:?}\n\
+         A backend is in that list because a `case` label in `run-in-container.sh` or \
+         `integration-windows.sh` drives it. Either the label is gone, or this row is a claim \
+         nothing checks — which is the defect the positive list exists to remove."
+    );
+
+    let unclaimed: Vec<&&str> = covered.difference(&claimed).collect();
+    assert!(
+        unclaimed.is_empty(),
+        "a harness drives these and `DRIVEN` does not name them: {unclaimed:?}\n\
+         Without a row they read UNPROVEN (no harness has run it) over a lifecycle that runs every \
+         night, which is the same sentence the audit objected to. Add the name to `DRIVEN`."
+    );
+}
+
+/// The roster line is the whole user-visible half of this table, so the contract it promises is
+/// asserted here rather than left to a reader: `[READY] <name>` stays greppable whatever the
+/// suffix says, the suffix is one of the two reasons and not a free-text paragraph, and a backend
+/// this host registers cannot end up with neither.
+#[tokio::test]
+async fn the_roster_line_keeps_its_promise_for_every_registered_backend() {
+    let config = shall::config::Config::default();
+    let hooks = shall::app::LuaHooks::new(&config).expect("hooks for a default config");
+    let registry = shall::backends::registry::create_default_registry(
+        shall::core::CommandExecutor::new(true, false),
+        &config,
+        std::sync::Arc::new(hooks),
+    )
+    .await;
+
+    for backend in registry.all() {
+        let name = backend.name();
+        let line = match shall::backends::proving::unproven_reason(name) {
+            None => format!("[READY] {name}"),
+            Some(why) => {
+                assert!(
+                    why == shall::backends::proving::NO_HARNESS_RAN_IT
+                        || why == shall::backends::proving::BYTES_NEVER_CAPTURED,
+                    "`{name}` reads unproven for a reason no roster line can carry: {why}"
+                );
+                format!("[READY] {name} (unproven — {why})")
+            }
+        };
+        assert!(
+            line.starts_with(&format!("[READY] {name} ")) || line == format!("[READY] {name}"),
+            "`shall check health | grep '^\\[READY\\]' | awk '{{print $2}}'` would not enumerate \
+             `{name}` from this line: {line}"
+        );
+    }
+}
+
+/// A backend in neither list must be named as unreachable rather than left to read as proven —
+/// and the default is the claim that says less, so a new backend lands in the safe column.
+#[test]
+fn every_backend_is_either_driven_or_names_its_receipt() {
+    for backend in UNIVERSE {
+        let reason = shall::backends::proving::unproven_reason(backend);
+        if !shall::backends::proving::DRIVEN.contains(backend) {
+            assert!(
+                reason.is_some(),
+                "`{backend}` is in no list at all, and reads proven"
+            );
+            assert!(
+                nowhere().iter().any(|n| n.backend == *backend),
+                "`{backend}` reads unproven with no receipt to say why. The two derived reasons \
+                 are for a backend the harnesses reach, not for one nothing reaches."
+            );
+        }
+    }
+}
+
 /// The universe list is hand-written, so it rots the moment a backend is added. This is what
 /// stops that: whatever platform runs the suite checks its own registry against the list, and
 /// between Windows and Linux CI every entry is covered.

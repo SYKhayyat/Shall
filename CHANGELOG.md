@@ -1122,3 +1122,18 @@ scoped upgrades, makes parallelism configurable, and adds first-class applicatio
 - **A teardown is still counted.** Deleting the last `exec:` line on an otherwise settled machine
   still runs its `@undo=` and still reports the change, because the phase that runs it returns
   its count.
+
+### A backend is proven by what was driven and what was seen
+
+- **`check health` marks a backend unproven unless a harness has driven it *and* its listing
+  output was captured from the manager itself.** `is_proven` used to be "not on the exemption
+  list", so every backend nobody had written a paragraph about read *proven* — including
+  `spack`, `krew`, `asdf` and `slackpkg`, which the matrix canaries while their own rows say
+  `UNVERIFIED:`, i.e. that the bytes their parsing is written against were never seen from the
+  tool. The list is now positive: a new backend lands unproven, on the answer that says less.
+- **The roster says which reason applies.** `(unproven — no harness has run it)` and
+  `(unproven — its listing bytes were never captured)` are different doubts, and calling a
+  manager the Slackware image drives every night "never run" is the kind of sentence that teaches
+  people to stop reading the line.
+- **Capturing the bytes is the fix**, and there is a ratchet for it that may only fall. Two new
+  gates hold the two ledgers to each other and to the harness scripts, in both directions.

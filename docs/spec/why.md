@@ -7409,3 +7409,56 @@ the reason a per-account `setting:` runs with the account's session variables ra
 its name in argv is the same one: these tools decide whose answer to give from the environment,
 and the bus address is named for the account whether or not a socket is there, because an
 inherited one belongs to whoever typed the command.
+
+**V.209 — Why a backend's standing is a positive claim, and why a row that admits nobody has seen
+its manager's output cannot read proven. *(`P1`; 2026-09-27)***
+
+The defect was a polarity, and the polarity was the whole thing. `is_proven` was
+`unproven_reason(...).is_none()`, so **every backend nobody had written a paragraph about read
+*proven*** — a name in a registry, a list of argv assertions, and a claim that some machine
+somewhere installed a package through it. The list beside it, `UNPROVEN`, was therefore not a set
+of unproven backends but the set of *exemptions*, and a program reading a set of exemptions
+inverts it.
+
+**Absence of an accusation is not evidence, and a table of receipts cannot be the claim.** The
+receipts in `proving.rs` are long and specific — a NixOS price, a Gentoo image that installs
+nothing, a Solus image that does not resolve — and every one of them is about a backend *no
+harness reaches*. A backend a harness reaches has no such receipt, and that is not because it has
+one; it is because it does not need one. The polarity made the silence do the work the receipt
+should have done, and the way that shows is a backend added on a Tuesday: it is registered, it
+appears in `list`, it prints no suffix, and a user has been told it is proven by a table that
+never mentioned it.
+
+**And the second ledger, which is the one the audit found.** Six rows in
+`builtin_backends.toml` carry `source = "UNVERIFIED: …"`: the listing bytes were written from
+documentation rather than captured from the tool. `is_proven` never read that file, and so
+`spack`, `krew`, `asdf` and `slackpkg` read **proven** over a row that says in the same sentence
+that nobody has ever seen what the tool prints. That is not a nuance. A manager whose output
+Shall has never seen has a list, a search and a remove nobody has seen either — the fixture is
+where Shall's belief about the tool's *shape* lives, so an uncaptured one means every operation on
+that row is a guess wearing a `case` label. A harness lifecycle is evidence that the *commands*
+are right; the bytes are evidence that the *parsing* is. Both, or neither is proven.
+
+**Why one answer and not two flags.** The owner's ruling was one axis: a backend is proven when a
+harness has driven it **and** its bytes were captured. The two-measurements version — keep
+lifecycle and bytes as separate verdicts, and let `check health` print whichever applies — is the
+shape a report would take, and it is worse here for one reason: it makes *reading well* a claim
+about a manager rather than a claim about us. A user who sees `lifecycle: yes, bytes: no` learns
+something about the repository's coverage and nothing about the manager; a user who sees
+`unproven — its listing bytes were never captured` learns that Shall is guessing at this tool, and
+can decide whether to let it.
+
+**What it costs, stated.** Four backends that work read unproven today, and one of them —
+`slackpkg` — is driven for real on an image in the CI matrix. That is a false negative in the
+direction that costs a user nothing but a line of doubt, and the alternative was a false positive
+over a row that says `UNVERIFIED`. The ratchet that closes it already exists and only falls:
+`UNVERIFIED_CEILING` in `tests/a_backend_is_a_row_tests.rs` is 6, and capturing four sets of real
+bytes takes it to 2. The seam is deliberately not a way to *raise* it, because "nobody has run it"
+and "nobody has looked" are the two sentences a table of exemptions is most likely to grow into.
+
+**And the list is data, held to the harnesses in both directions.** `DRIVEN` cannot be derived
+from Rust — the harnesses are shell — so it is hand-written, and the gate
+`tests/lifecycle_coverage_union_tests.rs::the_driven_list_is_exactly_what_a_harness_drives` reads
+those scripts and fails both when a row claims a lifecycle no script drives **and** when a script
+drives one the table does not name. A positive list that rots upward is the same defect with a
+new shape; that is why the second direction is in the same assertion.

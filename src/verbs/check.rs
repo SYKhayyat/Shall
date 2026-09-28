@@ -1225,21 +1225,30 @@ pub async fn check_health(app: &App, out: Output) -> Result<()> {
     // `shall check health | grep '^\[READY\]'` enumerates every usable backend on this host. Without
     // this, a healthy `doctor` printed nothing about which package managers actually work.
     //
-    // **A backend that has never met its manager says so, here, on its own line.** 62 backends
-    // ship and a substantial minority have never completed a real install → list →
-    // binary-on-PATH → remove in any harness — which is not a testing gap, it is a claim the
-    // program makes and nothing has ever checked. Until now a user could not tell those apart
+    // **A backend that has never met its manager says so, here, on its own line.** Every backend
+    // ships and a substantial minority have never completed a real install → list →
+    // binary-on-PATH → remove in any harness, or have never had the manager's real listing output
+    // captured at all — which is not a testing gap, it is a claim the program makes and nothing
+    // has ever checked. Until now a user could not tell those apart
     // from the ones with a lifecycle behind them: same list, same word, same colour.
     //
     // `[READY]` still means "this manager is here and answers", which is unchanged and is what
     // the greppable roster promises. The suffix is a separate fact about *Shall's* evidence, not
-    // about the machine, and it is phrased so `grep '^\[READY\]'` still enumerates every usable
+    // about the machine, and it is phrased so `grep '^\[READY]'` still enumerates every usable
     // backend.
+    //
+    // **The suffix is the reason, not one sentence for all of them.** There are two ways to be
+    // unproven and they are not the same doubt: no harness has ever driven the manager, or a
+    // harness has and the listing bytes the row was built from were written from documentation
+    // rather than captured from the tool. `spack`, `krew`, `asdf` and `slackpkg` are in the
+    // second camp, and telling a user that "no harness has run it" about a manager the slackware
+    // image drives every night is the kind of sentence that teaches people to stop reading the
+    // rest of the line.
     for (name, r) in &reports {
         if r.status == HealthStatus::Ok {
             match crate::backends::proving::unproven_reason(name) {
                 None => println!("[READY] {}", name),
-                Some(_) => println!("[READY] {} (unproven — no harness has run it)", name),
+                Some(why) => println!("[READY] {} (unproven — {})", name, why),
             }
         }
     }

@@ -352,6 +352,23 @@ build and what is deferred to hardware.**
     **refusal at apply**, never a parse failure, precisely so one shared Linux manifest still
     parses everywhere; that half is proven on any host.
 
+### Tier 7 — a backend's standing is a positive claim (`PLAN.md` #37): BUILT
+
+21. ~~**Absence from an exemption list is not a lifecycle.**~~ **BUILT (ruling 2026-09-27).**
+    `is_proven` was the absence of a complaint, so a backend nobody had written anything about
+    read *proven* — and six rows in `builtin_backends.toml` say `UNVERIFIED:` over their listing
+    bytes while four of them are canaried. **One axis** (`P1`): a backend is proven when a
+    harness has driven it (`DRIVEN`, a positive list) *and* its bytes were captured. `UNPROVEN`
+    stays at ten receipts and does **not** grow, because the four conflicted rows are driven and
+    a receipt saying "no harness has run it" would be false; they are unproven for the other
+    reason, derived from the ledger rather than typed. `check health` prints which. Rule `II.64`,
+    rationale `V.209`.
+
+    **What it costs, stated:** four working backends read unproven, one of them on a matrix
+    image. `UNVERIFIED_CEILING` is 6 and only falls; capturing four sets of real bytes takes it
+    to 2, and `a_captured_row_a_harness_drives_reads_proven` exists so the fix cannot be "mark
+    everything unproven".
+
 ### Tier 6 — one list of phases, and the converged path on it (`PLAN.md` #34): BUILT
 
 20. ~~**A converged `sync` runs the phases, not a copy of the phases that had a teardown.**~~

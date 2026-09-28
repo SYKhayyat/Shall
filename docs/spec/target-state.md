@@ -3927,3 +3927,45 @@ Shall made a thing, and a migrated row would arrive claiming a provenance nobody
   is **an error naming it, with its row kept**, so the next sync tries again; a row carrying no
   answer is treated as the user's own. A preserved directory is **not a removal**, so it is not
   charged against `max_extra_removals`.
+
+## II.64 A backend's standing comes from what was driven and seen, not from what was never exempted (`P1`, V.209)
+
+**`check health` marks a backend unproven unless a harness has driven it and its listing output
+has been captured from the manager itself.** The roster line says which of the two it is:
+`no harness has run it` or `its listing bytes were never captured`.
+
+### The polarity is positive
+
+`src/backends/proving.rs` holds two lists, and only one of them is the answer.
+
+- **`DRIVEN` is the claim.** A name is in it because a `case` label in
+  `docker/integration/run-in-container.sh`'s `canary()` or `dependent_lifecycle()`, in a
+  `primary_manager_image()` row, or in `scripts/integration-windows.sh` drives a real
+  install → list → binary-on-PATH → remove through it.
+- **`UNPROVEN` is the exemption, with a receipt** — why a harness *cannot* do that one. It is
+  not the list of everything else.
+
+**A backend in neither list reads unproven.** A new backend therefore lands on the answer that
+says less, and `is_proven` is a positive test rather than the absence of a complaint.
+
+### Two reasons, and they are not the same doubt
+
+A harness that never ran is one claim. A harness that ran, over a row whose
+`[backend.fixture] source` still says `UNVERIFIED:` — listing bytes written from documentation
+rather than captured from the tool — is another, and the manager's list, search and remove are as
+unseen as its lifecycle is untested. **Both are unproven**, and the roster says which, because
+telling a user that no harness has run `slackpkg` over a manager the slackware image drives every
+night is a false sentence that teaches people to stop reading the line.
+
+**So: a row stamped `UNVERIFIED` may not read proven**, and the fix is to run the manager and
+paste what it printed, which retires the stamp and lowers `UNVERIFIED_CEILING` in
+`tests/a_backend_is_a_row_tests.rs`.
+
+### What the gates hold it to
+
+`tests/lifecycle_coverage_union_tests.rs` reads both harness tables and holds `DRIVEN` to them in
+**both** directions — a row claiming a lifecycle no harness drives fails, and a canary nobody
+claims fails the other way — and every name outside `DRIVEN` must carry a receipt in `UNPROVEN`.
+`tests/a_backend_is_a_row_tests.rs` joins the two ledgers: every `UNVERIFIED` row reads unproven
+**in those words**, and at least ten rows with captured bytes *and* a lifecycle read proven, so
+the first check cannot be satisfied by refusing everything.

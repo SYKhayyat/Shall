@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **230** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **231** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 235 are accounted
-for: **230 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 236 are accounted
+for: **231 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -500,6 +500,12 @@ deliberately no longer has.*
 | **R4** | `-y` auto-executed a vendor's installer script under a header promising "**Ask, then do**", and scheduled syncs inherited the posture. Where does unattended bootstrap consent live? — RULED 2026-08-23: **`--yes` never answers the bootstrap prompt by itself.** The consent is a preference — `[config] bootstrap_auto_yes = true`, default off — written by a human beside the repo it trusts. BUILT 2026-08-24. | 2026-08-23 |
 | **R5** | Non-interactive `apply` with neither `--yes` nor a TTY applied, while identical conditions made `sync` refuse — opposite postures in the two most destructive commands. Which posture wins? — RULED 2026-08-23: **apply refuses like sync**; same sentence shape, `--yes` answers it, exit 3. BUILT 2026-08-24. | 2026-08-23 |
 | **R6** | Configuration that supplies executable content has no permission/ownership gate, and pins end at install. Both were ruled in principle ("fix everything actionable"; exec-content gate config-selectable between owner-writable-only / world-writable-only / warn-only; pins honored everywhere with only explicit unpin commands escaping). — **ANSWERED 2026-08-24, both halves built.** The gate: `[exec] trust` (`II.61`, `V.204`). Pins past install: the whole-system upgrade refuses while a manifest-typed pin exists, `--ignore-pins` escapes (`II.62`, `V.205`); targeted and planner paths already bound pins. | 2026-08-23 |
+
+### P — the standing round of 2026-09-27 (what has been driven, and what has been seen) — 1
+
+| | question | answered |
+|---|---|---|
+| **P1** | `is_proven` was `unproven_reason(...).is_none()`, so any backend absent from the exemption table read *proven* — and six rows in `builtin_backends.toml` say `source = "UNVERIFIED: …"` while four of them (`spack`, `krew`, `asdf`, `slackpkg`) are canaried by a harness, so a claim of standing sat on a row admitting nobody has ever seen the tool's real output. Which polarity, and how do the two ledgers relate? — RULED 2026-09-27: **one axis, positive.** A backend is proven only if a harness has driven it (`DRIVEN`) **and** its listing bytes were captured; a backend in neither list reads unproven, and the roster line says which of the two reasons applies. No exception table, and the fix for a stamped row is to run the manager and paste its output, which retires the stamp. (II.64, V.209) | 2026-09-27 |
 
 ---
 
@@ -9814,3 +9820,41 @@ is computed from the **selected** account now, which is the same value the write
 **The first entry for this decision was wrong in three places and is corrected above:** there is
 no `getent` and no parse-time user lookup, a template renders `USER`/`HOME` rather than `$HOME`,
 and the platform questions are runtime refusals rather than parse failures.
+
+## P1
+
+**Status: ANSWERED 2026-09-27, built.** `is_proven` treated a backend *not* in the `UNPROVEN`
+table as proven, and six rows in `builtin_backends.toml` carry `source = "UNVERIFIED: …"` that
+appear in no `UNPROVEN` entry — so those read as proven precisely while their own row says the
+listing bytes were written from documentation rather than captured from the manager. Rule in
+**II.64**, rationale in **V.209**.
+
+**The polarity is now positive, and the audit's `is_proven` was the half that was not the
+problem.** `is_proven` had exactly one production caller, and it had none: the only user-visible
+surface is `check health`'s `[READY]` roster, which reads `unproven_reason`. Flipping `is_proven`
+alone would have changed nothing a user sees and would have left the six rows reading proven, so
+the flip is expressed where the verdict is computed: `unproven_reason` asks the positive list
+first, and a name in neither list answers *"no harness has run it"* rather than nothing.
+
+**Two ledgers, one axis.** The ruling was one axis, not two: a harness lifecycle is evidence that
+the *commands* are right, the captured fixture is evidence that the *parsing* is, and a backend is
+proven on both or neither. **No exception table** — the alternative, keeping the two verdicts
+separate and printing whichever applies, makes "reading well" a claim about a manager rather than
+a claim about us, and a user who sees `lifecycle: yes, bytes: no` learns something about this
+repository's coverage and nothing about the tool. The roster says `its listing bytes were never
+captured`, which is a thing the user can act on by letting us run the manager.
+
+**`UNPROVEN` did not grow, and that is the point.** The four conflicted rows (`spack`, `krew`,
+`asdf`, `slackpkg`) are driven by a harness, so adding them to a table whose entries say "no
+harness has run it" would have been a false receipt. They are unproven for the *other* reason,
+which is derived from the ledger rather than typed, so the two tables cannot disagree about them
+without a test failing. `UNPROVEN` stays at ten rows, `NOWHERE_CEILING` stays at 10, and the
+README's argv-only table is untouched — the four are not argv-only, which is why they do not
+belong in it.
+
+**What it costs, and it is a false negative.** Four working backends read unproven today, one of
+them driven nightly on a matrix image. `UNVERIFIED_CEILING` in
+`tests/a_backend_is_a_row_tests.rs` is 6 and may only fall; capturing four sets of real bytes
+takes it to 2, and the second direction of the new gate
+(`a_captured_row_a_harness_drives_reads_proven`) refuses the easy repair of marking everything
+unproven.

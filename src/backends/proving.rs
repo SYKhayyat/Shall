@@ -22,12 +22,23 @@
 //! registry audit. It means exactly one thing — *no harness in this repository has driven a real
 //! install → list → binary-on-PATH → remove through it* — so if it is wrong about the manager,
 //! nothing here would know.
+//!
+//! **Absence from [`UNPROVEN`] used to mean proven, and now means nothing at all** (owner ruling,
+//! 2026-09-27). [`DRIVEN`] is the positive list: a backend reads proven only if a harness has
+//! driven it *and* its listing bytes were captured from the manager itself. Six rows in
+//! `builtin_backends.toml` still carry `source = "UNVERIFIED: …"`, and four of them are canaried
+//! by a harness — so they were reading *proven* over a row that admits nobody has ever seen the
+//! tool's real output. A manager whose output Shall has never seen is one whose list, search and
+//! remove nobody has seen either; that is the same doubt, so it is one answer.
 
 /// A backend no harness can reach with a real lifecycle, and why.
 ///
 /// Ordered as a reader meets them: the Linux managers first, then the BSD and Apple ones that
 /// need a kernel or hardware we do not have, then the dependent statements that are not package
 /// declarations at all.
+///
+/// **The list of what is exempt, not the list of what is proven** — that is what
+/// [`DRIVEN`] is for, and a backend in neither reads unproven.
 pub const UNPROVEN: &[(&str, &str)] = &[
     (
         "nixos",
@@ -181,17 +192,129 @@ pub const UNPROVEN: &[(&str, &str)] = &[
     ),
 ];
 
-/// Why this backend has never met its manager, or `None` when it has.
+/// The backends a harness in this repository has driven through a real install → list →
+/// binary-on-PATH → remove.
+///
+/// **Data, not a derivation, because the harnesses are shell and this is a binary.** Each name
+/// is a `case` label in `docker/integration/run-in-container.sh`'s `canary()` or
+/// `dependent_lifecycle()`, or in a `primary_manager_image()` row, or a row of
+/// `scripts/integration-windows.sh`. `tests/lifecycle_coverage_union_tests.rs` reads those scripts
+/// and holds this list to them in both directions, so a row added here without a harness to back
+/// it fails the suite, and a canary added there without a row here fails it too.
+///
+/// A backend in neither this list nor [`UNPROVEN`] reads **unproven**: a new backend defaults to
+/// the answer that says less, which is the direction a claim about somebody else's machine should
+/// fall.
+pub const DRIVEN: &[&str] = &[
+    "apk",
+    "appimage",
+    "apt",
+    "asdf",
+    "brew",
+    "btrfs",
+    "bun",
+    "cabal",
+    "cargo",
+    "choco",
+    "composer",
+    "conda",
+    "dir",
+    "dnf",
+    "dotnet",
+    "emacs",
+    "flatpak",
+    "gem",
+    "github",
+    "go",
+    "guix",
+    "helm",
+    "krew",
+    "link",
+    "luarocks",
+    "lvm",
+    "mise",
+    "mix",
+    "nimble",
+    "nix",
+    "npm",
+    "opam",
+    "pacman",
+    "paru",
+    "pip",
+    "pipx",
+    "pixi",
+    "pnpm",
+    "psresource",
+    "pub",
+    "scoop",
+    "service",
+    "setting",
+    "slackpkg",
+    "snap",
+    "spack",
+    "uv",
+    "vscode",
+    "web",
+    "winget",
+    "xbps",
+    "yarn",
+    "yay",
+    "zfs",
+    "zypper",
+];
+
+/// The short phrase `check health` prints for a backend no harness has driven. The receipt for
+/// each one is in [`UNPROVEN`]; a receipt is 1,300 characters of why an image would not close it,
+/// and a roster line is not the place for it.
+pub const NO_HARNESS_RAN_IT: &str = "no harness has run it";
+
+/// The short phrase for the other way a backend can be unproven: a harness drove it, and the
+/// listing bytes the row was built from were written from documentation rather than captured from
+/// the tool. `spack`, `krew`, `asdf` and `slackpkg` read this today.
+pub const BYTES_NEVER_CAPTURED: &str = "its listing bytes were never captured";
+
+/// Why this backend has never met its manager, in the words a roster line can carry, or `None`
+/// when it has.
+///
+/// **Two questions, one answer** (owner ruling, 2026-09-27), and the order is the order of how
+/// much the doubt costs: a harness that never ran is the bigger claim, so it is asked first.
 pub fn unproven_reason(backend: &str) -> Option<&'static str> {
-    UNPROVEN
-        .iter()
-        .find(|(name, _)| *name == backend)
-        .map(|(_, why)| *why)
+    if UNPROVEN.iter().any(|(name, _)| *name == backend) {
+        return Some(NO_HARNESS_RAN_IT);
+    }
+    if !DRIVEN.contains(&backend) {
+        return Some(NO_HARNESS_RAN_IT);
+    }
+    if uncaptured_listing_bytes().contains(backend) {
+        return Some(BYTES_NEVER_CAPTURED);
+    }
+    None
 }
 
-/// Whether a real lifecycle has ever been driven through this backend by some harness.
+/// Whether a real lifecycle has ever been driven through this backend **and** its listing output
+/// has been seen from the manager itself.
 pub fn is_proven(backend: &str) -> bool {
     unproven_reason(backend).is_none()
+}
+
+/// The backends whose `[backend.fixture] source` still says `UNVERIFIED:` — the rows whose bytes
+/// were written from documentation instead of captured from the tool.
+///
+/// Parsed once, and only when a caller has already asked about a backend no receipt names. The
+/// same table is parsed on every registration for the registry itself, so this is a second parse
+/// of a file this process has already read, not a new cost on the path.
+fn uncaptured_listing_bytes() -> &'static std::collections::BTreeSet<String> {
+    static UNCAPTURED: std::sync::OnceLock<std::collections::BTreeSet<String>> =
+        std::sync::OnceLock::new();
+    UNCAPTURED.get_or_init(|| {
+        crate::backends::onboarder::builtin_rows()
+            .into_iter()
+            .filter_map(|row| {
+                let fixture = row.fixture?;
+                (!fixture.is_verified()).then_some(row.name)
+            })
+            .collect()
+    })
 }
 
 #[cfg(test)]
@@ -202,8 +325,40 @@ mod tests {
     fn the_table_answers_both_ways() {
         assert!(is_proven("apt"), "apt has a lifecycle in every Linux image");
         assert!(!is_proven("mas"), "mas needs hardware no runner here has");
-        assert!(unproven_reason("mas").is_some_and(|w| w.contains("Apple")));
-        assert!(unproven_reason("apt").is_none());
+        assert_eq!(unproven_reason("mas"), Some(NO_HARNESS_RAN_IT));
+        assert_eq!(unproven_reason("apt"), None);
+    }
+
+    /// The polarity, in the direction that used to be wrong. A name neither table names is a
+    /// backend nobody has written anything about, and it reads unproven — which is the flip, and
+    /// the only part of the flip a caller can see.
+    #[test]
+    fn a_name_neither_table_names_reads_unproven() {
+        assert_eq!(
+            unproven_reason("a_backend_added_tomorrow"),
+            Some(NO_HARNESS_RAN_IT)
+        );
+        assert!(!is_proven("a_backend_added_tomorrow"));
+    }
+
+    /// A harness canary is not evidence about a tool whose output Shall has never seen. Four rows
+    /// are canaried and still stamped, and each of them is the exact shape the audit found: a
+    /// claim of standing over a row that admits the opposite.
+    #[test]
+    fn a_driven_backend_whose_bytes_were_never_captured_reads_unproven() {
+        for backend in ["spack", "krew", "asdf", "slackpkg"] {
+            assert!(
+                DRIVEN.contains(&backend),
+                "`{backend}` is named here as harness-driven; if the harness changed, the \\
+                 assertion below is not about what it was"
+            );
+            assert_eq!(
+                unproven_reason(backend),
+                Some(BYTES_NEVER_CAPTURED),
+                "`{backend}` is driven by a harness and its row still says UNVERIFIED, so it \\
+                 must not read proven"
+            );
+        }
     }
 
     /// Every reason says something. A blank excuse is the exemption this table exists to stop
@@ -219,6 +374,19 @@ mod tests {
                 why.len()
             );
             assert!(!backend.is_empty());
+        }
+    }
+
+    /// The two tables answer different questions, so a name may be in one and not the other — but
+    /// never in both, which would mean a receipt for a lifecycle a harness has run.
+    #[test]
+    fn no_backend_is_both_a_receipt_and_a_driven_lifecycle() {
+        for (backend, _) in UNPROVEN {
+            assert!(
+                !DRIVEN.contains(backend),
+                "`{backend}` is in `UNPROVEN` with a receipt saying no harness has driven it, and \
+                 in `DRIVEN` saying one has"
+            );
         }
     }
 }

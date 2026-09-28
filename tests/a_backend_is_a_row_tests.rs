@@ -374,6 +374,89 @@ fn the_number_of_fixtures_nobody_captured_only_falls() {
     );
 }
 
+/// **The two ledgers, joined: a row whose bytes were never captured must not read proven**
+/// (owner ruling, 2026-09-27).
+///
+/// This file owns the `UNVERIFIED:` vocabulary and `proving.rs` owns the verdict, and until now
+/// nothing read both — which is how four rows came to sit across them: `spack`, `krew`, `asdf` and
+/// `slackpkg` are canaried by a harness, so they read *proven*, while their own rows say nobody
+/// has ever seen the tool's real output. A manager whose output Shall has never seen has a list,
+/// a search and a remove nobody has seen either, so it reads unproven, in those words rather than
+/// in "no harness has run it" — which is true of the slackware image every night and would be a
+/// lie told to a user.
+#[test]
+fn a_row_whose_bytes_were_never_captured_reads_unproven() {
+    let uncaptured: Vec<String> = rows()
+        .iter()
+        .filter_map(|d| {
+            let f = d.fixture.as_ref()?;
+            (!f.is_verified()).then(|| d.name.clone())
+        })
+        .collect();
+    assert!(
+        !uncaptured.is_empty(),
+        "no row carries an UNVERIFIED stamp, so this gate is asserting over nothing"
+    );
+
+    let mut wrong: Vec<String> = Vec::new();
+    for backend in &uncaptured {
+        let reason = shall::backends::proving::unproven_reason(backend);
+        let driven = shall::backends::proving::DRIVEN.contains(&backend.as_str());
+        match (driven, reason) {
+            (_, None) => wrong.push(format!("{backend} is stamped UNVERIFIED and reads PROVEN")),
+            // Driven, so the lifecycle is not the doubt and the bytes are. Asserted on the
+            // wording, not merely on `Some`: a driven row that read "no harness has run it"
+            // would be the exact false sentence this gate exists to catch.
+            (true, Some(why)) if why == shall::backends::proving::BYTES_NEVER_CAPTURED => {}
+            (true, Some(why)) => wrong.push(format!(
+                "{backend} is driven by a harness and stamped UNVERIFIED, and reads unproven \
+                 for a different reason: {why}"
+            )),
+            // Not driven at all, so the bigger claim is the true one to print — the same
+            // ordering `unproven_reason` applies, and the reason a stamped row is not
+            // automatically the bytes story.
+            (false, Some(_)) => {}
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "a row admitting nobody has seen its manager's output must not claim a standing:\n  {}\n\n\
+         Fix by running the manager and pasting what it printed — which retires the stamp and \
+         lowers `UNVERIFIED_CEILING` — or, if no image runs it, by naming the debt in \
+         `proving.rs` so `check health` says the true thing.",
+        wrong.join("\n  ")
+    );
+}
+
+/// The other direction, so the first cannot be satisfied by refusing everything: a row whose bytes
+/// **were** captured, and which a harness drives, reads proven.
+#[test]
+fn a_captured_row_a_harness_drives_reads_proven() {
+    let mut proven = 0;
+    for def in rows() {
+        let Some(fixture) = def.fixture.as_ref() else {
+            continue;
+        };
+        if !fixture.is_verified() {
+            continue;
+        }
+        if !shall::backends::proving::DRIVEN.contains(&def.name.as_str()) {
+            continue;
+        }
+        assert!(
+            shall::backends::proving::is_proven(&def.name),
+            "{} has captured bytes and a harness lifecycle, and still reads unproven",
+            def.name
+        );
+        proven += 1;
+    }
+    assert!(
+        proven >= 10,
+        "only {proven} rows have both captured bytes and a harness lifecycle — the scan found \
+         nothing to check, which passes every assertion above it"
+    );
+}
+
 /// A row that says `os = "linux"` is registered on Linux and nowhere else, through
 /// `AdapterRow::applies_here` — the same gate every other adapter table goes through.
 #[test]

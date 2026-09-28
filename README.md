@@ -314,6 +314,15 @@ One code path is also unexecuted rather than untested: the `dpkg -i` / `rpm -U` 
 handoff. An argv test proves a command line was constructed correctly. It does not prove the
 manager accepts it.
 
+**A backend can be driven and still be unproven**, because a harness lifecycle is evidence that
+the *commands* are right and the listing bytes a backend row is built from are evidence that its
+*parsing* is. `spack`, `krew`, `asdf` and `slackpkg` are canaried by the matrix and their rows
+still say `UNVERIFIED:`, so `shall check health` marks them unproven with the reason it applies —
+`no harness has run it` for the table above, `its listing bytes were never captured` for these
+four. Both are one axis: a backend is proven only when a harness has driven it **and** somebody
+has pasted what the tool actually printed. The fix is to run the manager; the count of rows still
+waiting is a ratchet that may only fall.
+
 **Storage removal used to be named here and no longer is, because it runs.** The `storage` leg
 destroys a real object through Shall on every run and asserts it is gone — a btrfs subvolume, an
 LVM logical volume, and as of 2026-08-18 a ZFS dataset, each on a loopback device.
