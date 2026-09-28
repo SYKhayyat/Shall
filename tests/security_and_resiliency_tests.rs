@@ -380,11 +380,16 @@ async fn a_package_this_run_installed_is_still_removed() {
     );
 }
 
-/// The chain that made all of the above reachable from an ordinary sync: with `info()`
-/// failing open, every managed package was scheduled as an Install, each succeeded trivially
-/// and landed in the history, and one later failure rolled back across the whole set.
+/// **Both halves of the third answer**, which is what replaced "the plan stops".
+///
+/// The chain that made this reachable from an ordinary sync: with `info()` failing open, every
+/// managed package was scheduled as an Install, each succeeded trivially, and one later failure
+/// rolled back across the whole set. The repair is not "read it as installed" either — that
+/// reports `already up to date` over a declaration nobody looked at — but a third answer: nothing
+/// is scheduled for a manager that could not answer, the declaration is named, and **the rest of
+/// the machine's plan proceeds** (II.7b: one broken manager does not fail a sync).
 #[tokio::test]
-async fn a_manager_that_cannot_answer_stops_the_plan_rather_than_installing_everything() {
+async fn a_manager_that_cannot_answer_schedules_nothing_and_names_the_declaration() {
     let kernel = TestKernel::new().await;
     kernel.mock_executor.set_response(
         "brew info --json=v1 -- pkg-a",
@@ -396,6 +401,12 @@ async fn a_manager_that_cannot_answer_stops_the_plan_rather_than_installing_ever
         "brew".to_string(),
         vec![create_dummy_spec("pkg-a", "brew", None)],
     );
+    // A second manager that answers — the mock's default is ABSENT — so "the plan stopped" is
+    // distinguishable from "nothing was scheduled for the manager that failed".
+    desired.insert(
+        "apt".to_string(),
+        vec![create_dummy_spec("pkg-b", "apt", None)],
+    );
 
     let state_guard = kernel.state.lock().await;
     let planner = ChangePlanner::new(
@@ -403,12 +414,42 @@ async fn a_manager_that_cannot_answer_stops_the_plan_rather_than_installing_ever
         &state_guard,
         &kernel.app.config,
     );
-    let err = planner
+    let changes = planner
         .plan(&desired, PlanScope::Whole(HostBackends::default()))
         .await
-        .expect_err("a manager that cannot answer must stop the plan")
-        .to_string();
-    assert!(err.contains("could not say whether"), "{}", err);
+        .expect("a manager that cannot answer must not stop the plan");
+
+    let reported: Vec<&shall::app::sync::planner::Skipped> = changes
+        .skipped
+        .iter()
+        .filter(|s| s.kind == shall::app::sync::planner::SkipKind::CouldNotAsk)
+        .collect();
+    assert_eq!(
+        reported.len(),
+        1,
+        "the declaration it could not read is not named: {:?}",
+        changes.skipped
+    );
+    assert_eq!(reported[0].key, "brew:pkg-a");
+    assert!(
+        reported[0].reason.contains("could not say whether"),
+        "the row does not say what went wrong: {}",
+        reported[0].reason
+    );
+    assert!(
+        !changes
+            .graph
+            .node_weights()
+            .any(|action| matches!(action, GraphAction::Install(s) if s.name == "pkg-a")),
+        "a manager that could not answer scheduled an install for a package it may already have"
+    );
+    assert!(
+        changes
+            .graph
+            .node_weights()
+            .any(|action| matches!(action, GraphAction::Install(s) if s.name == "pkg-b")),
+        "the manager that answered was not planned either, so the plan really did stop"
+    );
 }
 
 // ============================================================================
