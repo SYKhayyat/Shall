@@ -23,7 +23,7 @@ use crate::ledger::Ledger;
 
 /// The files allowed to hold a rename-into-place of their own, and why.
 ///
-/// Two entries, and they are the two front doors:
+/// Two are the two front doors:
 ///
 /// - `utils/file.rs` is `durable_write` itself, plus `persist`'s preview policy for the config
 ///   repo: *print `would write …` and stop*.
@@ -31,6 +31,10 @@ use crate::ledger::Ledger;
 ///   nor preview-aware: a torn cache file is a cache miss, an fsync per listing would be a disk
 ///   barrier on the read path, and its temp name carries the pid because two `shall` runs
 ///   sharing one temp path is the torn listing the mechanism exists to prevent.
+///
+/// And one is a third door with a reason that is an impossibility rather than a preference: a
+/// streamed download body has no buffer to hand `durable_write`, and buffering one is the defect
+/// II.55 exists to remove.
 const MAY_RENAME: &[(&str, &str)] = &[
     (
         "src/utils/file.rs",
@@ -41,6 +45,14 @@ const MAY_RENAME: &[(&str, &str)] = &[
         "src/core/installed.rs",
         "The installed-listing cache. A torn file is a cache miss, so it is deliberately not \
          durable; its temp name carries the pid because the rename is only atomic per writer.",
+    ),
+    (
+        "src/core/download.rs",
+        "A streaming body cannot use `durable_write`, which takes the bytes as a buffer and so \
+         would undo II.55's chunked write. It streams to a sibling, flushes and `sync_all`s \
+         there, and the commit is a rename of a file that is already durable — the same order, \
+         with the caller's checksum and chmod in between because a rename has to be the last \
+         thing that happens.",
     ),
 ];
 
@@ -54,6 +66,12 @@ const MAY_RENAME: &[(&str, &str)] = &[
 /// `backends/link.rs` (restores a user's backup over their file) and `core/journal.rs` (sets a
 /// corrupt WAL aside). None of the three writes a file atomically; all three would have been
 /// "fixed" into using a writer that does not fit them.
+///
+/// **The streaming spelling is in here because the sequence was missed in exactly that shape.**
+/// `backends/appimage.rs` downloaded to `<artifact>.shall-part`, chmodded it, and renamed it over
+/// the live binary — the whole offence, hand-rolled, in the one backend whose artifact is on
+/// `PATH` — and this scan did not see it, because it only knew `fs::write` and `NamedTempFile`
+/// and a download is neither. Two spellings of the same sequence, so both are looked for.
 fn renames_into_place(source: &str) -> bool {
     let code: String = source
         .lines()
@@ -63,9 +81,16 @@ fn renames_into_place(source: &str) -> bool {
     // `.persist(` with a dot is `tempfile`'s rename-over-the-target; `file::persist(` — the
     // sanctioned front door — has no dot before the name, which is the whole of the distinction.
     let persists_a_temp_file = code.contains(".persist(");
-    // The hand-rolled spelling: bytes to a path, then a rename onto the real one.
-    let writes_then_renames = code.contains("fs::write(") && code.contains("fs::rename(");
-    persists_a_temp_file || writes_then_renames
+    // The hand-rolled spellings: bytes to a path, then a rename onto the real one. `fs::write` is
+    // the one-shot form; a `File::create` or `write_all` is the streaming form, which is how a
+    // download reaches the disk.
+    let renames = code.contains("fs::rename(")
+        || code.contains("::rename(")
+        || code.contains("fs::rename_all(");
+    let writes = code.contains("fs::write(")
+        || code.contains("File::create(")
+        || code.contains("write_all(");
+    persists_a_temp_file || (renames && writes)
 }
 
 /// Every `src/` file with a rename-into-place in it, excluding test modules — a test that writes
@@ -111,7 +136,7 @@ fn repo_root() -> PathBuf {
 }
 
 #[test]
-fn only_the_two_sanctioned_writers_rename_a_file_into_place() {
+fn only_the_sanctioned_writers_rename_a_file_into_place() {
     let (found, scanned) = files_that_rename(&repo_root());
 
     Ledger::of("a rename into place of their own", "MAY_RENAME")
@@ -137,6 +162,21 @@ fn the_scan_can_actually_fail() {
     ));
     assert!(renames_into_place(
         "std::fs::write(&tmp, json)?;\nstd::fs::rename(&tmp, &path)?;"
+    ));
+    // **And the spelling the scan missed for a whole release of `appimage:`** — a streamed body
+    // into a path, then that path renamed over the live artifact. Planted from the code it was
+    // written from, so a future edit to the scan cannot quietly narrow the shape back to the one
+    // that did not see it.
+    assert!(
+        renames_into_place(
+            "let mut f = tokio::fs::File::create(&part_path).await?;\n\
+             f.write_all(&chunk).await?;\n\
+             tokio::fs::rename(&part_path, &dest_path).await?;"
+        ),
+        "the scan cannot see a streaming write followed by a rename, which is what appimage did"
+    );
+    assert!(renames_into_place(
+        "file.write_all(b\"x\")?;\nstd::fs::rename(tmp, dest)?;"
     ));
 
     // The three real files that are NOT the offence, in the shape they actually have.

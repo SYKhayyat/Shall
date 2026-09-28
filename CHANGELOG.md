@@ -1137,3 +1137,24 @@ scoped upgrades, makes parallelism configurable, and adds first-class applicatio
   people to stop reading the line.
 - **Capturing the bytes is the fix**, and there is a ratchet for it that may only fall. Two new
   gates hold the two ledgers to each other and to the harness scripts, in both directions.
+
+### A failed download no longer deletes the binary that was working
+
+- **A download is staged beside the artifact and committed with a rename.** Bytes go to
+  `<name>.shall-part`, the length and the checksum are checked there, and only then is the file
+  moved into place — atomically, and on the same filesystem, which is why the stage is a sibling
+  and not a tempdir path. A dropped connection, a body that stops early, a full disk, a failed
+  flush or a checksum that does not match all leave **the artifact that was already installed
+  exactly as it was**. Before this, a re-download that died part-way through removed the working
+  binary and left nothing behind, on a machine whose `PATH` entry still pointed at the path it
+  had just emptied.
+- **The failure says so**: a transfer that fails over a working artifact names the survivor,
+  because "your tool is not installed" and "your tool is still installed and the new one did not
+  arrive" are different machines and only one of them is silent.
+- **`appimage:`'s hand-rolled `.shall-part` is gone.** It staged by hand; `core::download` now
+  owns that, so `web:`, `github:` and `appimage:` cannot drift apart. The scan that is supposed to
+  catch a hand-rolled atomic write had never seen that shape — it knew `fs::write` and
+  `NamedTempFile`, and a streamed download is neither — so it now does, with the missed code
+  planted in its own test.
+- **A staged file left by a `SIGKILL` is removed** when the next attempt at that artifact starts,
+  so a killed run cannot leave litter beside the artifact forever.

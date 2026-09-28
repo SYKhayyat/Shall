@@ -247,10 +247,13 @@ impl Installable for WebInstallable {
 
             let tmp_dir = tempfile::tempdir().map_err(Error::from)?;
             let dl_path = tmp_dir.path().join("downloaded_file");
-            crate::core::download::write_capped(response, &dl_path, &spec.name).await?;
-
-            if let Some(expected_sha) = spec.options.one("sha256") {
-                verify_checksum(&dl_path, expected_sha).await?;
+            let staged =
+                crate::core::download::stage_capped(response, &dl_path, &spec.name).await?;
+            if staged.is_staged() {
+                if let Some(expected_sha) = spec.options.one("sha256") {
+                    verify_checksum(staged.path(), expected_sha).await?;
+                }
+                staged.commit().await?;
             }
 
             // D5: a URL that points at a `.deb`/`.rpm` installs itself into a system database.

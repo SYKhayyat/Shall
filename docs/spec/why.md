@@ -7462,3 +7462,47 @@ from Rust — the harnesses are shell — so it is hand-written, and the gate
 those scripts and fails both when a row claims a lifecycle no script drives **and** when a script
 drives one the table does not name. A positive list that rots upward is the same defect with a
 new shape; that is why the second direction is in the same assertion.
+
+**V.210 — Why a download is staged beside the artifact and committed with a rename, and why a
+failed one has to say what it left behind. *(`O1`; 2026-09-27)***
+
+`stream_capped` opened the destination with `File::create` and streamed into it, and the error arm
+removed the destination. Both halves look careful and together they are a deletion: a re-download
+whose connection dropped at 60% **removed the working binary and left nothing**, on a machine
+whose `PATH` symlink still pointed at the path it emptied. The run reported the transfer's
+failure, so the report was true and the machine was not in the state the report described. That is
+the whole defect, and it is the same shape as the one II.54 was written about — a file that must
+never exist half-written — with the difference that the download cannot use the sanctioned writer
+at all.
+
+**Why not `durable_write`.** It takes the bytes as a buffer, and a buffer is the thing II.55
+removed: the reason a body is streamed chunk by chunk is that a two-gigabyte AppImage must not
+sit in RAM. Routing the download through the one durable writer would have meant reintroducing the
+defect to obtain the guarantee, and the guarantee is the more important of the two. So the
+download is a **third front door**, listed in the rename scan with that impossibility as its
+reason — which is exactly what II.54 says to do when a writer cannot be one of the two.
+
+**Why the stage is a sibling and not a tempdir path.** A `rename` is atomic only within a
+filesystem. A `TempDir` on a different mount turns the commit into a copy, and a copy is a window
+with the artifact's name on it — the precise property the rename was chosen for, given up at the
+last step. Fixed name rather than pid-suffixed because `shall.lock` is held for the length of a
+run: two runs cannot be committing the same destination, so a name that *could* be contended
+would only be a way to be wrong later, and a per-pid name would leave one file per killed run.
+
+**Why a `Drop` removes the staged file, and why the error path removes it too.** The `Drop` is what
+makes "no caller can forget" true — a `Staged` that goes out of scope without a commit takes its
+bytes with it rather than leaving a partial where the next run can find it and read it as a
+complete download. But the failure path never constructs a `Staged` (there is nothing to return),
+so the guard that exists only on success is not a guard, and the removal is written there as well.
+The first version of this had exactly that hole and the test that was supposed to catch it did: a
+dropped connection left the staged file behind on a path where nothing would ever look for it
+again.
+
+**Why the failure announces the survivor.** A run that fails and reports a failed download is
+correct; a run that fails and leaves the previous artifact in place is *also* correct, and a user
+cannot tell the two apart from the message alone. "Your tool is not installed" and "your tool is
+still installed, and the new one did not arrive" are different machines, and the second one is
+silent unless something says it. The note is appended with `Error::with_note` rather than
+rebuilt into another variant, because the variant carries the exit code — a permanent refusal has
+to stay permanent, or a retry loop starts spending the whole transfer again to reach the same
+answer.

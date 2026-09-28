@@ -224,40 +224,32 @@ impl Installable for AppImageInstallable {
                 )));
             }
 
-            // **Nothing arrives at the artifact path until it is whole and verified.**
-            // Streaming onto `dest_path` meant a re-install whose connection dropped at 60%
-            // replaced a working binary with a truncated one — and the PATH symlink from the
-            // previous install already pointed there, so it followed. `web:` and `github:`
-            // both download to a temp path; this was the one that did not. A sibling of the
-            // destination rather than a system tempdir, so the rename is on one filesystem and
-            // cannot fall back to a copy.
-            let part_path = self
-                .core
-                .install_dir
-                .join(format!("{}.shall-part", filename));
-            crate::core::download::write_capped(response, &part_path, url).await?;
-
-            // Before the chmod below, never after: an unverified file must never exist as an
-            // executable, even briefly.
-            if let Some(expected) = spec.options.one("sha256") {
-                if let Err(e) = crate::core::verify_checksum(&part_path, expected).await {
-                    let _ = tokio::fs::remove_file(&part_path).await;
-                    return Err(e);
+            // **Nothing arrives at the artifact path until it is whole and verified**, and that is
+            // now the download function's contract rather than this backend's habit. Streaming
+            // onto `dest_path` meant a re-install whose connection dropped at 60% replaced a
+            // working binary with a truncated one — and the PATH symlink from the previous
+            // install already pointed there, so it followed. This line was the one place that
+            // staged by hand (a `.shall-part` sibling, then a rename), and the hand-rolled copy
+            // is gone: `stage_capped` streams beside the destination, `verify_checksum` reads
+            // those bytes, and `commit` renames them into place.
+            let staged = crate::core::download::stage_capped(response, &dest_path, url).await?;
+            if staged.is_staged() {
+                // Before the chmod below, never after: an unverified file must never exist as an
+                // executable, even briefly.
+                if let Some(expected) = spec.options.one("sha256") {
+                    crate::core::verify_checksum(staged.path(), expected).await?;
                 }
-            }
 
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let metadata = tokio::fs::metadata(&part_path).await?;
-                let mut perms = metadata.permissions();
-                perms.set_mode(0o755);
-                tokio::fs::set_permissions(&part_path, perms).await?;
-            }
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let metadata = tokio::fs::metadata(staged.path()).await?;
+                    let mut perms = metadata.permissions();
+                    perms.set_mode(0o755);
+                    tokio::fs::set_permissions(staged.path(), perms).await?;
+                }
 
-            if let Err(e) = tokio::fs::rename(&part_path, &dest_path).await {
-                let _ = tokio::fs::remove_file(&part_path).await;
-                return Err(Error::from(e));
+                staged.commit().await?;
             }
 
             // D3b: `@download_only` keeps the fetched AppImage on disk but never links it onto

@@ -352,6 +352,17 @@ build and what is deferred to hardware.**
     **refusal at apply**, never a parse failure, precisely so one shared Linux manifest still
     parses everywhere; that half is proven on any host.
 
+### Tier 8 — a download is staged, and a failure keeps the artifact (`PLAN.md` #75): BUILT
+
+22. ~~**A transfer that dies part-way must not remove the binary that was working.**~~ **BUILT
+    (ruling 2026-09-27).** `core::download` owns two phases: `stage_capped` streams to a
+    `<name>.shall-part` sibling, the caller verifies the checksum and any permission change
+    there, and `Staged::commit` renames. `appimage:`'s hand-rolled copy is deleted, and the rename
+    scan is widened to the streaming spelling it had never seen. A fixed sibling rather than a
+    pid-suffixed temp, because the commit has to stay on one filesystem and `shall.lock` means two
+    runs cannot share a destination; a `SIGKILL` leftover is cleaned on entry. A failure names the
+    artifact it left in place. Rule amended in `II.55`, rationale `V.210`, decision `O1`.
+
 ### Tier 7 — a backend's standing is a positive claim (`PLAN.md` #37): BUILT
 
 21. ~~**Absence from an exemption list is not a lifecycle.**~~ **BUILT (ruling 2026-09-27).**

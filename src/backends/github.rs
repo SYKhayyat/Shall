@@ -780,15 +780,21 @@ impl Installable for GithubInstallable {
                     )));
                 }
                 let dl_path = tmp_dir.path().join(&pick.asset.name);
-                crate::core::download::write_capped(response, &dl_path, &pick.asset.name).await?;
-
-                // `@sha256` is legal only on a line that resolves to exactly one file
-                // (VIII.2/D6), so it needs no per-artifact story here.
-                if let Some(expected_sha) = spec.options.one("sha256") {
-                    verify_checksum(&dl_path, expected_sha).await?;
+                let staged =
+                    crate::core::download::stage_capped(response, &dl_path, &pick.asset.name)
+                        .await?;
+                if staged.is_staged() {
+                    // `@sha256` is legal only on a line that resolves to exactly one file
+                    // (VIII.2/D6), so it needs no per-artifact story here. Verified on the staged
+                    // bytes, not on the destination: a mismatch must be able to walk away without
+                    // having touched what is already there.
+                    if let Some(expected_sha) = spec.options.one("sha256") {
+                        verify_checksum(staged.path(), expected_sha).await?;
+                    }
+                    let sha = generate_checksum(staged.path()).await?;
+                    staged.commit().await?;
+                    downloaded.push((pick, dl_path, sha));
                 }
-                let sha = generate_checksum(&dl_path).await?;
-                downloaded.push((pick, dl_path, sha));
             }
 
             // The same asset of the same release, with different bytes than last time. No

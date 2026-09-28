@@ -3612,7 +3612,7 @@ misconfigured one.
 for minutes; a prompt cannot — either somebody is typing or nobody is there.
 `sudo_password_timeout_secs` is its own number for that reason.
 
-## II.55 A download is bounded before it fills the disk (`V.185`)
+## II.55 A download is bounded before it fills the disk, and never truncates what is installed (`V.185`, `V.210`)
 
 **A response body is streamed to disk, never buffered whole.** All three download backends read
 the entire body into memory before writing it, so a URL answering with something enormous
@@ -3624,6 +3624,30 @@ legitimately large — and movable, and `0` removes it. A declared `Content-Leng
 ceiling refuses before a byte moves; a server that declares nothing, or lies, is caught by the
 running count. A body that goes over takes its partial file with it, because a half-downloaded
 artifact left on disk is one a later run can find and treat as complete.
+
+**And the bytes are staged beside the destination, not written onto it.** Nothing reaches the
+artifact path until the body is whole, its length matches what the server declared, the
+caller's checksum has been checked and any permission change is made — the commit is a `rename`,
+which is atomic against a reader, and the staged file is a **sibling** of the destination so the
+rename is on one filesystem and cannot degrade into a copy. The staged name is fixed
+(`<name>.shall-part`) rather than pid-suffixed, because `shall.lock` is held for a run and two
+runs cannot share a destination; a staged file left by a `SIGKILL` — the one exit a `Drop` cannot
+cover — is removed when the next attempt at that same artifact starts.
+
+**A failed download leaves the artifact that is already there, and says so.** A dropped
+connection, a body that stops early, a full disk and a checksum that does not match all fail
+while the previous file is untouched, and the error **names the surviving artifact**: a user told
+only that "the transfer failed" cannot tell a machine with no binary from one still running the
+last good version. The two-phase shape is one function's contract (`core::download::stage_capped`
+returns a `Staged`, and `Staged::commit` is the rename), not a habit one backend has and the
+others do not — `appimage:` was the one that staged by hand, and its copy is gone.
+
+**A streamed body is its own durable writer, and the scan knows that spelling.** `durable_write`
+takes the bytes as a buffer, so a download cannot use it without reintroducing the whole-body read
+II.55 exists to remove. It is therefore the third entry in the rename scan's table of sanctioned
+writers, with that impossibility as its reason — and the scan itself was widened, because it only
+knew `fs::write` and `NamedTempFile` and so had never seen the one hand-rolled atomic write in the
+tree.
 
 ## II.56 The manifest owns what the registry forgot, and a removal that removed nothing says so (`S87`, `Q54`, V.186)
 

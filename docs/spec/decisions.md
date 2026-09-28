@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **231** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **232** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 236 are accounted
-for: **231 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 237 are accounted
+for: **232 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -506,6 +506,12 @@ deliberately no longer has.*
 | | question | answered |
 |---|---|---|
 | **P1** | `is_proven` was `unproven_reason(...).is_none()`, so any backend absent from the exemption table read *proven* — and six rows in `builtin_backends.toml` say `source = "UNVERIFIED: …"` while four of them (`spack`, `krew`, `asdf`, `slackpkg`) are canaried by a harness, so a claim of standing sat on a row admitting nobody has ever seen the tool's real output. Which polarity, and how do the two ledgers relate? — RULED 2026-09-27: **one axis, positive.** A backend is proven only if a harness has driven it (`DRIVEN`) **and** its listing bytes were captured; a backend in neither list reads unproven, and the roster line says which of the two reasons applies. No exception table, and the fix for a stamped row is to run the manager and paste its output, which retires the stamp. (II.64, V.209) | 2026-09-27 |
+
+### O — the durability round of 2026-09-27 (what a failed download leaves behind) — 1
+
+| | question | answered |
+|---|---|---|
+| **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
 ---
 
@@ -9858,3 +9864,41 @@ them driven nightly on a matrix image. `UNVERIFIED_CEILING` in
 takes it to 2, and the second direction of the new gate
 (`a_captured_row_a_harness_drives_reads_proven`) refuses the easy repair of marking everything
 unproven.
+
+## O1
+
+**Status: ANSWERED 2026-09-27, built.** A download truncated the live artifact and then deleted
+it. Rule amended in **II.55**, rationale in **V.210**.
+
+**One function owns the staging, and the two phases are the guarantee.** `stage_capped` streams
+to `<dest>.shall-part`, checks the cap and the declared length, and returns a `Staged`; the
+caller verifies `@sha256` against *those* bytes, makes any permission change, and calls
+`Staged::commit`, which is the rename. Every failure a download can have — cap, dropped
+connection, short body, full disk, failed fsync, bad checksum — happens before `dest` is touched,
+so the previous artifact is not merely restored: it is never disturbed.
+
+**`appimage:`'s hand-rolled copy is deleted, not kept.** It staged to `<file>.shall-part`, chmodded
+and renamed — the whole guarantee, written once in the one backend whose artifact is on `PATH` —
+and `web:` and `github:` had no such thing because they download into a throwaway tempdir. The
+function is the single place now, and the rename scan that was supposed to catch the hand-rolled
+copy **did not see it**: it matched `fs::write` and `NamedTempFile::persist`, and a streaming
+download is neither. The scan is widened to the streaming shape (`File::create`/`write_all` plus a
+rename) with the missed code planted in its own oracle, because a scan that cannot see the shape
+that got away is a scan that will not see the next one.
+
+**A streamed writer is a sanctioned third door, with an impossibility as its reason.**
+`durable_write` takes bytes as a buffer and using it here would reintroduce the whole-body read
+II.55 exists to remove; `core/download.rs` is in the table for that reason and no other.
+
+**The staged name is a fixed sibling, and a kill's leftover is cleaned on entry.** A rename is
+atomic only within a filesystem, so a tempdir on another mount would turn the commit into a copy
+and give up the property the rename was chosen for. Not pid-suffixed, because `shall.lock` is held
+for a run and two runs cannot be committing the same destination. The one exit a `Drop` cannot
+cover is a `SIGKILL`, and the next attempt of that same artifact is the only thing that knows the
+name, so it cleans it there.
+
+**A failure announces the survivor, appended with `with_note`.** A machine with no binary and a
+machine still running the last good version produce the same "the transfer failed" line, and only
+one of them is silent about what is still there. The note goes on the payload rather than into a
+new variant because the variant carries the exit code, and a permanent refusal that becomes
+retryable sends a retry loop back to spend the whole transfer.
