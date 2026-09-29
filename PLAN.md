@@ -41,6 +41,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   the same red. (Medium — a list nobody can compare to the last run is not evidence)
 
 ## Phase 3 — Correctness Mediums
+- [ ] #91 planner template_needs_update compares raw source to rendered target (sibling of the #69 read-back fix). (Low; unreachable today, wrong if reached)
 - [ ] #79 forget_all wipes all caches, #80 probe storm, #81 Mutex across --help, #82 batch deadline, #83 vars JSON fragile, #84 fan-out uncapped, #85 pool race, #86 zip sum wraps, #87 dir-symlink Windows.
 - [ ] #25 lifecycle jobs on distro containers, #53 nimble Windows, #54 dirty-host fixtures, #55 gentoo jq.
 - [ ] Suite-isolation bugs (Rust suite green only on NOPASSWD-sudo/adoptable hosts): #88 mock-layer tests probe real sudo, #89 guard-reachability control builds vacuous fixture, #90 fan-out floor vs skewed hosts.
