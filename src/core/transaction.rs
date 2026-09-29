@@ -791,7 +791,23 @@ impl Transaction {
             depth,
             waves,
         });
-        if let Some(why) = crate::core::latency::scheduling_violation(remaining, depth, waves) {
+        // The skip is announced and the pass is not. `scheduling_violation` returning `None`
+        // means one of two quite different things — the plan was too small to have a
+        // scheduling shape worth a rule, or the rule ran and the plan was within it — and this
+        // site used to treat both as silence. The first is a measurement that did not happen and
+        // the second is an answer, so the first is checked first and said out loud.
+        if !crate::core::latency::scheduling_is_measurable(remaining, depth) {
+            crate::core::latency::unmeasured(
+                "the plan",
+                &format!(
+                    "{remaining} package(s) with a longest dependency chain of {depth}, which is \
+                     under the two packages the scheduling rule needs before waves above depth \
+                     are reachable at all"
+                ),
+            );
+        } else if let Some(why) =
+            crate::core::latency::scheduling_violation(remaining, depth, waves)
+        {
             tracing::warn!(
                 "this plan was executed more serially than it is shaped: {}. The seconds a \
                  package manager costs belong to the host; the order Shall asks in does not.",

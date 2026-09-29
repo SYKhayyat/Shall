@@ -352,6 +352,44 @@ build and what is deferred to hardware.**
     **refusal at apply**, never a parse failure, precisely so one shared Linux manifest still
     parses everywhere; that half is proven on any host.
 
+### Tier 14 — two instruments that reported without asserting (`PLAN.md` #40): BUILT
+
+28. ~~**`MockExecutor`'s `unstubbed` ledger is written and never read, and all four of
+    `core/latency.rs`'s skip paths are bare `return`s.**~~ **BUILT (ruling 2026-09-29).** Both are
+    the same defect II.23 names, and the second is inside the test double that is supposed to be
+    immune to it.
+
+    - **`unstubbed_registrations()` reads the ledger; `deny_unstubbed()` fails a fall-through at
+      drop.** Per-test, because the measurement says so and not in either direction: with the
+      check forced on for every mock, **172 of 699 suite tests** carry a fall-through (934 across
+      them, 301 distinct command lines) — but **106 of those leave only existence probes
+      unanswered**, and `check_command`'s `true` default is deliberate, so redrawing them would
+      redden a quarter of the suite for having no opinion. The **66** with an unanswered
+      `execute()` — Shall's own installed-set and provider queries, `brew list --versions` in 15,
+      `sudo -n timeshift --create` in 12, `cargo install --list` in 10 — are the real half, and are
+      now reachable one test at a time. **The two flags are independent, and the unanswered-call
+      check runs first**, so `allow_unmatched_registrations()` cannot switch off the other.
+    - **One token, `shall-latency-unmeasured:`, from every path that declines to measure**: a class
+      with no wall-clock budget, a class with no fan-out shape, a run without `--timings`, a
+      fan-out under `min_children`, and a plan under two packages. **A run that was measured and
+      passed emits nothing** — that is the one `None` meaning the opposite of a skip, and it was
+      the worst of them, because the caller could not tell it from a skip. **Owner ruling: below
+      the default channel**, since it fires on most commands and a user who typed a package name
+      must not be shown a line about a budget that does not exist; **a gate drives each path and
+      fails if the marker is absent**, and the grep is the convenience rather than the guarantee.
+      Assertions are per path by sentence, not by count — the count version failed on the first
+      case because `sync` declines twice, and the wrong repair was to weaken the second emission.
+    - `Shape::is_measurable` and `scheduling_is_measurable` hold the conditions the markers are
+      guarded by, in one place each, so the rule and the reporter cannot disagree about when a
+      rule is in force. The `--timings` arm is asserted through the predicate rather than driven,
+      because `core::timing::enable()` is a one-way process global and driving it would make the
+      binary order-dependent. Rule extended in `II.23`, rationale `V.215`, decision `C4`.
+
+    **Not done, and the number to work from is 66.** The instrument is in place; converting the
+    66 is per-test work — register what the query should answer, or switch the flag on and say
+    why the one remaining call does not matter. The measurement above is what a triager needs and
+    is recorded here so the next session does not re-derive it by flipping a flag in `Drop`.
+
 ### Tier 13 — a survival proof needs an arrival (`PLAN.md` #39): BUILT (first batch)
 
 27. ~~**The harness is roughly half totem: over half its checks cannot see the product absent.**

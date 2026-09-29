@@ -732,11 +732,14 @@ fn restrict_to_owner(path: &Path) -> Result<()> {
 ///
 /// - **`unstubbed`** — commands that ran with no registration. Recorded rather than refused,
 ///   because a great many tests legitimately do not care what a command printed; they assert the
-///   argv, or the state afterwards. Refusing outright would redden hundreds of tests that are
-///   asserting something real.
+///   argv, or the state afterwards. **It was read by nothing at all**, so it was a record rather
+///   than an instrument; it has a read and a per-test opt-in now. `V.215`.
 /// - **`unmatched registrations`** — a stub that was set and never used. There is no innocent
 ///   reading of that: the test author wrote down what they expected the product to run, and the
 ///   product ran something else. It fails the test at drop.
+///
+/// The two are independent by construction, and the allowance for one is checked before the
+/// other is consulted, so neither opt-in can switch off the other's check.
 pub struct MockExecutor {
     pub responses: DashMap<String, Result<StdOutput>>,
     pub command_existence: DashMap<String, bool>,
@@ -755,6 +758,8 @@ pub struct MockExecutor {
     delays: DashMap<String, std::time::Duration>,
     /// Set by a test that means it — see [`MockExecutor::allow_unmatched_registrations`].
     allow_unmatched: std::sync::atomic::AtomicBool,
+    /// Set by a test that means it — see [`MockExecutor::deny_unstubbed`].
+    deny_unstubbed: std::sync::atomic::AtomicBool,
     vfs: Arc<DashMap<PathBuf, String>>,
 }
 
@@ -770,6 +775,7 @@ impl MockExecutor {
             forbidden: DashMap::new(),
             delays: DashMap::new(),
             allow_unmatched: std::sync::atomic::AtomicBool::new(false),
+            deny_unstubbed: std::sync::atomic::AtomicBool::new(false),
             vfs,
         }
     }
@@ -827,6 +833,26 @@ impl MockExecutor {
             .store(true, std::sync::atomic::Ordering::Relaxed);
     }
 
+    /// Every command that ran with nothing registered for it, deduplicated and sorted.
+    ///
+    /// **Append-only**: registering a response afterwards does not remove the record.
+    pub fn unstubbed_registrations(&self) -> Vec<String> {
+        let mut out: Vec<String> = self.unstubbed.iter().map(|e| e.key().clone()).collect();
+        out.sort();
+        out
+    }
+
+    /// Fail if any command ran with nothing registered for it.
+    ///
+    /// Per-mock, no default: 172 of the suite's tests leave a command unanswered, and 106 of
+    /// those are existence probes whose `true` default is deliberate, so a global check would
+    /// redden a quarter of the suite for having no opinion. Independent of
+    /// [`MockExecutor::allow_unmatched_registrations`], and cannot be switched off by it.
+    pub fn deny_unstubbed(&self) {
+        self.deny_unstubbed
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
     /// Fail if any registered stub went unused.
     ///
     /// Called from `Drop` so that a test does not have to remember; exposed because a test that
@@ -855,6 +881,38 @@ impl MockExecutor {
   "
             )
         );
+
+        // Checked BEFORE the allowance below, and the order is load-bearing: one flag must not
+        // be able to switch off the other half's check. `an_unanswered_command_is_a_defect_tests`
+        // holds the case that would fail if these two lines were swapped.
+        if self
+            .deny_unstubbed
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            let unstubbed = self.unstubbed_registrations();
+            if !unstubbed.is_empty() {
+                let ran = self
+                    .call_log
+                    .try_lock()
+                    .map(|l| l.clone())
+                    .unwrap_or_default();
+                panic!(
+                    "{} command(s) ran with no mock response registered for them:\n\n  {}\n\n\
+                     What actually ran:\n\n  {}\n\n\
+                     Each fell through to the empty-success default, so every assertion this test \
+                     makes about what Shall PRINTED proved nothing. Asserting the argv, or the \
+                     state afterwards, is a fine reason to leave one unstubbed — but this test \
+                     called `deny_unstubbed()`. Register the answer, or drop the call. `V.215`.",
+                    unstubbed.len(),
+                    unstubbed.join("\n  "),
+                    if ran.is_empty() {
+                        "(nothing)".to_string()
+                    } else {
+                        ran.join("\n  ")
+                    }
+                );
+            }
+        }
 
         if self
             .allow_unmatched

@@ -733,6 +733,32 @@ a large part of it could not tell a working Shall from an absent one.
   one that fails everything, 11 survivors became **8**. Against the real binary, the run is
   unchanged — the two extra unmeasured reports are proofs that correctly declined to run.
 
+### Two instruments that reported without asserting now assert
+
+No user-visible behaviour changes. Both of these are measuring instruments, and the finding is
+that each one could not tell a working Shall from an absent one.
+
+- **Shall now says when a latency budget declined to measure, rather than saying nothing.** Four
+  of the reporting paths in the latency layer were bare `return`s: a command class with no
+  wall-clock budget (two of four), one with no fan-out shape (three of four), a run that never
+  enabled `--timings`, and a fan-out too small to have an overlap ratio. Each printed nothing, so
+  "I looked and it was fine" and "nobody looked" were the same silence. They now carry one
+  greppable token, `shall-latency-unmeasured:`, with the reason after the colon. **It is emitted
+  below the default log level on purpose** — it fires on most commands, and a person who typed a
+  package name should not be shown a line about a budget that does not exist. What enforces it is
+  a check that drives each path and fails if the marker is absent; the grep is the convenience,
+  the check is the guarantee. A run that was measured and passed says nothing at all, because that
+  is the one answer that is not a skip.
+- **The test suite's record of unanswered questions is read now.** The mock executor kept a
+  ledger of every command that ran with no registered response — the test double's own version of
+  the defect above — and nothing had ever asked for it, for its whole life. It has a reader, and
+  a per-test switch that turns a fall-through into a failure. The switch is per-test because the
+  measurement says so: **172 of the suite's 699 tests leave a command unanswered**, but 106 of
+  those only leave *existence probes* unanswered, which is a deliberate "assume yes" default and
+  not a defect. The **66** that leave Shall's own installed-set query unanswered are the real
+  half, and they are now reachable one test at a time. The two switches are independent: allowing
+  a deliberately-dead stub does not also allow an unanswered question.
+
 ## [0.7.0] — 2026-07-31 — v7, the declarative rewrite
 
 > **The version is `0.7.0` and the design is "v7"**, which are two different numbers and were

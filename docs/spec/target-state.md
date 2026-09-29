@@ -2832,6 +2832,34 @@ arrive. An absence with nothing behind it and a presence with nothing behind it 
 defect read from two ends, and the instrument that only covers one end reports half a harness
 as sound.
 
+**And a rule that declines to fire says so, on a channel that does not cost a user attention.**
+"I looked and it was fine" and "I did not look" are different sentences and every instrument
+in this repository has a way to decline — a budget that covers two classes out of four, a
+fan-out too small to have an overlap ratio, a plan with one package, a run that never enabled
+its own timings. Each of those was a bare `return`, so all four printed nothing and all four
+were indistinguishable from a rule that had run and passed. **A single token carries the
+distinction** (`shall-latency-unmeasured:`), so a build log answers *how many measurements were
+declined* with one grep, and the text after the colon says which (`V.215`).
+
+**The channel is part of the rule, because a marker nobody can see is not a marker.** The
+default level is `warn`, these fire on most commands, and a person who typed a package name
+would be shown a line about a budget that does not exist — which is not information for them and
+is exactly how such warnings learn to be filtered into `/dev/null` along with the real ones. So
+the marker sits below the default, and **what enforces it is a gate that drives each skip path
+and fails if the marker is absent**, not the grep. A grep is a convenience somebody may forget;
+the gate is the guarantee (`V.215`).
+
+**And the check that answers a question nobody asked is a record, not an instrument.** The mock
+executor keeps a ledger of every command that ran with no registered response. It was written on
+every fall-through and read by nothing for its whole life, which made it an oracle that reported
+without ever asserting — the defect this section is about, inside the test double that is
+supposed to be immune to it. It has a reader now, and the reader is **per-test opt-in** rather
+than global: a great many tests legitimately assert the argv or the state afterwards and do not
+care what a command printed, so refusing outright would redden hundreds of tests that are
+asserting something real. The measurement that decides this is in `V.215` — **66 tests with an
+unanswered query, out of 172 that fall through at all** — and a rule whose threshold came from a
+guess would be a different rule.
+
 ## II.24 A command says whether it writes; a list beside the enum does not (`S50`, V.155)
 
 **How a run takes the exclusive lock on `data/` is answered by `Commands::lock_scope()`, an

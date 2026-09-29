@@ -79,6 +79,7 @@ mod an_extension_surface_has_a_front_door_tests;
 mod an_option_after_a_value_is_not_swallowed_tests;
 mod an_option_list_survives_the_seam_tests;
 mod an_orphan_of_a_killed_run_is_taken_back_tests;
+mod an_unanswered_command_is_a_defect_tests;
 mod ansi_is_for_terminals_tests;
 mod argv_drift_tests;
 mod automation_lifecycle_tests;

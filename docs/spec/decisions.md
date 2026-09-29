@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **235** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **236** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 240 are accounted
-for: **235 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 241 are accounted
+for: **236 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -513,13 +513,14 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28 (a watcher's inputs, a mute manager, and the removal token) — 3
+### C — the round of 2026-09-28/29 (a watcher's inputs, a mute manager, the removal token, and two dead oracles) — 4
 
 | | question | answered |
 |---|---|---|
 | **C1** | `watch --on-change` fingerprinted `modules/*.txt` by size and mtime, so a profile switch, a `priority` reorder, a `vars/` edit, an `adapters/` row, `preferences.toml` or a hook changed what Shall does and never woke the daemon — and a watcher that misses the edit looks exactly like a watcher working. What counts as a change, and should the tick say what it saw? — RULED 2026-09-28: **any file in the config repo, by content hash, except `.git/` and `locks/`** (the second because the sync `watch` runs writes it — hashing it makes the daemon reconcile for ever), **plus the user's own `.shall-watchignore`** in a deliberate subset of `.gitignore`'s language with no negation, where a line that cannot be read is refused rather than skipped. And the tick **names what changed, up to five, then the count**. (II.66, V.212) | 2026-09-28 |
 | **C2** | `spec_is_missing` returned `Err` when a manager could not say whether a package is installed, and its fan-out `?`\ d that into the plan — so one manager having a bad moment meant no declaration on the machine was planned and the command exited 1 having applied nothing, against II.7b's "one broken manager does not fail a sync". And the issue's suggested repair — read the failure as *absent* — schedules an install for every package that manager holds, which is a transaction of no-op successes one unrelated failure rolls back. What should the third answer be, what should the command exit, and should Shall ask again? — RULED 2026-09-28: **a third answer, its own skip row** (`CouldNotAsk`) that schedules nothing and is named; **exit 0**, with the count in "declarations this run could not act on" beside the missing-manager rows; the removals half **unchanged** (an unreadable manager is read as present, because the opposite guess leaves software nothing can account for); and **retries are a number in config, default 0**, applying to the planner's reads and not to writes. (II.67, V.213) | 2026-09-28 |
 | **C3** | `Reaped`'s doc said the private field made the token unmintable, while `Reaped::for_reason(scope, _why)` was a public constructor that ignored its reason and had 44 call sites — so "the guard ran" was a convention any caller could decline, with a review procedure (grep the call sites) attached to it that had already caught one of those sites naming a function which did not exist. Two cases were called legitimate: a rollback undoing its own work, and unit tests. What should the escape hatch be, and what does a rollback actually ask? — RULED 2026-09-28: **no escape hatch in production at all.** The fields stay private and gain `allowed`, the count the guard cleared, with `authorises(n)` for the question a removal path asks. Rollbacks and `heal` **ask the guard** through `enforce_own_work`, which checks `protected_packages` and the OS-essential list but **not the ceilings** (undoing Shall's own work is not removing the user's software, and a compensation refused for exceeding `max_removals` would strand the machine half-changed) and is **all-or-nothing**: a protected package refuses the whole unwind, the install stays, and the transaction says so. Unit tests use a `#[cfg(test)]` constructor that does not ship; the integration suite asks the guard for real. (II.10, V.214) | 2026-09-28 |
+| **C4** | Two instruments reported without ever asserting. `MockExecutor`'s `unstubbed` ledger recorded every command that ran with no registered response and was read by nothing — the test double kept a complete record of every question the suite failed to answer and nothing ever asked for it. And all four skip paths in `core/latency.rs` were bare `return`s, so "the rule ran and passed" and "nobody checked" were the same silence. What should gate them, and where should the marker go? — RULED 2026-09-29: `unstubbed_registrations()` reads the ledger and `deny_unstubbed()` fails a fall-through at drop, **per-test opt-in** — measured, 172 of 699 suite tests carry one, 106 of them only existence probes whose `true` default is deliberate, **66 with an unanswered `execute()`**; a global check would redden 172 tests for having no opinion and no check would leave 66 assertions resting on a string nobody wrote. The two flags are independent and neither allowance switches off the other's check. The latency marker is **one token, `shall-latency-unmeasured:`**, emitted at **`info` — below the default `warn`, owner ruling, because it fires on most commands and a user who typed a package name must not be shown a line about a budget that does not exist** — and **enforced by a gate that drives each skip path, not by the grep**. A pass emits nothing. The `--timings` arm is asserted through `is_measurable` rather than driven, because `core::timing::enable()` is a one-way global. (II.23, V.215) | 2026-09-29 |
 
 ---
 
@@ -10012,3 +10013,44 @@ test-only one. `tests/a_removal_token_cannot_be_minted_tests` replaced
 `an_escape_hatch_names_something_that_exists_tests`, whose subject no longer exists: the old gate
 scanned the *reasons* given to a constructor that is gone, and the new one asks whether anything
 outside `guard.rs` can build a token at all — a question about types rather than about prose.
+
+## C4
+
+**Status: ANSWERED 2026-09-29, built.** The two instruments that reported without asserting.
+Rule extended in **II.23**, rationale in **V.215**.
+
+**The `unstubbed` ledger gets a reader, and the reader is per-test opt-in.**
+`MockExecutor::unstubbed_registrations()` reads what was previously written and never looked at,
+and `MockExecutor::deny_unstubbed()` makes a fall-through fail at drop. The two flags are
+checked independently and **the allowance for a dead stub is consulted after the unanswered-call
+check**, so neither opt-in can switch off the other's assertion. Measured over one suite run with
+the check forced on for every mock: **172 of 699 tests** carry at least one fall-through (934
+across them, 301 distinct command lines). **106 of the 172 are existence probes whose `true`
+default is deliberate** and are therefore not defects; **66 have at least one unanswered
+`execute()`** — Shall's own installed-set and provider queries — and those are the target. The
+flag is per-test because those two numbers make the alternative untenable in both directions: a
+global check reddens 172 tests for having no opinion, and no check leaves 66 assertions resting
+on a string the test never wrote.
+
+**The latency marker is one token, below the default channel, enforced by a gate.**
+Every path in `core/latency.rs` that declines to measure now emits
+`shall-latency-unmeasured: <subject> — <why>` through a single `unmeasured()` — a class with no
+wall-clock budget, a class with no fan-out shape, a run without `--timings`, a fan-out under
+`min_children`, and a plan under two packages. *"The rule ran and the run was within it" emits
+nothing*, because that is the one `None` that means the opposite of a skip. **Owner ruling
+2026-09-29: the marker is emitted at `info`, below the default `warn`,** because it fires on most
+commands and at `warn` a person who typed a package name would be shown a line about a budget
+that does not exist — which is how a warning gets filtered away along with the real ones. **The
+gate, not the grep, is what enforces it**: `unmeasured_is_reported_on_every_skip_path` drives
+each path and fails if the marker is absent, and the token is a `const` so a rename cannot leave
+the greppable string behind. Assertions are **per path by sentence, not by count** — the count
+version failed on the first case because `sync` declines on two counts at once, and the wrong
+repair would have been to weaken the second emission.
+
+**The `--timings` arm is asserted through a named predicate, not driven, and the limit is
+stated.** Reaching it needs `core::timing::enable()`, a one-way process global with no reset, so
+driving it would make the binary order-dependent. `Shape::is_measurable` and
+`scheduling_is_measurable` therefore hold the condition the marker is guarded by, in one place,
+and the gate asserts those. **One condition, two callers** — the rule and the reporter cannot
+come to disagree about when a rule is in force, which is the same defect II.23 exists to stop
+arriving in new places.

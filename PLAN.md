@@ -22,7 +22,8 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 - [x] #39 harness half-totem (mutation survival). (High — absence/restraint family shipped as
   `0f9c5e5`; the ISSUE STAYS OPEN, because section 16's ~50 content claims are the larger half
   and are named in the issue, not here)
-- [ ] #40 two oracles that cannot fail. (Medium)
+- [x] #40 two oracles that cannot fail. (Medium — both shipped; the `unstubbed` half has a
+  measured follow-up of 66 tests, recorded in `docs/spec/plan.md` Tier 14)
 - [ ] #99 a harness section that stops running is invisible: `crash/groupkill` lost 10 checks on
   ubuntu and the run still went green. (High — there is no floor on *checks run*, which is the
   exact mirror of `CAUGHT_FLOOR`, and three of the five properties only the matrix can verify are

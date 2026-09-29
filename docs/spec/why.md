@@ -7732,3 +7732,81 @@ configuration neither the manifest nor the user described, produced by a mechani
 purpose is to describe what the machine holds. The coarse answer leaves everything in place and
 names what could not be undone, which is a sentence a user can act on. It is the same reasoning as
 `purge-undeclared` refusing rather than removing what it cannot classify, one layer down.
+
+---
+
+**V.215 — Why an instrument that declines to fire has to say so, and why the test double was the
+last place it was missing.**
+*(Rule in II.23. Built 2026-09-29, `C4`.)*
+
+**The audit's phrase for this class of defect is "a check that cannot fail", and it has been used
+in this repository to mean two different things.** One is a check whose mechanism cannot
+distinguish its two answers — the `dag_test.rs` above, where a single global mutex returns `Ok`
+for both the overlapping and the serial schedule. The other is a check that *had* a mechanism and
+was never wired to it. **The second is the harder one to see, because each individual run is
+green and the code reads as though the mechanism is there.**
+
+**`MockExecutor` had both ledgers and only one consumer.** `unmatched_registrations` is the half
+with no innocent reading — a stub the test author wrote down and the product never ran — and it
+fails at drop, after a repair for the `e2e_tests.rs` incident that registered
+`brew install {name}` against a product emitting `brew install -- neovim`. Its twin,
+`unstubbed`, records every command that ran with *nothing* registered, and was read by nothing
+at all. So the test double kept a complete record of every question the suite failed to prepare
+an answer for, and no test, no gate and no build had ever asked for it. **A test double that
+cannot detect a vacuous test is not a test double's job — but a test double that records one and
+never says so is worse than useless, because the record reads like a control that exists.**
+
+**The number is what makes the rule, and it was measured rather than argued.** Forcing the
+check on for every mock, with the flag flipped in `Drop` and the suite run once:
+
+| | |
+|---|---|
+| suite tests that fail | **172 of 699** |
+| fall-throughs across them | **934** |
+| distinct command lines | **301** |
+| of which existence probes (`command -v X`) | **554 occurrences, 55 distinct** |
+| tests whose *only* unanswered calls are those probes | **106** |
+| tests with at least one unanswered `execute()` | **66** — 246 distinct command lines, 326 fall-throughs |
+
+**The 106 and the 66 are different things and the rule is only honest if it says so.** The
+largest entry in the whole ledger is `command -v btrfs`, unanswered in **168** tests, and
+`command -v timeshift` in 166. That is not 334 defects. `check_command` defaults to `true` *on
+purpose* — a mock answering `false` would have every backend report itself unavailable — so those
+tests are not wrong, they are unopinionated, and a rule that failed them would redden a quarter
+of the suite for having an opinion about nothing. **The 66 are the real half**, and they are the
+readable ones: `brew list --versions` unanswered in 15, `sudo -n timeshift --create` in 12,
+`cargo install --list` in 10, `dpkg-query -W -f=…` in 6. Those are Shall's own *queries* — the
+installed-set questions an assertion about what a machine holds is built on — and a test that
+leaves one unanswered is asserting against an empty string it did not write. **So the instrument
+is per-test opt-in, and the measurement is what justifies per-test rather than a guess in either
+direction: too global and 172 tests go red for having no opinion; too narrow and the 66 keep
+answering themselves.**
+
+**The latency budget had the same shape, and the ruling is about the channel rather than the
+mechanism.** Four of `core/latency.rs`'s reporting paths were bare `return`s: a class with no
+wall-clock budget (two of four), a class with no fan-out shape (three of four), a run that never
+enabled `--timings`, and a fan-out below `min_children`. `shape_violation` returning `None` was
+the worst of them, because `None` there means two opposite things — *the plan was too small to
+have a rule* and *the rule ran and the plan was within it* — and the caller could not tell them
+apart. The first version of the fix reported the count of markers, and **it failed on the first
+case for the most instructive reason available**: `sync` is `Mutating`, so it declines on both
+counts at once, emitted two markers, and the count said one. The repair is not to weaken the
+second emission; it is to give each skip a sentence and assert the sentence.
+
+**At `warn` the marker would have been the defect it exists to prevent.** The default level is
+`warn` and these fire on most commands, so a person who typed a package name would be shown
+`shall eval` has no wall-clock budget — not information for them, and exactly how a warning gets
+filtered into `/dev/null` along with the real ones. **Owner ruling 2026-09-29: below the default
+channel, with a gate that drives each path.** The gate matters more than the channel and the
+channel matters more than the grep: `unmeasured_is_reported_on_every_skip_path` fails if a path
+goes back to silence (verified by deleting one marker and watching it go red), while
+`grep -c shall-latency-unmeasured:` on a build log is the convenience somebody may forget.
+
+**The third path is asserted through a named predicate rather than driven, and that is a real
+limit rather than a convenience.** Reaching the `--timings` arm needs `core::timing::enable()`,
+which is a one-way process global with no reset, so a unit test that called it would make every
+later test in the binary order-dependent. So `Shape::is_measurable` and
+`scheduling_is_measurable` exist as **named functions holding the condition the marker is
+guarded by**, the gate asserts those, and the rule and the reporter cannot come to disagree
+about when a rule is in force — which is the failure this repository keeps meeting in a new
+place, and the reason the condition is a name rather than a literal in two places.

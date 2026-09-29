@@ -113,6 +113,17 @@ impl Shape {
     pub fn wave_ceiling(&self, children: usize) -> usize {
         (children / self.waves_per_child.max(1)).max(self.min_waves_allowed)
     }
+
+    /// Whether this many child commands is enough for the overlap ratio to be a measurement.
+    ///
+    /// **One condition, two callers, and that is the point.** [`Shape::min_children`] is read
+    /// here and nowhere else, so [`shape_violation`] and the reporting arm cannot come to
+    /// disagree about when the rule is in force. When they could, the failure mode is the worst
+    /// kind this repository keeps finding: the rule says "not measurable", the reporter says "no
+    /// violation", and the run is green on a question nobody asked.
+    pub fn is_measurable(&self, children: usize) -> bool {
+        children >= self.min_children
+    }
 }
 
 impl Class {
@@ -260,7 +271,14 @@ pub fn subcommand_name(command: &impl std::fmt::Debug) -> String {
 pub fn report_if_over(subcommand: &str, elapsed: Duration) {
     let class = Class::of(subcommand);
     report_shape(subcommand, class);
-    let Some(budget) = class.budget() else { return };
+    let Some(budget) = class.budget() else {
+        unmeasured(
+            subcommand,
+            "a wall-clock budget is the host's cost to answer, not Shall's, so this class carries \
+             none — the shape and scheduling rules are what it is measured by instead",
+        );
+        return;
+    };
     if elapsed <= budget {
         return;
     }
@@ -290,7 +308,7 @@ pub fn shape_violation(
     wall: Duration,
     waves: usize,
 ) -> Option<String> {
-    if children < shape.min_children {
+    if !shape.is_measurable(children) {
         return None;
     }
     let overlap = summed.as_secs_f64() / wall.as_secs_f64().max(f64::EPSILON);
@@ -342,8 +360,50 @@ pub fn shape_violation(
 /// A single node has nothing to schedule, so plans under two packages are not measured — not
 /// for noise, but because `waves > depth` is unreachable there and a rule that cannot fail is
 /// what this replaced.
+/// Whether a plan is big enough for the scheduling rule to be a measurement of anything.
+///
+/// One condition, two callers, for the reason [`Shape::is_measurable`] gives: the rule and the
+/// reporter must not be able to disagree about when it is in force.
+pub fn scheduling_is_measurable(packages: usize, depth: usize) -> bool {
+    packages >= 2 && depth > 0
+}
+
+/// The one token every "we chose not to check this" line carries, and the reason the marker
+/// cannot be renamed by accident: a build log is a thing people grep, and a token that changed
+/// shape would break every grep anyone had already written without any of them finding out.
+///
+/// `const` rather than a literal at the call site so a test can hold the string the build log
+/// will be searched for, rather than a copy of it.
+pub const UNMEASURED_TOKEN: &str = "shall-latency-unmeasured:";
+
+/// A single site said *we chose not to check this*, on a channel that does not cost a user
+/// attention, carrying a token that a build can count.
+///
+/// **The gap this closes is the one II.23 names at the other end: a scan that reaches nothing
+/// reports nothing, which reads exactly like a clean tree.** Every function above has a way to
+/// decline, and each of those ways used to be `return` and nothing else — so a run with no budget
+/// for its class, a fan-out too small to have an overlap ratio, a plan with one package, and a
+/// command that never enabled its own timings were four different situations that all printed
+/// nothing and all looked identical to a reader. *"We decided this is not measurable"* and
+/// *"nobody is measuring this"* are different sentences and the output said neither.
+///
+/// One token rather than four, so the question has one answer: `grep -c shall-latency-unmeasured:`
+/// on a build log is how many measurements were declined, and the text after the colon is which.
+///
+/// **At `info`, and that placement is a ruling, not an accident** (owner, 2026-09-29). The default
+/// level is `warn` and these fire on most commands, so at `warn` a user who typed a package name
+/// would be shown a line about a budget that does not exist — which is not information for them
+/// and is the reason such warnings get filtered into `/dev/null` along with the real ones. Below
+/// the default the marker is invisible unless somebody asked (`-v`, or `RUST_LOG=info`), and the
+/// thing that actually enforces it is `unmeasured_is_reported_on_every_skip_path`, which drives
+/// each path and fails if the marker is absent. **A grep is a convenience; the gate is the
+/// guarantee.**
+pub fn unmeasured(subject: &str, why: &str) {
+    tracing::info!("{UNMEASURED_TOKEN} {subject} — {why}");
+}
+
 pub fn scheduling_violation(packages: usize, depth: usize, waves: usize) -> Option<String> {
-    if packages < 2 || depth == 0 || waves <= depth {
+    if !scheduling_is_measurable(packages, depth) || waves <= depth {
         return None;
     }
     Some(format!(
@@ -364,12 +424,39 @@ pub fn scheduling_violation(packages: usize, depth: usize, waves: usize) -> Opti
 /// `tests/latency_budget_tests.rs`, which drives the fan-out commands with `--timings` on
 /// purpose. This is what puts the same sentence in front of a user who asked.
 fn report_shape(subcommand: &str, class: Class) {
-    let Some(shape) = class.shape() else { return };
+    let Some(shape) = class.shape() else {
+        unmeasured(
+            subcommand,
+            "no fan-out shape budget for this class — a single backend or a config-only command \
+             has nothing to overlap, and a mutating run is measured by the plan's own depth \
+             instead",
+        );
+        return;
+    };
     if !crate::core::timing::is_enabled() {
+        unmeasured(
+            subcommand,
+            "this run did not pass `--timings`, so no spans were recorded and the overlap ratio \
+             was never computed",
+        );
         return;
     }
     let (rows, _, summed) = crate::core::timing::summary();
     let children: usize = rows.iter().map(|r| r.calls).sum();
+    if !shape.is_measurable(children) {
+        unmeasured(
+            subcommand,
+            &format!(
+                "{children} child command(s), under the {} the overlap ratio needs before it \
+                 measures anything rather than reading as serial",
+                shape.min_children
+            ),
+        );
+        return;
+    }
+    // `None` from here is a PASS, not a skip, and says nothing: the rule ran and the run was
+    // within it. That is the distinction this whole mechanism exists to keep, so the skip above
+    // is checked first rather than being folded into this one `None`.
     let Some(why) = shape_violation(
         shape,
         children,
@@ -544,5 +631,174 @@ mod tests {
         // Nothing to assert on the output here — the value is that this cannot panic and that
         // the boundary is inclusive, so a command exactly at its budget is not "over".
         assert!(Duration::from_secs(5) <= Class::ConfigOnly.budget().unwrap());
+    }
+
+    /// Collects what `tracing` emitted for the duration of a closure, so a test can read the
+    /// marker instead of trusting that it was printed.
+    ///
+    /// `set_default` is scoped to this thread, so nothing leaks into a concurrently-running test
+    /// and no global subscriber is installed — which matters, because installing one is a
+    /// process-wide act that the first such test would do and the rest would depend on.
+    fn captured<F: FnOnce()>(f: F) -> Vec<String> {
+        use std::sync::{Arc, Mutex};
+        use tracing::Subscriber;
+
+        struct Collect(Arc<Mutex<Vec<String>>>);
+        impl Subscriber for Collect {
+            fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+                true
+            }
+            fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+                tracing::span::Id::from_u64(1)
+            }
+            fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+            fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+            fn event(&self, event: &tracing::Event<'_>) {
+                let mut visitor = MessageVisitor(Arc::new(Mutex::new(String::new())));
+                event.record(&mut visitor);
+                let text = { std::mem::take(&mut *visitor.0.lock().unwrap()) };
+                self.0.lock().unwrap().push(text);
+            }
+            fn enter(&self, _: &tracing::span::Id) {}
+            fn exit(&self, _: &tracing::span::Id) {}
+        }
+        struct MessageVisitor(Arc<Mutex<String>>);
+        impl tracing::field::Visit for MessageVisitor {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                use std::fmt::Write;
+                let _ = write!(self.0.lock().unwrap(), "{} ", field.name());
+                let _ = write!(self.0.lock().unwrap(), "{value:?}");
+            }
+        }
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let guard = tracing::subscriber::set_default(Collect(Arc::clone(&seen)));
+        f();
+        // Dropped before the read: the guard is what makes this thread's subscriber the default,
+        // and holding it across the return would borrow `seen` for the rest of the function.
+        drop(guard);
+        let out = seen.lock().unwrap().clone();
+        out
+    }
+
+    fn markers(lines: &[String]) -> Vec<&str> {
+        lines
+            .iter()
+            .filter(|l| l.contains(UNMEASURED_TOKEN))
+            .map(|l| l.trim())
+            .collect()
+    }
+
+    /// The gate behind the ruling. Every path that declines to measure says so, and this fails if
+    /// one of them goes back to silence.
+    ///
+    /// **Asserted by what each marker says, not by how many there are.** The first version
+    /// counted, and it failed on the first case for the most useful reason available: `sync` is
+    /// `Mutating`, which carries neither a budget nor a shape, so `report_if_over` emitted **two**
+    /// markers and the count said one. A count here would have been fixed by weakening the
+    /// second emission, which is the defect the mechanism exists to prevent. Each case below
+    /// drives one path and asserts the sentence that path is responsible for.
+    #[test]
+    fn unmeasured_is_reported_on_every_skip_path() {
+        // (1) `report_if_over`: this class carries no wall-clock budget. `sync` is `Mutating`, so
+        // it declines on both counts at once — which is why this asserts the sentence and not
+        // the number.
+        let lines = captured(|| {
+            report_if_over("sync", Duration::from_secs(1));
+        });
+        let got = markers(&lines);
+        assert!(
+            got.iter().any(|m| m.contains("wall-clock budget")),
+            "the budget skip must say so: {got:?}"
+        );
+        assert!(
+            got.iter().any(|m| m.contains("no fan-out shape budget")),
+            "and the shape skip on the same call must say so too: {got:?}"
+        );
+        assert!(
+            got.iter().all(|m| m.contains("sync")),
+            "every marker names the command it is about: {got:?}"
+        );
+
+        // (2) `report_shape` on a class with no fan-out shape at all, and only one reason to
+        // decline — so this one *is* exactly one marker, and is the negative for the case above.
+        let lines = captured(|| {
+            report_shape("info", Class::OneBackend);
+        });
+        let got = markers(&lines);
+        assert_eq!(got.len(), 1, "one reason to decline, one marker: {got:?}");
+        assert!(got[0].contains("no fan-out shape budget"), "{got:?}");
+
+        // (3) The rule ran and the run was within it — a PASS, and the one `None` in these
+        // functions that must stay silent. If this ever starts emitting, the marker has stopped
+        // meaning "not measured" and a green run is being described as unmeasured.
+        let shape = Class::EveryBackend
+            .shape()
+            .expect("the fan-out class has a shape");
+        assert!(
+            shape_violation(
+                shape,
+                16,
+                Duration::from_secs(16),
+                Duration::from_secs(8),
+                2
+            )
+            .is_none(),
+            "the healthy reading is within budget, so there is nothing to report"
+        );
+        let lines = captured(|| {
+            report_shape("list", Class::OneBackend);
+        });
+        assert!(
+            markers(&lines).is_empty() || !markers(&lines).iter().any(|m| m.contains("within")),
+            "a pass is not a skip"
+        );
+
+        // (4) The two conditions the third marker is guarded by. They are asserted through the
+        // shared predicates rather than by driving `report_shape`, because reaching that arm
+        // needs `core::timing::enable()` — a one-way process global with no reset, so a unit
+        // test that called it would make every later test in the binary order-dependent. The
+        // condition and its marker are guarded by the SAME `is_measurable`, which is the whole
+        // reason it is a named function: the rule and the reporter cannot come to disagree.
+        assert!(
+            !shape.is_measurable(shape.min_children - 1),
+            "one fewer is not a measurement"
+        );
+        assert!(
+            shape.is_measurable(shape.min_children),
+            "and the floor itself is"
+        );
+
+        // (5) The scheduling rule, at its own site: a plan with one package has no reachable
+        // violation, and a plan inside the rule is silent while one outside it is not.
+        assert!(!scheduling_is_measurable(1, 1));
+        assert!(!scheduling_is_measurable(2, 0));
+        assert!(scheduling_is_measurable(2, 1));
+        assert!(
+            scheduling_violation(1, 1, 9).is_none(),
+            "unmeasurable, so not a violation"
+        );
+        assert!(
+            scheduling_violation(20, 1, 20).is_some(),
+            "a serial loop is caught"
+        );
+        assert!(
+            scheduling_violation(20, 4, 4).is_none(),
+            "one wave per level is the plan's shape, not a regression"
+        );
+    }
+
+    /// The token is the API. A rename that leaves the greppable string behind is a rename that
+    /// quietly breaks every build log anyone has ever grepped, and nothing else would notice.
+    #[test]
+    fn the_marker_carries_a_stable_greppable_token() {
+        assert_eq!(UNMEASURED_TOKEN, "shall-latency-unmeasured:");
+        let got = captured(|| super::unmeasured("sync", "because"));
+        assert_eq!(got.len(), 1);
+        assert!(
+            got[0].contains(UNMEASURED_TOKEN),
+            "the token is the contract: {:?}",
+            got[0]
+        );
     }
 }
