@@ -19,13 +19,25 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 - [x] #77 watch blind to profiles/vars. (High)
 - [x] #78 single info() failure aborts whole plan. (High)
 - [x] #35 Reaped self-attestation token. (High)
-- [x] #39 harness half-totem (mutation survival). (High)
+- [x] #39 harness half-totem (mutation survival). (High — absence/restraint family shipped as
+  `0f9c5e5`; the ISSUE STAYS OPEN, because section 16's ~50 content claims are the larger half
+  and are named in the issue, not here)
 - [ ] #40 two oracles that cannot fail. (Medium)
+- [ ] #99 a harness section that stops running is invisible: `crash/groupkill` lost 10 checks on
+  ubuntu and the run still went green. (High — there is no floor on *checks run*, which is the
+  exact mirror of `CAUGHT_FLOOR`, and three of the five properties only the matrix can verify are
+  driven by that section)
 - [ ] #96 CI: the 8 distro integration images are red on the container harness's `dir:` check (a
   check that never observes what it asserts). (High — the matrix is the only thing that reaches a
   real manager)
 - [ ] #97 CI: `Advisories and licences` and the MSVC build are red on `main`; the MSVC one means
   the `#71` Windows code has never been compiled by anything. (High)
+- [ ] #98 CI: the `why.md` unattached-rationale ratchet is red on `main` — 53 entries against a
+  ceiling of 52, and it reds `Build for x86_64-unknown-linux-gnu` on every push. (High — the one
+  red job no open issue named)
+- [ ] #100 the `void` leg's failure list is a sample of the network: six of eleven backend
+  failures name a backend that passed in the next run, and `uv`/`yarn` fail in every run inside
+  the same red. (Medium — a list nobody can compare to the last run is not evidence)
 
 ## Phase 3 — Correctness Mediums
 - [ ] #79 forget_all wipes all caches, #80 probe storm, #81 Mutex across --help, #82 batch deadline, #83 vars JSON fragile, #84 fan-out uncapped, #85 pool race, #86 zip sum wraps, #87 dir-symlink Windows.
