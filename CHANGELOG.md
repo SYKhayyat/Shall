@@ -759,6 +759,13 @@ that each one could not tell a working Shall from an absent one.
   half, and they are now reachable one test at a time. The two switches are independent: allowing
   a deliberately-dead stub does not also allow an unanswered question.
 
+### A control reported in the vocabulary of a product bug, on eight legs at once
+
+The container integration matrix was red on every distro with `the dir is gone from disk (nothing in this run was ever seen as 'dir-dst', so its absence proves nothing)` — and in the same run, `the declared dir is on disk` and `the declared dir has its mode` both **passed**. Shall was never broken.
+
+- **The harness's `dir:` teardown check named a witness tag that nothing had ever recorded.** The check refuses to score a teardown green over a creation it was never shown, which is the control working; the missing half was one line of harness. Its `link:` twin has had the witness since the pair was introduced, which is how one of a pair went missing without anything noticing.
+- **A new check reads both harnesses and fails on any `gone_ok` tag that nothing witnesses.** A control's own absence is a failure too, and it is indistinguishable from a defect in the product unless something says so — this is the same shape as "a gate is not a gate until it has been watched to fail", one level down.
+
 ## [0.7.0] — 2026-07-31 — v7, the declarative rewrite
 
 > **The version is `0.7.0` and the design is "v7"**, which are two different numbers and were

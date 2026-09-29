@@ -390,6 +390,44 @@ build and what is deferred to hardware.**
     why the one remaining call does not matter. The measurement above is what a triager needs and
     is recorded here so the next session does not re-derive it by flipping a flag in `Drop`.
 
+### Tier 15 — the `dir:` check that never observed anything was a missing line (`PLAN.md` #96): BUILT
+
+30. ~~**The 8 distro integration images are red on the container harness's `dir:` check** — a check
+    that never observes what it asserts.~~ **BUILT, and the diagnosis in the issue was wrong in a
+    way worth keeping.** The product was never broken. In the same run, on every leg:
+
+    ```text
+    PASS  the declared dir is on disk
+    PASS  the declared dir has its mode
+    FAIL  the dir is gone from disk (nothing in this run was ever seen as 'dir-dst',
+                                       so its absence proves nothing)
+    ```
+
+    **`gone_ok` names a tag, and nothing had ever recorded that tag.** There was no
+    `witness dir-dst` anywhere in the file, so the teardown could not be scored and the check
+    said so — correctly. **The check that "never observed what it asserted" was `gone_ok` doing
+    its job**: it refused to score an absence over a creation it had never been shown. The `link:`
+    block directly above it has had its witness since the pair was introduced; this twin never
+    got one, and a green run and a red one then differed by a line of harness rather than by any
+    behaviour of Shall's. One line, and eight legs.
+
+    **The failure mode is the one this repository keeps meeting in a new place**: a control
+    reported in the vocabulary of a defect in the product. A reader of the red board would have
+    gone looking for a `dir:` bug in the sync engine, and #96's own title pointed at the check
+    rather than at the wiring.
+
+    - **`every_gone_ok_tag_is_witnessed_somewhere`** now reads both harnesses as text and fails
+      on any `gone_ok` tag with no `witness` in the same file. It carries a **floor** (two tags
+      and two witnesses, because the Windows harness genuinely has two — `pkg-binary` and
+      `registry-value` — and a floor read off the container's ten would report it as broken) and
+      a **control** that each harness's first tag is on both sides, so the check can tell a
+      witnessed tag from an unwitnessed one rather than only ever answering "nothing is
+      missing". **Verified by mutation**: deleting the `witness dir-dst` line turns it red and
+      names the tag.
+    - **The lifecycle verified directly**, on the real binary: declare `dir:` in a reached
+      module → sync creates it at mode 700 → drop the declaration → sync removes it. The
+      `gone_ok` that was red on eight legs now scores.
+
 ### Tier 14c — what each section ran (`PLAN.md` #99): the tally ships, the floor does not
 
 29. ~~**A harness section that stops running is invisible.**~~ **PART BUILT.** `crash/groupkill`

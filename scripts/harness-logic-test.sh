@@ -246,6 +246,76 @@ run_against() {
 for src in $SOURCES; do run_against "$src"; done
 
 # ---------------------------------------------------------------------------
+# Every `gone_ok` tag must be recorded by a `witness`, in the same harness.
+#
+# **`gone_ok` refuses to score an absence for a subject nothing was ever seen leaving behind** —
+# that is the control, and it is the whole reason the instrument works. The cost of a control is
+# that its own absence is a failure, and that failure reads exactly like a defect in the product
+# under test. Which is what happened: `gone_ok "the dir is gone from disk" dir-dst` had no
+# `witness dir-dst` anywhere, so the check could never be scored, and **eight distro legs went
+# red with `the declared dir is on disk` and `the declared dir has its mode` both PASSING.** The
+# harness was reporting a missing line of itself in the vocabulary of a broken product, which is
+# the worst of both faults at once.
+#
+# So this is a scan over the harness **as text**, with a floor: a scan that matched nothing would
+# pass, and a gate that cannot fail is what II.23 is about. The floor is the tag count, and the
+# `link:` block's own witness is the control — a harness where the pair exists must not be
+# reported, which is what stops this from flagging every `gone_ok` in existence.
+for src in $SOURCES; do
+    echo "== $src: every gone_ok tag is witnessed in the same harness"
+    if [ ! -f "$src" ]; then echo "  FATAL: no such harness"; BAD=$((BAD + 1)); continue; fi
+
+    _gt="$(grep -oE 'gone_ok "[^"]*" [a-z][a-z0-9-]*' "$src" | grep -oE '[a-z][a-z0-9-]*$' | sort -u)"
+    _wt="$(grep -oE '^[[:space:]]*witness [a-z][a-z0-9-]*' "$src" | grep -oE '[a-z][a-z0-9-]*$' | sort -u)"
+
+    TOTAL=$((TOTAL + 1))
+    _gn=$(printf '%s\n' "$_gt" | grep -c . )
+    _wn=$(printf '%s\n' "$_wt" | grep -c . )
+    # The floor first: on a tree where the scan stopped matching, the answer below would be
+    # "nothing is missing", which is the passing answer for a scan that examined nothing.
+    # A floor of 2, and it is 2 because the Windows harness genuinely has two: `pkg-binary` and
+    # `registry-value`, both witnessed. A floor set to the container harness's ten would report
+    # that harness as broken, which is the move this file keeps refusing — a budget read off one
+    # host class enforced on another. Two is the floor that still catches "the scan stopped
+    # matching", which is the failure it exists for; what discriminates a witnessed tag from an
+    # unwitnessed one is the control below, not the count.
+    if [ "$_gn" -lt 2 ] || [ "$_wn" -lt 2 ]; then
+        echo "  BAD   found $_gn gone_ok tag(s) and $_wn witness(es); the scan has stopped"
+        echo "        matching the file, and \"nothing is unwitnessed\" would be a pass"
+        BAD=$((BAD + 1))
+        continue
+    fi
+
+    _missing="$(comm -23 <(printf '%s\n' "$_gt") <(printf '%s\n' "$_wt"))"
+    if [ -n "$_missing" ]; then
+        echo "  BAD   gone_ok tag(s) nothing ever witnesses:"
+        printf '        %s\n' $_missing
+        echo "        Each of these can never be scored, so its harness reports the missing"
+        echo "        witness as if the product had failed to create the thing. Add the"
+        echo "        \`witness <tag>\` at the site that asserts the presence, or drop the"
+        echo "        gone_ok. Measured: \`dir-dst\` did this on all eight distro legs."
+        BAD=$((BAD + 1))
+    else
+        echo "  ok    all $_gn gone_ok tag(s) have a witness in the same harness"
+    fi
+
+    # The control: a tag that IS witnessed must not be reported, and the shape of the answer
+    # above must be the passing one when there is nothing missing.
+    # The control, and it uses EACH harness's own vocabulary rather than a shared tag: the point
+    # is that a tag present on both sides is not reported, so the check can tell a witnessed tag
+    # from an unwitnessed one rather than only ever answering "nothing is missing".
+    _ctrl="$(printf '%s\n' "$_gt" | head -1)"
+    TOTAL=$((TOTAL + 1))
+    if [ -n "$_ctrl" ] && printf '%s\n' "$_wt" | grep -qx "$_ctrl"; then
+        echo "  ok    \`$_ctrl\` is on both sides and not reported — the scan discriminates"
+    else
+        echo "  BAD   the control is wrong: \"$_ctrl\" is not on both sides, so this check"
+        echo "        cannot tell a witnessed tag from an unwitnessed one"
+        BAD=$((BAD + 1))
+    fi
+done
+
+# ---------------------------------------------------------------------------
 # `witness`, `gone_ok` and `stays_ok`, driven in both directions.
 #
 # II.23: the oracle drives the same predicate the check drives. These three exist to make a

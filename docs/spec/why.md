@@ -4656,6 +4656,37 @@ it, and "still there" is then the correct answer. A tightening that only one of 
 instruments can measure is half a tightening, and only the stub that fails at everything had any
 opinion about it.
 
+**And the same reasoning ran one level further, into the instrument's own wiring, where it cost
+eight legs of a build board.** `gone_ok` is a control: it refuses to score an absence for a
+subject nothing was ever seen leaving behind. The container harness's `dir:` teardown named the
+tag `dir-dst` and **nothing anywhere recorded it** — the `link:` block directly above it has had
+its `witness` since the pair was introduced, and this twin never got one. So the check could
+never be scored, and it said so:
+
+```text
+PASS  the declared dir is on disk
+PASS  the declared dir has its mode
+FAIL  the dir is gone from disk (nothing in this run was ever seen as 'dir-dst', …)
+```
+
+**Shall was never broken.** The creation was asserted and the mode was asserted, two lines above,
+on every distro in the matrix. What was broken was a line of the harness — and it was reported in
+the vocabulary of a product defect, which is the worst of both faults at once: the issue it
+produced was titled after *the check*, and pointed a reader at the sync engine rather than at the
+wiring. A control's own absence is a failure like any other, and the whole argument of this entry
+is that a failure nobody can attribute is a failure nobody fixes.
+
+**So the pairing is now checked rather than trusted.** `every_gone_ok_tag_is_witnessed_somewhere`
+reads both harnesses as text and fails on any tag a control names that no witness records. It
+carries a floor, because a scan that matched nothing would answer "nothing is unwitnessed" — and
+that is the passing answer, which is II.23's own sentence applied to the check that enforces
+II.23. **The floor is 2 and not 10, and that is a measurement**: the Windows harness genuinely has
+two tags, `pkg-binary` and `registry-value`, so a floor read off the container harness's ten
+would report it as broken — the move this file keeps refusing. It also carries a control using
+each harness's own first tag, so the check can tell a witnessed tag from an unwitnessed one
+rather than only ever answering "nothing is missing". **Verified by mutation**: deleting the one
+missing line turns it red and names the tag.
+
 **A third instance was found by sweeping the family rather than the report, and it was the one
 that had been sitting in plain sight.** `$PKG is reinstalled, not left removed` is the same
 sentence four sections earlier about the same package, and the section-10 absence check took a

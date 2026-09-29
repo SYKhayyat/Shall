@@ -2832,6 +2832,17 @@ arrive. An absence with nothing behind it and a presence with nothing behind it 
 defect read from two ends, and the instrument that only covers one end reports half a harness
 as sound.
 
+**And a check that NAMES a control must record it, or the control's own absence is a failure
+reported in the vocabulary of a defect.** `gone_ok` refuses to score an absence for a subject
+nothing was ever seen leaving behind, and it says so by name when the subject was never seen. That
+is the control working — and it is indistinguishable, to a reader of a red build, from the
+product having failed to create the thing. Measured: the container harness's `dir:` teardown named
+a tag no `witness` ever recorded, so **eight distro legs reported the harness's own missing line
+in the words of a broken sync engine**, while the creation check beside it passed. **So the
+pairing is checkable and is checked**: every tag a control names is read out of the harness and
+compared against the tags a witness records, in the same file, with a floor so a scan that
+stopped matching cannot report "nothing is missing" as a pass (`V.153`).
+
 **And a rule that declines to fire says so, on a channel that does not cost a user attention.**
 "I looked and it was fine" and "I did not look" are different sentences and every instrument
 in this repository has a way to decline — a budget that covers two classes out of four, a

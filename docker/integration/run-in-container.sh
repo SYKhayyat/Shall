@@ -2134,6 +2134,20 @@ else
     ok "the dir target does not exist before sync" test ! -e "$DIR_DST"
     ok "sync creates a declared dir" lx -y sync
     ok "the declared dir is on disk" test -d "$DIR_DST"
+    # **This line was missing, and it is what #96 was.** `gone_ok "the dir is gone from disk"`
+    # below names the tag `dir-dst`, and nothing had ever recorded it — so the teardown could
+    # never be scored, and the harness said so on **every distro in the matrix**:
+    # `the dir is gone from disk (nothing in this run was ever seen as 'dir-dst', so its absence
+    # proves nothing)`. Eight red legs, and the product was fine the whole time: in the same run
+    # `the declared dir is on disk` and `the declared dir has its mode` both PASSED.
+    #
+    # **So the check that never observed what it asserted was `gone_ok` doing its job** — it
+    # refused to score a teardown green over a creation it had never been shown. The `link:`
+    # block above it has had its `witness` since the pair was introduced; this twin never got one,
+    # and a green run and a red one differed by a line of harness rather than by any behaviour of
+    # Shall's. `every_gone_ok_tag_is_witnessed_somewhere` in `harness-logic-test.sh` is what stops
+    # the next twin being added without one.
+    witness dir-dst test -d "$DIR_DST"
     ok "the declared dir has its mode" test "$(stat -c %a "$DIR_DST")" = 700
     grep -v -F "dir:$DIR_DST" "$_limp" > "$_limp.tmp" 2>/dev/null
     mv "$_limp.tmp" "$_limp"
