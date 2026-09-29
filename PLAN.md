@@ -39,6 +39,13 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   fourteen compile errors, and the local chain can now type-check that platform at all; **the
   `Advisories and licences` half is untouched and still red**, a different job and a different
   root cause)
+- [ ] #101 CI: both MSVC test binaries die with `0xc0000005 STATUS_ACCESS_VIOLATION` mid-run, and
+  the log cannot say which test crashed. (High — **this is what the fourteen compile errors were
+  hiding**: the crate compiles and then the process dies, so `cargo check` cannot answer it. The
+  job runs without `--nocapture`, so the crash discards its own evidence — **one**
+  `--test-threads=1 --nocapture` run should name the test outright. I first reported the two
+  `FAILED` lines here as two failures; the exit codes showed the process died before libtest
+  could flush them, so they may only have been in flight)
 - [ ] #98 CI: the `why.md` unattached-rationale ratchet is red on `main` — 53 entries against a
   ceiling of 52, and it reds `Build for x86_64-unknown-linux-gnu` on every push. (High — the one
   red job no open issue named)
