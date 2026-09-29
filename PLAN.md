@@ -46,6 +46,15 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   `--test-threads=1 --nocapture` run should name the test outright. I first reported the two
   `FAILED` lines here as two failures; the exit codes showed the process died before libtest
   could flush them, so they may only have been in flight)
+- [ ] #102 CI: the main test step discards a crash's own evidence, on every platform.
+  `.github/workflows/ci.yml:363` runs for **every** row of the build matrix with no `--nocapture`
+  and no `--test-threads`, so a binary that dies mid-run never reaches libtest's failure report —
+  run `36598780716` logged zero `panicked at` lines in 78KB and no `failures:` section, which is
+  what left #101 undiagnosable from CI. (High — **the family is the workflow, not the MSVC row**:
+  the six `--nocapture` uses in `ci.yml` are all probe steps that parse stdout, so the shape was
+  already understood six times over and the one step that can crash got none of it. The re-run must
+  be `if: failure()`, not a blanket `--test-threads=1`: a green job pays nothing and the suite is
+  ~20 minutes parallel)
 - [ ] #98 CI: the `why.md` unattached-rationale ratchet is red on `main` — 53 entries against a
   ceiling of 52, and it reds `Build for x86_64-unknown-linux-gnu` on every push. (High — the one
   red job no open issue named)
