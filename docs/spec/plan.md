@@ -390,6 +390,34 @@ build and what is deferred to hardware.**
     why the one remaining call does not matter. The measurement above is what a triager needs and
     is recorded here so the next session does not re-derive it by flipping a flag in `Drop`.
 
+### Tier 14c — what each section ran (`PLAN.md` #99): the tally ships, the floor does not
+
+29. ~~**A harness section that stops running is invisible.**~~ **PART BUILT.** `crash/groupkill`
+    lost 10 of its 10 checks on `ubuntu` (CI 36515002965), reported one `soft` line, and the run
+    still ended `pass=391 fail=1 soft=5` — green, and eight checks short of the 405 the previous
+    `main` ran on the same image. The `soft` was **right**: the SIGKILL landed outside the
+    transaction window, so nothing exercised recovery. What was missing is the count the `soft`
+    did not carry.
+
+    - **The per-section tally, printed in the RESULT block** as `shall-it-section: <name> <n>` plus
+      a `TOTAL`, grep-able from any build log without downloading and diffing two runs. 26
+      sections, credited by every predicate that scores a check, so the count is a fact about the
+      run rather than something to be reconstructed afterwards. **Verified against the total**:
+      `TOTAL 236` against `pass=236`, and per-section figures matching the CI legs.
+    - **Not shipped: the floor.** The measurement is done and the numbers are the input — see the
+      comment on #99. It is deliberately not in this commit, because a floor tight enough to
+      matter is set from per-leg data this account cannot produce locally, and a floor guessed at
+      would redden the matrix for being wrong about an image.
+
+    **A latent bug this surfaced, which is the same family as #40's.** With the tally in, the
+    fail-everything stub grew a survivor: `the plan file exists`. It had been passing or failing
+    depending on whether an earlier run left `/tmp/shall-it-plan.json` behind, because the path is
+    fixed and nothing in the harness clears it — **a presence assertion over an artifact the run
+    is supposed to create, which is not a claim about this run at all.** Removed before the
+    command that writes it, which is what the `bundle → restore` section beside it already did and
+    is now the model. It also moved the do-nothing rate (102 → 101 survivors), so the check had
+    been reading the previous run on both stubs.
+
 ### Tier 13 — a survival proof needs an arrival (`PLAN.md` #39): BUILT (first batch)
 
 27. ~~**The harness is roughly half totem: over half its checks cannot see the product absent.**

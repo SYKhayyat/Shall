@@ -27,7 +27,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 - [ ] #99 a harness section that stops running is invisible: `crash/groupkill` lost 10 checks on
   ubuntu and the run still went green. (High — there is no floor on *checks run*, which is the
   exact mirror of `CAUGHT_FLOOR`, and three of the five properties only the matrix can verify are
-  driven by that section)
+  driven by that section. **The per-section tally ships; the FLOOR does not** — see `##[14c]`)
 - [ ] #96 CI: the 8 distro integration images are red on the container harness's `dir:` check (a
   check that never observes what it asserts). (High — the matrix is the only thing that reaches a
   real manager)

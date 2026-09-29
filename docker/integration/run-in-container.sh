@@ -139,7 +139,7 @@ excerpt() { # [logfile] [lines]
 ok() {
     desc="$1"; shift
     if "$@" >/tmp/it.out 2>&1; then
-        PASS=$((PASS + 1)); echo "  PASS  $desc"; return 0
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  $desc"; return 0
     else
         rc=$?; FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES\n    - $desc (rc=$rc)"
         echo "  FAIL  $desc (rc=$rc)"; excerpt; return 1
@@ -157,7 +157,7 @@ answers() {
     desc="$1"; shift
     "$@" >/tmp/it.out 2>&1; rc=$?
     if [ "$rc" = 0 ] || [ "$rc" = 2 ]; then
-        PASS=$((PASS + 1)); echo "  PASS  $desc (rc=$rc)"; return 0
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  $desc (rc=$rc)"; return 0
     else
         FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES\n    - $desc (rc=$rc)"
         echo "  FAIL  $desc (rc=$rc)"; excerpt; return 1
@@ -196,7 +196,7 @@ nok() {
         echo "  FAIL  $desc (rc=3: Shall refused on purpose; if that is the outcome under test, assert it with refuses_with_3)"
         return 1
     else
-        PASS=$((PASS + 1)); echo "  PASS  $desc (failed, as it must)"; return 0
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  $desc (failed, as it must)"; return 0
     fi
 }
 
@@ -225,7 +225,7 @@ nok_saying() { # description pattern command...
         excerpt; return 1
     fi
     if grep -q "$pat" /tmp/it.out; then
-        PASS=$((PASS + 1)); echo "  PASS  $desc (refused, saying so)"; return 0
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  $desc (refused, saying so)"; return 0
     fi
     FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES
     - $desc (failed without saying /$pat/)"
@@ -237,7 +237,7 @@ refuses_with_3() { # description command...
     desc="$1"; shift
     "$@" >/tmp/it.out 2>&1; rc=$?
     if [ "$rc" = 3 ]; then
-        PASS=$((PASS + 1)); echo "  PASS  $desc (refused on purpose, exit 3)"; return 0
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  $desc (refused on purpose, exit 3)"; return 0
     fi
     FAILC=$((FAILC + 1))
     if [ "$rc" = 0 ]; then
@@ -256,7 +256,7 @@ refuses_with_3() { # description command...
 grep_ok() {
     desc="$1"; pat="$2"; shift 2
     if "$@" 2>&1 | grep -q "$pat"; then
-        PASS=$((PASS + 1)); echo "  PASS  $desc"; return 0
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  $desc"; return 0
     else
         FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES\n    - $desc (missing /$pat/)"
         echo "  FAIL  $desc (output missing /$pat/)"; return 1
@@ -265,12 +265,75 @@ grep_ok() {
 
 soft() { SOFTC=$((SOFTC + 1)); echo "  soft  $1"; }
 
-# A failure recorded directly, when the thing that failed was not a single command call.
-hard() { FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES
+# ---- what each section actually ran ------------------------------------------------------
+#
+# **A section that stops running used to be invisible, and the only way to find one was to diff
+# two CI logs.** Measured: `crash/groupkill` lost 10 of its 10 checks on `ubuntu` in run
+# 36515002965, correctly reported one `soft` line, and the run still ended
+# `pass=391 fail=1 soft=5` — green, and eight checks short of the 405 the previous `main` ran on
+# the same image with the same backend. Locating those eight took a scripted diff of two
+# downloaded logs; a reader of either run could not have seen it.
+#
+# The `soft` was right. The kill landed outside the transaction window, so nothing exercised
+# recovery, and scoring it green is the vacuous check II.1 exists to refuse. What was missing is
+# the count the soft did not carry, and this is that count: a per-section tally, printed, so
+# "this section ran 41 checks" and "this section ran 4" are two facts about the run rather than
+# something to be reconstructed afterwards.
+#
+# **Written as a file, not a variable, for the reason the coverage ledger above is.** `grep_ok`
+# runs its command in a pipeline, and a pipeline is a subshell whose variable writes die with it
+# — so a tally kept in a variable would forget every section a greped command belonged to, which
+# is most of them.
+#
+# `SECTIONS` holds `index<TAB>name` in the order the sections ran, and `SECTION_RUN` the number
+# of checks each accumulated. A section with no checks is still written, because "it ran and
+# found nothing to check" and "it never ran" are different and this is where they are told apart.
+SECTIONS=/tmp/shall-it-sections
+SECTION_CHECKS=/tmp/shall-it-section-checks
+rm -f "$SECTIONS" "$SECTION_CHECKS"; : > "$SECTIONS"; : > "$SECTION_CHECKS"
+
+section() { # section "<the same line the harness used to echo>"
+    echo "$1"
+    # The index is the number of sections ALREADY recorded, read before this one is appended.
+    # Computing it afterwards gives every section the index of its successor, which is the
+    # off-by-one this had on its first run: the tally then attributed each section's checks to
+    # the one after it and the first section read 0.
+    printf '%s\t%s\n' "$(grep -c . "$SECTIONS")" "${1#*] }" >> "$SECTIONS"
+}
+
+# Called by every predicate that scores a check. **One line per check, appended** — the first
+# version kept a running total and rewrote the file on every check, reading it back with
+# `grep -c`, which counts LINES and so returned 1 forever: every section froze at 2 and the tally
+# read 46 against a run of 313. Counting the checks at the end instead means the hot path is a
+# single append and the arithmetic lives in one place.
+_credit_section() {
+    _cs_idx="$(tail -1 "$SECTIONS" 2>/dev/null | cut -f1)"
+    [ -n "$_cs_idx" ] && printf '%s\n' "$_cs_idx" >> "$SECTION_CHECKS"
+    return 0
+}
+
+# The tally, in the shape a build log can be read by. One line per section, then the total, so
+# `grep shall-it-section:` on any run answers "what did this run actually cover" without a
+# download and without a diff.
+print_section_tally() {
+    echo ""
+    echo "        per-section checks run (shall-it-section:):"
+    _t_total=0
+    while IFS='	' read -r _ts_i _ts_name; do
+        [ -n "$_ts_i" ] || continue
+        _ts_n="$(grep -c "^$_ts_i\$" "$SECTION_CHECKS" 2>/dev/null)"
+        [ -n "$_ts_n" ] || _ts_n=0
+        _t_total=$((_t_total + _ts_n))
+        printf '        shall-it-section: %-58s %3d\n' "$_ts_name" "$_ts_n"
+    done < "$SECTIONS"
+    printf '        shall-it-section: %-58s %3d\n' "TOTAL" "$_t_total"
+}
+
+hard() { FAILC=$((FAILC + 1)); _credit_section; FAILED_NAMES="$FAILED_NAMES
     - $1"; echo "  FAIL  $1"; }
 # A refusal is its own outcome. Shall worked correctly and declined on purpose (exit 3), and
 # scoring that as a failure — or as "ecosystem variance" — says the opposite of what happened.
-refused() { PASS=$((PASS + 1)); echo "  PASS  $1 (Shall refused, on purpose)"; }
+refused() { PASS=$((PASS + 1)); _credit_section; echo "  PASS  $1 (Shall refused, on purpose)"; }
 
 # ---- an absence that means something -------------------------------------------------------
 #
@@ -313,7 +376,7 @@ gone_ok() { # gone_ok "desc" <tag> cmd... — cmd must FAIL now and have SUCCEED
     - $_g_desc (it is still there)"
         echo "  FAIL  $_g_desc (it is still there)"; return 1
     fi
-    PASS=$((PASS + 1)); echo "  PASS  $_g_desc (was there, now gone)"; return 0
+    PASS=$((PASS + 1)); _credit_section; echo "  PASS  $_g_desc (was there, now gone)"; return 0
 }
 
 # The other direction, and it needs the same control for the opposite reason.
@@ -343,7 +406,7 @@ stays_ok() { # stays_ok "desc" <tag> cmd... — cmd must SUCCEED now, having bee
         return 1
     fi
     if "$@" >/tmp/it.out 2>&1; then
-        PASS=$((PASS + 1)); echo "  PASS  $_s_desc (was there, still there)"; return 0
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  $_s_desc (was there, still there)"; return 0
     fi
     FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES
     - $_s_desc (it is gone)"
@@ -633,7 +696,7 @@ assert_binary_reachable() { # backend binary install-log prior-resolution
 
     # It resolves somewhere it did not resolve before: this install is what put it there.
     if [ -n "$_rnow" ] && [ "$_rnow" != "$_rprev" ]; then
-        PASS=$((PASS + 1)); echo "  PASS  $_rbe: $_rbin is on PATH (at $_rnow)"; return 0
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  $_rbe: $_rbin is on PATH (at $_rnow)"; return 0
     fi
 
     # Either nothing resolves, or the name still resolves to whatever owned it before. PATH
@@ -645,6 +708,7 @@ assert_binary_reachable() { # backend binary install-log prior-resolution
     [ -n "$_rdir" ] && _rcopy="$(off_path_copy "$_rbe" "$_rbin" "$3")"
     if [ -n "$_rcopy" ]; then
         PASS=$((PASS + 1))
+        _credit_section
         if [ -n "$_rnow" ]; then
             echo "  PASS  $_rbe: $_rbin still resolves to the pre-existing $_rnow, and this backend's own copy is at $_rcopy"
         else
@@ -681,14 +745,14 @@ if ! $SHALL --version >/dev/null 2>&1; then
 fi
 
 # --- 1. Bootstrap the II.1 repo -------------------------------------------
-echo "[1] Bootstrap"
+section "[1] Bootstrap"
 ok "init scaffolds the repo" lx init
 ok "priority file exists" test -f "$SHALL_CONFIG_DIR/priority"
 grep_ok "priority names this backend" "$BACKEND" cat "$SHALL_CONFIG_DIR/priority"
 ok "active file exists" test -f "$SHALL_CONFIG_DIR/active"
 
 # --- 2. Discovery (read-only) ---------------------------------------------
-echo "[2] Discovery / read-only verbs"
+section "[2] Discovery / read-only verbs"
 ok "check health" lx check health
 ok "check drift" lx check drift
 # `plan` exits 2 when it finds work (`H2`, owner 2026-08-13) — it is a read-only command
@@ -716,7 +780,7 @@ grep_ok "protected includes a system essential" "libc\|systemd\|kernel\|bash\|co
     lx protected
 
 # --- 3. Dry-run is preview-only -------------------------------------------
-echo "[3] Dry-run safety"
+section "[3] Dry-run safety"
 ok "sync --dry-run does not error" lx --dry-run sync
 ok "a dry-run install shows a plan" lx --dry-run install "$PKG"
 # Asked of the machine, not of PATH: a preview that installed into a directory the host has
@@ -728,7 +792,7 @@ nok "dry-run did NOT actually install $PKG" binary_present "$BACKEND" "$PKG" /tm
 # IV.1: this is the only state in which the check tests anything. After `adopt`
 # the machine is nearly all managed, so "delete everything unmanaged" is a small
 # removal and the ratio it exists to catch never fires.
-echo "[4] purge-undeclared, before adopt (the state that makes it a test)"
+section "[4] purge-undeclared, before adopt (the state that makes it a test)"
 refuses_with_3 "purge-undeclared is refused on a machine Shall has not adopted" lx -y purge-undeclared
 # WHICH rule refused matters: a `nok` that accepts any non-zero exit accepts a panic
 # and an unknown flag just as happily. Before adopt the ratio rule is the one that
@@ -737,7 +801,7 @@ grep_ok "and it is the unadopted-machine ratio that refused" \
     "adopt\|allow-mass-purge" lx -y purge-undeclared
 
 # --- 5. Imperative install -> list -> coherence ---------------------------
-echo "[5] Install"
+section "[5] Install"
 if [ -n "$SMOKE" ]; then
     skip_smoke "install $PKG, and the list/PATH checks that read its result"
 else
@@ -771,13 +835,13 @@ else
 fi
 
 # --- 6. Idempotency --------------------------------------------------------
-echo "[6] Idempotency"
+section "[6] Idempotency"
 # Runs under SMOKE too: with nothing installed the model is empty, and a sync over an
 # empty model must still exit 0 rather than find work that is not there.
 ok "second sync is a no-op (exit 0)" lx -y sync
 
 # --- 7. Negative path ------------------------------------------------------
-echo "[7] Negative path"
+section "[7] Negative path"
 # **`nok_saying`, and the pattern is the subject.** A bare `nok` scores any non-zero exit,
 # so the fail-everything stub of `scripts/harness-mutation-test.sh` passed this check by
 # printing `shall: this stub fails everything` and exiting 1. The stub never echoes its
@@ -804,7 +868,7 @@ if [ -f "$IMPERATIVE" ]; then
 fi
 
 # --- 8. Adopt (Part IV proof) ---------------------------------------------
-echo "[8] Adopt"
+section "[8] Adopt"
 ADOPTED_FILE="$SHALL_CONFIG_DIR/modules/adopted.txt"
 nok "nothing is adopted before adopt runs" test -s "$ADOPTED_FILE"
 ok "adopt takes manual packages" lx -y adopt
@@ -903,7 +967,7 @@ $BACKEND manual set=$MANUAL  $BACKEND installed=$INSTALLED_TOTAL"
 fi
 
 # --- 9. The guard (Part IV proofs) ----------------------------------------
-echo "[9] The guard"
+section "[9] The guard"
 # A protected package is never removed. Only survival is asserted: whether the
 # verb refuses or no-ops depends on whether it was declared, and an earlier
 # form asserted an exit code so convoluted that a correct refusal failed it.
@@ -952,7 +1016,7 @@ grep_ok "and the refusal after adopt still names its rule" \
     "protected\|essential\|allow-mass-removal\|allow-mass-purge" lx -y purge-undeclared
 
 # --- 10. Remove -------------------------------------------------------------
-echo "[10] Remove"
+section "[10] Remove"
 if [ -n "$SMOKE" ]; then
     skip_smoke "uninstall $PKG (nothing was installed to remove)"
 else
@@ -968,7 +1032,7 @@ else
 fi
 
 # --- 11. Git-backed history (Phase 4 / v7) --------------------------------
-echo "[11] Git history + rollback"
+section "[11] Git history + rollback"
 if ! on_path git; then
     # X.5 keeps git optional, which is not the same as its absence being an empty
     # answer. On an image with no git every history verb must SAY SO — `git log`
@@ -1001,7 +1065,7 @@ fi
 fi
 
 # --- 12. rebuild asserts, and writes no commit (K14) ----------------------
-echo "[12] rebuild"
+section "[12] rebuild"
 # Git is asked directly, not `shall git log`: a rebuild that committed by some
 # other route would still move HEAD, and only git can say so.
 commits() { git -C "$SHALL_CONFIG_DIR" rev-list --count HEAD 2>/dev/null || echo 0; }
@@ -1059,7 +1123,7 @@ fi
 fi
 
 # --- 13. Backend chains, the per-host lock, and unlock (II.7b) ------------
-echo "[13] Chains and the per-host lock"
+section "[13] Chains and the per-host lock"
 if [ -n "$SMOKE" ]; then
     # A lock entry is written by a run that changes the machine, so there is nothing
     # here to inspect. The grammar below is checked anyway: it is pure parsing.
@@ -1107,7 +1171,7 @@ fi
 ok "unlocking a name that was never frozen is not an error" lx unlock backends shall-never-frozen-zzz
 
 # --- 13b. A manager that could not answer is not one that said no (V.7c) --
-echo "[13b] Silence is not a no"
+section "[13b] Silence is not a no"
 REAL_CARGO=$(sh -c 'command -v cargo' 2>/dev/null)
 if [ -z "$REAL_CARGO" ]; then
     soft "no cargo in this image — cannot stage a manager that fails to answer"
@@ -1203,7 +1267,7 @@ setup_storage_devices() {
         if mkfs.btrfs -q -f /var/tmp/shall-btrfs.img >/dev/null 2>&1 \
            && mount -o loop /var/tmp/shall-btrfs.img /mnt/shall-btrfs >/dev/null 2>&1; then
             STORAGE_BTRFS=/mnt/shall-btrfs
-            PASS=$((PASS + 1)); echo "  PASS  btrfs: a real filesystem is mounted at $STORAGE_BTRFS"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  btrfs: a real filesystem is mounted at $STORAGE_BTRFS"
         else
             soft "btrfs: mkfs or mount failed in this container, so the lifecycle has nowhere to run"
         fi
@@ -1242,7 +1306,7 @@ setup_storage_devices() {
             if _probe="$(lvcreate -n shallprobe -L 8M shallvg 2>&1)"; then
                 lvremove -y shallvg/shallprobe >/dev/null 2>&1
                 STORAGE_LVM=shallvg
-                PASS=$((PASS + 1)); echo "  PASS  lvm: volume group $STORAGE_LVM exists on $_loop and can hold a volume"
+                PASS=$((PASS + 1)); _credit_section; echo "  PASS  lvm: volume group $STORAGE_LVM exists on $_loop and can hold a volume"
             else
                 soft "lvm: the volume group exists and \`lvcreate\` cannot make a volume in it, which is this container and not Shall — $(echo "$_probe" | tr '\n' ' ')"
             fi
@@ -1294,7 +1358,7 @@ setup_storage_devices() {
         fi
         if [ -z "$_zwhy" ]; then
             STORAGE_ZFS=shallpool
-            PASS=$((PASS + 1)); echo "  PASS  zfs: pool $STORAGE_ZFS is imported"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  zfs: pool $STORAGE_ZFS is imported"
         else
             soft "zfs: the module is loaded and the pool could not be created — $_zwhy"
         fi
@@ -1324,7 +1388,7 @@ teardown_storage_devices() {
 # after a successful install is HARD. That split is what caught the pixi
 # `global remove` vs `global uninstall` bug a dry-run plan could never see.
 setup_storage_devices
-echo "[14] Real lifecycle, every other manager on this image"
+section "[14] Real lifecycle, every other manager on this image"
 
 # canary <backend> → "package|binary|remove-mode|list-token|install-options"
 #   binary      empty when the package ships no executable — the PATH check is
@@ -1687,9 +1751,10 @@ assert_binary_gone() {
     if [ "$_now" = "$_was" ]; then
         if [ -n "$_now" ]; then
             PASS=$((PASS + 1))
+        _credit_section
             echo "  PASS  $_be: $_bin is back to the pre-install $_now (not this backend's copy)"
         else
-            PASS=$((PASS + 1)); echo "  PASS  $_be: $_bin is gone"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  $_be: $_bin is gone"
         fi
         return 0
     fi
@@ -1789,7 +1854,7 @@ lifecycle() {
             *)         echo "$be" >> "$LEDGER/be-life-partial"; undeclare_canary "$be:$cpkg"; return 0 ;;
         esac
     fi
-    PASS=$((PASS + 1)); echo "  PASS  $be installed $cpkg for real"
+    PASS=$((PASS + 1)); _credit_section; echo "  PASS  $be installed $cpkg for real"
     echo "$be" >> "$LEDGER/be-life"
 
     # Everything below is HARD: the install worked, so the manager answered, and a
@@ -1924,7 +1989,7 @@ storage_resize_lifecycle() {
     if _resize_to 128M && lx_slow -y sync >/tmp/resize.out 2>&1; then
         _after="$(_size_of "$_vol")"
         if [ -n "$_after" ] && [ -n "$_before" ] && [ "$_after" -gt "$_before" ]; then
-            PASS=$((PASS + 1)); echo "  PASS  lvm: a bigger @size grew $_vol, $_before -> $_after bytes"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  lvm: a bigger @size grew $_vol, $_before -> $_after bytes"
         else
             FAILC=$((FAILC + 1))
             FAILED_NAMES="$FAILED_NAMES\n    - lvm: @size=128M reported success and the volume is still $_after bytes"
@@ -1941,7 +2006,7 @@ storage_resize_lifecycle() {
     _grown="$(_size_of "$_vol")"
     if lx_slow -y sync >/tmp/resize.out 2>&1; then
         if [ "$(_size_of "$_vol")" = "$_grown" ]; then
-            PASS=$((PASS + 1)); echo "  PASS  lvm: a second sync over the same declaration left the volume alone"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  lvm: a second sync over the same declaration left the volume alone"
         else
             FAILC=$((FAILC + 1))
             FAILED_NAMES="$FAILED_NAMES\n    - lvm: a converged sync resized the volume again"
@@ -1959,7 +2024,7 @@ storage_resize_lifecycle() {
         echo "  FAIL  lvm: a smaller @size was accepted with no @allow_shrink"
     elif grep -q "allow_shrink" /tmp/resize.out; then
         if [ "$(_size_of "$_vol")" = "$_grown" ]; then
-            PASS=$((PASS + 1)); echo "  PASS  lvm: a smaller @size is refused by name and the volume is untouched at $_grown bytes"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  lvm: a smaller @size is refused by name and the volume is untouched at $_grown bytes"
         else
             FAILC=$((FAILC + 1))
             FAILED_NAMES="$FAILED_NAMES\n    - lvm: the shrink was refused and the volume changed anyway"
@@ -1975,7 +2040,7 @@ storage_resize_lifecycle() {
     if grep -q "allow_shrink=true" "$_mod" && lx_slow -y sync >/tmp/resize.out 2>&1; then
         _shrunk="$(_size_of "$_vol")"
         if [ -n "$_shrunk" ] && [ "$_shrunk" -lt "$_grown" ]; then
-            PASS=$((PASS + 1)); echo "  PASS  lvm: @allow_shrink shrank $_vol, $_grown -> $_shrunk bytes"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  lvm: @allow_shrink shrank $_vol, $_grown -> $_shrunk bytes"
         else
             FAILC=$((FAILC + 1))
             FAILED_NAMES="$FAILED_NAMES\n    - lvm: @allow_shrink reported success and the volume is still $_shrunk bytes"
@@ -2014,7 +2079,7 @@ storage_resize_lifecycle
 # The other two dependent statements are not here, and their reasons survive re-derivation:
 # `service:` needs an init system a container does not run, and `setting:` writes to a settings
 # store with no bus here. Both are drivable on the NATIVE sweeps, which are not containers.
-echo "[14b] A dependent statement driven for real: link:"
+section "[14b] A dependent statement driven for real: link:"
 if [ -n "$SMOKE" ]; then
     skip_smoke "the link: lifecycle"
 else
@@ -2091,7 +2156,7 @@ fi
 # REFUSES an unapproved script, then runs it once approved, then declines to run it twice under
 # `@runs=1`, then runs its `@undo=` when the line goes away, had never been seen outside a
 # fixture. Four rules, one lifecycle, and a container is exactly where it belongs.
-echo "[14c] shim:, dotfiles: and exec: driven for real"
+section "[14c] shim:, dotfiles: and exec: driven for real"
 if [ -n "$SMOKE" ]; then
     skip_smoke "the shim:, dotfiles: and exec: lifecycles"
 else
@@ -2293,7 +2358,7 @@ fi
 # wiring that can break. A dry-run install proves that path without a machine
 # that has the manager. V.15 refuses an unlisted backend, so the smoke config
 # lists every one.
-echo "[15] Plan-smoke, every backend this image cannot run"
+section "[15] Plan-smoke, every backend this image cannot run"
 
 ALL_BACKENDS=$(lx check health --json 2>/dev/null \
     | sed -n 's/.*"backend"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sort -u)
@@ -2376,7 +2441,7 @@ done
 # 24 of the previous run's 82 checks were `<cmd> --help`, which proves clap is
 # wired and nothing else. Every command below is actually executed; the ones that
 # cannot be are exempted BY NAME with a reason, in EXEMPT_CMDS.
-echo "[16] Command surface, executed"
+section "[16] Command surface, executed"
 
 ok "vars resolves this machine's variables" lx vars
 # `eval` is the one output that will acquire consumers Shall cannot see, so the
@@ -2387,7 +2452,7 @@ ok "eval emits valid JSON" sh -c "$SHALL eval | python3 -c 'import json,sys; jso
 # session drives the loop (`:help`, `:vars`) and exits on EOF, proving it runs headless; it goes
 # through `lx` so the coverage check below counts it as really executed, not merely `--help`'d.
 if printf ':help\n:vars\n:quit\n' | lx repl >/tmp/it.out 2>&1; then
-    PASS=$((PASS + 1)); echo "  PASS  repl evaluates a piped session and exits on EOF (U34)"
+    PASS=$((PASS + 1)); _credit_section; echo "  PASS  repl evaluates a piped session and exits on EOF (U34)"
 else
     FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES\n    - repl piped session failed"
     echo "  FAIL  repl piped session"; excerpt /tmp/it.out 4
@@ -2408,7 +2473,7 @@ ok "policy checks the desired state against [guard]" lx policy
 _rc=0
 lx check conflicts >/tmp/it.out 2>&1 || _rc=$?
 if [ "$_rc" -eq 0 ] || { [ "$_rc" -eq 2 ] && grep -q "MULTIPLE PROVIDERS" /tmp/it.out; }; then
-    PASS=$((PASS + 1)); echo "  PASS  check conflicts reports cross-backend conflicts"
+    PASS=$((PASS + 1)); _credit_section; echo "  PASS  check conflicts reports cross-backend conflicts"
 else
     FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES\n    - check conflicts (rc=$_rc)"
     echo "  FAIL  check conflicts (rc=$_rc)"; excerpt /tmp/it.out 4
@@ -2475,7 +2540,7 @@ ok "service list" lx service list
 # drives). Either it lists, or it says the backend cannot — an unexplained non-zero is
 # still a failure.
 if lx repo list >/tmp/it.out 2>&1; then
-    PASS=$((PASS + 1)); echo "  PASS  repo list enumerates repositories"
+    PASS=$((PASS + 1)); _credit_section; echo "  PASS  repo list enumerates repositories"
 else
     grep_ok "repo list says which backends cannot enumerate" \
         "not supported\|does not support" cat /tmp/it.out
@@ -2500,12 +2565,12 @@ ok "hooks shell-init prints the wrapper functions" lx hooks shell-init bash
 _heal_out=$(lx heal 2>&1); _heal_rc=$?
 if printf '%s' "$_heal_out" | grep -q "could not be recovered"; then
     if [ "$_heal_rc" -ne 0 ]; then
-        PASS=$((PASS + 1)); echo "  PASS  heal names what it could not recover, and says so in the exit code"
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  heal names what it could not recover, and says so in the exit code"
     else
         hard "heal reported an unrecovered operation and exited 0 (W36)"
     fi
 elif [ "$_heal_rc" -eq 0 ]; then
-    PASS=$((PASS + 1)); echo "  PASS  heal had nothing to recover and said nothing"
+    PASS=$((PASS + 1)); _credit_section; echo "  PASS  heal had nothing to recover and said nothing"
 else
     hard "heal exited $_heal_rc without naming anything it could not recover"
 fi
@@ -2553,7 +2618,7 @@ fi
 # The command runs either way; only reaching OSV.dev is optional, so a network
 # failure is soft — and `ok` is not used, because it would count the failure too.
 if lx check security >/tmp/it.out 2>&1; then
-    PASS=$((PASS + 1)); echo "  PASS  check security scans for vulnerabilities"
+    PASS=$((PASS + 1)); _credit_section; echo "  PASS  check security scans for vulnerabilities"
 else
     soft "check security ran but could not reach the OSV.dev database"
 fi
@@ -2571,6 +2636,15 @@ fi
 # `plan` exits 2 when it finds work (`H2`, owner 2026-08-13) — it is a read-only command
 # that looked, which is what 2 means. `answers` is the helper for exactly that: 0 or 2 is
 # an answer, 1 and 3 are not.
+# **The artifact is removed first, and that is the whole check.** `the plan file exists` reads a
+# fixed path in `/tmp` that nothing in the harness clears, so its verdict was whatever the last
+# run on this machine left behind: caught against a stub on a clean `/tmp`, and a PASS against
+# the same stub once any real run had been there — which is how it turned up as a new survivor of
+# the fail-everything stub in the middle of an unrelated change, eight checks of nothing to do
+# with plans. A presence assertion over a path the run is supposed to create is a claim about
+# *this* run, so this run creates it, and the removal is the only part that makes the assertion
+# mean anything.
+rm -f /tmp/shall-it-plan.json
 answers "plan freezes a reviewable file" lx plan --out /tmp/shall-it-plan.json
 ok "the plan file exists" test -f /tmp/shall-it-plan.json
 ok "apply reads a saved plan" lx --dry-run apply /tmp/shall-it-plan.json
@@ -2588,7 +2662,7 @@ grep_ok "and says --force is what overrides it" "force" lx reset
 ok "self-upgrade --check reports the version and source" lx self-upgrade --check
 
 # --- 16b. bundle → restore, the round trip (V.59) -------------------------
-echo "[16b] bundle → restore"
+section "[16b] bundle → restore"
 rm -rf /tmp/shall-it-bundle /tmp/shall-it-restored
 ok "bundle packs the config" lx bundle --out /tmp/shall-it-bundle
 ok "the bundle directory exists" test -d /tmp/shall-it-bundle
@@ -2610,7 +2684,7 @@ ok "and --force overrides it" \
 # --- 16c. `--help` for the whole surface ----------------------------------
 # Kept, but demoted: it catches a subcommand whose clap wiring is broken, and the
 # audit below does not accept it as coverage.
-echo "[16c] --help across the surface"
+section "[16c] --help across the surface"
 HELP_CMDS=$($SHALL --help 2>&1 | sed -n '/^Commands:/,/^Options:/p' \
     | sed -n 's/^  \([a-z][a-z-]*\) .*/\1/p' | grep -v '^help$' | sort -u)
 for c in $HELP_CMDS; do
@@ -2629,7 +2703,7 @@ done
 # graceful path and is what every other check here already exercises. Only SIGKILL leaves the
 # state this section is about — an entry on disk that says a package is being installed and a
 # process that will never come back to say how it went.
-echo "[16d] SIGKILL mid-transaction, then heal"
+section "[16d] SIGKILL mid-transaction, then heal"
 
 JOURNAL="$SHALL_DATA_DIR/journal.jsonl"
 
@@ -2820,6 +2894,7 @@ crash_run() {
             return 0
         fi
         PASS=$((PASS + 1))
+        _credit_section
         echo "  PASS  crash/$_tag: SIGKILL landed with $_closed operation(s) closed in the write-ahead log and $_opened still open, with $(crash_installed) of $CRASH_N canaries on disk"
     elif [ "$_opened" -lt 1 ]; then
         # Honest, and deliberately NOT a pass. The kill landed outside a transaction, so
@@ -2830,6 +2905,7 @@ crash_run() {
         return 0
     else
         PASS=$((PASS + 1))
+        _credit_section
         echo "  PASS  crash/$_tag: SIGKILL left $_opened newly-opened operation(s) in the write-ahead log ($_open_at_kill open in all), with $(crash_installed) of $CRASH_N canaries on disk"
     fi
 
@@ -2840,12 +2916,12 @@ crash_run() {
     #     that check has ever been able to mean anything.
     if printf '%s' "$_hout" | grep -q "could not be recovered"; then
         if [ "$_hrc" -ne 0 ]; then
-            PASS=$((PASS + 1)); echo "  PASS  crash/$_tag: heal named what it could not recover and said so in the exit code"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  crash/$_tag: heal named what it could not recover and said so in the exit code"
         else
             hard "crash/$_tag: heal reported an unrecovered operation and exited 0 (W36)"
         fi
     elif [ "$_hrc" -eq 0 ]; then
-        PASS=$((PASS + 1)); echo "  PASS  crash/$_tag: heal recovered the interrupted operation(s)"
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  crash/$_tag: heal recovered the interrupted operation(s)"
     else
         hard "crash/$_tag: heal exited $_hrc without naming anything it could not recover"
     fi
@@ -2856,7 +2932,7 @@ crash_run() {
     if printf '%s' "$_hout" | grep -q 'CommandFailed {\|absent_name:\|retry: Permanent\|retry: Transient'; then
         hard "crash/$_tag: heal printed the journal's own struct at the user — $(printf '%s' "$_hout" | grep -o 'CommandFailed {\|absent_name:\|retry: [A-Za-z]*' | head -1)"
     else
-        PASS=$((PASS + 1)); echo "  PASS  crash/$_tag: heal's report is in the user's words, not the journal's"
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  crash/$_tag: heal's report is in the user's words, not the journal's"
     fi
 
     # (3) Nothing is left open that heal did not name. An entry that stays InProgress is a
@@ -2867,7 +2943,7 @@ crash_run() {
         hard "crash/$_tag: $_still operation(s) are still open after heal (this crash opened $_opened of them), and heal named none of them"
         journal_open_names | head -5
     else
-        PASS=$((PASS + 1)); echo "  PASS  crash/$_tag: nothing is open in the log that heal did not name"
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  crash/$_tag: nothing is open in the log that heal did not name"
     fi
 
     # (4) The model still parses. A crash that wedges the config is E1's family one layer down.
@@ -2886,7 +2962,7 @@ crash_run() {
         lx why "$BACKEND:$_p" 2>&1 | grep -q "not under Shall management" && _unowned="$_unowned $_p"
     done
     if [ -z "$_unowned" ]; then
-        PASS=$((PASS + 1)); echo "  PASS  crash/$_tag: every canary the crash left on the machine is under Shall management"
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  crash/$_tag: every canary the crash left on the machine is under Shall management"
     else
         hard "crash/$_tag: the crash left$_unowned installed and under nobody's management, so the command for removing them will report success and take nothing away"
     fi
@@ -2894,7 +2970,7 @@ crash_run() {
     # (5) The promise the whole loop exists to test: the next sync converges onto the
     #     declaration, whatever the crash left behind.
     if lx_slow -y sync >"/tmp/crash-conv-$_tag.out" 2>&1 && [ "$(crash_installed)" -eq "$CRASH_N" ]; then
-        PASS=$((PASS + 1)); echo "  PASS  crash/$_tag: the sync after the crash converged onto all $CRASH_N canaries"
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  crash/$_tag: the sync after the crash converged onto all $CRASH_N canaries"
 
         # (6) ...and there is nothing left to do. A crash that leaves permanent phantom drift is
         #     indistinguishable from a converged machine until you ask twice, which is the half
@@ -2913,7 +2989,7 @@ crash_run() {
             if ! grep -q "Planned changes" "/tmp/crash-plan-$_tag.out" \
                || grep -qi "already up to date\|nothing to do" "/tmp/crash-plan-$_tag.out" \
                || grep -q "install 0 *remove 0" "/tmp/crash-plan-$_tag.out"; then
-                PASS=$((PASS + 1)); echo "  PASS  crash/$_tag: and the preview after that plans no change at all"
+                PASS=$((PASS + 1)); _credit_section; echo "  PASS  crash/$_tag: and the preview after that plans no change at all"
             else
                 hard "crash/$_tag: a converged machine still has a plan — $(grep -i 'install\|remove' "/tmp/crash-plan-$_tag.out" | head -2 | tr '\n' ' ')"
             fi
@@ -2926,7 +3002,7 @@ crash_run() {
         # contract here is smaller and still real: it must say what is wrong in words a person
         # can act on, and not with a panic. Silence and a stack trace are the two failures.
         if grep -qi "interrupt\|dpkg\|database\|lock\|run.*configure\|repair" "/tmp/crash-conv-$_tag.out"; then
-            PASS=$((PASS + 1)); echo "  PASS  crash/$_tag: the manager was left broken and Shall named the manager's own state"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  crash/$_tag: the manager was left broken and Shall named the manager's own state"
         elif grep -q "panicked at\|RUST_BACKTRACE" "/tmp/crash-conv-$_tag.out"; then
             hard "crash/$_tag: killing the package manager mid-write made Shall panic"
             excerpt "/tmp/crash-conv-$_tag.out" 6
@@ -2971,7 +3047,7 @@ crash_run() {
     # with them — a harness that breaks the machine on purpose owes it a repair.
     if [ -n "$_grp" ]; then
         if repair_manager && lx_slow -y sync >/tmp/crash-repair.out 2>&1; then
-            PASS=$((PASS + 1)); echo "  PASS  crash/$_tag: the repair Shall named put the manager back, and the next sync worked"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  crash/$_tag: the repair Shall named put the manager back, and the next sync worked"
         elif repair_manager; then
             hard "crash/$_tag: the manager's own repair ran and the sync after it still failed"
             excerpt /tmp/crash-repair.out 6
@@ -2983,7 +3059,7 @@ crash_run() {
     crash_wipe
     _left=$(crash_installed)
     if [ "$_left" -eq 0 ]; then
-        PASS=$((PASS + 1)); echo "  PASS  crash/$_tag: the canaries are off the machine again"
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  crash/$_tag: the canaries are off the machine again"
     else
         # A removal that reports success and leaves the file is the worst outcome this whole
         # section can produce, so it is hard and it prints what the removal actually said.
@@ -3037,7 +3113,7 @@ elif [ "$_baseline_total" -lt 1 ]; then
     # the one check in this round that survived a shall which fails everything.
     hard "journal: the write-ahead log has no entries at all after sixteen sections of installs and removals — nothing recorded an operation, so there is nothing to audit"
 elif [ "$_baseline_open" -eq 0 ]; then
-    PASS=$((PASS + 1)); echo "  PASS  journal: an ordinary run left nothing open in the write-ahead log ($_baseline_total recorded, $(journal_incomplete) failed-and-retryable)"
+    PASS=$((PASS + 1)); _credit_section; echo "  PASS  journal: an ordinary run left nothing open in the write-ahead log ($_baseline_total recorded, $(journal_incomplete) failed-and-retryable)"
 else
     hard "journal: $_baseline_open operation(s) are still open in the write-ahead log and nothing crashed — every command in this run either finished or failed, and both close their entry"
     journal_open_names | head -5
@@ -3066,13 +3142,13 @@ else
         >> "$JOURNAL"
     _hout=$(lx heal 2>&1); _hrc=$?
     if printf '%s' "$_hout" | grep -q "shallnosuchmgr"; then
-        PASS=$((PASS + 1)); echo "  PASS  heal: an operation it cannot act on is named rather than skipped in silence"
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  heal: an operation it cannot act on is named rather than skipped in silence"
     else
         hard "heal: an entry naming a manager this machine does not have was skipped without a word (rc=$_hrc)"
         printf '%s\n' "$_hout" | tail -4 | sed 's/^/        | /'
     fi
     if [ "$_hrc" -ne 0 ]; then
-        PASS=$((PASS + 1)); echo "  PASS  heal: and it says so in the exit code rather than reporting success"
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  heal: and it says so in the exit code rather than reporting success"
     else
         hard "heal: an operation was left unresolved and heal exited 0 — \`shall heal && echo ok\` prints ok (W36's family)"
     fi
@@ -3091,7 +3167,7 @@ else
     # would be measuring the fixture instead of the write-ahead log.
     crash_declare
     if lx_slow -y sync >/tmp/crash-control.out 2>&1 && [ "$(crash_installed)" -eq "$CRASH_N" ]; then
-        PASS=$((PASS + 1)); echo "  PASS  crash/heal: the control sync installs all $CRASH_N canaries ($CRASH_PKGS)"
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  crash/heal: the control sync installs all $CRASH_N canaries ($CRASH_PKGS)"
         CRASH_FIXTURE_OK=1
         crash_wipe
 
@@ -3128,7 +3204,7 @@ fi
 # dies, and the *stamp* beside it is written by a `Drop` that SIGKILL never runs — so after a
 # crash the file on disk still names a process that no longer exists. A wait driven off that
 # file rather than off the lock would hang for two minutes on a corpse.
-echo "[16e] Two runs at once, and killing the lock holder"
+section "[16e] Two runs at once, and killing the lock holder"
 
 LOCKFILE="$SHALL_DATA_DIR/shall.lock"
 LOCKOWNER="$SHALL_DATA_DIR/shall.lock.owner"
@@ -3156,7 +3232,7 @@ else
     kill -9 "$_holder" 2>/dev/null; wait "$_holder" 2>/dev/null
 
     if grep -q "waiting for the data directory" /tmp/two-writers.out; then
-        PASS=$((PASS + 1)); echo "  PASS  two-writers: the second run announced the wait instead of going quiet"
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  two-writers: the second run announced the wait instead of going quiet"
     else
         hard "two-writers: a second writer met a held lock and said nothing about waiting"
         excerpt /tmp/two-writers.out 6
@@ -3165,7 +3241,7 @@ else
     # a 12s holder at all, which is the failure this check exists for — a lock that is taken
     # and not honoured is worse than no lock, because the message says it is safe.
     if [ "$_waited" -ge 8 ]; then
-        PASS=$((PASS + 1)); echo "  PASS  two-writers: it waited ${_waited}s for the holder rather than writing alongside it"
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  two-writers: it waited ${_waited}s for the holder rather than writing alongside it"
     else
         hard "two-writers: the second run got past a held lock in ${_waited}s (the holder was to keep it for 12s)"
     fi
@@ -3177,7 +3253,7 @@ else
     # was one of five checks here that survived a do-nothing binary. Succeeding is only the
     # right answer if it waited first.
     if { [ "$_rc" -eq 0 ] || [ "$_rc" -eq 2 ]; } && [ "$_waited" -ge 8 ]; then
-        PASS=$((PASS + 1)); echo "  PASS  two-writers: and it proceeded once the lock was free (rc=$_rc, after ${_waited}s)"
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  two-writers: and it proceeded once the lock was free (rc=$_rc, after ${_waited}s)"
     elif [ "$_rc" -eq 0 ] || [ "$_rc" -eq 2 ]; then
         hard "two-writers: it succeeded in ${_waited}s without ever waiting for the holder"
     else
@@ -3217,7 +3293,7 @@ else
         # It names the command and the pid, not "another shall". A wait with no name is
         # indistinguishable from a hang, which is the whole reason the stamp file exists.
         if printf '%s' "$_stamp" | grep -q "pid $_holder"; then
-            PASS=$((PASS + 1)); echo "  PASS  lock: the holder published its own command and pid — $_stamp"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  lock: the holder published its own command and pid — $_stamp"
         else
             hard "lock: the holder's stamp does not name pid $_holder — it says '$_stamp'"
         fi
@@ -3228,7 +3304,7 @@ else
         # decided to wait by reading that FILE, this is where it costs two minutes.
         kill -9 "$_holder" 2>/dev/null; wait "$_holder" 2>/dev/null
         if [ -s "$LOCKOWNER" ]; then
-            PASS=$((PASS + 1)); echo "  PASS  lock: the stamp outlived the process that wrote it, which is the state under test"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  lock: the stamp outlived the process that wrote it, which is the state under test"
         else
             soft "lock: the stamp was already gone after the kill, so the corpse case below is weaker than intended"
         fi
@@ -3268,7 +3344,7 @@ else
             hard "lock: the killed holder's stamp is still on disk after a run that takes the lock — nothing took and released it, so this check had nothing to measure"
             excerpt /tmp/lock-corpse-probe.out 6
         else
-            PASS=$((PASS + 1)); echo "  PASS  lock: a killed holder's lock died with it — the next run took it in ${_probe}s and released it"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  lock: a killed holder's lock died with it — the next run took it in ${_probe}s and released it"
         fi
 
         # **The subject here is Shall's own lock, so the package manager's is cleared first.**
@@ -3301,7 +3377,7 @@ else
         else
             _why=""
             grep -q "shall: waiting for" /tmp/lock-corpse.out 2>/dev/null && _why=" (it waited for the package manager the killed run had started, and said so)"
-            PASS=$((PASS + 1)); echo "  PASS  lock: the sync after a killed holder claimed no wait on the data directory (${_took}s)${_why}"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  lock: the sync after a killed holder claimed no wait on the data directory (${_took}s)${_why}"
         fi
         # The other question, asked separately because it is a different question — and asked at
         # all only where the fixture it syncs is installable here. The sentence claims a *sync*
@@ -3330,7 +3406,7 @@ fi
 # for a password on the terminal Shall was started from; with no terminal there is nothing to
 # ask, and the check would be measuring the absence of the thing it is for. So this section
 # makes a user with a password, and drives Shall on a pty.
-echo "[16f] sudo with a real password, on a pty"
+section "[16f] sudo with a real password, on a pty"
 
 SUDO_USER_NAME=shallsudo
 SUDO_PW=shall-harness-pw
@@ -3468,14 +3544,14 @@ EOF
         run_as_sudoer "update" "$SUDO_PW" /tmp/sudo-update.out
         _rc=$?
         if grep -qi "password for\|Password:" /tmp/sudo-update.out; then
-            PASS=$((PASS + 1)); echo "  PASS  sudo: the password prompt reached the terminal"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  sudo: the password prompt reached the terminal"
         else
             hard "sudo: a privileged mutation ran as a non-root user and no password prompt ever reached the screen"
             excerpt /tmp/sudo-update.out 8
         fi
         # --- (2) and the password reached sudo -------------------------------
         if [ "$_rc" -eq 0 ]; then
-            PASS=$((PASS + 1)); echo "  PASS  sudo: the typed password reached sudo and the privileged command ran"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  sudo: the typed password reached sudo and the privileged command ran"
         else
             hard "sudo: the password was typed at a real prompt and the privileged command still failed (rc=$_rc)"
             excerpt /tmp/sudo-update.out 8
@@ -3494,7 +3570,7 @@ EOF
         elif [ "$_took" -ge 30 ]; then
             hard "sudo: a wrong password left Shall waiting ${_took}s against a \`sudo_password_timeout_secs\` of 5 — the bound is not being honoured"
         elif grep -qi "sorry, try again\|incorrect password\|authentication fail\|sudo" /tmp/sudo-wrong.out; then
-            PASS=$((PASS + 1)); echo "  PASS  sudo: a wrong password fails in ${_took}s and says which program refused"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  sudo: a wrong password fails in ${_took}s and says which program refused"
         else
             hard "sudo: a wrong password failed without naming sudo anywhere in the output"
             excerpt /tmp/sudo-wrong.out 8
@@ -3513,7 +3589,7 @@ EOF
         if [ "$_took" -ge 30 ]; then
             hard "sudo: a terminal with nobody at it wedged Shall for ${_took}s against a \`sudo_password_timeout_secs\` of 5 — the bound is not being honoured"
         elif [ "$_rc" -ne 0 ] && grep -qi "password\|sudo" /tmp/sudo-silent.out; then
-            PASS=$((PASS + 1)); echo "  PASS  sudo: an unanswered prompt is a bounded failure (${_took}s) that names sudo, not a wedge"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  sudo: an unanswered prompt is a bounded failure (${_took}s) that names sudo, not a wedge"
         elif [ "$_rc" -ne 0 ]; then
             hard "sudo: the run failed with nobody at the terminal and never mentioned a password or sudo — that is a different failure"
             excerpt /tmp/sudo-silent.out 6
@@ -3576,7 +3652,7 @@ EOF
             if [ "$_rc" -ne 0 ]; then
                 soft "sudo: the two-operation run did not complete (rc=$_rc), so the prompt count says nothing — $(tail -c 200 /tmp/sudo-onerun.out | tr '\n' ' ')"
             elif [ "$_asks" -le 1 ]; then
-                PASS=$((PASS + 1)); echo "  PASS  sudo: one run that installed and removed asked for a password $_asks time(s)"
+                PASS=$((PASS + 1)); _credit_section; echo "  PASS  sudo: one run that installed and removed asked for a password $_asks time(s)"
             else
                 hard "sudo: one run asked for a password $_asks times — the timestamp is not being held across a sync's manager calls"
             fi
@@ -3596,7 +3672,7 @@ EOF
             _rc=$?
             _sudo_installed=""
             if [ "$_rc" -eq 0 ] && on_path "$_sudo_pkg"; then
-                PASS=$((PASS + 1)); echo "  PASS  sudo: a non-root user installed $BACKEND:$_sudo_pkg, and the file is on disk"
+                PASS=$((PASS + 1)); _credit_section; echo "  PASS  sudo: a non-root user installed $BACKEND:$_sudo_pkg, and the file is on disk"
                 _sudo_installed=1
                 _mine_add "$_sudo_pkg"
             else
@@ -3619,7 +3695,7 @@ EOF
                     hard "sudo: the privileged uninstall of $BACKEND:$_sudo_pkg left the binary on PATH"
                     excerpt /tmp/sudo-remove.out 8
                 else
-                    PASS=$((PASS + 1)); echo "  PASS  sudo: and the same user removed it again"
+                    PASS=$((PASS + 1)); _credit_section; echo "  PASS  sudo: and the same user removed it again"
                 fi
             fi
         fi
@@ -3647,7 +3723,7 @@ EOF
         if [ -z "$_had" ]; then
             soft "sudo: this section installed nothing, so an empty manifest had nothing to take back"
         elif [ -z "$_left" ]; then
-            PASS=$((PASS + 1)); echo "  PASS  sudo: an empty manifest took back everything this section installed —$_had"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  sudo: an empty manifest took back everything this section installed —$_had"
         else
             hard "sudo: the section's own packages survived an empty manifest —$_left"
             excerpt /tmp/sudo-cleanup.out 8
@@ -3672,7 +3748,7 @@ fi
 # replaces the root subvolume, and zfs needs an out-of-tree kernel module this container's host
 # does not have. lvm is U27's exemplar USER row — thirty lines of data in `adapters/` — so
 # driving it proves the plugin door as well as the effector, which is the K17/U1 rule.
-echo "[16g] Snapshot → mutate → restore, on a real device"
+section "[16g] Snapshot → mutate → restore, on a real device"
 
 LVM_ORIGIN=""
 if [ -n "$SMOKE" ]; then
@@ -3729,7 +3805,7 @@ EOSNAP
     lx_slow -y sync >/tmp/restore-sync.out 2>&1
     _snaps="$(lvs --noheadings -o lv_name "$STORAGE_LVM" 2>/dev/null | tr -d ' ' | grep '^shall_' | head -1)"
     if [ -n "$_snaps" ]; then
-        PASS=$((PASS + 1)); echo "  PASS  restore: a mutating sync took a real LVM snapshot — $_snaps"
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  restore: a mutating sync took a real LVM snapshot — $_snaps"
         grep_ok "restore: snapshot list reports it" "shall_" lx snapshot list
 
         # --- (b) the control: no terminal, no gallery -------------------------
@@ -3769,7 +3845,7 @@ EOF
             hard "restore: the gallery still refuses a provider for its name — the row declares a live restore and the command does not read the row"
             excerpt /tmp/restore-abort.out 6
         elif grep -q "Type 'RESTORE'" /tmp/restore-abort.out; then
-            PASS=$((PASS + 1)); echo "  PASS  restore: a provider declared in a user row reaches the confirmation"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  restore: a provider declared in a user row reaches the confirmation"
         else
             hard "restore: the gallery never reached its confirmation prompt"
             excerpt /tmp/restore-abort.out 8
@@ -3777,7 +3853,7 @@ EOF
         # And it did nothing. A confirmation that acts on the wrong answer is worse than one
         # that never asked, so this is asked of LVM and not of Shall's output.
         if lvs --noheadings -o lv_name "$STORAGE_LVM" 2>/dev/null | tr -d ' ' | grep -q '^shall_'; then
-            PASS=$((PASS + 1)); echo "  PASS  restore: answering anything but RESTORE left the snapshot alone"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  restore: answering anything but RESTORE left the snapshot alone"
         else
             hard "restore: the snapshot was consumed by a confirmation that was answered 'no'"
         fi
@@ -3807,7 +3883,7 @@ EOF
         [ -f "$_marker_after" ] || _gone=1
         umount "$LVM_MNT" >/dev/null 2>&1
         if [ -n "$_back" ] && [ -n "$_gone" ]; then
-            PASS=$((PASS + 1)); echo "  PASS  restore: the filesystem is back to the snapshot — the pre-snapshot file returned and the post-snapshot file is gone"
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  restore: the filesystem is back to the snapshot — the pre-snapshot file returned and the post-snapshot file is gone"
         elif [ -n "$_back" ]; then
             hard "restore: the pre-snapshot file came back and the post-snapshot file survived — a half-merge"
             excerpt /tmp/restore-do.out 8
@@ -3830,7 +3906,7 @@ fi
 # ==========================================================================
 # The only check here that can notice what is MISSING from the list above it. A
 # backend or a command added next year fails this until it is covered.
-echo "[17] Coverage audit"
+section "[17] Coverage audit"
 
 # What the image SAID it shipped, against what is here.
 #
@@ -3853,6 +3929,7 @@ if [ -f /etc/shall-image-managers ]; then
         echo "        build log for its step before excusing the backend that needs it."
     else
         PASS=$((PASS + 1))
+        _credit_section
         echo "  PASS  every manager this image installs is present"
     fi
 fi
@@ -3883,7 +3960,7 @@ elif [ -n "$UNTOUCHED_BE" ]; then
     FAILED_NAMES="$FAILED_NAMES\n    - coverage: backend(s) no lifecycle and no plan-smoke touched:$UNTOUCHED_BE"
     echo "  FAIL  every registered backend is covered — untouched:$UNTOUCHED_BE"
 else
-    PASS=$((PASS + 1)); echo "  PASS  every registered backend got a lifecycle or a plan-smoke"
+    PASS=$((PASS + 1)); _credit_section; echo "  PASS  every registered backend got a lifecycle or a plan-smoke"
 fi
 
 # --- the release blocker, counted (Q4) -----------------------------------
@@ -3938,6 +4015,7 @@ if [ -z "$SMOKE" ] && [ -n "${SHALL_IT_IMAGE:-}" ]; then
         if grep -qx "$be" "$LEDGER/be-life" "$LEDGER/be-life-partial" \
                 "$LEDGER/be-life-unmeasured" 2>/dev/null; then
             PASS=$((PASS + 1))
+        _credit_section
             echo "  PASS  $be: the image that claims its lifecycle is this one, and it ran"
         else
             FAILC=$((FAILC + 1))
@@ -3977,7 +4055,7 @@ elif [ "$NO_PATH_N" -gt 0 ]; then
     soft "$NO_PATH_N backend(s) have no path to a real lifecycle (ceiling $LIFECYCLE_GAP_CEILING) —$NO_PATH"
     echo "        Q4: this is the release blocker, not a caption. Lower the ceiling as they land."
 else
-    PASS=$((PASS + 1)); echo "  PASS  every registered backend has a canary or a stated reason it cannot have one"
+    PASS=$((PASS + 1)); _credit_section; echo "  PASS  every registered backend has a canary or a stated reason it cannot have one"
 fi
 
 # --- the real-lifecycle ratchet (G-11) ------------------------------------
@@ -4105,6 +4183,7 @@ elif [ -f "$FLOOR_FILE" ]; then
         fi
     else
         PASS=$((PASS + 1))
+        _credit_section
         echo "  PASS  real-lifecycle ratchet: $LIFECYCLES >= $FLOOR recorded for $HOST_CLASS"
         [ "$LIFECYCLES" -gt "$FLOOR" ] &&             echo "        ratchet up:  sed -i 's/^$HOST_CLASS .*/$HOST_CLASS $LIFECYCLES/' $FLOOR_FILE"
     fi
@@ -4161,7 +4240,7 @@ elif [ -n "$UNTOUCHED_CMD" ]; then
     FAILED_NAMES="$FAILED_NAMES\n    - coverage: subcommand(s) only ever reached via --help:$UNTOUCHED_CMD"
     echo "  FAIL  every subcommand is executed — only --help'd:$UNTOUCHED_CMD"
 else
-    PASS=$((PASS + 1)); echo "  PASS  every non-exempt subcommand was executed, not just --help'd"
+    PASS=$((PASS + 1)); _credit_section; echo "  PASS  every non-exempt subcommand was executed, not just --help'd"
 fi
 
 # The container is thrown away either way, so this is not cleanup for its own sake: an
@@ -4171,6 +4250,7 @@ teardown_storage_devices
 
 # --- Summary ---------------------------------------------------------------
 echo "=============================================================="
+print_section_tally
 echo " RESULT  pass=$PASS  fail=$FAILC  soft=$SOFTC"
 if [ "$FAILC" -ne 0 ]; then
     printf " FAILURES:%b\n" "$FAILED_NAMES"
