@@ -19,7 +19,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 - [x] #77 watch blind to profiles/vars. (High)
 - [x] #78 single info() failure aborts whole plan. (High)
 - [x] #35 Reaped self-attestation token. (High)
-- [ ] #39 harness half-totem (mutation survival). (High)
+- [x] #39 harness half-totem (mutation survival). (High)
 - [ ] #40 two oracles that cannot fail. (Medium)
 - [ ] #96 CI: the 8 distro integration images are red on the container harness's `dir:` check (a
   check that never observes what it asserts). (High — the matrix is the only thing that reaches a

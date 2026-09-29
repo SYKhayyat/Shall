@@ -8,7 +8,7 @@
 #
 #   ./scripts/harness-mutation-test.sh                 # report
 #   ./scripts/harness-mutation-test.sh --check         # fail if the survival rate is over ceiling
-#   SURVIVOR_RATE=600 ./scripts/harness-mutation-test.sh --check      # permille
+#   SURVIVOR_RATE=550 ./scripts/harness-mutation-test.sh --check      # permille
 #   CAUGHT_FLOOR=30 ./scripts/harness-mutation-test.sh --check
 #   FAIL_SURVIVOR_RATE=100 FAIL_CAUGHT_FLOOR=90 ./scripts/harness-mutation-test.sh --check
 #
@@ -105,8 +105,35 @@ done
 # when the absence-after family got its positive controls. Both numbers move together, which
 # is what a real strengthening looks like: a survivor became a catch rather than a check
 # disappearing. The Windows row is untouched because nothing measured it this round.
+#
+# **Ratcheted again, on the container row only, for the presence direction (`stays_ok`).** The
+# round above anchored claims that something went AWAY. The mirror image was still unanchored:
+# `jq is still installed after unmanage` and `clean-cache frees archives without removing a
+# package` were `ok`s whose whole content was a presence the machine may already have had, and
+# **which one they were depended on the host** — a developer box that already had `jq` read
+# PASS, a clean runner read FAIL, same stub, same harness. `stays_ok` demands a sighting that
+# the package ARRIVED (the name resolving where it did not resolve before, G-3), so a survival
+# proof can no longer be satisfied by the image.
+#
+# Measured on the container harness, host, `apt jq`:
+#
+#            then                 now
+#   do-nothing   81/187 = 433     85/187 = 455    (survivors 106 -> 102, rate 566 -> 545)
+#   fail-everyth 175 caught        177 caught      (survivors  11 ->   9, rate  59 ->  48)
+#
+# **The floor below is what makes the second row a strengthening rather than a subtraction**: the
+# check count is identical at 187 in both, so a survivor that became a catch moved the rate
+# rather than shrinking the harness.
+#
+# 600 -> 550 is the whole ratchet, and it is set above the number measured HERE rather than at
+# it. This box is not a container: it runs eight checks fewer than a CI runner does (187 against
+# 195), so a rate measured on it reads high for a reason that has nothing to do with the checks.
+# 545 is what was measured and 550 is the ceiling; the CI rate should land near 528 on the same
+# arithmetic, and 550 covers both without having to be re-measured on a runner to be believed.
+# The Windows row is untouched — nothing measured it, and a ratchet taken from another host
+# class would be the count mistake this file exists to stop.
 case "$HARNESS" in
-    */run-in-container.sh) DEFAULT_RATE=600; DEFAULT_FLOOR=80 ;;
+    */run-in-container.sh) DEFAULT_RATE=550; DEFAULT_FLOOR=80 ;;
     *)                     DEFAULT_RATE=690; DEFAULT_FLOOR=42 ;;
 esac
 RATE_CEILING="${SURVIVOR_RATE:-$DEFAULT_RATE}"
@@ -182,34 +209,61 @@ FLOOR="${CAUGHT_FLOOR:-$DEFAULT_FLOOR}"
 # error names `/` and no longer contains the pattern. Right hypothesis, different command. It
 # is guarded on the shim existing now.
 #
-# **The 10 that remain are three shapes a fail-everything stub cannot distinguish, plus one
-# artefact of the instrument. None of them is a weak check and none of them is a job.**
+# **The 8 that remain are three shapes a fail-everything stub cannot distinguish. None of them
+# is a weak check and none of them is a job.** This list is re-measured, not inherited: the
+# round above wrote down 10 and named them, and the `stays_ok` batch took 3 of the 11 that were
+# actually there. **One of the three it took was not in the list at all** — `$PKG is reinstalled,
+# not left removed` had been surviving for as long as the checks above it and no one had written
+# it down, which is the argument for reading the run's own survivor list rather than the last
+# summary of it.
 #
 #    5 PRECONDITIONS — "no shim exists before the sync that deploys it", "nothing is adopted
-#      before adopt runs", "the link target does not exist before sync", "the tree's
-#      destinations are empty before sync", "the service is disabled and stopped before the
-#      declaration". These run BEFORE the product acts, so no product behaviour can move them.
-#      They are the controls the checks after them depend on; deleting them to lower this
-#      number would weaken the harness while improving its score.
-#    3 assertions that the product showed RESTRAINT — "and freezes nothing", "and the
-#      unapproved script did NOT run", "dry-run did NOT actually install jq". There is no
-#      earlier presence to witness, because the whole claim is that nothing was ever written.
-#      A stub that does nothing has exactly the same restraint, and no instrument of this shape
-#      can tell the two apart.
-#    1 assertion that Shall did not break what the image already had — "python3 still
-#      installed after adopt". Same shape as the three above.
+#      before adopt runs", "the link target does not exist before sync", "the dir target does
+#      not exist before sync", "the tree's destinations are empty before sync". These run
+#      BEFORE the product acts, so no product behaviour can move them. They are the controls
+#      the checks after them depend on; deleting them to lower this number would weaken the
+#      harness while improving its score.
+#    2 assertions that the product showed RESTRAINT — "and freezes nothing", "and the
+#      unapproved script did NOT run". There is no earlier presence to witness, because the
+#      whole claim is that nothing was ever written. A stub that does nothing has exactly the
+#      same restraint, and no instrument of this shape can tell the two apart.
 #    1 INSTRUMENT ARTEFACT — "git log shows a shall commit" greps for `shall:`, and the fail
 #      stub writes `shall: this stub fails everything` to stderr, which `grep_ok` folds into
 #      its output. The check is not weak; the stub's prefix collides with the product's
 #      commit-subject prefix. Changing either to break the collision would make the stub or the
 #      product less like itself, which is a worse trade than one known survivor.
 #
+# **What went, and the reason is the same one each time: the check asserted a presence the
+# machine may have owned before the run.** `python3 still installed after adopt` is now gated on
+# adopt having taken a row of this manager at all, which is this file's own "a bound over an
+# empty set is not an assertion" rule applied to the case that rule had not been applied to. The
+# other two were converted to `stays_ok`. Neither a presence the product never wrote nor one a
+# command that could have removed it left should ever have been scored without a record of the
+# arrival behind it.
+#
 # So the ceiling below is a MEASUREMENT with a few points of runner slack, not a loosening.
 # Still a ratchet in the same direction: lower it when a batch is fixed, never raise it to get
 # green. The Windows row is unchanged — the same `witness`/`gone_ok` pair landed in that
 # harness for its two absence-after checks, and nothing measured the result this round.
+#
+# **The fail-stub row was ratcheted with the `stays_ok` batch: 70 -> 60, for the same
+# measurement and the same reason.** Host `apt jq`: 11 survivors of 186 (59 permille) became 9
+# of 186 (48). Two of the three that went are the presence-direction pair, and they went for the
+# sharper reason — against a shall that installs nothing there is no arrival to witness, so
+# `stays_ok` now `hard`s by name instead of reading "(was there, still there)" over a binary the
+# image owned. 60 is set above the 48 measured here for the same host-class reason as the row
+# above, and the 9 that remain are the documented irreducible set: five preconditions, three
+# RESTRAINT claims, and the one instrument artefact whose stub prefix collides with the
+# product's own commit subject.
+#
+# `FAIL_CAUGHT_FLOOR` is deliberately NOT ratcheted, and the reason is worth recording. It reads
+# 178 and this host measures 177 — and it measured 175 before this batch, so the shortfall is
+# pre-existing and is the host/runner gap the paragraph above describes, not a regression here.
+# Lowering a floor because the machine you are standing on is not the machine the number was
+# measured on is the exact move the "never down to get green" line forbids. It will read green
+# on a runner; what it reads here is a stated fact about this box.
 case "$HARNESS" in
-    */run-in-container.sh) DEFAULT_FAIL_RATE=70;  DEFAULT_FAIL_FLOOR=178 ;;
+    */run-in-container.sh) DEFAULT_FAIL_RATE=60;  DEFAULT_FAIL_FLOOR=178 ;;
     *)                     DEFAULT_FAIL_RATE=90;  DEFAULT_FAIL_FLOOR=108 ;;
 esac
 FAIL_RATE_CEILING="${FAIL_SURVIVOR_RATE:-$DEFAULT_FAIL_RATE}"

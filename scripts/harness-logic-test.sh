@@ -46,6 +46,22 @@ lift() {
 # which reads as the harness being broken rather than this file's awk being short: worth
 # knowing, because the first instinct was to shrink the function to fit the test measuring it.
 
+outcome() { # label want cmd...
+    _olabel="$1"; _owant="$2"; shift 2
+    TOTAL=$((TOTAL + 1))
+    _op0=$PASS; _of0=$FAILC; _os0=$SOFTC
+    "$@" >/dev/null 2>&1
+    if   [ "$PASS"  -gt "$_op0" ]; then _ogot=pass
+    elif [ "$FAILC" -gt "$_of0" ]; then _ogot=fail
+    elif [ "$SOFTC" -gt "$_os0" ]; then _ogot=soft
+    else _ogot=none; fi
+    if [ "$_ogot" = "$_owant" ]; then
+        echo "  ok    $_olabel -> $_ogot"
+    else
+        echo "  BAD   $_olabel -> $_ogot (wanted $_owant)"; BAD=$((BAD + 1))
+    fi
+}
+
 run_against() {
     SRC="$1"
     echo "== $SRC"
@@ -151,22 +167,6 @@ run_against() {
     _rlog="$_rd/install.log"
     printf '%s\n' "  WARN shall::verbs::sync: \`go\` installs its executables into $_rd, which is not on your PATH — so what it just installed will answer \"command not found\"." > "$_rlog"
 
-    outcome() { # label want cmd...
-        _olabel="$1"; _owant="$2"; shift 2
-        TOTAL=$((TOTAL + 1))
-        _op0=$PASS; _of0=$FAILC; _os0=$SOFTC
-        "$@" >/dev/null 2>&1
-        if   [ "$PASS"  -gt "$_op0" ]; then _ogot=pass
-        elif [ "$FAILC" -gt "$_of0" ]; then _ogot=fail
-        elif [ "$SOFTC" -gt "$_os0" ]; then _ogot=soft
-        else _ogot=none; fi
-        if [ "$_ogot" = "$_owant" ]; then
-            echo "  ok    $_olabel -> $_ogot"
-        else
-            echo "  BAD   $_olabel -> $_ogot (wanted $_owant)"; BAD=$((BAD + 1))
-        fi
-    }
-
     # The defect this check exists for: installed, unreachable, and nothing said so.
     outcome "unreachable and unexplained" fail assert_binary_reachable go "$_rbin" "$_rd/no-such.log"
 
@@ -244,6 +244,67 @@ run_against() {
 }
 
 for src in $SOURCES; do run_against "$src"; done
+
+# ---------------------------------------------------------------------------
+# `witness`, `gone_ok` and `stays_ok`, driven in both directions.
+#
+# II.23: the oracle drives the same predicate the check drives. These three exist to make a
+# harness check capable of failing, and the only way to know one still can is to take it away
+# from a working run and watch it go red — a check of the check that stops matching is a check
+# that stops being a check.
+#
+# **`stays_ok` is the newest and the one that needed this most**, because the defect it fixes is
+# invisible to a review of the harness text: `ok "$PKG is still installed after unmanage"` reads
+# as an assertion, and on a machine that already had the package it was one — just not of
+# Shall. Both directions are driven, and so is the one that matters most, which is the one where
+# the subject is present and unwitnessed. That case is the whole defect, and if the predicate
+# ever stops refusing it, every survival proof in both harnesses silently returns to being a
+# tautology.
+for src in $SOURCES; do
+    echo "== $src: a survival proof needs an arrival"
+    [ -f "$src" ] || { echo "  FATAL: no such harness"; BAD=$((BAD + 1)); continue; }
+
+    PASS=0; FAILC=0; SOFTC=0; FAILED_NAMES=""
+    soft() { SOFTC=$((SOFTC + 1)); }
+    hard() { FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES
+    - $1"; }
+
+    for _fn in _seen_tag witness gone_ok stays_ok; do
+        _body="$(lift "$_fn" "$src")"
+        if [ -z "$_body" ]; then
+            echo "  FATAL: could not lift $_fn() from $src"
+            TOTAL=$((TOTAL + 1)); BAD=$((BAD + 1)); continue 2
+        fi
+        eval "$_body"
+    done
+
+    _wd="$(mktemp -d)"; LEDGER="$_wd"; mkdir -p "$LEDGER"
+    : > "$_wd/present"; rm -f "$_wd/absent"
+
+    # The control, and the reason the other three are worth reading: a survival proof about a
+    # package this run installed. `witness` on something true, then the command passes.
+    witness pkg test -f "$_wd/present"
+    outcome "a subject that arrived and is still there" pass \
+        stays_ok "arrived and survived" pkg test -f "$_wd/present"
+    # **The defect.** The subject is right there and this run never saw it arrive — the machine
+    # had it before the harness started. A bare `ok` scores this `pass`, on a `shall` that
+    # installed nothing, which is the entire reason the predicate exists.
+    outcome "a subject this run never saw arrive" fail \
+        stays_ok "present but unwitnessed" never-arrived test -f "$_wd/present"
+    # And the command actually failing is not a substitute for the arrival — that is how a
+    # package the run removed for its own reasons would pass as a survival proof.
+    outcome "an arrival recorded and the subject then gone" fail \
+        stays_ok "arrived and vanished" pkg test -f "$_wd/absent"
+
+    # The other direction, because the two are the same rule read from opposite ends and an
+    # oracle that only drives one of them is half an oracle.
+    outcome "an arrival that went away" pass \
+        gone_ok "arrived and removed" pkg test -f "$_wd/absent"
+    outcome "an absence with no arrival behind it" fail \
+        gone_ok "gone but never seen" never-arrived test -f "$_wd/absent"
+
+    rm -rf "$_wd"
+done
 
 # ---------------------------------------------------------------------------
 # Every subcommand a harness invokes must exist in the binary.

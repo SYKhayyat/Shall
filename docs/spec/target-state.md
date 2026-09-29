@@ -2816,6 +2816,22 @@ and the floor fails before the emptiness can be read as health.
 **Ratchets are bidirectional.** A count that may only shrink is asserted `<= n` *and* `>= n`, so
 slack that was lowered and never re-pinned is as red as growth.
 
+**And the same floor has a presence direction, which is the one an absence-only instrument
+cannot see.** A claim that something is *still* there is a presence assertion, and a system
+that never touched the subject satisfies it whenever the machine already had one — so
+`clean-cache did not remove the package` is proved by the image, not by the product, and *which
+one it is depends on the host*: the same check reads PASS on a machine that already had the
+canary and FAIL on a clean runner. A survival proof is therefore only a proof if the thing was
+seen to **arrive** first, and "arrived" is a claim about this run's own history rather than
+about the current state, which is why it cannot be answered by the predicate under test.
+
+**So both directions are named predicates, and neither infers its subject from the state it is
+asserting.** `witness`/`gone_ok` anchor a claim that something went away; `stays_ok` anchors a
+claim that it is still here, and refuses to score either for a subject this run never saw
+arrive. An absence with nothing behind it and a presence with nothing behind it are the same
+defect read from two ends, and the instrument that only covers one end reports half a harness
+as sound.
+
 ## II.24 A command says whether it writes; a list beside the enum does not (`S50`, V.155)
 
 **How a run takes the exclusive lock on `data/` is answered by `Commands::lock_scope()`, an

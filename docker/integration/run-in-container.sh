@@ -316,6 +316,40 @@ gone_ok() { # gone_ok "desc" <tag> cmd... — cmd must FAIL now and have SUCCEED
     PASS=$((PASS + 1)); echo "  PASS  $_g_desc (was there, now gone)"; return 0
 }
 
+# The other direction, and it needs the same control for the opposite reason.
+#
+# `gone_ok` asks "did this go away", and a product that never put it there answers yes. `stays_ok`
+# asks "is this still here", and a product that never touched it also answers yes — because the
+# image already had it. **A presence assertion over something the machine shipped before the run
+# is not a check, and which one it is depends on the host**: measured as the reason
+# `jq is still installed after unmanage` and `clean-cache frees archives without removing a
+# package` were survivors of a do-nothing binary on a developer's box (where `jq` was already on
+# PATH) and catches of the same binary on a clean runner (where it was not). Two verdicts, one
+# check, decided by what the image happened to ship.
+#
+# So this one demands a sighting recorded EARLIER in the run: the thing has to have been seen to
+# ARRIVE, not merely to be present. Both users above are commands that could have removed a
+# package Shall had installed, so their survival claim is about a package this run put on the
+# machine — and that is the arrival to witness.
+#
+# `hard` rather than a soft when the sighting is missing, and deliberately: a SMOKE_ONLY run
+# installs nothing, so there is no arrival to witness and the proof cannot run. Those callers sit
+# behind `skip_smoke`, which is the place that says so. A caller that reaches this without one
+# is a caller asserting survival of something the run never owned.
+stays_ok() { # stays_ok "desc" <tag> cmd... — cmd must SUCCEED now, having been witnessed earlier
+    _s_desc="$1"; _s_tag="$2"; shift 2
+    if [ ! -f "$LEDGER/seen/$(_seen_tag "$_s_tag")" ]; then
+        hard "$_s_desc (nothing in this run was ever seen as '$_s_tag', so its being here now proves nothing)"
+        return 1
+    fi
+    if "$@" >/tmp/it.out 2>&1; then
+        PASS=$((PASS + 1)); echo "  PASS  $_s_desc (was there, still there)"; return 0
+    fi
+    FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES
+    - $_s_desc (it is gone)"
+    echo "  FAIL  $_s_desc (it is gone)"; return 1
+}
+
 # Why an install failed — a question, not an assumption (E5).
 #
 # Both harnesses used to soften ANY install failure into a claim about the network, and skip
@@ -662,8 +696,17 @@ ok "check drift" lx check drift
 # an answer, 1 and 3 are not.
 answers "plan (no changes yet)" lx plan --dry-run
 answers "check parses the model" lx check
-ok "check absent lists nothing" lx check absent
-ok "protected lists guarded packages" lx protected
+# **Two claims about what Shall PRINTS, not about what it returns.** Both used to be bare
+# `ok`s, and a do-nothing binary passes both — an absence of output and an exit code of 0 are
+# the same observation. `check absent`'s name says "lists nothing", which is a statement about
+# the sentence it prints, and `protected`'s says "lists guarded packages", which is a
+# statement about a list. Neither is a statement about the exit status.
+#
+# The `absent:` pattern matches the backticks Shall wraps the key in without naming them: a
+# pattern with a literal backtick inside double quotes is a command substitution in a POSIX
+# shell, and the harness runs under dash.
+grep_ok "check absent says nothing is declared absent" "No .absent:. lines are in force" lx check absent
+grep_ok "protected lists guarded packages" "Protected packages" lx protected
 # **`shall` is not in this alternation, and it used to be.** The pattern matched the
 # program's own name, so ANY output mentioning Shall satisfied it — including the mutation
 # stub's `shall: this stub fails everything`, which is exactly how this check passed against
@@ -707,6 +750,23 @@ else
     cp /tmp/it.out /tmp/it-life0.out 2>/dev/null || true
     grep_ok "list shows $PKG" "$PKG" lx list
     assert_binary_reachable "$BACKEND" "$PKG" /tmp/it-life0.out "$PKG_PREPATH"
+    # **The arrival, recorded — and recorded as an ARRIVAL rather than as a presence.** Two
+    # sections later the harness asserts that commands which could have removed `$PKG` did not,
+    # and on any machine that already owns a binary of that name that assertion is satisfied by
+    # the machine rather than by this install — which is why it read PASS on a developer box and
+    # FAIL on a clean runner for the same stub. `stays_ok` needs to know the package arrived.
+    #
+    # "The name resolves somewhere it did not resolve before" is the harness's own test for that
+    # (G-3) and `assert_binary_reachable` two lines above is already failing this run by name when
+    # it is false, so it introduces no new way for an image to go red: a machine that already had
+    # the canary is refused by the reachability check, not by this one. Presence alone is not
+    # enough and demonstrably was not — a witness taken on presence recorded an arrival for an
+    # install that never ran, and both survival proofs then read "(was there, still there)"
+    # against a shall that installed nothing.
+    PKG_AFTER="$(path_of "$PKG")"
+    if [ -n "$PKG_AFTER" ] && [ "$PKG_AFTER" != "$PKG_PREPATH" ]; then
+        witness pkg-installed binary_present "$BACKEND" "$PKG" /tmp/it-life0.out
+    fi
     echo "$BACKEND" >> "$LEDGER/be-life"
 fi
 
@@ -753,14 +813,6 @@ ok "adopt takes manual packages" lx -y adopt
 # "what is installed", which adopt does not change, so reading it proves nothing —
 # the adoption manifest is the only file that records what adopt decided.
 if [ "$BACKEND" = "apt" ] || [ "$BACKEND" = "dnf" ] || [ "$BACKEND" = "pacman" ]; then
-    if command -v python3 >/dev/null 2>&1; then
-        # `on_path`, not `binary_present`: python3 is the image's own, installed by apt into
-        # /usr/bin before this harness ran, so there is no install of ours to have named a
-        # directory for.
-        ok "python3 still installed after adopt" on_path python3
-    else
-        soft "python3 not on this image — cannot check the survival proof"
-    fi
     # No `|| echo 0`: `grep -c` prints the count AND exits 1 when it is zero, so the
     # fallback would append a second line and every later `test -ge` would be a syntax
     # error instead of a comparison.
@@ -785,6 +837,25 @@ if [ "$BACKEND" = "apt" ] || [ "$BACKEND" = "dnf" ] || [ "$BACKEND" = "pacman" ]
 $BACKEND manual set=$MANUAL  $BACKEND installed=$INSTALLED_TOTAL"
     ok "adopt wrote an adoption manifest" test -s "$ADOPTED_FILE"
     ok "adopt recorded at least one package" test "$ADOPTED" -ge 1
+    # **A survival proof needs something to have survived, and this one did not have one.**
+    # `python3` is on the image before Shall ever runs, so `python3 still installed after adopt`
+    # passed against a binary that adopted nothing at all — the same empty-set bound the two
+    # checks below are reported unmeasured for, in the same section, for the same reason. It ran
+    # BEFORE these counts were computed, which is why it could not know; it is here now so it
+    # can. With a row of this manager adopted there was a removal for python3 to have escaped,
+    # and with none there was nothing to escape.
+    #
+    # `on_path`, not `binary_present`: python3 is the image's own, installed by apt into
+    # /usr/bin before this harness ran, so there is no install of ours to have named a
+    # directory for — and that is also why the arrival cannot be witnessed the way section 5's
+    # package is. A row of this manager's is the only thing here that is not the image's own.
+    if [ "$ADOPTED_NATIVE" -le 0 ]; then
+        soft "adopt took no $BACKEND: row, so python3's survival across it is unmeasured rather than proved"
+    elif ! command -v python3 >/dev/null 2>&1; then
+        soft "python3 not on this image — cannot check the survival proof"
+    else
+        ok "python3 still installed after adopt" on_path python3
+    fi
     # **Both bounds below are satisfied by zero**, which is what an adopt that did nothing
     # leaves behind — measured as two of the fail-stub survivors. A bound over an empty
     # set is not a weak assertion, it is no assertion, so it reports as unmeasured rather
@@ -885,12 +956,14 @@ echo "[10] Remove"
 if [ -n "$SMOKE" ]; then
     skip_smoke "uninstall $PKG (nothing was installed to remove)"
 else
-    # Witnessed BEFORE the uninstall, not after: "the binary is gone" over a package that was
-    # never installed is the same PASS as over one Shall removed, and under the fail-everything
-    # stub that is exactly what it was.
-    witness pkg-binary binary_present "$BACKEND" "$PKG" /tmp/it-life0.out
+    # Witnessed in section 5, where the install is, rather than here: "the binary is gone" over
+    # a package that was never installed is the same PASS as over one Shall removed, and under
+    # the fail-everything stub that is exactly what it was. This used to take a second sighting
+    # of its own, on presence rather than on an arrival — so on a host that already had the
+    # package it witnessed the host's copy and the absence below then read as proof. One tag,
+    # one meaning, recorded once, at the only place that can see an arrival.
     ok "uninstall $PKG" lx -y uninstall "$PKG"
-    gone_ok "$PKG binary gone after uninstall" pkg-binary \
+    gone_ok "$PKG binary gone after uninstall" pkg-installed \
         binary_present "$BACKEND" "$PKG" /tmp/it-life0.out
 fi
 
@@ -958,7 +1031,15 @@ fi
 # would churn every manual package on the image to prove a claim about one.
 ok "rebuild $PKG runs" lx_slow -y rebuild "$PKG"
 cp /tmp/it.out /tmp/it-rebuild.out 2>/dev/null || true
-ok "$PKG is reinstalled, not left removed" binary_present "$BACKEND" "$PKG" /tmp/it-rebuild.out
+# **The third member of the same family, and the reason the family had to be swept rather than
+# patched.** `stays_ok` went in for the two survival proofs in section 16; this is a survival
+# proof too, four sections earlier, with the same shape — the machine's own copy of the canary
+# satisfies it whether or not the rebuild put it there, which is why it read PASS on this host
+# against a shall that rebuilds nothing and would read FAIL on a clean runner. Same tag, same
+# arrival, same instrument: a claim that something SURVIVED an operation is a claim about a
+# package this run installed, and the run's own record of having installed it is the control.
+stays_ok "$PKG is reinstalled, not left removed" pkg-installed \
+    binary_present "$BACKEND" "$PKG" /tmp/it-rebuild.out
 AFTER_COMMITS=$(commits)
 echo "        commits before=$BEFORE_COMMITS after=$AFTER_COMMITS"
 # Guarded by the same question, because `0 = 0` is what this reads on an image with no git —
@@ -1945,6 +2026,19 @@ else
 ' > "$LINK_SRC"
     rm -f "$LINK_DST"
     _limp="$SHALL_CONFIG_DIR/modules/imperative.txt"
+    # **The harness owns this file now, and used to assume `shall init` had made it.** Every
+    # declaration in 14b and 14c is appended here with `>>`, and an append to a path whose
+    # directory does not exist fails — so on any run where `init` did not scaffold, the whole
+    # of both sections executed with no declaration in the file, the `grep -v` teardowns wrote
+    # nothing, and the only evidence was a dozen `No such file or directory` lines scrolling
+    # past between checks that still reported PASS. The sections looked live and were not.
+    #
+    # Created only when missing, so a real run keeps exactly the file `shall init` made and
+    # `shall install` has been appending to. And created BEFORE the first append, not after:
+    # the order is the whole point, since the failure it removes is an append that silently did
+    # nothing.
+    mkdir -p "$SHALL_CONFIG_DIR/modules"
+    [ -f "$_limp" ] || : > "$_limp"
     # The imperative module is already reached by the active profile — `shall install` writes
     # here — so appending needs no profile wiring, which would be a second way to do it.
     printf 'link:./%s @target=%s
@@ -2415,7 +2509,24 @@ elif [ "$_heal_rc" -eq 0 ]; then
 else
     hard "heal exited $_heal_rc without naming anything it could not recover"
 fi
-ok "clean-cache frees archives without removing a package" lx clean-cache
+# **The command is NOT behind the SMOKE guard; only the survival half is.** It was, and the
+# coverage audit refused the run by name — `every subcommand is executed — only --help'd:
+# clean-cache` — because a SMOKE_ONLY image then never runs the verb at all. That is IV.1 doing
+# its job: `clean-cache` installs nothing and removes nothing, so there is no reason for it to
+# be skipped, and skipping it is a hole in the subcommand ledger rather than a saving. The
+# gentoo leg is SMOKE_ONLY by construction, so this would have taken that leg with it.
+ok "clean-cache frees archives" lx clean-cache
+if [ -n "$SMOKE" ]; then
+    skip_smoke "the proof that clean-cache left the package behind (nothing was installed)"
+else
+    # **Split in two, and the second half is the one with teeth.** This used to be one check
+    # named `clean-cache frees archives without removing a package`, which asserted only that
+    # the command exited 0 — and the "without removing a package" was a claim no command in the
+    # line examined. On an image that already had jq, it is satisfied by the image; on a clean
+    # runner it is not. `stays_ok` settles both: the package has to be one this run installed.
+    stays_ok "and without removing a package" pkg-installed \
+        binary_present "$BACKEND" "$PKG" /tmp/it-life0.out
+fi
 ok "update refreshes repository metadata" lx update
 ok "watch --once runs a single unattended reconcile" lx -y watch --once
 ok "search finds something" lx search "$PKG"
@@ -2433,7 +2544,11 @@ ok "unmanage forgets a package without uninstalling it" lx unmanage "$PKG"
 if [ -n "$SMOKE" ]; then
     skip_smoke "the proof that unmanage left the package behind (nothing was installed)"
 else
-    ok "$PKG is still installed after unmanage" binary_present "$BACKEND" "$PKG" /tmp/it-life0.out
+    # Was `ok`, and read PASS on any host where jq was already on PATH — which is a fact about
+    # the image, not about `unmanage`. Anchored to the install in section 5, so it says whether
+    # the package Shall put on this machine survived a command meant to forget it.
+    stays_ok "$PKG is still installed after unmanage" pkg-installed \
+        binary_present "$BACKEND" "$PKG" /tmp/it-life0.out
 fi
 # The command runs either way; only reaching OSV.dev is optional, so a network
 # failure is soft — and `ok` is not used, because it would count the failure too.

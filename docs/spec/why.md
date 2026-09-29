@@ -4618,6 +4618,52 @@ and it needs both halves asserted against each other — two backends must overl
 one backend must not — because either half alone has a passing explanation that is the opposite
 of the intended one.
 
+**And the instrument built to watch for this covered only half of it, which is the sharpest
+form the defect takes: a gate that is green about the half it can see.** The integration harness
+already had `witness`/`gone_ok`, so *`the shim is gone from disk`* could not pass over a shim
+that was never deployed. Nothing did the same for the opposite sentence. Three checks read
+`ok "$PKG is still installed after unmanage"`, `ok "clean-cache frees archives without removing
+a package"` and `ok "$PKG is reinstalled, not left removed"` — and every one of them asserts a
+presence the machine may have owned before the run began. A `shall` that installed nothing,
+removed nothing and rebuilt nothing satisfies all three, because the box already had a `jq` on
+it.
+
+**What made it a defect rather than a weak check is that the verdict moved with the host.** The
+same harness, the same stub, read `PASS` on a developer's machine and `FAIL` on a clean CI
+runner, and the only difference was what the image happened to ship. A check whose answer
+depends on that is not measuring the product; it is measuring the box, and it does so silently,
+because each individual run is a plausible-looking pass. `gone_ok` could not have caught this:
+its subject is a disappearance, and there was no disappearance to anchor — the defect is a
+presence with no history behind it, which is the same shape read from the other end.
+
+**So the fix is a named predicate for the presence direction, and the control is an ARRIVAL
+rather than a presence.** `stays_ok` refuses to score a survival claim for a subject this run
+never saw arrive, which makes the control a question about the run's own history — something
+the predicate under test cannot answer about itself. What counts as an arrival is the harness's
+existing `G-3` test, *the name resolves somewhere it did not resolve before*, and reusing that
+rather than inventing a second one matters: it is the same condition `assert_binary_reachable`
+is already failing the run by name over, so a machine that shipped the canary is refused by the
+reachability check and not by a new one that could only add a second way to go red.
+
+**The first attempt got this wrong in the most instructive way available, which is to say it
+looked like it worked.** The witness was taken on *presence* — "is the binary there" — because
+that is the question `stays_ok` asks and it seemed free to reuse it. On a machine with `jq`
+already installed it recorded an arrival for an install that never ran, and both survival proofs
+read `(was there, still there)` against a `shall` that had installed nothing. It was the
+fail-everything stub that said so, which is the argument for running both: the do-nothing stub
+*cannot* see this one, because a stub that does nothing leaves the machine exactly as it found
+it, and "still there" is then the correct answer. A tightening that only one of the two
+instruments can measure is half a tightening, and only the stub that fails at everything had any
+opinion about it.
+
+**A third instance was found by sweeping the family rather than the report, and it was the one
+that had been sitting in plain sight.** `$PKG is reinstalled, not left removed` is the same
+sentence four sections earlier about the same package, and the section-10 absence check took a
+*second* sighting of its own, on presence rather than on an arrival — so on a host that already
+had the package it witnessed the host's copy and read the removal Shall never did as proof. One
+tag, recorded once, at the only place that can see an arrival. This is the whole of the standing
+rule: a bug is a family, and the instance reported is never the interesting part of it.
+
 ---
 
 **V.154 — Why the guard scope is passed as the enum, and never as its own label.**

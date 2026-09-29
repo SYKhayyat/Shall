@@ -379,6 +379,34 @@ gone_ok() { # gone_ok "desc" <tag> cmd... — cmd must FAIL now and have SUCCEED
     PASS=$((PASS + 1)); echo "  PASS  $_g_desc (was there, now gone)"; return 0
 }
 
+# The other direction, and it needs the same control for the opposite reason.
+#
+# `gone_ok` asks "did this go away", and a product that never put it there answers yes. `stays_ok`
+# asks "is this still here", and a product that never touched it also answers yes — because the
+# machine already had it. **A presence assertion over something the host shipped before the run is
+# not a check, and which one it is depends on the host**: the macOS runner ships `wget`, so
+# "$PKG is still installed after unmanage" read PASS there against a `shall` that installed
+# nothing at all, while the same check on a host without it read FAIL. Two verdicts, one check,
+# decided by what the machine happened to have.
+#
+# So this one demands a sighting recorded EARLIER in the run: the thing has to have been seen to
+# ARRIVE, not merely to be present. The twin of `witness pkg-binary` in the container harness, and
+# the same argument — a claim that a command spared a package is a claim about the package this
+# run installed.
+stays_ok() { # stays_ok "desc" <tag> cmd... — cmd must SUCCEED now, having been witnessed earlier
+    _s_desc="$1"; _s_tag="$2"; shift 2
+    if [ ! -f "$LEDGER/seen/$(_seen_tag "$_s_tag")" ]; then
+        hard "$_s_desc (nothing in this run was ever seen as '$_s_tag', so its being here now proves nothing)"
+        return 1
+    fi
+    if "$@" >/tmp/itw.out 2>&1; then
+        PASS=$((PASS + 1)); echo "  PASS  $_s_desc (was there, still there)"; return 0
+    fi
+    FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES
+    - $_s_desc (it is gone)"
+    echo "  FAIL  $_s_desc (it is gone)"; return 1
+}
+
 # Why an install failed — a question, not an assumption (E5).
 #
 # Both harnesses used to soften ANY install failure into a claim about the network, and skip
@@ -733,8 +761,13 @@ ok "check drift" lx check drift
 # The aggregate `check` exits 2 when it has findings to report, and an unmanaged package
 # on a developer's own machine is a finding. Every named section exits 0.
 answers "check parses the model" lx check
-ok "check absent" lx check absent
-ok "protected" lx protected
+# `check absent`'s name says "lists nothing" and `protected`'s says "lists guarded packages".
+# Both used to assert only that the command exited 0, which a do-nothing binary satisfies: an
+# absence of output and a success are the same observation. The `absent:` pattern matches the
+# backticks Shall wraps the key in without naming them — a literal backtick inside double quotes
+# is a command substitution in a POSIX shell, and this runs under git-bash's sh.
+grep_ok "check absent says nothing is declared absent" "No .absent:. lines are in force" lx check absent
+grep_ok "protected lists guarded packages" "Protected packages" lx protected
 ok "plan --dry-run" lx --dry-run plan
 
 # --- 3. Dry-run safety -----------------------------------------------------
@@ -787,14 +820,30 @@ if [ "$CLASS" = installed ] || [ "$CLASS" = transient ]; then
     echo "$BACKEND" >> "$LEDGER/be-life"
     grep_ok "list shows $PKG" "$PKG" lx list
     assert_binary_reachable "$BACKEND" "$PKG" /tmp/itw-life0.out "$PKG_PREPATH"
+    # The sighting both absence claims below lean on, taken while the package is certainly here
+    # and BEFORE anything here can have removed it. It used to be recorded after `unmanage`,
+    # which is the only thing `stays_ok` cannot use: an arrival has to precede the claim that it
+    # survived, or the claim has nothing to be a survivor OF.
+    #
+    # Taken only when the host did NOT already own the package, for the same reason S36 below
+    # declines to assert an absence in that case: a machine that came with the binary has one
+    # whatever this run did, so sighting it is sighting the machine and calling it an arrival.
+    if [ -z "$PKG_WAS_HERE" ]; then
+        witness pkg-binary binary_present "$BACKEND" "$PKG" /tmp/itw-life0.out
+    fi
     ok "second sync is a no-op" lx -y sync
     # `unmanage` belongs here and not with the read-only verbs: "forgets it WITHOUT
     # uninstalling it" is only a proof while something is installed to leave behind.
     ok "unmanage forgets a package without uninstalling it" lx unmanage "$BACKEND:$PKG"
-    ok "$PKG is still installed after unmanage" binary_present "$BACKEND" "$PKG" /tmp/itw-life0.out
+    # Was `ok`, and on the macOS runner — which ships wget — that is a fact about the machine,
+    # not about `unmanage`: it read PASS there against a shall that installed nothing.
+    if [ -n "$PKG_WAS_HERE" ]; then
+        soft "$PKG predates the run, so its survival across unmanage is not this sweep's to assert"
+    else
+        stays_ok "$PKG is still installed after unmanage" pkg-binary \
+            binary_present "$BACKEND" "$PKG" /tmp/itw-life0.out
+    fi
     ok "declaring it again takes it back" lx -y install "$BACKEND:$PKG"
-    # The sighting the absence below leans on, taken while the package is certainly here.
-    witness pkg-binary binary_present "$BACKEND" "$PKG" /tmp/itw-life0.out
     ok "uninstall $BACKEND:$PKG" lx -y uninstall "$BACKEND:$PKG"
     # S36 again, on the package the run did not install. When the host already owned
     # $PKG, absence is not this harness's to demand: the manager may legitimately keep a
@@ -1731,7 +1780,20 @@ elif [ "$_heal_rc" -eq 0 ]; then
 else
     hard "heal exited $_heal_rc without naming anything it could not recover"
 fi
-ok "clean-cache frees archives without removing a package" lx clean-cache
+ok "clean-cache frees archives" lx clean-cache
+# **Split in two, and the second half is the one with teeth.** This used to be one check named
+# `clean-cache frees archives without removing a package`, which asserted only that the command
+# exited 0 — and the "without removing a package" was a claim no command in the line examined.
+# It is also a claim this sweep can only sometimes make: section 5 installs its canary back at
+# the end, and the canary loop removes what it installed, so whether a package is on the machine
+# at this point depends on what the run before it did. The sighting is the question, and the
+# harness's own idiom for a survival proof it has no subject for is `soft`, not a pass.
+if [ -f "$LEDGER/seen/pkg_binary" ]; then
+    stays_ok "and without removing a package" pkg-binary \
+        binary_present "$BACKEND" "$PKG" /tmp/itw-life0.out
+else
+    soft "clean-cache's survival proof — this run left no package installed to spare, so there is nothing to bound"
+fi
 ok "update refreshes repository metadata" lx update
 ok "watch --once runs a single unattended reconcile" lx -y watch --once
 ok "search finds something" lx search "$PKG"

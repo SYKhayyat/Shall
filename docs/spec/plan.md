@@ -352,6 +352,51 @@ build and what is deferred to hardware.**
     **refusal at apply**, never a parse failure, precisely so one shared Linux manifest still
     parses everywhere; that half is proven on any host.
 
+### Tier 13 — a survival proof needs an arrival (`PLAN.md` #39): BUILT (first batch)
+
+27. ~~**The harness is roughly half totem: over half its checks cannot see the product absent.**
+    ~~ **BUILT, batch 1 of the absence/restraint family (2026-09-28).** The mutation gate ran
+    the container harness against a do-nothing `shall` and 106 of 187 checks passed anyway.
+    Most of those are honest exit-code checks whose EFFECT is asserted next to them, and the
+    instrument's own header says so. The class that is not honest is **a presence assertion over
+    something the machine shipped before the run** — and what made it a defect rather than a weak
+    check is that *the verdict moved with the host*: the same harness, the same stub, read `PASS`
+    on a box that already had `jq` and `FAIL` on a clean runner, because the box had one either
+    way.
+
+    - **`stays_ok`, the presence twin of `gone_ok`**, in both harnesses. It refuses to score a
+      survival claim for a subject the run never saw *arrive*, and "arrived" is the harness's
+      existing `G-3` test — *the name resolves somewhere it did not resolve before* — so a
+      machine that shipped the canary is refused by `assert_binary_reachable` rather than by a
+      second new way to go red.
+    - **The family, swept rather than patched**: `$PKG is still installed after unmanage`,
+      `clean-cache … without removing a package`, `$PKG is reinstalled, not left removed`, the
+      section-10 `witness pkg-binary` (which witnessed the *host's* copy and read Shall's
+      removal as proof), and `python3 still installed after adopt` — which is now gated on adopt
+      having taken a row at all, this file's own "a bound over an empty set is not an assertion"
+      rule applied to the case it had not been applied to.
+    - `check absent` and `protected` in both harnesses became `grep_ok`: their names claim what
+      Shall **prints**, and an exit code of 0 is the same observation as an absence of output.
+    - **The harness now owns `modules/imperative.txt`** instead of assuming `shall init` made it.
+      Every declaration in 14b/14c is appended with `>>`; where `init` did not scaffold, both
+      sections ran with no declaration in the file and the only evidence was a dozen
+      `No such file or directory` lines between checks that still reported `PASS`.
+    - **Measured, host, `apt jq`** — do-nothing 106/187 (566) → **101/187 (540)**;
+      fail-everything 11 survivors (59) → **8 (43)**, caught 175 → 178, which is what closes a
+      pre-existing shortfall against the `FAIL_CAUGHT_FLOOR` of 178 without lowering it. Ceilings
+      ratcheted `600 → 550` and `70 → 60`, both set above what was measured here rather than at
+      it. Against the real binary: `pass=235 → 234`, `fail=6 → 6`, `soft=19 → 21` — the two
+      extra softs are the two proofs that correctly report themselves unmeasured when adopt took
+      no row and nothing was installed.
+
+    **Not in this batch, and it is the larger half of the issue**: section 16's content claims
+    (`profile create scaffolds one`, `module show reads it back`, `export writes native
+    manifests`, `bundle packs the config`, `search finds something` and about forty more) still
+    assert only that a command exited 0. Each is a `grep_ok` away from being a real assertion,
+    and the patterns have to be read off a real backend's output per image rather than guessed.
+    Rule `II.23` extended with its presence direction, rationale `V.153`. No new decision: this
+    is the existing rule applied, not a new ruling.
+
 ### Tier 12 — the removal token cannot be minted (`PLAN.md` #35): BUILT
 
 26. ~~**`Reaped::for_reason` is a public mint that ignores its reason.**~~ **BUILT (ruling

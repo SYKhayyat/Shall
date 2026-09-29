@@ -706,6 +706,33 @@ ask at all, ask in one breath.*
   talking and stopped exiting is. Raise it if you drive something legitimately silent for
   longer.
 
+### The harness's survival proofs now need something to have survived
+
+No product behaviour changes here. This is the verification instrument, and the finding is that
+a large part of it could not tell a working Shall from an absent one.
+
+- **A claim that something is *still* there is now anchored to the run's own record of having put
+  it there.** The integration harness already refused to score an absence for a subject nothing
+  had ever been seen leaving behind; the mirror image had no such rule, so `jq is still
+  installed after unmanage`, `clean-cache … without removing a package` and `jq is reinstalled,
+  not left removed` were assertions that a `shall` which installed nothing, removed nothing and
+  rebuilt nothing satisfied — because the machine already had a `jq`. What made it a defect
+  rather than a weak check is that **the verdict moved with the host**: the same check read `PASS`
+  on a machine that had the package and `FAIL` on one that did not.
+- **`python3 still installed after adopt` reports itself unmeasured** when adopt took no row of
+  that manager, which is the same "a bound over an empty set is not an assertion" rule the two
+  adoption bounds beside it already used.
+- **`check absent` and `protected` assert what Shall prints.** Their names claim a list and an
+  absence; an exit code of zero is the same observation as no output at all.
+- **The harness owns the manifest file it appends declarations to**, instead of assuming `shall
+  init` had created it. Where it had not, two whole sections ran with no declaration in the file
+  and the only evidence was a dozen `No such file or directory` lines between checks that still
+  reported `PASS`.
+- **Measured, not asserted** (container harness, host, `apt jq`): against a `shall` that does
+  nothing and succeeds, 106 of 187 checks passed anyway before and **101 of 187** after; against
+  one that fails everything, 11 survivors became **8**. Against the real binary, the run is
+  unchanged — the two extra unmeasured reports are proofs that correctly declined to run.
+
 ## [0.7.0] — 2026-07-31 — v7, the declarative rewrite
 
 > **The version is `0.7.0` and the design is "v7"**, which are two different numbers and were
