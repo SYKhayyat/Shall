@@ -127,15 +127,17 @@ impl Installable for DirInstallable {
                     if let Some(name) = desired_owner {
                         super::link::chown_to_user(&path, name, &self.core.executor, true).await?;
                     }
+                    // A POSIX mode is a Unix question, and the answer on Windows is that there
+                    // is none to answer. The `#[cfg]` was on the *body*, which left the binding
+                    // alive on a target where nothing reads it — a warning, and CI rates warnings
+                    // fatal. Putting it on the `if let` says the same thing and compiles.
+                    #[cfg(unix)]
                     if let Some(value) = mode_value {
-                        #[cfg(unix)]
-                        {
-                            use std::os::unix::fs::PermissionsExt;
-                            let current =
-                                std::fs::metadata(&path).unwrap().permissions().mode() & 0o7777;
-                            if current != value {
-                                crate::would!("Dir: would set mode {:o} on {:?}", value, path);
-                            }
+                        use std::os::unix::fs::PermissionsExt;
+                        let current =
+                            std::fs::metadata(&path).unwrap().permissions().mode() & 0o7777;
+                        if current != value {
+                            crate::would!("Dir: would set mode {:o} on {:?}", value, path);
                         }
                     }
                 }
@@ -157,20 +159,18 @@ impl Installable for DirInstallable {
                 super::link::chown_to_user(&path, name, &self.core.executor, true).await?;
             }
 
+            #[cfg(unix)]
             if let Some(value) = mode_value {
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    let current = tokio::fs::metadata(&path)
-                        .await
-                        .map_err(Error::from)?
-                        .permissions()
-                        .mode()
-                        & 0o7777;
-                    if current != value {
-                        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(value))
-                            .map_err(Error::from)?;
-                    }
+                use std::os::unix::fs::PermissionsExt;
+                let current = tokio::fs::metadata(&path)
+                    .await
+                    .map_err(Error::from)?
+                    .permissions()
+                    .mode()
+                    & 0o7777;
+                if current != value {
+                    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(value))
+                        .map_err(Error::from)?;
                 }
             }
         }

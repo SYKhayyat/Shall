@@ -390,6 +390,39 @@ build and what is deferred to hardware.**
     why the one remaining call does not matter. The measurement above is what a triager needs and
     is recorded here so the next session does not re-derive it by flipping a flag in `Drop`.
 
+### Tier 16 — the Windows build compiles again (`PLAN.md` #97, MSVC half): BUILT
+
+31. ~~**`Advisories and licences` and the MSVC build are red on `main`; the MSVC one means the
+    `#71` Windows code has never been compiled by anything.**~~ **BUILT (MSVC half).** Not a
+    configuration problem and not a broken toolchain: **fourteen compile errors** across
+    `src/core/account.rs`, `src/backends/dir.rs` and `src/app/apply/extras.rs`, none reachable by
+    any local step, because the local chain ran only on the platform the developer was on.
+
+    Two shapes, and the second is the family:
+
+    - **A resolution error hiding type errors.** `OPEN_EXISTING` imported from `um::winbase` rather
+      than `um::fileapi`. `rustc` stops before type-checking on an unresolved import, so this one
+      line was hiding the other nine — which is why the error list read as a dozen unrelated
+      things rather than as one mistake with a tail.
+    - **A value bound outside a `cfg` block and read only inside one.** `sid.as_ptr().cast()` on a
+      shared slice cannot produce the `*mut c_void` `PSID` is (five sites); a `mode` binding read
+      only by a `#[cfg(unix)]` block is *bound and unread* on Windows, which is a warning and this
+      project's gate rates warnings fatal (two sites); a `let … else` whose pattern is irrefutable
+      on the platform it is compiled for is an unreachable arm, and it ran backwards — the arm that
+      never fired was the one returning a default, so a third `Identity` variant added later would
+      have been answered wrongly instead of refused to compile (two sites).
+
+    **The gap is closed, not just the errors.** `cargo check --target x86_64-pc-windows-gnu`
+    type-checks the Windows half from a Linux host and needs no linker — only the `rust-std`
+    component and a mingw C compiler, which are one `nix build` and one `curl` away. `CLAUDE.md`
+    now carries the commands, says to use `-gnu` rather than `-msvc` (`msvc` wants `lib.exe`,
+    which does not exist here, and fails in `cc-rs` before reaching a line of Shall's), and says
+    that `-D warnings` is half of it: **two of the fourteen were warnings, not errors.** First run
+    ~25 minutes for a new target, ~40 seconds after.
+
+    **The `Advisories and licences` half is untouched and still red** — a different job, a
+    different root cause, and nothing here addresses it.
+
 ### Tier 15 — the `dir:` check that never observed anything was a missing line (`PLAN.md` #96): BUILT
 
 30. ~~**The 8 distro integration images are red on the container harness's `dir:` check** — a check

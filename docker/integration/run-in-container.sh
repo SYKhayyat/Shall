@@ -263,8 +263,6 @@ grep_ok() {
     fi
 }
 
-soft() { SOFTC=$((SOFTC + 1)); echo "  soft  $1"; }
-
 # ---- what each section actually ran ------------------------------------------------------
 #
 # **A section that stops running used to be invisible, and the only way to find one was to diff
@@ -412,6 +410,8 @@ stays_ok() { # stays_ok "desc" <tag> cmd... — cmd must SUCCEED now, having bee
     - $_s_desc (it is gone)"
     echo "  FAIL  $_s_desc (it is gone)"; return 1
 }
+
+soft() { SOFTC=$((SOFTC + 1)); echo "  soft  $1"; }
 
 # Why an install failed — a question, not an assumption (E5).
 #

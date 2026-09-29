@@ -217,7 +217,20 @@ fn every_harness_function_is_defined_before_it_is_called() {
         for (name, def_line) in &defs {
             let mut inside = false;
             for (i, raw) in lines.iter().enumerate() {
+                // A definition may carry a trailing comment — `nok_saying() { # description
+                // pattern command...` — and the one after it does not end in `{`, so the scan
+                // never noticed the body had opened. **Everything inside it was then read as
+                // top level**, which is how `nok_saying`'s call to `_credit_section` was
+                // reported as running before the function existed. The comment has to come off
+                // before the brace is looked for, or the exemption this loop implements is
+                // "skip bodies of functions written without a comment" — which is a hole shaped
+                // exactly like the bug it is checking for: a check that examines nothing looks
+                // the same as a check that finds nothing.
                 let opens = raw
+                    .split('#')
+                    .next()
+                    .unwrap_or("")
+                    .trim_end()
                     .strip_suffix('{')
                     .map(|s| s.trim_end().ends_with("()"))
                     .unwrap_or(false);

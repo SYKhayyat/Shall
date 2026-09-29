@@ -686,6 +686,11 @@ pub(crate) async fn in_effect(
                 return None;
             };
             let path = std::path::Path::new(id);
+            // Read only to read the mode below, and the mode is a Unix fact: the `not(unix)` arm
+            // further down answers "a `dir:` carrying a mode is not converged here" without
+            // looking. Gating the binding rather than only its use keeps the target that does
+            // not read it from binding it.
+            #[cfg(unix)]
             let metadata = match std::fs::symlink_metadata(path) {
                 Ok(metadata) if metadata.is_dir() => metadata,
                 Ok(_) => return Some(false),

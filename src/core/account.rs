@@ -156,7 +156,7 @@ fn sid_text(sid: &[u32]) -> Option<String> {
     use winapi::shared::sddl::ConvertSidToStringSidW;
     use winapi::um::winbase::LocalFree;
     let mut text: *mut u16 = std::ptr::null_mut();
-    if unsafe { ConvertSidToStringSidW(sid.as_ptr().cast(), &mut text) } == 0 {
+    if unsafe { ConvertSidToStringSidW(sid.as_ptr().cast_mut().cast(), &mut text) } == 0 {
         return None;
     }
     let out = unsafe { std::ffi::CStr::from_ptr(text.cast()) }
@@ -402,6 +402,9 @@ fn resolve_named(name: &str) -> Result<Account> {
             &mut sid_size,
             std::ptr::null_mut(),
             &mut domain_size,
+            // `peUse`: the SID_NAME_USE the lookup chose. Nothing here reads it, and passing a
+            // real buffer for it would be a claim that something does.
+            std::ptr::null_mut(),
         )
     };
     if first != FALSE && unsafe { GetLastError() } != ERROR_INSUFFICIENT_BUFFER {
@@ -429,6 +432,7 @@ fn resolve_named(name: &str) -> Result<Account> {
             &mut sid_capacity,
             domain.as_mut_ptr(),
             &mut domain_size,
+            std::ptr::null_mut(),
         )
     };
     if rc == FALSE {
@@ -438,7 +442,7 @@ fn resolve_named(name: &str) -> Result<Account> {
         )));
     }
     let mut sid_text: *mut u16 = std::ptr::null_mut();
-    if unsafe { ConvertSidToStringSidW(sid.as_ptr().cast(), &mut sid_text) } == FALSE {
+    if unsafe { ConvertSidToStringSidW(sid.as_ptr().cast_mut().cast(), &mut sid_text) } == FALSE {
         return Err(Error::Other(format!(
             "could not format the identity for `{}`",
             name
@@ -554,9 +558,13 @@ fn owns_path(path: &Path, identity: &Identity, follow: bool) -> Result<bool> {
     use winapi::um::securitybaseapi::EqualSid;
     use winapi::um::winbase::LocalFree;
     use winapi::um::winnt::OWNER_SECURITY_INFORMATION;
-    let Identity::Windows { sid } = identity else {
-        return Ok(false);
-    };
+    // Irrefutable, and deliberately written as one. `Identity` carries exactly one variant per
+    // platform, so on Windows this pattern always matches and the `else` was unreachable —
+    // a warning, which CI rates fatal. It also ran *backwards*: the arm that never fires was the
+    // one that said "return false", so a third variant added later would have been answered with
+    // a wrong answer rather than a compile error. The unix side at line 88 already takes the
+    // identity this way.
+    let Identity::Windows { sid } = identity;
     let path_wide = wide_path(path)?;
     let mut owner = std::ptr::null_mut();
     let mut descriptor = std::ptr::null_mut();
@@ -596,7 +604,7 @@ fn owns_path(path: &Path, identity: &Identity, follow: bool) -> Result<bool> {
             path, status
         )));
     }
-    let equal = unsafe { EqualSid(owner, sid.as_ptr().cast()) } != 0;
+    let equal = unsafe { EqualSid(owner, sid.as_ptr().cast_mut().cast()) } != 0;
     unsafe { LocalFree(descriptor.cast()) };
     Ok(equal)
 }
@@ -606,18 +614,25 @@ fn apply_owner_path(path: &Path, identity: &Identity, follow: bool) -> Result<()
     use winapi::um::accctrl::SE_FILE_OBJECT;
     use winapi::um::aclapi::{SetNamedSecurityInfoW, SetSecurityInfo};
     use winapi::um::winnt::OWNER_SECURITY_INFORMATION;
-    let Identity::Windows { sid } = identity else {
-        return Ok(());
-    };
+    // Irrefutable for the same reason as `owns_path` above.
+    let Identity::Windows { sid } = identity;
     let path_wide = wide_path(path)?;
     let status = if follow {
         unsafe {
             SetNamedSecurityInfoW(
-                path_wide.as_ptr(),
+                // winapi types the name as LPWSTR, which is `*mut u16`, so a shared `Vec<u16>`
+                // has to say so rather than let inference pick the `*const` reading.
+                path_wide.as_ptr().cast_mut(),
                 SE_FILE_OBJECT,
                 OWNER_SECURITY_INFORMATION,
-                sid.as_ptr().cast(),
+                sid.as_ptr().cast_mut().cast(),
                 std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                // The `Dacl` argument. A null DACL alongside flags that name only the OWNER is
+                // how Win32 is told to leave the DACL alone, which is what the two arguments
+                // above it already asked for — the call was written with six arguments because
+                // this one is invisible in the C declaration's own documentation, and the
+                // function has seven.
                 std::ptr::null_mut(),
             )
         }
@@ -628,7 +643,7 @@ fn apply_owner_path(path: &Path, identity: &Identity, follow: bool) -> Result<()
                 handle,
                 SE_FILE_OBJECT,
                 OWNER_SECURITY_INFORMATION,
-                sid.as_ptr().cast(),
+                sid.as_ptr().cast_mut().cast(),
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
@@ -648,10 +663,8 @@ fn apply_owner_path(path: &Path, identity: &Identity, follow: bool) -> Result<()
 
 #[cfg(windows)]
 fn open_windows_path(path: &Path, write: bool) -> Result<winapi::um::winnt::HANDLE> {
-    use winapi::um::fileapi::CreateFileW;
-    use winapi::um::winbase::{
-        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, OPEN_EXISTING,
-    };
+    use winapi::um::fileapi::{CreateFileW, OPEN_EXISTING};
+    use winapi::um::winbase::{FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT};
     use winapi::um::winnt::{
         FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, READ_CONTROL, WRITE_OWNER,
     };
@@ -662,7 +675,10 @@ fn open_windows_path(path: &Path, write: bool) -> Result<winapi::um::winnt::HAND
             path.as_ptr(),
             access,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-            std::ptr::null(),
+            // `lpSecurityAttributes` is `PSECURITY_ATTRIBUTES` — a mutable pointer even when it
+            // is null, because Win32 may write through it. `std::ptr::null()` infers `*const _`
+            // from the parameter and does not compile; `null_mut()` states the null.
+            std::ptr::null_mut(),
             OPEN_EXISTING,
             FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
             std::ptr::null_mut(),

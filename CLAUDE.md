@@ -137,6 +137,45 @@ takes every fault-injection check offline with it. So the same commit introduced
 disabled the only instrument that could have reported it, and both sat for 26 commits. The first
 thing the restored harness did was hand back a second blocker from that same commit.
 
+**And the mirror of that gap is now closable, which it was not for the whole of #97.** The
+paragraph above says `unix-check.sh` is the only thing that compiles the `cfg`-gated blocks the
+other four steps cannot see. That is true of the **unix** half and was true of **both** halves
+until 2026-09-29, when the Windows code was found **not to compile at all** — fourteen errors
+across `account.rs`, `dir.rs` and `extras.rs`, none of which any local step could see and all of
+which the MSVC job had been reporting since `#71` landed.
+
+**`cargo check --target x86_64-pc-windows-gnu` from a Linux host does it, and it needs no
+linker.** `check` type-checks without linking, so nothing but a C compiler is required — and
+`mlua`/`xz2`/`zstd`/`zip` all vendor C, so it needs one for the *target*:
+
+```bash
+# The cross C toolchain, without which cc-rs dies looking for `lib.exe`:
+nix build --impure --expr 'let p = import <nixpkgs> {}; in p.pkgsCross.mingwW64.stdenv.cc' --out-link /tmp/mingw-cc
+# The target's std, which `rustup target add` would do if there were a `rustup`:
+V=$(rustc --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+curl -sSLO "https://static.rust-lang.org/dist/rust-std-$V-x86_64-pc-windows-gnu.tar.xz"
+tar xf "rust-std-$V-x86_64-pc-windows-gnu.tar.xz"
+cd "rust-std-$V-x86_64-pc-windows-gnu" && ./install.sh --prefix="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu" --disable-ldconfig
+
+export PATH="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:/tmp/mingw-cc/bin:$PATH"
+export CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-cc
+export CXX_x86_64_pc_windows_gnu=x86_64-w64-mingw32-c++
+export AR_x86_64_pc_windows_gnu=x86_64-w64-mingw32-ar
+cargo check --target x86_64-pc-windows-gnu --lib
+```
+
+**Use `-gnu`, not `-msvc`.** The `cfg(windows)` code and the `winapi` crate are identical on
+both, so the type errors are the same errors — and `msvc` additionally wants `lib.exe`, which
+does not exist here, so it fails in `cc-rs` before reaching a line of Shall's. **`-D warnings`
+matters as much as the errors**: two of the fourteen were `unused_variables` from a binding used
+only inside a `#[cfg(unix)]` block, which is a warning on Windows and fatal under CI's gate.
+First run is ~25 minutes (all 448 crates for a new target); after that ~40 seconds.
+
+**What this changes about the rule above.** The honest form is now *"the local chain verifies one
+platform of two, and the other is one `nix build` and one `curl` away"* — not that the other
+cannot be checked. A gate that can be run should be run; the reason it was not is that nobody had
+tried, and the cost of the not-trying was fourteen errors and a red job.
+
 **Which behaviours only the container harness can verify — state this, do not re-run and hope.**
 The Rust suite is hermetic: it drives mock providers, so any behaviour that depends on a *real*
 manager's answer is outside what it can reach. A red harness is therefore not "a job to re-run

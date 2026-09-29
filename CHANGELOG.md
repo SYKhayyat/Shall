@@ -766,6 +766,18 @@ The container integration matrix was red on every distro with `the dir is gone f
 - **The harness's `dir:` teardown check named a witness tag that nothing had ever recorded.** The check refuses to score a teardown green over a creation it was never shown, which is the control working; the missing half was one line of harness. Its `link:` twin has had the witness since the pair was introduced, which is how one of a pair went missing without anything noticing.
 - **A new check reads both harnesses and fails on any `gone_ok` tag that nothing witnesses.** A control's own absence is a failure too, and it is indistinguishable from a defect in the product unless something says so — this is the same shape as "a gate is not a gate until it has been watched to fail", one level down.
 
+### The Windows build compiles again — and can now be checked without a Windows machine
+
+`Build for x86_64-pc-windows-msvc` has been red since `#71` landed the per-user home layer. **Fourteen compile errors across three files**, none of which any local step could see, because the local chain ran only on the platform the developer was on.
+
+- **`OPEN_EXISTING` was imported from the wrong module** (`um::winbase` rather than `um::fileapi`), which is a resolution error — and a resolution error stops `rustc` before it type-checks, so it was hiding nine more behind it.
+- **A SID pointer was built from a shared slice.** `winapi` types `PSID` as `*mut c_void`; `slice::as_ptr()` gives a `*const`, and `.cast()` keeps the constness. Five sites.
+- **Two Win32 calls were passed the wrong number of arguments.** `LookupAccountNameW` takes seven and both calls supplied six; `SetNamedSecurityInfoW` takes seven and the `Dacl` argument was missing — a null DACL alongside owner-only flags is how Win32 is told to leave the DACL alone, which is what the arguments above it already asked for.
+- **Two bindings were used only inside a `#[cfg(unix)]` block**, so on Windows they were bound and never read. A warning, which this project's gate rates fatal. The `#[cfg]` moves onto the binding, which says the same thing and compiles: a POSIX mode is a Unix question, and a Windows `dir:` has no answer to it.
+- **Two `let … else` arms were unreachable**, because `Identity` carries exactly one variant per platform. They also ran backwards — the arm that never fired was the one returning a default answer, so a third variant added later would have been answered wrongly rather than refused to compile.
+
+**And the reason nobody found this is now fixed rather than explained.** `cargo check --target x86_64-pc-windows-gnu` type-checks the Windows half from a Linux host and needs no linker; only the `rust-std` component and a mingw C compiler are required, and both are one `nix build` and one `curl` away. `CLAUDE.md` carries the commands. **The point is not that fourteen errors were fixed — it is that the gap that let them sit is closed**, and the same gap had already cost 26 commits on the Unix side.
+
 ## [0.7.0] — 2026-07-31 — v7, the declarative rewrite
 
 > **The version is `0.7.0` and the design is "v7"**, which are two different numbers and were

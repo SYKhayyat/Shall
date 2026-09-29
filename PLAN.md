@@ -27,7 +27,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 - [ ] #99 a harness section that stops running is invisible: `crash/groupkill` lost 10 checks on
   ubuntu and the run still went green. (High — there is no floor on *checks run*, which is the
   exact mirror of `CAUGHT_FLOOR`, and three of the five properties only the matrix can verify are
-  driven by that section. **The per-section tally ships; the FLOOR does not** — see `##[14c]`)
+  driven by that section. **The per-section tally ships; the FLOOR does not** — see `docs/spec/plan.md` Tier 14c)
 - [x] #96 CI: the 8 distro integration images are red on the container harness's `dir:` check (a
   check that never observes what it asserts). (**BUILT — and it was one missing line of harness,
   not a product defect.** `gone_ok "the dir is gone from disk" dir-dst` had no `witness dir-dst`
@@ -35,7 +35,10 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   `the declared dir is on disk` PASSING beside a `gone_ok` that refused. The check that "never
   observed what it asserted" was `gone_ok` doing its job)
 - [ ] #97 CI: `Advisories and licences` and the MSVC build are red on `main`; the MSVC one means
-  the `#71` Windows code has never been compiled by anything. (High)
+  the `#71` Windows code has never been compiled by anything. (High — **the MSVC half is BUILT**:
+  fourteen compile errors, and the local chain can now type-check that platform at all; **the
+  `Advisories and licences` half is untouched and still red**, a different job and a different
+  root cause)
 - [ ] #98 CI: the `why.md` unattached-rationale ratchet is red on `main` — 53 entries against a
   ceiling of 52, and it reds `Build for x86_64-unknown-linux-gnu` on every push. (High — the one
   red job no open issue named)
@@ -46,7 +49,11 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 ## Phase 3 — Correctness Mediums
 - [ ] #91 planner template_needs_update compares raw source to rendered target (sibling of the #69 read-back fix). (Low; unreachable today, wrong if reached)
 - [ ] #79 forget_all wipes all caches, #80 probe storm, #81 Mutex across --help, #82 batch deadline, #83 vars JSON fragile, #84 fan-out uncapped, #85 pool race, #86 zip sum wraps, #87 dir-symlink Windows.
-- [ ] #25 lifecycle jobs on distro containers, #53 nimble Windows, #54 dirty-host fixtures, #55 gentoo jq.
+- [ ] #25 lifecycle jobs on distro containers, #53 nimble Windows, #54 dirty-host fixtures.
+- [x] #55 gentoo (emerge) leg: harness drives the ambiguous canary jq. (**BUILT — the canary is
+  `htop` since 2026-08-17, because `jq` is two atoms on Gentoo and a bare `jq` is a name Portage
+  itself refuses; `Dockerfile.gentoo:96` and the nightly leg is green. The issue is stale, not
+  wrong: it was true when filed)
 - [ ] Suite-isolation bugs (Rust suite green only on NOPASSWD-sudo/adoptable hosts): #88 mock-layer tests probe real sudo, #89 guard-reachability control builds vacuous fixture, #90 fan-out floor vs skewed hosts.
 - [ ] #41 prose tax distill, #36 doc-comment layer, #38 eopkg RETIRED honesty.
 - [ ] #95 `V.186` and `Q55` say `completed_installs` was deleted; the code still has it, and reads
