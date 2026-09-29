@@ -27,7 +27,6 @@ use crate::mock_providers::TestKernel;
 /// they are testing the executor's argv decisions, and the guard has its own tests. They still
 /// **ask** for their token (`harness::reaped_for_a_test`), so a change to the guard cannot make
 /// these pass by never consulting it.
-
 fn spec(name: &str, backend: &str, version: Option<&str>) -> PackageSpec {
     let mut options = shall::config::grammar::Options::default();
     if let Some(v) = version {
