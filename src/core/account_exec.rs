@@ -162,6 +162,10 @@ mod account_tests {
         panic!("this host names no account other than the invoking one");
     }
 
+    // Only the `cfg(unix)` tests below call it, so on Windows it is dead code — a warning, and
+    // this project's gate rates warnings fatal. Gated rather than deleted, because a helper the
+    // Unix tests share is a helper the next Unix test should reach for.
+    #[cfg(unix)]
     fn account_env(account: &Account) -> HashMap<String, String> {
         account.session_env().into_iter().collect()
     }

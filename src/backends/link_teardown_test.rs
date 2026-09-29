@@ -5,9 +5,12 @@
 //! lands, not after) — plus the defect found while building them: the teardown was handed the
 //! declaration's SOURCE and deleted the user's own file with it.
 
-use super::link::{
-    backup_path, is_outside_home, refuse_target_in_repo, LinkBackendCore, LinkInstallable,
-};
+use super::link::{backup_path, refuse_target_in_repo, LinkBackendCore, LinkInstallable};
+// `is_outside_home` is only read by the `cfg(unix)` tests below, so importing it unconditionally
+// leaves Windows with an unused import — a warning, and fatal under this project's gate. Split
+// out rather than reached for through the module, so the gate has something to be right about.
+#[cfg(unix)]
+use super::link::is_outside_home;
 use crate::config::Config;
 use crate::core::{CommandExecutor, Installable, PackageSpec};
 use std::path::Path;
