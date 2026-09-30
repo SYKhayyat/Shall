@@ -390,6 +390,32 @@ build and what is deferred to hardware.**
     why the one remaining call does not matter. The measurement above is what a triager needs and
     is recorded here so the next session does not re-derive it by flipping a flag in `Drop`.
 
+### Tier 19 — a second answer to a question that has one (`PLAN.md` #91): BUILT
+
+34. ~~**The planner's `template_needs_update` compares a raw template against a rendered
+    target.**~~ **BUILT by deletion.** The issue named two options — render-then-compare and
+    wire it with a test, or delete the dead branch — and said *not both*. Deleted, because
+    `apply::extras::in_effect` is the single authority for whether a `link:`/`dir:`/`service:`/
+    `setting:` line is satisfied, it already renders a template before comparing bytes (`#69`), and
+    a second implementation of the same question is how this repository gets into trouble.
+
+    - **The bug, for the record**: `checksum_pair(spec.name, @target)` hashed the **raw** template
+      on disk against the destination the installer had **rendered**, so a template containing
+      `{{ HOME }}` or `${secret:name}` could never match — perpetual drift, and a change scheduled
+      on every sync, for ever. The read-back half had been fixed for exactly this and pinned by
+      `a_rendered_template_is_read_back_rendered_not_raw`; this was the sibling that survived.
+    - **Unreachable, which is why it was Low and not worse**: `link`'s register installs no
+      `Queryable`, so `spec_is_missing` answers `Missing` at the capability check. That is a reason
+      to delete and not a reason to keep — the branch dies the moment `link` becomes queryable, and
+      it dies reporting drift on every templated line. **24 lines, and no behaviour changes**,
+      because the code could not run.
+    - **`the_planner_never_reads_the_filesystem` is the guard, and it is a prohibition with a
+      floor**: the planner may not read a file to decide anything, because the one function that
+      answers that question is `in_effect`. It is driven against the real file (clean) **and
+      against the deleted code verbatim** (must trip), and a planted `fs::read_to_string` in
+      `planner.rs` turns it red with a line number. A prohibition that cannot fail reports green
+      having examined nothing, and this repository has a filed issue for that.
+
 ### Tier 18 — the unattached-rationale ratchet, re-pinned (`PLAN.md` #98): BUILT
 
 33. ~~**The `why.md` unattached-rationale ratchet is red on `main` at 53 against a ceiling of

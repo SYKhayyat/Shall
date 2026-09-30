@@ -81,7 +81,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   the same red. (Medium — a list nobody can compare to the last run is not evidence)
 
 ## Phase 3 — Correctness Mediums
-- [ ] #91 planner template_needs_update compares raw source to rendered target (sibling of the #69 read-back fix). (Low; unreachable today, wrong if reached)
+- [x] #91 planner template_needs_update compares raw source to rendered target (sibling of the #69 read-back fix). (Low; **BUILT by deletion** — the issue named two options and said not both. `in_effect` is the single authority and it renders before comparing, so the planner's copy went: 24 lines, and no behaviour changes because `link` installs no `Queryable` and the branch never ran. `the_planner_never_reads_the_filesystem` keeps it gone, with the deleted code as its own control)
 - [ ] #79 forget_all wipes all caches, #80 probe storm, #81 Mutex across --help, #82 batch deadline, #83 vars JSON fragile, #84 fan-out uncapped, #85 pool race, #86 zip sum wraps, #87 dir-symlink Windows.
 - [ ] #25 lifecycle jobs on distro containers, #53 nimble Windows, #54 dirty-host fixtures.
 - [x] #55 gentoo (emerge) leg: harness drives the ambiguous canary jq. (**BUILT — the canary is

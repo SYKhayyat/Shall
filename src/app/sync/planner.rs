@@ -11,7 +11,6 @@ use petgraph::stable_graph::StableDiGraph;
 use semver::{Version, VersionReq};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 use std::sync::Arc;
 use tracing::{debug, info, instrument, warn};
 use version_compare::{compare as loose_compare, Cmp};
@@ -1197,13 +1196,6 @@ impl<'a> ChangePlanner<'a> {
         if drifted {
             return Verdict::Missing;
         }
-        if spec.backend == "link" && spec.options.one("template") == Some("true") {
-            return if self.template_needs_update(spec).await {
-                Verdict::Missing
-            } else {
-                Verdict::Satisfied
-            };
-        }
         Verdict::Satisfied
     }
 
@@ -1302,22 +1294,6 @@ impl<'a> ChangePlanner<'a> {
             Ok(Cmp::Eq) => true,
             Ok(Cmp::Gt) if constraint.starts_with('>') => true,
             _ => false,
-        }
-    }
-
-    async fn template_needs_update(&self, spec: &PackageSpec) -> bool {
-        let target = match spec.options.one("target") {
-            Some(s) => Path::new(s),
-            None => return true,
-        };
-        let source = Path::new(&spec.name);
-        if !tokio::fs::try_exists(target).await.unwrap_or(false) {
-            return true;
-        }
-        let (s_hash, t_hash) = crate::core::security::checksum_pair(source, target).await;
-        match (s_hash, t_hash) {
-            (Ok(s), Ok(t)) => s != t,
-            _ => true,
         }
     }
 
