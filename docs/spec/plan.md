@@ -390,6 +390,30 @@ build and what is deferred to hardware.**
     why the one remaining call does not matter. The measurement above is what a triager needs and
     is recorded here so the next session does not re-derive it by flipping a flag in `Drop`.
 
+### Tier 18 — the unattached-rationale ratchet, re-pinned (`PLAN.md` #98): BUILT
+
+33. ~~**The `why.md` unattached-rationale ratchet is red on `main` at 53 against a ceiling of
+    52.**~~ **BUILT.** 53 → **48**, and the ceiling re-pinned **52 → 48** in the same change.
+
+    - **The five were the cheapest kind there is, and the reason is worth recording: they were
+      never missing rationale, only unattached rationale.** `V.129`, `V.137`, `V.138`, `V.143` and
+      `V.149` each *already* named the rule they explain — "Rule in II.2", "Rule in II.9", "Rule
+      in II.11", "Rule in II.7", "Rule in II.7c" — and those rules were already carrying the same
+      reasoning in their own prose, **without the citation**. The `II.2` table had been out of date
+      for two days and said so in the paragraph about it; the `II.11` paragraph already explained
+      why the verb is named after what it deletes and named the wrong name. So the work was
+      attaching a rationale to the paragraph that already answers the reader's question, which is
+      the *second* of the three honest ends the test's message names.
+    - **The re-pin is not optional and not a separate decision.** The ratchet is bidirectional by
+      design — `uncited <= UNCITED_CEILING` catches growth, `uncited >= UNCITED_CEILING` catches a
+      ceiling nobody has lowered as the work lands — and the second assertion fired on the first
+      run, asking for 48. A ceiling that is not lowered the moment the pile shrinks is a ceiling
+      that stops meaning anything, and the next change spends the slack this one earned.
+    - **Not done, and it is the owner's half.** 48 entries remain uncited and the third honest end
+      — retiring an entry that explains nothing that still exists — is a judgement about whether
+      half a document's accumulated rationale still describes the system. That is not an agent's
+      call, and the ratchet now holds the line at 48 so the pile cannot grow while it waits.
+
 ### Tier 17 — a crash that takes its own evidence (`PLAN.md` #102): BUILT
 
 32. ~~**The main test step discards a crash's own evidence, on every platform.**~~ **BUILT.**

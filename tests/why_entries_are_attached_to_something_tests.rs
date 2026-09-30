@@ -18,8 +18,8 @@
 //! zero failures in *both* directions — Part II and the code — and it is a hard assertion for
 //! that reason: it costs nothing until someone renumbers an entry.
 //!
-//! **Is every entry attached to something?** A ratchet, not an assertion, because the answer
-//! today is 53 and the resolution is work rather than a typo. An uncited entry has three honest
+//! **Is every entry attached to something?** A ratchet, not an assertion, because the answer was
+//! 53 on 2026-09-30 and the resolution is work rather than a typo. An uncited entry has three honest
 //! ends: cite it from the rule it explains, move it to the doc comment of the test that enforces
 //! it — a rationale attached to a check cannot go stale, which is the best pattern in this
 //! corpus — or, if it explains nothing that still exists, it is the owner's to retire.
@@ -33,7 +33,20 @@ use std::path::{Path, PathBuf};
 /// Entries in `why.md` that no Part II rule and no line of `src/`or `tests/` cites.
 ///
 /// **May only go DOWN.** Raising it is the drift this file exists to catch, happening.
-const UNCITED_CEILING: usize = 52;
+///
+/// **52 → 48 on 2026-09-30, and the five were the cheapest kind there is.** `V.129`, `V.137`,
+/// `V.138`, `V.143` and `V.149` each already said which rule they explain — *"Rule in II.2"*,
+/// *"Rule in II.9"*, *"Rule in II.11"*, *"Rule in II.7"*, *"Rule in II.7c"* — and the rules were
+/// already carrying the reasoning in their own prose, **without the citation**. The table in
+/// `II.2` had been out of date for two days and said so; the paragraph in `II.11` already
+/// explained why the verb is named after what it deletes and named the wrong name. So this was
+/// never missing rationale. It was unattached rationale, in five places, and the attachment is a
+/// reader being sent to the paragraph that already answers their question.
+///
+/// The re-pin is in the same change as the attachments, which is what the second assertion below
+/// is for: a ceiling that is not lowered the moment the pile shrinks is a ceiling that stops
+/// meaning anything, and the next change would spend the slack this one earned.
+const UNCITED_CEILING: usize = 48;
 
 fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

@@ -181,6 +181,13 @@ sentence above it. A prose instruction to check a copy against its authority is 
 `tests/grammar_table_matches_the_spec_tests.rs` is, and it now fails the build if this table
 and `KEYWORDS` disagree in either direction (Q29).
 
+**The set is open, and that is the owner's sentence rather than an oversight** — *"i dont think
+it is closed, no. we still might add"* — for a reason a freeze did not reach: `generate:` output
+is merged *as if typed*, so it re-enters this grammar, and a generator can emit a thousand
+computed lines but **cannot emit a statement kind that does not exist**. Generators expand
+quantity, never kind, so freezing the kinds would close the one door `generate:` does not
+reopen. The price is exactly the sentence above, and the test is what pays it (`V.129`).
+
 **`exec:` is the one statement that is a verb, and it bends the model in exactly one place.** A
 false `when` on every other statement means *undo*; on `exec:` it does not, because a script that
 succeeds makes its own condition false and treating that as removal would flap. What removing an
@@ -1068,7 +1075,10 @@ because it is phase 1, not because anybody remembered to leave it out (V.144).
 **A plan states what it was computed over, and that decides what it may remove** *(Y12)*. The
 removal set is `managed âˆ’ desired`, so it is only as good as `desired`: a caller that hands the
 planner something narrower than the machine's whole declaration set gets a removal planned for
-everything outside it. There are exactly three things `desired` can be, and a caller names which:
+everything outside it. **`None` used to mean both "do not filter" and "everything missing is
+drift"** — unrelated facts, and one of them is a decision about deleting software — and five of
+the eight call sites passed it (`V.143`). There are exactly three things `desired` can be, and a
+caller names which:
 
 | | what `desired` is | what may be removed |
 |---|---|---|
@@ -1237,9 +1247,11 @@ else, ever.**
 
 ### II.7c A manager this machine does not have is skipped, not failed
 
-**One config, three machines** (owner ruling, 2026-08-06, `Y15`). A line pinned to a manager
-this host does not have is **not a broken config — it is the half of the config that belongs to
-a different machine.** `apt:ripgrep` beside `winget:ripgrep` beside `brew:ripgrep` is what a
+**One config, three machines** (owner ruling, 2026-08-06, `Y15`, `V.149`). A line pinned to a
+manager this host does not have is **not a broken config — it is the half of the config that
+belongs to a different machine.** It was an `Error::BackendNotFound` out of the planner's fan-out
+before it was this, and the `?` carried it out of `plan()`: not the one line failing, the whole
+file. `apt:ripgrep` beside `winget:ripgrep` beside `brew:ripgrep` is what a
 portable configuration looks like, and each machine does the part it can.
 
 So: **a declaration whose backend is not on this machine is skipped, named in the run's
@@ -1692,7 +1704,11 @@ refuses*; `shall unmanage <backend>:<name>` is the way out. A second section lis
 alone, commented out, with the count per reason.
 
 **Adopt does NOT consult the guard — not `protected_packages`, and not OS-essential**
-(2026-08-05, `Q47`). This resolves **E7**, where "protected" means two opposite things:
+(2026-08-05, `Q47`). **And these packages are declared, not commented out**: the manifest used to
+carry them in a second commented section on the reasoning that a live line is *"a line whose
+deletion means uninstall"*, which was already false — `guard::protection_of` refuses to remove
+what a backend reports as essential whatever the manifest says, so the comment character guarded a
+deletion that could not happen, at the cost of 33 packages Shall had no opinion about (`V.137`). This resolves **E7**, where "protected" means two opposite things:
 *never remove* in the guard, *never adopt* in `migrate.rs`. **Protection means one thing:
 never remove.** So adopt takes every manual package including protected and OS-essential
 ones; the guard then prevents their removal. This is a **change from what Stage 2 built** —
@@ -1936,7 +1952,10 @@ installed, the manager attributes it to a choice, nothing declares it. *Undeclar
 installed package nothing declares, dependency closure and all — a strictly wider set, and the
 one this command deletes. `check unmanaged` answers the first, `check drift` and this command
 answer the second, and **no surface may use one word for the other set.** The verb is named
-after what it deletes; it was `purge-unmanaged`, naming the set it does *not* act on.
+after what it deletes; it was `purge-unmanaged`, naming the set it does *not* act on — which
+reached `check unmanaged` and the rollup but not `check drift`, not the readme and not the
+command's own name, so the most destructive verb in the program was named after a set it never
+touches (`V.138`).
 
 **`sync` is additive; `purge-undeclared` is exclusive. This is the answer for every backend, and
 no backend gets its own** (owner ruling, 2026-07-23, N1). A thing Shall declared and then stopped

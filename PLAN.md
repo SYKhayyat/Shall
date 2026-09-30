@@ -1,7 +1,7 @@
 # PLAN — Shall (work top to bottom, one issue per worker session)
 
 Worker loop: top unchecked item only, fix + resolving test, commit, check off, stop.
-Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97, #102.
+Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97, #102, #98.
 
 ## SKIP — duplicates of one event, do not re-work
 - #32 DUP of #23+#24; #48 DUP of #32; #49 DUP of #33; #45 DUP of #26 (same file:line, same fix).
@@ -69,9 +69,13 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   never produced. `every_build_row_can_name_its_own_crash` guards it, and the control is the main
   step: if `Run tests` ever goes serial, the check would be satisfied by the step it is supposed
   to follow)
-- [ ] #98 CI: the `why.md` unattached-rationale ratchet is red on `main` — 53 entries against a
-  ceiling of 52, and it reds `Build for x86_64-unknown-linux-gnu` on every push. (High — the one
-  red job no open issue named)
+- [x] #98 CI: the `why.md` unattached-rationale ratchet is red on `main` — 53 entries against a
+  ceiling of 52, and it reds `Build for x86_64-unknown-linux-gnu` on every push. (High — **BUILT,
+  and the five were the cheapest kind there is**: `V.129`, `V.137`, `V.138`, `V.143` and `V.149`
+  each already named the rule they explain — II.2, II.9, II.11, II.7, II.7c — and those rules were
+  already carrying the reasoning in their own prose **without the citation**. 53 → 48, and
+  `UNCITED_CEILING` re-pinned 52 → 48 in the same change, which the ratchet's second assertion
+  demands)
 - [ ] #100 the `void` leg's failure list is a sample of the network: six of eleven backend
   failures name a backend that passed in the next run, and `uv`/`yarn` fail in every run inside
   the same red. (Medium — a list nobody can compare to the last run is not evidence)
