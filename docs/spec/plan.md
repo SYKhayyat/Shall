@@ -390,12 +390,23 @@ build and what is deferred to hardware.**
     why the one remaining call does not matter. The measurement above is what a triager needs and
     is recorded here so the next session does not re-derive it by flipping a flag in `Drop`.
 
-### Tier 16 — the Windows build compiles again (`PLAN.md` #97, MSVC half): BUILT
+### Tier 16 — the two red jobs on `main` (`PLAN.md` #97): BOTH HALVES
 
 31. ~~**`Advisories and licences` and the MSVC build are red on `main`; the MSVC one means the
-    `#71` Windows code has never been compiled by anything.**~~ **BUILT (MSVC half).** Not a
-    configuration problem and not a broken toolchain: **fourteen compile errors** across
-    `src/core/account.rs`, `src/backends/dir.rs` and `src/app/apply/extras.rs`, none reachable by
+    `#71` Windows code has never been compiled by anything.**~~ **BUILT, both halves.** The
+    `Advisories and licences` half was `RUSTSEC-2026-0285` against `rustls` 0.23.43, three hops
+    down through `reqwest` — the dependency Shall fetches package instructions and binaries with.
+    Fixed the way the gate asks for and not the way it tolerates: **`cargo update -p rustls` to
+    0.23.45, one package and one checksum, and no `deny.toml` entry**, because that file calls an
+    ignore "a build that was made green by a decision rather than by a fix" and this one had a
+    fix. The patch release declares the same `rust-version` (1.71) as the version it replaces and
+    Shall declares 1.89, so the MSRV promise is untouched — **checked against the registry
+    metadata rather than assumed**, because that job is the only thing that would have said
+    otherwise and it is a 40-minute round trip. `advisories ok, bans ok, licenses ok, sources ok`
+    locally, which is the same command the job runs.
+
+    The MSVC half: not a configuration problem and not a broken toolchain: **fourteen compile
+    errors** across `src/core/account.rs`, `src/backends/dir.rs` and `src/app/apply/extras.rs`, none reachable by
     any local step, because the local chain ran only on the platform the developer was on.
 
     Two shapes, and the second is the family:

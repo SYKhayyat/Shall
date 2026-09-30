@@ -778,6 +778,29 @@ The container integration matrix was red on every distro with `the dir is gone f
 
 **And the reason nobody found this is now fixed rather than explained.** `cargo check --target x86_64-pc-windows-gnu` type-checks the Windows half from a Linux host and needs no linker; only the `rust-std` component and a mingw C compiler are required, and both are one `nix build` and one `curl` away. `CLAUDE.md` carries the commands. **The point is not that fourteen errors were fixed — it is that the gap that let them sit is closed**, and the same gap had already cost 26 commits on the Unix side.
 
+### A TLS advisory in Shall's own dependency chain is fixed rather than silenced
+
+`Advisories and licences` — the `cargo deny` gate — had been red on `main` and on every commit
+since, which makes an advisory gate decoration: the one job whose entire claim is that it is not.
+
+- **`RUSTSEC-2026-0285`, `rustls` 0.23.43 → 0.23.45.** rustls accepted TLS 1.3 handshake messages
+  sent at the wrong encryption level when they followed a key-changing message in the same
+  record, so a peer could send plaintext `EncryptedExtensions` inside the `ServerHello`'s record
+  without rustls rejecting the connection. The handshake transcript is still authenticated, so a
+  network-position attacker cannot use it to alter or complete a handshake — but "the attacker
+  cannot complete the handshake" is not the same claim as "there is no bug", and the fix exists.
+  It is the same bug as Go's GO-2026-4340 (CVE-2025-61730).
+- **`rustls` is three hops down and no line of Shall's names it**: `shall → reqwest 0.12.28 →
+  hyper-rustls 0.27.9 → rustls`, and `tokio-rustls` beside it. So this is a dependency of the
+  thing Shall uses to *fetch a package's build instructions and binaries* — the one place in the
+  program where a bad TLS decision is not a bad page of text.
+- **The bump is a patch release inside the range `reqwest` already asks for**, so nothing in the
+  graph moved: one package, one version, one checksum. `rustls` 0.23.45 declares
+  `rust-version = "1.71"`, the same as the version it replaces and well under Shall's declared
+  1.89, so the MSRV promise is untouched.
+- **No `deny.toml` entry was added**, which is the point. The file says an entry is "a build that
+  was made green by a decision rather than by a fix", and this one had a fix.
+
 ## [0.7.0] — 2026-07-31 — v7, the declarative rewrite
 
 > **The version is `0.7.0` and the design is "v7"**, which are two different numbers and were

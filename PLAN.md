@@ -1,7 +1,7 @@
 # PLAN — Shall (work top to bottom, one issue per worker session)
 
 Worker loop: top unchecked item only, fix + resolving test, commit, check off, stop.
-Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99.
+Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97.
 
 ## SKIP — duplicates of one event, do not re-work
 - #32 DUP of #23+#24; #48 DUP of #32; #49 DUP of #33; #45 DUP of #26 (same file:line, same fix).
@@ -39,11 +39,13 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   anywhere, so the teardown could never be scored and all eight legs reported
   `the declared dir is on disk` PASSING beside a `gone_ok` that refused. The check that "never
   observed what it asserted" was `gone_ok` doing its job)
-- [ ] #97 CI: `Advisories and licences` and the MSVC build are red on `main`; the MSVC one means
-  the `#71` Windows code has never been compiled by anything. (High — **the MSVC half is BUILT**:
-  fourteen compile errors, and the local chain can now type-check that platform at all; **the
-  `Advisories and licences` half is untouched and still red**, a different job and a different
-  root cause)
+- [x] #97 CI: `Advisories and licences` and the MSVC build are red on `main`; the MSVC one means
+  the `#71` Windows code has never been compiled by anything. (High — **BUILT, both halves**.
+  MSVC: fourteen compile errors, and the local chain can now type-check that platform at all.
+  `Advisories and licences`: `RUSTSEC-2026-0285` against `rustls` 0.23.43, three hops down
+  through `reqwest` — **`cargo update -p rustls` to 0.23.45**, one package, and deliberately
+  **no `deny.toml` entry**, because that file calls an ignore "a build made green by a decision
+  rather than by a fix". Same declared MSRV, so the MSRV job is untouched)
 - [ ] #101 CI: both MSVC test binaries die with `0xc0000005 STATUS_ACCESS_VIOLATION` mid-run, and
   the log cannot say which test crashed. (High — **this is what the fourteen compile errors were
   hiding**: the crate compiles and then the process dies, so `cargo check` cannot answer it. The
