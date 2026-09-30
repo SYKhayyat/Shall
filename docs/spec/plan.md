@@ -390,6 +390,45 @@ build and what is deferred to hardware.**
     why the one remaining call does not matter. The measurement above is what a triager needs and
     is recorded here so the next session does not re-derive it by flipping a flag in `Drop`.
 
+### Tier 17 — a crash that takes its own evidence (`PLAN.md` #102): BUILT
+
+32. ~~**The main test step discards a crash's own evidence, on every platform.**~~ **BUILT.**
+    `.github/workflows/ci.yml` ran `cargo test --release --no-fail-fast` for **every** row of the
+    build matrix with no `--nocapture` and no `--test-threads`, so a binary that dies mid-run never
+    reaches libtest's failure report. Run `36598780716` logged **zero** `panicked at` lines in
+    78KB and no `failures:` section, and that is what left `#101` undiagnosable from CI: the job
+    was reporting a crash in the only vocabulary a dead process can be asked for.
+
+    - **One step, after `Run tests`, on the whole matrix** —
+      `cargo test … -- --test-threads=1 --nocapture`, gated on `${{ failure() && matrix.native }}`.
+      Serial is what names the test: a segfaulting test leaves its name as the last line libtest
+      printed, and in parallel that line is whichever thread got there last. `--nocapture` is what
+      puts back the output the harness had buffered when the process went.
+    - **Both halves of the gate are load-bearing, and the issue's "not a blanket
+      `--test-threads=1`" is the cheaper half to get wrong.** `failure()` because the suite is
+      ~20 minutes in parallel and far longer serially, and a serial run on a green job is a tax
+      on every push to buy evidence nobody reads. `matrix.native` because **a cross row that
+      failed at *build* has no test binary to re-run**, and without it this step fails for a
+      reason that has nothing to do with the crash it exists to explain.
+    - **A re-run that passes cannot make the job green**: the step above already failed, and a job
+      with a failed step is a failed job. It can only add evidence.
+    - **`every_build_row_can_name_its_own_crash` guards it**, because a step that exists only to
+      produce evidence is exactly the kind that gets deleted without anyone noticing it was the
+      evidence — the `witness dir-dst` shape from `#96`. **The control is the main step**: if
+      `Run tests` ever grows `--test-threads=1`, the check would be satisfied by the very step it
+      is supposed to follow, so the main step is required *not* to be serial, which is also the
+      honest state. Five mutations fed to it — the step deleted, `--test-threads=1` dropped,
+      `--nocapture` dropped, `failure()` dropped, and the main step made serial — each caught by
+      the assertion written for it.
+
+    **`#101` is still open and is not answered by this.** The evidence is now produced; nobody has
+    read it yet, because reading it needs a Windows machine. What the log already shows, and what
+    the re-run will make unambiguous: **no `stdout ----` block appears for any test in the whole
+    run**, which is what makes the two `FAILED` lines in-flight rather than failures, and four
+    lines before the death libtest printed that
+    `a_reader_writes_nothing_tests::no_reader_subcommand_writes_anything` had been running for
+    over 60 seconds — a lead, recorded as one.
+
 ### Tier 16 — the two red jobs on `main` (`PLAN.md` #97): BOTH HALVES
 
 31. ~~**`Advisories and licences` and the MSVC build are red on `main`; the MSVC one means the

@@ -363,6 +363,33 @@ jobs:
       run: cargo test --release --target ${{ matrix.target }} --no-fail-fast
       if: matrix.native
 
+    # **A test binary that dies takes its own evidence with it, and this is what gets it back.**
+    #
+    # `cargo test` reports a crash as `process didn't exit successfully … (exit code:
+    # 0xc0000005, STATUS_ACCESS_VIOLATION)` and a line telling you to pass `--no-capture` — with
+    # no test named, because the process that would have named it is the one that died. Measured
+    # on `Build for x86_64-pc-windows-msvc`: run 36598780716 logged **zero** `panicked at` lines in
+    # 78KB and no `failures:` section, and #101 has been undiagnosable from CI ever since. The
+    # step above is the same on every row of the matrix, so this is the family: any row, any test,
+    # same silence.
+    #
+    # `--test-threads=1` is the load-bearing half. A segfaulting test leaves its name as the last
+    # line libtest printed, and in parallel that line is whichever thread got there last; serially
+    # it is the one that died. `--nocapture` is the other half: it puts back the output the
+    # harness had buffered when the process went.
+    #
+    # **`if: failure()` and not a blanket serial run**, for the reason the issue gives and the
+    # arithmetic confirms: a green job pays nothing, and the suite is twenty minutes in parallel
+    # and far longer than that serially. The `matrix.native` half matters too — a cross row that
+    # failed at *build* has no test binary to re-run, and without it this step would try and fail
+    # for a reason that has nothing to do with the crash it exists to explain.
+    #
+    # A re-run that PASSES does not make the job green: the step above already failed, and a job
+    # with a failed step is a failed job. This can only add evidence, never remove a failure.
+    - name: Name the crash (only when something died)
+      if: ${{ failure() && matrix.native }}
+      run: cargo test --release --target ${{ matrix.target }} --no-fail-fast -- --test-threads=1 --nocapture
+
     - name: Tests for this target run elsewhere
       run: |
         echo "${{ matrix.target }} is cross-compiled from $(uname -m) and its tests are NOT run here."

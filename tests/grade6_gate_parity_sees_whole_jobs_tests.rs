@@ -267,3 +267,120 @@ fn every_ci_job_has_something_local_that_runs_it() {
         jobs
     );
 }
+
+/// **A test binary that dies must be re-run serially, or the crash costs the diagnosis it
+/// already paid for.**
+///
+/// `cargo test` reports a dying test binary as `process didn't exit successfully … 0xc0000005`
+/// and a note to pass `--no-capture`, with no test named — because the process that would have
+/// named it is the one that died. Run 36598780716 logged zero `panicked at` lines in 78KB and no
+/// `failures:` section, and `PLAN.md` #101 has been undiagnosable from CI ever since. The fix is
+/// one failure-only step, and the reason it needs a gate is the shape of this repository: the
+/// `witness dir-dst` tag was deleted by accident and every leg went red reporting a *product*
+/// defect (N-5, #96), so a step that exists only to produce evidence is exactly the kind that
+/// gets deleted without anyone noticing it was the evidence.
+///
+/// **Both halves are asserted, and one of them is the reason the step is not simply "run the
+/// suite again".** `--test-threads=1` is what makes the last line libtest printed be the test
+/// that died, rather than whichever thread happened to get there last; `--nocapture` is what
+/// puts back the output the harness had buffered. And the step must be gated on `failure()`:
+/// the suite is twenty minutes in parallel and far longer serially, so a serial run on a green
+/// job is a tax on every push to buy something nobody reads.
+///
+/// **The control is the main step itself**: if `Run tests` ever grows `--test-threads=1`, this
+/// check would be satisfied by the very step it is supposed to be following, and would report a
+/// re-run that does not exist. So the main step is required NOT to be serial, which is also the
+/// honest state — a parallel suite is the fast one.
+#[test]
+fn every_build_row_can_name_its_own_crash() {
+    let ci = read(&repo().join(".github/workflows/ci.yml"));
+    let lines: Vec<&str> = ci.lines().collect();
+
+    let main_step = lines
+        .iter()
+        .position(|l| l.trim_start().starts_with("- name: Run tests"))
+        .unwrap_or_else(|| {
+            panic!(
+                "ci.yml has no `Run tests` step; re-derive this check rather than deleting it — \
+                 it is the only step whose failure this one explains"
+            )
+        });
+
+    // The main step, in full, up to the next step at the same indentation.
+    let step_of = |from: usize| -> Vec<String> {
+        let indent = lines[from].len() - lines[from].trim_start().len();
+        let mut out = Vec::new();
+        for l in &lines[from..] {
+            if !out.is_empty() {
+                let ind = l.len() - l.trim_start().len();
+                if !l.trim().is_empty() && ind <= indent && l.trim_start().starts_with('-') {
+                    break;
+                }
+            }
+            if l.contains('\t') {
+                panic!("ci.yml has a tab in indentation at `{}`", l.trim());
+            }
+            out.push(l.to_string());
+        }
+        out
+    };
+    let main = step_of(main_step);
+    let main_run = main
+        .iter()
+        .find(|l| l.trim_start().starts_with("run:"))
+        .unwrap();
+    assert!(
+        !main_run.contains("--test-threads=1"),
+        "ci.yml's `Run tests` step is serial: `{main_run}`. The parallel suite is the fast one, \
+         and a serial step there would satisfy the re-run check below with a step that does not \
+         exist — which is the control this check is built on."
+    );
+
+    // The step after it, and the one after that: the re-run is a sibling, not a descendant.
+    let next_step = lines
+        .iter()
+        .skip(main_step + 1)
+        .position(|l| {
+            let ind = l.len() - l.trim_start().len();
+            ind == 4 && l.trim_start().starts_with("- name:")
+        })
+        .map(|p| main_step + 1 + p);
+
+    let rerun = next_step.map(step_of).unwrap_or_default();
+    let rerun_run = rerun
+        .iter()
+        .find(|l| l.trim_start().starts_with("run:"))
+        .cloned()
+        .unwrap_or_default();
+    let rerun_if = rerun
+        .iter()
+        .find(|l| l.trim_start().starts_with("if:"))
+        .cloned()
+        .unwrap_or_default();
+
+    assert!(
+        rerun_run.contains("cargo test") && rerun_run.contains("--test-threads=1"),
+        "the step after `Run tests` does not re-run the suite serially — it is \
+         `{rerun_run}`. A test binary that dies (0xc0000005 on the MSVC row) then takes its own \
+         evidence with it and the job log cannot say which test crashed, which is what #101 is."
+    );
+    assert!(
+        rerun_run.contains("--nocapture"),
+        "the serial re-run is `{rerun_run}`, without `--nocapture`. Serial is what names the \
+         test; `--nocapture` is what returns the output it had buffered when it died, and \
+         without it the re-run repeats the silence it was added to end."
+    );
+    assert!(
+        rerun_if.contains("failure()"),
+        "the serial re-run is gated on `{rerun_if}` rather than on `failure()`. The suite is \
+         twenty minutes in parallel and far longer serially: a serial run on a green job is a \
+         tax on every push to buy evidence nobody reads, and a gate that only costs when it is \
+         already red is the only kind that gets run."
+    );
+    assert!(
+        rerun_if.contains("matrix.native"),
+        "the serial re-run is gated on `{rerun_if}` and not on `matrix.native` too. A cross row \
+         that failed at BUILD has no test binary to re-run, and this step would then fail for a \
+         reason that has nothing to do with the crash it exists to explain."
+    );
+}

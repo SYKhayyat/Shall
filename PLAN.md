@@ -1,7 +1,7 @@
 # PLAN — Shall (work top to bottom, one issue per worker session)
 
 Worker loop: top unchecked item only, fix + resolving test, commit, check off, stop.
-Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97.
+Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97, #102.
 
 ## SKIP — duplicates of one event, do not re-work
 - #32 DUP of #23+#24; #48 DUP of #32; #49 DUP of #33; #45 DUP of #26 (same file:line, same fix).
@@ -52,16 +52,23 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   job runs without `--nocapture`, so the crash discards its own evidence — **one**
   `--test-threads=1 --nocapture` run should name the test outright. I first reported the two
   `FAILED` lines here as two failures; the exit codes showed the process died before libtest
-  could flush them, so they may only have been in flight)
-- [ ] #102 CI: the main test step discards a crash's own evidence, on every platform.
-  `.github/workflows/ci.yml:363` runs for **every** row of the build matrix with no `--nocapture`
+  could flush them, so they may only have been in flight. **DEFERRED by an agent, 2026-09-30**: no
+  Windows and no Wine here, so the crash cannot be reproduced or bisected, and the fix for the
+  missing evidence (#102) is now in place instead. What the log does add: **no `stdout ----`
+  block appears for any test**, which is what makes those two `FAILED` lines in-flight rather
+  than failures, and four lines before the death libtest printed
+  `a_reader_writes_nothing_tests::no_reader_subcommand_writes_anything has been running for over
+  60 seconds` — a lead, not a conclusion)
+- [x] #102 CI: the main test step discards a crash's own evidence, on every platform.
+  `.github/workflows/ci.yml:363` ran for **every** row of the build matrix with no `--nocapture`
   and no `--test-threads`, so a binary that dies mid-run never reaches libtest's failure report —
   run `36598780716` logged zero `panicked at` lines in 78KB and no `failures:` section, which is
-  what left #101 undiagnosable from CI. (High — **the family is the workflow, not the MSVC row**:
-  the six `--nocapture` uses in `ci.yml` are all probe steps that parse stdout, so the shape was
-  already understood six times over and the one step that can crash got none of it. The re-run must
-  be `if: failure()`, not a blanket `--test-threads=1`: a green job pays nothing and the suite is
-  ~20 minutes parallel)
+  what left #101 undiagnosable from CI. (High — **BUILT**: one failure-only step after `Run tests`
+  on the whole matrix, `--test-threads=1 --nocapture`, gated on `failure() && matrix.native` so a
+  green job pays nothing and a cross row that failed at *build* does not try to test a binary it
+  never produced. `every_build_row_can_name_its_own_crash` guards it, and the control is the main
+  step: if `Run tests` ever goes serial, the check would be satisfied by the step it is supposed
+  to follow)
 - [ ] #98 CI: the `why.md` unattached-rationale ratchet is red on `main` — 53 entries against a
   ceiling of 52, and it reds `Build for x86_64-unknown-linux-gnu` on every push. (High — the one
   red job no open issue named)

@@ -801,6 +801,26 @@ since, which makes an advisory gate decoration: the one job whose entire claim i
 - **No `deny.toml` entry was added**, which is the point. The file says an entry is "a build that
   was made green by a decision rather than by a fix", and this one had a fix.
 
+### A CI crash now names itself
+
+`cargo test` reports a test binary that dies as `process didn't exit successfully … 0xc0000005`
+and a note to pass `--no-capture`, **with no test named** — because the process that would have
+named it is the one that died. Run 36598780716 logged zero `panicked at` lines in 78KB, and
+`#101` has been undiagnosable from CI ever since. The step that runs the suite is the same on
+every row of the build matrix, so this was never an MSVC problem: it was a workflow problem.
+
+- **Every row that runs the suite now re-runs it serially when something failed**, with
+  `--test-threads=1` (a segfaulting test leaves its name as the last line libtest printed, and
+  serially that line is the one that died) and `--nocapture` (the output it had buffered).
+- **It costs nothing on a green job**, because it is gated on `failure()` — and it is gated on
+  `matrix.native` too, because a cross row that failed at *build* has no test binary to re-run.
+- **A re-run that passes cannot turn the job green.** The step above already failed; this one can
+  only add evidence.
+
+Nothing about how Shall behaves changes. What changes is that a crash in CI is a sentence rather
+than an exit code, which is the difference between a bug that can be found and one that can only
+be re-run and hoped at.
+
 ## [0.7.0] — 2026-07-31 — v7, the declarative rewrite
 
 > **The version is `0.7.0` and the design is "v7"**, which are two different numbers and were
