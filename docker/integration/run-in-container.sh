@@ -4316,6 +4316,54 @@ else
     echo "        $HOST_CLASS. Mount it:  -v \"\$PWD/scripts/lifecycle-floor.txt:$FLOOR_FILE:ro\""
 fi
 
+
+# Commands that cannot be executed in a container, each with the reason. Anything
+# not on this list must have been RUN — `--help` does not count.
+EXEMPT_CMDS="shell history bisect fleet"
+# A SMOKE run installs nothing, so no commit is ever written, and the two verbs
+# that read one have nothing to read. Named here rather than silently passing:
+# an exemption that appears only in one mode has to say which mode.
+[ -n "$SMOKE" ] && EXEMPT_CMDS="$EXEMPT_CMDS rollback diff run"
+exempt_reason() {
+    case "$1" in
+        shell)    echo "opens an interactive subshell" ;;
+        history)  echo "an interactive manifest-history TUI" ;;
+        bisect)   echo "restores system snapshots, and may need a reboot between steps" ;;
+        fleet)    echo "compares machines over SSH; there are no peers here" ;;
+        rollback) echo "SMOKE_ONLY: nothing was installed, so no commit exists to roll back to" ;;
+        diff)     echo "SMOKE_ONLY: nothing was installed, so there are no two commits to diff" ;;
+        run)      echo "SMOKE_ONLY: an ephemeral environment installs the package it provisions" ;;
+        *)        echo "" ;;
+    esac
+}
+for c in $EXEMPT_CMDS; do echo "        exempt: $c — $(exempt_reason "$c")"; done
+
+UNTOUCHED_CMD=""
+for c in $HELP_CMDS; do
+    grep -qx "$c" "$LEDGER/cmd-real.u" && continue
+    case " $EXEMPT_CMDS " in *" $c "*) continue ;; esac
+    UNTOUCHED_CMD="$UNTOUCHED_CMD $c"
+done
+echo "        subcommands: $(echo $HELP_CMDS | wc -w) in --help, \
+$(grep -c . "$LEDGER/cmd-real.u") executed, $(echo $EXEMPT_CMDS | wc -w) exempt"
+CMD_COUNT=$(echo $HELP_CMDS | wc -w)
+if too_few_to_audit 20 "$CMD_COUNT"; then
+    FAILC=$((FAILC + 1))
+    FAILED_NAMES="$FAILED_NAMES\n    - coverage: --help listed $CMD_COUNT subcommand(s) — nothing was audited"
+    echo "  FAIL  --help listed $CMD_COUNT subcommand(s); an audit over that examines nothing"
+elif [ -n "$UNTOUCHED_CMD" ]; then
+    FAILC=$((FAILC + 1))
+    FAILED_NAMES="$FAILED_NAMES\n    - coverage: subcommand(s) only ever reached via --help:$UNTOUCHED_CMD"
+    echo "  FAIL  every subcommand is executed — only --help'd:$UNTOUCHED_CMD"
+else
+    PASS=$((PASS + 1)); _credit_section; echo "  PASS  every non-exempt subcommand was executed, not just --help'd"
+fi
+
+# The container is thrown away either way, so this is not cleanup for its own sake: an
+# unmounted loopback file left behind by a run that failed halfway makes the NEXT run's
+# `mkfs` fail on a busy device, and that failure names btrfs rather than the run before it.
+teardown_storage_devices
+
 # --- 18. did every section run, against the record --------------------------------------
 #
 # The tally in the summary block is a fact about this run, and until now nothing compared it to
@@ -4326,6 +4374,18 @@ fi
 # **One verdict for the whole set, not one per section.** It is one question, and per-section
 # verdicts would report twenty catches for a single observation the moment the product is
 # absent, which makes `harness-mutation-test.sh`'s caught count mean something it does not.
+#
+# **And it runs LAST, after every other check, which the first run of this gate proved the hard
+# way.** It was written directly after the real-lifecycle ratchet, on the reasoning that the
+# coverage audit was finished by then — and it is not: the argv audit ("every non-exempt
+# subcommand was executed, not just --help'd") is forty lines further down and *credits the
+# current section*. So the new `section` call stole that check from `Coverage audit`, the audit
+# measured 4 against its recorded 5, and **six integration legs went red on the commit that
+# added the floor** — the gate reporting a coverage collapse that was a two-line ordering mistake
+# of its own. The instrument was right about the number and wrong about the cause, which is the
+# shape of every finding in this file with a different subject, and it is also the strongest
+# possible argument for the gate: a defect nobody reasoned about was caught by a count. Anything
+# added to this harness from here is either before this line or after it deliberately.
 check_section_floors() { # host-class file
     # Initialised FIRST, before any early return, because the reporter reads them and a
     # declined check that left the previous run's answer behind would report that instead.
@@ -4440,53 +4500,6 @@ report_section_floors() { # reads what check_section_floors left in _cf_*
 section "[18] Did every section run, against the record"
 check_section_floors "$HOST_CLASS" /src/scripts/section-floor.txt
 report_section_floors
-
-# Commands that cannot be executed in a container, each with the reason. Anything
-# not on this list must have been RUN — `--help` does not count.
-EXEMPT_CMDS="shell history bisect fleet"
-# A SMOKE run installs nothing, so no commit is ever written, and the two verbs
-# that read one have nothing to read. Named here rather than silently passing:
-# an exemption that appears only in one mode has to say which mode.
-[ -n "$SMOKE" ] && EXEMPT_CMDS="$EXEMPT_CMDS rollback diff run"
-exempt_reason() {
-    case "$1" in
-        shell)    echo "opens an interactive subshell" ;;
-        history)  echo "an interactive manifest-history TUI" ;;
-        bisect)   echo "restores system snapshots, and may need a reboot between steps" ;;
-        fleet)    echo "compares machines over SSH; there are no peers here" ;;
-        rollback) echo "SMOKE_ONLY: nothing was installed, so no commit exists to roll back to" ;;
-        diff)     echo "SMOKE_ONLY: nothing was installed, so there are no two commits to diff" ;;
-        run)      echo "SMOKE_ONLY: an ephemeral environment installs the package it provisions" ;;
-        *)        echo "" ;;
-    esac
-}
-for c in $EXEMPT_CMDS; do echo "        exempt: $c — $(exempt_reason "$c")"; done
-
-UNTOUCHED_CMD=""
-for c in $HELP_CMDS; do
-    grep -qx "$c" "$LEDGER/cmd-real.u" && continue
-    case " $EXEMPT_CMDS " in *" $c "*) continue ;; esac
-    UNTOUCHED_CMD="$UNTOUCHED_CMD $c"
-done
-echo "        subcommands: $(echo $HELP_CMDS | wc -w) in --help, \
-$(grep -c . "$LEDGER/cmd-real.u") executed, $(echo $EXEMPT_CMDS | wc -w) exempt"
-CMD_COUNT=$(echo $HELP_CMDS | wc -w)
-if too_few_to_audit 20 "$CMD_COUNT"; then
-    FAILC=$((FAILC + 1))
-    FAILED_NAMES="$FAILED_NAMES\n    - coverage: --help listed $CMD_COUNT subcommand(s) — nothing was audited"
-    echo "  FAIL  --help listed $CMD_COUNT subcommand(s); an audit over that examines nothing"
-elif [ -n "$UNTOUCHED_CMD" ]; then
-    FAILC=$((FAILC + 1))
-    FAILED_NAMES="$FAILED_NAMES\n    - coverage: subcommand(s) only ever reached via --help:$UNTOUCHED_CMD"
-    echo "  FAIL  every subcommand is executed — only --help'd:$UNTOUCHED_CMD"
-else
-    PASS=$((PASS + 1)); _credit_section; echo "  PASS  every non-exempt subcommand was executed, not just --help'd"
-fi
-
-# The container is thrown away either way, so this is not cleanup for its own sake: an
-# unmounted loopback file left behind by a run that failed halfway makes the NEXT run's
-# `mkfs` fail on a busy device, and that failure names btrfs rather than the run before it.
-teardown_storage_devices
 
 # --- Summary ---------------------------------------------------------------
 echo "=============================================================="
