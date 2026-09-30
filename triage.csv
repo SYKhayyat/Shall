@@ -1,0 +1,52 @@
+number,title,url,D,R,why,risk
+17,Complete remaining safety and failure-handling hardening,https://github.com/SYKhayyat/Shall/issues/17,4,4,Multi-boundary path/shell/snapshot/lock hardening needs typed fail-closed design,Needs fail-closed design
+18,Eliminate remaining dry-run preview and accounting inconsistencies,https://github.com/SYKhayyat/Shall/issues/18,4,3,Unified preview/execution ordering plus atomic restore needs shared planning result,Needs shared plan
+19,Harden parser ergonomics subprocess probes and platform behavior,https://github.com/SYKhayyat/Shall/issues/19,4,4,Scattered grammar/PATH/sandbox/XML defects need per-area escaping and timeout rules,Scattered defects
+20,Add lifecycle cleanup and TUI recovery guarantees,https://github.com/SYKhayyat/Shall/issues/20,3,4,Stale-session reaper plus RAII terminal guard spans session and TUI teardown,Spans teardown
+21,Add a real high-level verification path for release and integration behavior,https://github.com/SYKhayyat/Shall/issues/21,3,2,New smoke target wiring build workflow metadata and dry-run paths is test-only,Test-only
+25,All 7 integration lifecycle jobs fail on distro containers,https://github.com/SYKhayyat/Shall/issues/25,3,2,All-distros lifecycle failure needs log triage across managers and images CI-only,CI-only
+36,Shall Lamdan 3: the doc-comment system is a second unshipped documentation,https://github.com/SYKhayyat/Shall/issues/36,2,1,Centralize ruling vocabulary into one index plus resolving test docs-only,Docs-only
+38,Shall Lamdan 5: eopkg is genuinely retired — represent its deadness honestly,https://github.com/SYKhayyat/Shall/issues/38,1,2,Add RETIRED stamp and retired-witness assertion single-backend ledger fix,Ledger fix
+39,Shall Lamdan 6: the integration harness is roughly half totem,https://github.com/SYKhayyat/Shall/issues/39,3,2,Add positive-controls check-by-check against do-nothing stub harness-only,Harness-only
+40,Shall Lamdan 7: the integration harness has two oracles that cannot fail,https://github.com/SYKhayyat/Shall/issues/40,2,2,Wire unstubbed ledger and CI-greppable latency skips small harness wiring,Harness wiring
+41,Shall Lamdan 8: the prose tax is the largest of the three repos,https://github.com/SYKhayyat/Shall/issues/41,1,1,Distill decisions/why essays to dated log docs-only reversible,Docs-only
+42,Shall Interop A: the prose-tax is one disease in three patients,https://github.com/SYKhayyat/Shall/issues/42,2,1,Apply one rulings.md convention across repos docs-only coordination,Docs coordination
+43,Shall Interop B: the ruling vocabulary is this repo's version of girsa's W,https://github.com/SYKhayyat/Shall/issues/43,2,2,Mirror girsa resolving test for ruling cites mechanical test-only,Test-only
+44,Shall Interop C: product-identity questions only you can answer,https://github.com/SYKhayyat/Shall/issues/44,4,1,Backend breadth and harness cost are open product decisions no code yet,Decisions only
+53,Windows native sweep: nimble:nimjson fails to build classified a per-,https://github.com/SYKhayyat/Shall/issues/53,2,2,Rule out backend invocation then swap Windows canary fixture-only,Fixture-only
+54,Windows native sweep: fixtures assume a clean host (pipx canary pre-instal,https://github.com/SYKhayyat/Shall/issues/54,2,2,Add pipx pre-existing soft-skip and relax conflicts assert harness-only,Harness-only
+55,gentoo (emerge) leg: harness drives the ambiguous canary jq,https://github.com/SYKhayyat/Shall/issues/55,1,2,Map gentoo to app-misc/jq like smoke_pkg does one-line harness fix,One-line fix
+59,shall adopt should discover dotfiles,https://github.com/SYKhayyat/Shall/issues/59,4,3,Needs scan depth symlink-repo inference and interactive selection design,Needs design
+60,shall adopt should discover schedules,https://github.com/SYKhayyat/Shall/issues/60,4,4,Needs systemd/cron/launchd/schtasks mapping plus root and noise filtering,Needs mapping
+61,shall adopt should discover repos and PPAs,https://github.com/SYKhayyat/Shall/issues/61,3,4,Per-backend source parsing with dead-repo and conflict handling,Conflict handling
+62,shall adopt should discover shell configurations,https://github.com/SYKhayyat/Shall/issues/62,4,4,Shell rc plus plugin-manager detection needs secrets redaction design,Needs redaction design
+63,shall adopt should enumerate desktop and OS settings,https://github.com/SYKhayyat/Shall/issues/63,5,4,Cross-platform non-default enumeration with baseline and privacy filtering,Privacy filtering
+64,shall adopt should surface services by default,https://github.com/SYKhayyat/Shall/issues/64,3,3,Surface enabled-at-boot services filtering essentials and trigger-started units,Filtering needed
+65,shall adopt should surface firewall rules by default,https://github.com/SYKhayyat/Shall/issues/65,3,5,Adopt live firewall rules across adapters; wrong rules open security holes,Opens holes
+66,shall export: generate a reproducible script from a live system scan,https://github.com/SYKhayyat/Shall/issues/66,5,5,New scan-to-bash/ansible/nix verb with idempotency and secrets exclusion,Secrets + idempotency
+67,shall export: convert declaration files to a standalone script,https://github.com/SYKhayyat/Shall/issues/67,4,3,Resolve backends conditionals absent and options into standalone emitters,Emitter complexity
+72,Close the nixos: activation gap — no CI leg has ever activated a real NixOS,https://github.com/SYKhayyat/Shall/issues/72,4,2,Needs NixOS VM boot plus activate/switch floor CI-only but high stakes,CI-only high stakes
+73,First-class search-index declaration over a tree on a schedule,https://github.com/SYKhayyat/Shall/issues/73,4,3,New search noun wiring config service schedule and freshness check,New noun wiring
+74,Declared invariants: fail check when a crown-jewel path is unbacked,https://github.com/SYKhayyat/Shall/issues/74,4,3,New invariant noun versus check-class decision for off-box backup guard,Needs noun decision
+79,[Medium/perf] Any mutation wipes all backends on-disk installed cache,https://github.com/SYKhayyat/Shall/issues/79,1,2,Narrow forget_all to mutated backend entry single-function cache fix,Cache fix
+80,[Medium/perf] Unbounded per-package x per-probe subprocess storm,https://github.com/SYKhayyat/Shall/issues/80,2,2,Cap GenericQueryable fan-out with buffer_unordered or per-run probe cache,Fan-out cap
+81,[Medium/perf] std Mutex held across --help subprocess,https://github.com/SYKhayyat/Shall/issues/81,2,2,Release lock before spawn or use tokio Mutex/singleflight pinned location,Pinned location
+82,[Medium/bug+perf] Batch deadline scales wrong both ways,https://github.com/SYKhayyat/Shall/issues/82,2,3,Replace len.clamp scaling with sublinear base plus per-package ceiling,Scaling fix
+83,[Medium/bug] External vars JSON detection fragile to BOM/banner,https://github.com/SYKhayyat/Shall/issues/83,1,3,Strip BOM and reuse json_document scan single parser fix,Parser fix
+84,[Low/perf] Pre-batch prior_state fan-out width = batch size,https://github.com/SYKhayyat/Shall/issues/84,1,2,Cap buffered width with max_parallel like sibling fan-outs,Width cap
+85,[Low/bug] HTTP pool check-then-insert race,https://github.com/SYKhayyat/Shall/issues/85,1,2,Use entry or_try_insert for Client construction single-spot race,Single-spot race
+86,[Low/bug] zip unpacked-size sum can wrap past bomb bound,https://github.com/SYKhayyat/Shall/issues/86,1,5,Use saturating fold like tar path; wraparound defeats zip-bomb bound,Defeats bomb bound
+87,[Low/bug] copy_over mishandles dir-symlink on Windows,https://github.com/SYKhayyat/Shall/issues/87,1,3,Reuse remove_by_kind instead of remove_file single Windows path fix,Windows path fix
+88,[Medium/bug] Hermetic mock-layer tests probe the host's real sudo,https://github.com/SYKhayyat/Shall/issues/88,3,2,Route sudo credential probe through MockExecutor and fix global leak,Global leak
+89,[Medium/bug] Guard-reachability control test builds a vacuous fixture,https://github.com/SYKhayyat/Shall/issues/89,2,2,Count only adopted lines and loud-skip empty-profile hosts fixture-only,Fixture-only
+90,[Low/bug] Fan-out shape gate floors on hosts with few and skewed managers,https://github.com/SYKhayyat/Shall/issues/90,2,2,Gate overlap floor on skew or ceiling-adjust ratio metric-only fix,Metric-only
+91,Planner's template_needs_update compares raw source to rendered target,https://github.com/SYKhayyat/Shall/issues/91,2,3,Render-then-compare or delete dead branch; latent perpetual-drift planner bug,Perpetual drift
+94,Shall records what it installs and asks before adopting a bare tool name,https://github.com/SYKhayyat/Shall/issues/94,4,4,Needs receipt file Landing module and ask/always/never prompt semantics,Needs semantics
+95,V.186 and Q55 say completed_installs was deleted; the code still has it,https://github.com/SYKhayyat/Shall/issues/95,2,4,Decide manifest-only ownership versus crash-window journal reader plus docs,Needs ownership decision
+96,CI: the 8 distro integration images are red on the container harness's dir,https://github.com/SYKhayyat/Shall/issues/96,1,2,Observe dir-dst before asserting removal single harness lifecycle fix,Harness fix
+97,CI: 'Advisories and licences' and the MSVC build are red on main,https://github.com/SYKhayyat/Shall/issues/97,2,2,Read cargo-deny gate and uncompiled Windows arms pre-existing CI red,Pre-existing red
+98,CI: the why.md unattached-rationale ratchet is red on main,https://github.com/SYKhayyat/Shall/issues/98,1,1,Cite or retire one why entry to restore ceiling file-level docs fix,Docs fix
+99,A harness section that stops running is invisible: crash/groupkill lost 10,https://github.com/SYKhayyat/Shall/issues/99,3,2,Add absolute checks-run floor like CAUGHT_FLOOR harness instrumentation,Harness instrumentation
+100,A red void leg's failure list is a sample of the network,https://github.com/SYKhayyat/Shall/issues/100,4,2,Separate network flakes from systematic uv/yarn failures; needs triage design,Needs triage design
+101,CI: both MSVC test binaries die with STATUS_ACCESS_VIOLATION,https://github.com/SYKhayyat/Shall/issues/101,5,3,Unlocalized Windows runtime crash with no panic text needs bisection,Needs bisection
+102,CI: the main test step discards a crash's own evidence on every platform,https://github.com/SYKhayyat/Shall/issues/102,1,1,Add if-failure serial nocapture rerun in ci.yml single-step CI fix,CI fix
