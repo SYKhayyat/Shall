@@ -461,24 +461,57 @@ build and what is deferred to hardware.**
       module → sync creates it at mode 700 → drop the declaration → sync removes it. The
       `gone_ok` that was red on eight legs now scores.
 
-### Tier 14c — what each section ran (`PLAN.md` #99): the tally ships, the floor does not
+### Tier 14c — what each section ran (`PLAN.md` #99): BUILT
 
-29. ~~**A harness section that stops running is invisible.**~~ **PART BUILT.** `crash/groupkill`
-    lost 10 of its 10 checks on `ubuntu` (CI 36515002965), reported one `soft` line, and the run
-    still ended `pass=391 fail=1 soft=5` — green, and eight checks short of the 405 the previous
-    `main` ran on the same image. The `soft` was **right**: the SIGKILL landed outside the
-    transaction window, so nothing exercised recovery. What was missing is the count the `soft`
-    did not carry.
+29. ~~**A harness section that stops running is invisible.**~~ **BUILT, both halves** (the tally
+    2026-09-29, the floor 2026-09-30). `crash/groupkill` lost 10 of its 10 checks on `ubuntu`
+    (CI 36515002965), reported one `soft` line, and the run still ended `pass=391 fail=1 soft=5` —
+    green, and eight checks short of the 405 the previous `main` ran on the same image. The `soft`
+    was **right**: the SIGKILL landed outside the transaction window, so nothing exercised
+    recovery. What was missing is the count the `soft` did not carry.
 
     - **The per-section tally, printed in the RESULT block** as `shall-it-section: <name> <n>` plus
       a `TOTAL`, grep-able from any build log without downloading and diffing two runs. 26
       sections, credited by every predicate that scores a check, so the count is a fact about the
       run rather than something to be reconstructed afterwards. **Verified against the total**:
       `TOTAL 236` against `pass=236`, and per-section figures matching the CI legs.
-    - **Not shipped: the floor.** The measurement is done and the numbers are the input — see the
-      comment on #99. It is deliberately not in this commit, because a floor tight enough to
-      matter is set from per-leg data this account cannot produce locally, and a floor guessed at
-      would redden the matrix for being wrong about an image.
+    - **The floor, and the file is `scripts/section-floor.txt`.** An absolute count per host class
+      per section, in the shape `CAUGHT_FLOOR` already holds for the other direction of the same
+      blindness: a rate cannot tell "the checks got stronger" from "the checks were deleted", and
+      a count that ran cannot tell "the harness grew" from "a section stopped". Host-class keyed
+      because the honest number is a property of the machine — `Real lifecycle` measures 125 on
+      `tools` and 0 on `gentoo`, `Snapshot -> mutate -> restore` 8 on `storage` and 0 on the other
+      ten, the SIGKILL section 41 where the fixture installs and 3 where it does not.
+    - **A `soft` is not an excuse, and the reason is the whole difficulty.** A `soft`-bound record
+      carries the count it excuses down to AND the text of the `soft` that excuses it, and is
+      honoured only when the run measured at least that count and printed that text in that
+      section this time. The count binds because losing nine checks and losing ten are different
+      findings; the text binds because a reason written for one image's cause must not carry
+      another's. Five lines carry one today, and all five are the harness's own fixture: either
+      the control sync did not install `pv dos2unix ncdu`, or the kill landed outside the
+      transaction window. **The ubuntu case in the finding above has no line, and would fail.**
+    - **The input was measured where the account could not produce it locally**: 286 numbers read
+      off four runs of the tally across the whole matrix (36550745873, 36606109539, 36676516988,
+      36696775008), each the highest its class has measured. `gentoo`, `guix`, `slackware` and
+      `tools` are in two of the four — they are the slow images — and the file says so, because
+      those are the least-supported numbers in it and the first worth re-measuring.
+    - **Mounted wherever the lifecycle floor is**, and that is enforced rather than trusted:
+      `every_container_leg_that_runs_the_harness_mounts_every_floor` now scans a LIST of floors
+      across `ci.yml`, `run.sh` and `release-check.sh`, because the second file is exactly the one
+      a "mount it where it looks like the gate" edit would have missed.
+    - **Tested by mutation, both directions, and watched red.** `harness-logic-test.sh` drives the
+      lifted functions through ten cases: the control, a silent shortfall (fails), the same
+      shortfall announced (excused, loudly), the same `soft` below the bound (fails), a `soft` the
+      run did not print (fails), the same `soft` in another section (fails), a section above its
+      record (passes, prints the `sed`), a class with no record at all (fails), a class with no
+      line for one section (neither, and says what to add), and `SMOKE_ONLY` (neither). Five
+      mutations of the harness were fed to it and each was caught by the case it was written for.
+
+    **Not done, and it is half of Q12's rule 6 rather than a detail.** The Windows and macOS
+    native sweeps print no per-section tally, so the file holds nothing for them and the gate is
+    in force on neither. Porting the tally is the prerequisite; the test says so on every run
+    rather than letting the absence read as coverage. And the Windows harness is the half of the
+    whole ratchet family that has never had this question asked.
 
     **A latent bug this surfaced, which is the same family as #40's.** With the tally in, the
     fail-everything stub grew a survivor: `the plan file exists`. It had been passing or failing

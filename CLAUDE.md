@@ -189,6 +189,17 @@ later", it is **this list of properties currently unverified**:
 - a backend's real install → list → binary-on-PATH → remove lifecycle;
 - argv and terminator behaviour of a manager as installed, rather than as the table infers it.
 
+**And which of those were even attempted.** A harness section that stops running cannot fail —
+every check it did not make is a check that did not fail — so the container harness prints
+`shall-it-section: <section> <n>` per section and `scripts/section-floor.txt` ratchets those
+counts per host class. **A `soft` is not an excuse for one.** A shortfall the harness announced
+is excused by a dated line carrying both the count it covers and the text this run printed; a
+section that stopped in silence prints no `soft` and is excused by nothing, which is the whole
+point. `crash/groupkill` once lost 10 of its 10 checks on one image and the run stayed green, so
+this is not hypothetical — and the Windows and macOS sweeps print no tally yet, so **the floor is
+in force on the container matrix only**, which is half of Q12's rule 6 and the honest reading of
+it until the tally is ported.
+
 **`cargo fmt -- --check` is part of this chain, not a release-time afterthought.** CI rates it
 fatal on every push, and it is the one gate a change with no logic in it can break: renaming
 `nexus::` to `shall::` re-sorted two import groups past `petgraph`, which turned the whole board

@@ -631,6 +631,202 @@ for _src in $SOURCES; do
     fi
 done
 
+# ---------------------------------------------------------------------------
+# The section floor: did every section run, against `scripts/section-floor.txt`.
+#
+# **This is the only gate in the file whose failure is invisible in the run it judges.** Every
+# other predicate here has a check that must be capable of failing; this one is the claim that
+# they all did, and its own subject — a section that stops running — produces no failing check
+# to find. Measured: `crash/groupkill` lost 10 of its 10 checks on one image, printed one
+# `soft`, and the run ended `pass=391 fail=1 soft=5` — green, and eight checks short of the 405
+# the previous `main` ran on the same image with the same backend. So both halves below are the
+# whole point and both are driven: a shortfall with nothing to say for itself must FAIL, and a
+# shortfall the harness ANNOUNCED must not — because a gate that punishes the instrument for
+# declining to measure is a gate that gets switched off, and this one would be switched off on
+# eleven images at once the first time a `SIGKILL` landed outside a transaction window.
+#
+# The functions are lifted from the harness, so this tests the bytes CI runs. The control is
+# the first case and it matters more than the rest: a floor that cannot tell a section at its
+# number from a section that was never compared reports the second as the first, and "every
+# section is above its floor" is exactly what a gate holding no record at all would say.
+echo "== a section below its floor is a failure, and a section that SAID why is not"
+for _src in $SOURCES; do
+    if ! grep -q 'print_section_tally' "$_src"; then
+        # The Windows and macOS harnesses have no section tally, so there is nothing for a
+        # floor to compare and nothing worth mounting one for. That is a stated gap and not a
+        # second implementation of this gate — the shape that WOULD be a defect is a harness
+        # that mounts the file and prints no tally, and
+        # `tests/the_review_apparatus_is_rust_tests.rs` watches that one.
+        TOTAL=$((TOTAL + 1))
+        if grep -q 'check_section_floors' "$_src"; then
+            echo "  BAD   $(basename "$_src") has a section floor and no tally: it compares every section against zero"
+            BAD=$((BAD + 1))
+        else
+            echo "  ok    $(basename "$_src"): no section tally, so no section floor — the gap is Q12 rule 6's other half, still open"
+        fi
+        continue
+    fi
+    _body=""
+    for _fn in section_floor_record section_soft_says _credit_section _record_soft \
+               check_section_floors report_section_floors; do
+        _b="$(lift "$_fn" "$_src")"
+        if [ -z "$_b" ]; then _body=""; break; fi
+        _body="$_body
+$_b"
+    done
+    if [ -z "$_body" ]; then
+        TOTAL=$((TOTAL + 1))
+        echo "  BAD   $(basename "$_src") has no section floor: nothing compares what its sections ran"
+        BAD=$((BAD + 1))
+        continue
+    fi
+    (
+        PASS=0; FAILC=0; SOFTC=0; FAILED_NAMES=""
+        # shellcheck disable=SC2034
+        SMOKE=""
+        soft() { SOFTC=$((SOFTC + 1)); _record_soft "$1"; }
+        eval "$_body"
+
+        _sf_dir="$(mktemp -d)"
+        SECTIONS="$_sf_dir/sections"; SECTION_CHECKS="$_sf_dir/checks"
+        SECTION_SOFTS="$_sf_dir/softs"; FLOOR="$_sf_dir/section-floor.txt"
+        : > "$SECTIONS"; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
+        # Two sections, because a gate that only ever sees one cannot be shown to be reading
+        # the right one. `Bootstrap` is at its floor, `SIGKILL` is the section the finding was
+        # in, and the record gives the second a `soft`-bound — the shape a real entry has.
+        printf '0\tBootstrap\n1\tSIGKILL mid-transaction, then heal\n' > "$SECTIONS"
+        printf '%s\n' \
+            "# a comment, which the parser must skip" \
+            "container-linux-ubuntu-local  Bootstrap  4" \
+            "container-linux-ubuntu-local  SIGKILL mid-transaction, then heal  41  soft  22  2026-09-30  the kill opened no new entry in the write-ahead log" \
+            > "$FLOOR"
+        # `idx` is the section a check is credited to, which is the only thing the tally's two
+        # files hold; `credit N` writes N of them against the current one.
+        credit() { _i=0; while [ "$_i" -lt "$1" ]; do printf '%s\n' "$idx" >> "$SECTION_CHECKS"; _i=$((_i + 1)); done; }
+        reset() { PASS=0; FAILC=0; SOFTC=0; FAILED_NAMES=""; }
+        judge() {
+            check_section_floors container-linux-ubuntu-local "$1" > "$_sf_dir/out" 2>&1
+            report_section_floors >> "$_sf_dir/out" 2>&1
+        }
+        _bad=0
+
+        # The control, and the run every other case here is a deviation of.
+        reset; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
+        idx=0; credit 4; idx=1; credit 41
+        judge "$FLOOR"
+        [ "$FAILC" -eq 0 ] || { echo "  BAD   two sections at their floors failed the run"; _bad=1; }
+        grep -q "2 section(s) at or above the floor" "$_sf_dir/out" \
+            || { echo "  BAD   the pass did not say how many sections it compared — which is what a gate that compared nothing would also print"; _bad=1; }
+        [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): sections at their floors pass, and the pass says it compared two"
+
+        # The defect this exists for, in the exact shape of the measured one: the section is
+        # short, nothing printed, and the run must end in a FAILURE rather than a quiet number.
+        reset; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
+        idx=0; credit 4; idx=1; credit 4
+        judge "$FLOOR"
+        [ "$FAILC" -eq 1 ] || { echo "  BAD   a section that credited 4 of 41 checks did not fail the run"; _bad=1; }
+        grep -q "SIGKILL mid-transaction, then heal(4, floor 41)" "$_sf_dir/out" \
+            || { echo "  BAD   the failure did not name the section, the count and the floor:"; sed -n 's/^/          /p' "$_sf_dir/out"; _bad=1; }
+        [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): a section that stopped running in silence fails, and is named"
+
+        # The mirror, and the reason a `soft`-bound line exists at all: the same shortfall, with
+        # the harness announcing it. Matched with `grep -F` against what this run actually
+        # printed, so an excuse is worth exactly as much as the sentence in it — and it is
+        # reported, because an excuse honoured silently is how a floor becomes a comment.
+        reset; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
+        idx=0; credit 4; idx=1; credit 22
+        _record_soft "crash/groupkill: the kill opened no new entry in the write-ahead log (0 before, 0 after), so this iteration measured no recovery"
+        judge "$FLOOR"
+        [ "$FAILC" -eq 0 ] || { echo "  BAD   a shortfall the harness announced was scored as a failure"; _bad=1; }
+        grep -q "excused by a recorded" "$_sf_dir/out" \
+            || { echo "  BAD   the excuse was honoured silently"; _bad=1; }
+        [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): a shortfall with the soft that explains it is excused, loudly"
+
+        # **And the count still binds.** The same soft, the same section, and a run that lost
+        # more than the excuse covers: the excusal says 22, this measured 4, and the reason is
+        # not a reason for the other eighteen checks. A bound that did not bind would excuse
+        # the measured collapse as thoroughly as the one it was written for.
+        reset; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
+        idx=0; credit 4; idx=1; credit 4
+        _record_soft "crash/groupkill: the kill opened no new entry in the write-ahead log (0 before, 0 after), so this iteration measured no recovery"
+        judge "$FLOOR"
+        [ "$FAILC" -eq 1 ] || { echo "  BAD   an excusal covered a count below the one it was written for"; _bad=1; }
+        [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): the excuse's count binds — 4 is not the 22 it was written for"
+
+        # **And the text binds.** A record that excuses a shortfall only while the run prints
+        # THAT soft cannot be used to absorb a different one, which is the whole reason the
+        # line carries words and not just a number.
+        reset; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
+        idx=0; credit 4; idx=1; credit 22
+        _record_soft "crash/groupkill: something else went wrong entirely"
+        judge "$FLOOR"
+        [ "$FAILC" -eq 1 ] || { echo "  BAD   a soft this run did not print was accepted as the excuse"; _bad=1; }
+        [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): an excuse is honoured only by the soft it names"
+
+        # A `soft` in a DIFFERENT section does not excuse this one. Attribution is the whole
+        # mechanism: an excuse matching any soft anywhere in the run would be honoured by the
+        # run's least informative line.
+        reset; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
+        idx=0; credit 4; credit 22
+        _record_soft "crash/groupkill: the kill opened no new entry in the write-ahead log (0 before, 0 after), so this iteration measured no recovery"
+        judge "$FLOOR"
+        [ "$FAILC" -eq 1 ] || { echo "  BAD   a soft attributed to another section excused this one"; _bad=1; }
+        [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): a soft excuses only the section that printed it"
+
+        # A run that beat its record, which is the other half of a ratchet: it passes AND it
+        # prints the edit, because a floor that can only fall is a ceiling nobody set.
+        reset; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
+        idx=0; credit 9; idx=1; credit 41
+        judge "$FLOOR"
+        [ "$FAILC" -eq 0 ] || { echo "  BAD   a section above its floor failed"; _bad=1; }
+        grep -q 'ratchet up:.*container-linux-ubuntu-local  Bootstrap  9' "$_sf_dir/out" \
+            || { echo "  BAD   a section above its floor did not print the line to add:"; sed -n 's/^/          /p' "$_sf_dir/out"; _bad=1; }
+        [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): beating the record passes and prints the edit"
+
+        # **The gate that is not in force must say so, loudly.** A file that is not mounted —
+        # the state N-5 describes for the ratchet that shares this shape, on five legs at once,
+        # with every one of them green — lands in the branch that compared nothing, and
+        # "nothing is short" is what that branch must never report.
+        reset
+        judge "$_sf_dir/no-such-file"
+        [ "$FAILC" -eq 1 ] || { echo "  BAD   a missing floor file passed the gate"; _bad=1; }
+        grep -q "no record for container-linux-ubuntu-local" "$_sf_dir/out" \
+            || { echo "  BAD   the missing file was not named as a missing record"; _bad=1; }
+        [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): a class with no record at all is a failure, not a pass"
+
+        # A class with no line for ONE section is neither passed nor failed, and says what to
+        # add. Q12's rule 4: a gate that fails the first time it meets a new platform is a gate
+        # that stops people adding platforms — and it is still not a pass, because a record
+        # that is not there compares nothing.
+        reset; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
+        idx=0; credit 4; idx=1; credit 41
+        printf '2\tA section added after this file was written\n' >> "$SECTIONS"
+        judge "$FLOOR"
+        [ "$FAILC" -eq 0 ] || { echo "  BAD   a section with no record failed the run"; _bad=1; }
+        grep -q "no record yet for: A section added after this file was written (0)" "$_sf_dir/out" \
+            || { echo "  BAD   the unrecorded section was not named, so nothing says to add it:"; sed -n 's/^/          /p' "$_sf_dir/out"; _bad=1; }
+        [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): an unrecorded section is reported and counted as neither"
+
+        # SMOKE_ONLY measures a different run, and a floor over it reports the mode. This is
+        # the branch that keeps a documented local invocation (`SMOKE_ONLY=1`) from reddening
+        # on every image, and it has to be a `soft` — a PASS would be a section compared
+        # against nothing and scoring perfectly.
+        reset; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
+        idx=0; credit 0; idx=1; credit 0
+        # shellcheck disable=SC2034
+        SMOKE=1
+        judge "$FLOOR"
+        [ "$SOFTC" -eq 1 ] || { echo "  BAD   SMOKE_ONLY was neither softened nor refused"; _bad=1; }
+        [ "$PASS" -eq 0 ] || { echo "  BAD   SMOKE_ONLY scored a pass on the section floor"; _bad=1; }
+        [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): SMOKE_ONLY is not judged, and does not pass either"
+
+        rm -rf "$_sf_dir"
+        exit "$_bad"
+    )
+    if [ $? -eq 0 ]; then :; else BAD=$((BAD + 1)); fi
+    TOTAL=$((TOTAL + 1))
+done
+
 # The coverage audit's floor. Both harnesses take `ALL_BACKENDS` and `HELP_CMDS` from the
 # program under test and then assert set-containment — and a `for` over an empty list runs
 # zero times, leaves the "untouched" string empty, and PASSes. Measured under a do-nothing

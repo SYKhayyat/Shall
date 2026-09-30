@@ -294,6 +294,18 @@ not exist on Linux and the reverse. These numbers may rise and never fall, and t
 is checked against that file by the test suite, so it cannot drift the way the sentence it
 replaced did.
 
+**And each sweep also records what each of its sections actually ran**, because a section that
+stops running cannot fail: every check it did not make is a check that did not fail, so the run
+ends green with a hole in it. This happened — `crash/groupkill` lost 10 of its 10 checks on one
+image, and finding those ten took a diff of two CI logs. So every container run prints
+`shall-it-section: <section> <n>` per section, and `scripts/section-floor.txt` ratchets those
+counts per host class: a section that credits fewer checks than its class has credited before
+fails, and one that credits more prints the line to add. A shortfall the harness *announced* is
+excused, but only by a dated line that names both the count it covers and the `soft` this run
+printed — a section that stopped in silence prints no `soft` and is excused by nothing. These are
+the container matrix's numbers; the Windows and macOS sweeps print no per-section tally yet, so
+the floor is in force on neither.
+
 **These are argv-tested only** — Shall builds the command line and a test asserts it is the
 right one, and no machine in this project's CI has ever run it:
 

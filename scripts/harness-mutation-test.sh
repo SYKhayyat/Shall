@@ -130,6 +130,22 @@ done
 # 195), so a rate measured on it reads high for a reason that has nothing to do with the checks.
 # 545 is what was measured and 550 is the ceiling; the CI rate should land near 528 on the same
 # arithmetic, and 550 covers both without having to be re-measured on a runner to be believed.
+#
+# **Re-measured 2026-09-30, host, `apt jq`, after the section floor landed (`PLAN.md` #99):
+# 101 of 188 survive a do-nothing binary (537 permille) and 8 of 187 survive a fail-everything
+# one (42 permille, 179 caught).** One check was added and it is a CATCH under both stubs, which
+# is the shape worth recording: a gate that asks how much of the harness RAN is itself a check
+# that notices the product being absent, so both rates moved the right way and neither ceiling
+# needed lowering. The `CAUGHT_FLOOR` of 80 is untouched for the same reason — it is a minimum,
+# and 87 is above it.
+#
+# One caveat on reading a LOCAL number against a CI one, and it is about these two floors rather
+# than about the checks: this host has no `/src/scripts/` at all, so `lifecycle-floor.txt` and
+# `section-floor.txt` both take their "not in force, nothing was compared" branch and are counted
+# as catches here **for that reason**. On the `ubuntu` leg both are mounted and both are judged on
+# their numbers, so they are catches there too — same kind, different sentence, and the count is
+# the same either way. What a local number cannot tell you is a class-specific floor: the local
+# run has no `SHALL_IT_IMAGE`, so it is a host class of its own with no record in either file.
 # The Windows row is untouched — nothing measured it, and a ratchet taken from another host
 # class would be the count mistake this file exists to stop.
 case "$HARNESS" in

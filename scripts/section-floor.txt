@@ -1,0 +1,422 @@
+# How many checks each SECTION of the harness ran, per host class. A ratchet: a section's
+# number may rise, and a run that falls below the recorded one fails.
+#
+#   <host-class>  <section name>  <n>
+#   <host-class>  <section name>  <n>  soft  <excused-down-to>  <YYYY-MM-DD>  <the soft line>
+#
+# Fields are separated by TWO spaces, and a `#` line is a comment. A section name contains single
+# spaces and sometimes a colon, an arrow and a comma, so the file is read by stripping fields off
+# the front rather than by splitting a line on whitespace.
+#
+# WHY THIS EXISTS, and it is the mirror of a gate that already exists.
+#
+# `scripts/harness-mutation-test.sh` holds `CAUGHT_FLOOR`, an ABSOLUTE count of checks that
+# caught a broken product, and its header says why a rate would not do: a survivor rate cannot
+# tell "the checks got stronger" from "the checks were deleted". This is the same blindness in
+# the other direction, and it had nothing at all in front of it. **A section that stops running
+# cannot fail.** Every check it did not make is a check that did not fail, the summary prints
+# `pass=… fail=…` as usual, and the run is green with a hole in it.
+#
+# Measured. `crash/groupkill` lost 10 of its 10 checks on the `ubuntu` image in CI 36515002965.
+# The run reported one `soft` — correctly, because the SIGKILL landed outside the transaction
+# window, so nothing exercised recovery, and scoring that green is the thing a check-that-
+# measured-nothing must never do — and it ended `pass=391 fail=1 soft=5`, green, and eight checks
+# short of the 405 the previous `main` ran on the same image with the same backend. Locating those
+# eight took a scripted diff of two downloaded logs. A reader of either run could not have seen
+# it.
+#
+# The per-section tally shipped first (5794ac3) and made the run say what it covered; this file
+# is what compares it. Together they answer both halves: *did a section stop running*, and
+# *which one*. The tally alone answered the second to whoever diffed two logs by hand.
+#
+# **KEYED BY HOST CLASS, for the reason `lifecycle-floor.txt` gives at length, and here it is not
+# tidiness — it is the whole design.** The honest number is a property of the machine, not of
+# the harness. `Real lifecycle, every other manager on this image` measures 125 on `tools` and 0
+# on `gentoo`; `Snapshot -> mutate -> restore` measures 8 on `storage`, the only image that
+# builds a volume group, and 0 on the other ten; `SIGKILL mid-transaction, then heal` measures 41
+# where the fixture installs and 3 where it does not. One number over those is a number that
+# reports eleven images, ten of them wrongly, and a ratchet that is wrong that often gets
+# lowered, at which point it is a ceiling drawn by whoever lowered it last.
+#
+# The class is `<harness>-<os>[-<image>]-<ci|local>`, built exactly as `lifecycle-floor.txt`
+# builds it: `SHALL_IT_IMAGE` where the Dockerfile declares one, `os-release` otherwise, and
+# `docker run` passes no `CI`, so a container is always `-local`. `/etc/os-release` says `ubuntu`
+# for the `tools` image too, which is why the key is the image and not the distro.
+#
+# A `soft` IS NOT AN EXCUSE, and this is the half that makes the file worth having. A `soft` is
+# the instrument declining to measure, which is right and must stay right — so a run whose
+# section is short because the harness SAID why is not a red board. But a `soft` alone would
+# make every collapse excusable by the collapse itself: a section that stops running in silence
+# prints no soft, and a gate that only asks "did something decline?" cannot tell that from a
+# section that declined for a stated reason.
+#
+# So a `soft`-bound line carries BOTH halves and is honoured only when both hold:
+#
+#   the count — the run measured AT LEAST this many, so a collapse past it is not the same
+#     event. A section that loses ten checks and one that loses nine are different findings,
+#     and a line that excused both would have caught neither.
+#   the text — this run printed that `soft`, in that section, this time, matched literally
+#     against the lines this run actually printed. An excuse written for one image's reason
+#     cannot carry another image's, and a stale excuse cannot outlive its cause silently: it
+#     stops matching, and the gate goes red on the cause returning.
+#
+# The line does not expire, for the reason `lifecycle-floor.txt` argues at length and the owner
+# ruled on: an expiry turns a single upstream rotation into a board that goes red and STAYS red,
+# and a permanently red board is the failure this mechanism exists to prevent, arriving by the
+# other road. The date is on the line so the debt is visible in a diff, and every run that
+# honours an excuse prints the section, the count and the number it was excused to.
+#
+# THE NUMBERS, and which runs they came from. Every line below is the HIGHEST count a class has
+# measured, over four runs of the tally across the whole matrix:
+#
+#   36550745873  nightly, 2026-09-29      36676516988  push, 2026-09-30
+#   36606109539  push,   2026-09-29      36696775008  nightly, 2026-09-30
+#
+# `gentoo`, `guix`, `slackware` and `tools` appear in two of the four — they are the slow
+# images, and two measurements is what there was. Their lines are the least-supported numbers
+# in this file and the first to be worth re-measuring. Every other class has four.
+#
+# WHAT THE `soft` LINES ARE, and every one of them is the harness declining rather than Shall
+# failing. Seven are the crash section, by one of its two routes: the control sync installs
+# `pv dos2unix ncdu` first, and when that install did not happen the kill had nothing to
+# interrupt; or the kill landed outside the transaction window and opened no new journal entry.
+# The eighth is `appimage` on the `void` image, which has no FUSE in a plain container. Each is
+# recorded with the lowest count that cause has actually produced and with the words of the line
+# that produced it, so a run that falls further than the cause explains still fails.
+#
+# **Three of the seven carry a bound their own class has not printed yet** — `arch`, `opensuse`
+# and `ubuntu` have run that section 41 times flat, with no soft, in the four runs above. The
+# bound is 22 because that is what the same cause produced on `alpine`, `fedora` and `storage`,
+# and the second condition still applies in full: **the excuse is honoured only when the run
+# prints that line**, so a bound written in advance of its first occurrence can hide nothing and
+# only saves a leg the false red of a coin-flip kill landing outside a transaction window. The
+# `tools` bound is 3 rather than 22 because its own low was 3, from the other route: its fixture
+# did not install at all.
+#
+# ONE SECTION DELIBERATELY HAS NO BLOCK, and it is this gate's own. The harness's section 18 is
+# "Did every section run, against the record", and it scores exactly one check — so its count is
+# 1 or 0 by construction, and a floor over that would compare 1 against 1 forever and catch
+# nothing. Every run prints the line to add for it and counts it as neither, which is the correct
+# answer for a quantity with no variance. A block appears here when a section's checks can differ
+# from one run to the next; until then, this file saying nothing about it is the honest record.
+#
+# **WHAT THIS DOES NOT COVER, said here rather than discovered.** These are the container
+# matrix's numbers. `scripts/integration-windows.sh` and the macOS native sweep have no section
+# tally, so this file holds nothing for them and the gate is in force on neither — the same
+# gap Q12's rule 6 ("both harnesses carry it") was written to close for the lifecycle floor,
+# and the same half-open state. Porting the tally is the prerequisite, and it is not this
+# change. A class with no block here is neither passed nor failed: the run prints the lines to
+# add and counts the section as neither, because a record that is not there compares nothing.
+#
+# TO RAISE ONE: run the matrix, read the number the run prints, edit the line, commit it. Every
+# ratchet-up `sed` the run prints is the edit. **Never lower a line to get green** — that is
+# the one edit this file exists to make visible in a diff, and it is the edit that turns a
+# ratchet into a comment.
+# container-linux-alpine-local
+container-linux-alpine-local  --help across the surface  61
+container-linux-alpine-local  A dependent statement driven for real: link:  12
+container-linux-alpine-local  Adopt  2
+container-linux-alpine-local  Bootstrap  4
+container-linux-alpine-local  Chains and the per-host lock  17
+container-linux-alpine-local  Command surface, executed  70
+container-linux-alpine-local  Coverage audit  5
+container-linux-alpine-local  Discovery / read-only verbs  7
+container-linux-alpine-local  Dry-run safety  3
+container-linux-alpine-local  Git history + rollback  8
+container-linux-alpine-local  Idempotency  1
+container-linux-alpine-local  Install  3
+container-linux-alpine-local  Negative path  3
+container-linux-alpine-local  Plan-smoke, every backend this image cannot run  50
+container-linux-alpine-local  Real lifecycle, every other manager on this image  34
+container-linux-alpine-local  Remove  2
+container-linux-alpine-local  SIGKILL mid-transaction, then heal  41  soft  22  2026-09-30  the kill opened no new entry in the write-ahead log
+container-linux-alpine-local  Silence is not a no  3
+container-linux-alpine-local  Snapshot → mutate → restore, on a real device  0
+container-linux-alpine-local  The guard  3
+container-linux-alpine-local  Two runs at once, and killing the lock holder  7
+container-linux-alpine-local  bundle → restore  6
+container-linux-alpine-local  purge-undeclared, before adopt (the state that makes it a test)  2
+container-linux-alpine-local  rebuild  6
+container-linux-alpine-local  shim:, dotfiles: and exec: driven for real  26
+container-linux-alpine-local  sudo with a real password, on a pty  0
+
+# container-linux-arch-local
+container-linux-arch-local  --help across the surface  61
+container-linux-arch-local  A dependent statement driven for real: link:  12
+container-linux-arch-local  Adopt  8
+container-linux-arch-local  Bootstrap  4
+container-linux-arch-local  Chains and the per-host lock  17
+container-linux-arch-local  Command surface, executed  70
+container-linux-arch-local  Coverage audit  5
+container-linux-arch-local  Discovery / read-only verbs  7
+container-linux-arch-local  Dry-run safety  3
+container-linux-arch-local  Git history + rollback  8
+container-linux-arch-local  Idempotency  1
+container-linux-arch-local  Install  3
+container-linux-arch-local  Negative path  3
+container-linux-arch-local  Plan-smoke, every backend this image cannot run  46
+container-linux-arch-local  Real lifecycle, every other manager on this image  56
+container-linux-arch-local  Remove  2
+container-linux-arch-local  SIGKILL mid-transaction, then heal  41  soft  22  2026-09-30  the kill opened no new entry in the write-ahead log
+container-linux-arch-local  Silence is not a no  3
+container-linux-arch-local  Snapshot → mutate → restore, on a real device  0
+container-linux-arch-local  The guard  3
+container-linux-arch-local  Two runs at once, and killing the lock holder  7
+container-linux-arch-local  bundle → restore  6
+container-linux-arch-local  purge-undeclared, before adopt (the state that makes it a test)  2
+container-linux-arch-local  rebuild  6
+container-linux-arch-local  shim:, dotfiles: and exec: driven for real  26
+container-linux-arch-local  sudo with a real password, on a pty  0
+
+# container-linux-fedora-local
+container-linux-fedora-local  --help across the surface  61
+container-linux-fedora-local  A dependent statement driven for real: link:  12
+container-linux-fedora-local  Adopt  7
+container-linux-fedora-local  Bootstrap  4
+container-linux-fedora-local  Chains and the per-host lock  17
+container-linux-fedora-local  Command surface, executed  70
+container-linux-fedora-local  Coverage audit  5
+container-linux-fedora-local  Discovery / read-only verbs  7
+container-linux-fedora-local  Dry-run safety  3
+container-linux-fedora-local  Git history + rollback  8
+container-linux-fedora-local  Idempotency  1
+container-linux-fedora-local  Install  3
+container-linux-fedora-local  Negative path  3
+container-linux-fedora-local  Plan-smoke, every backend this image cannot run  48
+container-linux-fedora-local  Real lifecycle, every other manager on this image  44
+container-linux-fedora-local  Remove  2
+container-linux-fedora-local  SIGKILL mid-transaction, then heal  41  soft  22  2026-09-30  the kill opened no new entry in the write-ahead log
+container-linux-fedora-local  Silence is not a no  3
+container-linux-fedora-local  Snapshot → mutate → restore, on a real device  0
+container-linux-fedora-local  The guard  3
+container-linux-fedora-local  Two runs at once, and killing the lock holder  7
+container-linux-fedora-local  bundle → restore  6
+container-linux-fedora-local  purge-undeclared, before adopt (the state that makes it a test)  2
+container-linux-fedora-local  rebuild  6
+container-linux-fedora-local  shim:, dotfiles: and exec: driven for real  26
+container-linux-fedora-local  sudo with a real password, on a pty  0
+
+# container-linux-gentoo-local
+container-linux-gentoo-local  --help across the surface  61
+container-linux-gentoo-local  A dependent statement driven for real: link:  0
+container-linux-gentoo-local  Adopt  2
+container-linux-gentoo-local  Bootstrap  4
+container-linux-gentoo-local  Chains and the per-host lock  10
+container-linux-gentoo-local  Command surface, executed  67
+container-linux-gentoo-local  Coverage audit  3
+container-linux-gentoo-local  Discovery / read-only verbs  7
+container-linux-gentoo-local  Dry-run safety  3
+container-linux-gentoo-local  Git history + rollback  3
+container-linux-gentoo-local  Idempotency  1
+container-linux-gentoo-local  Install  0
+container-linux-gentoo-local  Negative path  3
+container-linux-gentoo-local  Plan-smoke, every backend this image cannot run  60
+container-linux-gentoo-local  Real lifecycle, every other manager on this image  0
+container-linux-gentoo-local  Remove  0
+container-linux-gentoo-local  SIGKILL mid-transaction, then heal  0
+container-linux-gentoo-local  Silence is not a no  0
+container-linux-gentoo-local  Snapshot → mutate → restore, on a real device  0
+container-linux-gentoo-local  The guard  3
+container-linux-gentoo-local  Two runs at once, and killing the lock holder  0
+container-linux-gentoo-local  bundle → restore  6
+container-linux-gentoo-local  purge-undeclared, before adopt (the state that makes it a test)  2
+container-linux-gentoo-local  rebuild  2
+container-linux-gentoo-local  shim:, dotfiles: and exec: driven for real  0
+container-linux-gentoo-local  sudo with a real password, on a pty  0
+
+# container-linux-guix-local
+container-linux-guix-local  --help across the surface  61
+container-linux-guix-local  A dependent statement driven for real: link:  12
+container-linux-guix-local  Adopt  2
+container-linux-guix-local  Bootstrap  4
+container-linux-guix-local  Chains and the per-host lock  17
+container-linux-guix-local  Command surface, executed  70
+container-linux-guix-local  Coverage audit  5
+container-linux-guix-local  Discovery / read-only verbs  7
+container-linux-guix-local  Dry-run safety  3
+container-linux-guix-local  Git history + rollback  8
+container-linux-guix-local  Idempotency  1
+container-linux-guix-local  Install  3
+container-linux-guix-local  Negative path  3
+container-linux-guix-local  Plan-smoke, every backend this image cannot run  55
+container-linux-guix-local  Real lifecycle, every other manager on this image  6
+container-linux-guix-local  Remove  2
+container-linux-guix-local  SIGKILL mid-transaction, then heal  22
+container-linux-guix-local  Silence is not a no  0
+container-linux-guix-local  Snapshot → mutate → restore, on a real device  0
+container-linux-guix-local  The guard  3
+container-linux-guix-local  Two runs at once, and killing the lock holder  7
+container-linux-guix-local  bundle → restore  6
+container-linux-guix-local  purge-undeclared, before adopt (the state that makes it a test)  2
+container-linux-guix-local  rebuild  6
+container-linux-guix-local  shim:, dotfiles: and exec: driven for real  26
+container-linux-guix-local  sudo with a real password, on a pty  0
+
+# container-linux-opensuse-local
+container-linux-opensuse-local  --help across the surface  61
+container-linux-opensuse-local  A dependent statement driven for real: link:  12
+container-linux-opensuse-local  Adopt  2
+container-linux-opensuse-local  Bootstrap  4
+container-linux-opensuse-local  Chains and the per-host lock  17
+container-linux-opensuse-local  Command surface, executed  70
+container-linux-opensuse-local  Coverage audit  5
+container-linux-opensuse-local  Discovery / read-only verbs  7
+container-linux-opensuse-local  Dry-run safety  3
+container-linux-opensuse-local  Git history + rollback  8
+container-linux-opensuse-local  Idempotency  1
+container-linux-opensuse-local  Install  3
+container-linux-opensuse-local  Negative path  3
+container-linux-opensuse-local  Plan-smoke, every backend this image cannot run  49
+container-linux-opensuse-local  Real lifecycle, every other manager on this image  40
+container-linux-opensuse-local  Remove  2
+container-linux-opensuse-local  SIGKILL mid-transaction, then heal  41  soft  22  2026-09-30  the kill opened no new entry in the write-ahead log
+container-linux-opensuse-local  Silence is not a no  3
+container-linux-opensuse-local  Snapshot → mutate → restore, on a real device  0
+container-linux-opensuse-local  The guard  3
+container-linux-opensuse-local  Two runs at once, and killing the lock holder  7
+container-linux-opensuse-local  bundle → restore  6
+container-linux-opensuse-local  purge-undeclared, before adopt (the state that makes it a test)  2
+container-linux-opensuse-local  rebuild  6
+container-linux-opensuse-local  shim:, dotfiles: and exec: driven for real  26
+container-linux-opensuse-local  sudo with a real password, on a pty  0
+
+# container-linux-slackware-local
+container-linux-slackware-local  --help across the surface  61
+container-linux-slackware-local  A dependent statement driven for real: link:  12
+container-linux-slackware-local  Adopt  2
+container-linux-slackware-local  Bootstrap  4
+container-linux-slackware-local  Chains and the per-host lock  17
+container-linux-slackware-local  Command surface, executed  70
+container-linux-slackware-local  Coverage audit  5
+container-linux-slackware-local  Discovery / read-only verbs  7
+container-linux-slackware-local  Dry-run safety  3
+container-linux-slackware-local  Git history + rollback  8
+container-linux-slackware-local  Idempotency  1
+container-linux-slackware-local  Install  3
+container-linux-slackware-local  Negative path  3
+container-linux-slackware-local  Plan-smoke, every backend this image cannot run  52
+container-linux-slackware-local  Real lifecycle, every other manager on this image  21
+container-linux-slackware-local  Remove  2
+container-linux-slackware-local  SIGKILL mid-transaction, then heal  3
+container-linux-slackware-local  Silence is not a no  3
+container-linux-slackware-local  Snapshot → mutate → restore, on a real device  0
+container-linux-slackware-local  The guard  3
+container-linux-slackware-local  Two runs at once, and killing the lock holder  3
+container-linux-slackware-local  bundle → restore  6
+container-linux-slackware-local  purge-undeclared, before adopt (the state that makes it a test)  2
+container-linux-slackware-local  rebuild  6
+container-linux-slackware-local  shim:, dotfiles: and exec: driven for real  26
+container-linux-slackware-local  sudo with a real password, on a pty  0
+
+# container-linux-storage-local
+container-linux-storage-local  --help across the surface  61
+container-linux-storage-local  A dependent statement driven for real: link:  12
+container-linux-storage-local  Adopt  7
+container-linux-storage-local  Bootstrap  4
+container-linux-storage-local  Chains and the per-host lock  17
+container-linux-storage-local  Command surface, executed  70
+container-linux-storage-local  Coverage audit  4
+container-linux-storage-local  Discovery / read-only verbs  7
+container-linux-storage-local  Dry-run safety  3
+container-linux-storage-local  Git history + rollback  8
+container-linux-storage-local  Idempotency  1
+container-linux-storage-local  Install  3
+container-linux-storage-local  Negative path  3
+container-linux-storage-local  Plan-smoke, every backend this image cannot run  49
+container-linux-storage-local  Real lifecycle, every other manager on this image  29
+container-linux-storage-local  Remove  2
+container-linux-storage-local  SIGKILL mid-transaction, then heal  41  soft  22  2026-09-30  the kill opened no new entry in the write-ahead log
+container-linux-storage-local  Silence is not a no  6
+container-linux-storage-local  Snapshot → mutate → restore, on a real device  8
+container-linux-storage-local  The guard  3
+container-linux-storage-local  Two runs at once, and killing the lock holder  7
+container-linux-storage-local  bundle → restore  6
+container-linux-storage-local  purge-undeclared, before adopt (the state that makes it a test)  2
+container-linux-storage-local  rebuild  6
+container-linux-storage-local  shim:, dotfiles: and exec: driven for real  35
+container-linux-storage-local  sudo with a real password, on a pty  8
+
+# container-linux-tools-local
+container-linux-tools-local  --help across the surface  61
+container-linux-tools-local  A dependent statement driven for real: link:  12
+container-linux-tools-local  Adopt  7
+container-linux-tools-local  Bootstrap  4
+container-linux-tools-local  Chains and the per-host lock  17
+container-linux-tools-local  Command surface, executed  70
+container-linux-tools-local  Coverage audit  5
+container-linux-tools-local  Discovery / read-only verbs  7
+container-linux-tools-local  Dry-run safety  3
+container-linux-tools-local  Git history + rollback  8
+container-linux-tools-local  Idempotency  1
+container-linux-tools-local  Install  3
+container-linux-tools-local  Negative path  3
+container-linux-tools-local  Plan-smoke, every backend this image cannot run  29
+container-linux-tools-local  Real lifecycle, every other manager on this image  125
+container-linux-tools-local  Remove  2
+container-linux-tools-local  SIGKILL mid-transaction, then heal  41  soft  3  2026-09-30  the control sync did not install
+container-linux-tools-local  Silence is not a no  3
+container-linux-tools-local  Snapshot → mutate → restore, on a real device  0
+container-linux-tools-local  The guard  3
+container-linux-tools-local  Two runs at once, and killing the lock holder  7
+container-linux-tools-local  bundle → restore  6
+container-linux-tools-local  purge-undeclared, before adopt (the state that makes it a test)  2
+container-linux-tools-local  rebuild  6
+container-linux-tools-local  shim:, dotfiles: and exec: driven for real  35
+container-linux-tools-local  sudo with a real password, on a pty  8
+
+# container-linux-ubuntu-local
+container-linux-ubuntu-local  --help across the surface  61
+container-linux-ubuntu-local  A dependent statement driven for real: link:  12
+container-linux-ubuntu-local  Adopt  7
+container-linux-ubuntu-local  Bootstrap  4
+container-linux-ubuntu-local  Chains and the per-host lock  17
+container-linux-ubuntu-local  Command surface, executed  70
+container-linux-ubuntu-local  Coverage audit  5
+container-linux-ubuntu-local  Discovery / read-only verbs  7
+container-linux-ubuntu-local  Dry-run safety  3
+container-linux-ubuntu-local  Git history + rollback  8
+container-linux-ubuntu-local  Idempotency  1
+container-linux-ubuntu-local  Install  3
+container-linux-ubuntu-local  Negative path  3
+container-linux-ubuntu-local  Plan-smoke, every backend this image cannot run  47
+container-linux-ubuntu-local  Real lifecycle, every other manager on this image  40
+container-linux-ubuntu-local  Remove  2
+container-linux-ubuntu-local  SIGKILL mid-transaction, then heal  41  soft  22  2026-09-30  the kill opened no new entry in the write-ahead log
+container-linux-ubuntu-local  Silence is not a no  3
+container-linux-ubuntu-local  Snapshot → mutate → restore, on a real device  0
+container-linux-ubuntu-local  The guard  3
+container-linux-ubuntu-local  Two runs at once, and killing the lock holder  7
+container-linux-ubuntu-local  bundle → restore  6
+container-linux-ubuntu-local  purge-undeclared, before adopt (the state that makes it a test)  2
+container-linux-ubuntu-local  rebuild  6
+container-linux-ubuntu-local  shim:, dotfiles: and exec: driven for real  35
+container-linux-ubuntu-local  sudo with a real password, on a pty  8
+
+# container-linux-void-local
+container-linux-void-local  --help across the surface  61
+container-linux-void-local  A dependent statement driven for real: link:  12
+container-linux-void-local  Adopt  2
+container-linux-void-local  Bootstrap  4
+container-linux-void-local  Chains and the per-host lock  17
+container-linux-void-local  Command surface, executed  70
+container-linux-void-local  Coverage audit  5
+container-linux-void-local  Discovery / read-only verbs  7
+container-linux-void-local  Dry-run safety  3
+container-linux-void-local  Git history + rollback  8
+container-linux-void-local  Idempotency  1
+container-linux-void-local  Install  3
+container-linux-void-local  Negative path  3
+container-linux-void-local  Plan-smoke, every backend this image cannot run  48
+container-linux-void-local  Real lifecycle, every other manager on this image  37  soft  33  2026-09-30  appimage: no real lifecycle here
+container-linux-void-local  Remove  2
+container-linux-void-local  SIGKILL mid-transaction, then heal  3
+container-linux-void-local  Silence is not a no  3
+container-linux-void-local  Snapshot → mutate → restore, on a real device  0
+container-linux-void-local  The guard  3
+container-linux-void-local  Two runs at once, and killing the lock holder  7
+container-linux-void-local  bundle → restore  6
+container-linux-void-local  purge-undeclared, before adopt (the state that makes it a test)  2
+container-linux-void-local  rebuild  4
+container-linux-void-local  shim:, dotfiles: and exec: driven for real  26
+container-linux-void-local  sudo with a real password, on a pty  0
+

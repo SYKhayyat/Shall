@@ -63,6 +63,15 @@ ratchet recorded 26 for that image and 13 for the Windows runner, and the README
 driven managers implied a third number again. A figure that a passing CI run raises is a figure no
 document should be storing by hand.
 
+**A green harness run is not a claim about coverage either, and the same reasoning applies one
+level up.** A section that stops running cannot fail, so the container harness prints what each
+of its sections ran and
+[`scripts/section-floor.txt`](../scripts/section-floor.txt) ratchets those counts per host class —
+286 numbers, read off four runs of the matrix, with a `soft`-bound line for the five cases where
+the harness itself declines to measure. `crash/groupkill` once lost 10 of its 10 checks on one
+image and the run stayed green. The Windows and macOS sweeps print no tally yet, so the floor is
+in force on the container matrix only, and saying so is part of the claim.
+
 *"Registered" meant two things and three documents counted two different ones.* This file said 52
 while the grades said 48 (Windows) and 56 (Ubuntu), and no two agreed because the word did not
 mean the same thing twice: **64 backends are compiled into the build; how many *register* is

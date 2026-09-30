@@ -7841,3 +7841,55 @@ later test in the binary order-dependent. So `Shape::is_measurable` and
 guarded by**, the gate asserts those, and the rule and the reporter cannot come to disagree
 about when a rule is in force — which is the failure this repository keeps meeting in a new
 place, and the reason the condition is a name rather than a literal in two places.
+
+**V.216 — Why a floor on the checks that RAN, and why a `soft` is not an excuse for one.**
+*(Built 2026-09-30, `PLAN.md` #99. Instrument, not a rule about the product.)*
+
+**A section that stops running cannot fail.** Every check it did not make is a check that did not
+fail, so the summary reads `pass=391 fail=1 soft=5`, the job is green, and what has actually
+happened is that a tenth of the harness did not run. Measured: `crash/groupkill` lost **10 of its
+10 checks** on the `ubuntu` image in CI 36515002965, and locating those eight-to-ten took a
+scripted diff of two downloaded logs — no gate, and no reader of either run, could have seen it.
+
+**The mirror of a rule this file already carries.** `V.101` holds `CAUGHT_FLOOR`, an **absolute**
+count of checks that caught a broken product, for the reason in that entry: a survivor *rate*
+cannot tell "the checks got stronger" from "the checks were deleted". A count of checks that
+*ran* has the same blindness in the other direction, and it had nothing at all in front of it.
+So the floor is an absolute number per host class — never a proportion of the total, and never a
+threshold guessed once — and the run prints the edit for raising it, because a floor that can
+only fall is a ceiling nobody set.
+
+**The host class is the key, and that is not tidiness.** `Real lifecycle, every other manager on
+this image` measures **125** on the `tools` image and **0** on `gentoo`; `Snapshot -> mutate ->
+restore` measures 8 on `storage` — the only image that builds a volume group — and 0 on the other
+ten; `SIGKILL mid-transaction, then heal` measures 41 where the fixture installs and 3 where it
+does not. One number over those reports eleven images, ten of them wrongly, and a ratchet that
+is wrong that often gets lowered — which is the one edit the file exists to make visible.
+
+**And the hard half: a `soft` is not an excuse, because that would make every collapse
+excusable by the collapse.** A `soft` is the instrument declining to measure, which is right and
+stays right — the kill landed outside the transaction window, so nothing exercised recovery, and
+scoring that green is the vacuous check `II.23` exists to refuse. But a gate that only asks "did
+something decline?" cannot tell a section that declined for a stated reason from one that stopped
+in silence, and silence is the failure this whole mechanism is for. So a `soft`-bound record
+carries **both** halves and is honoured only when both hold: the **count** the excuse covers — a
+section that loses nine checks and one that loses ten are different findings, and a bound that
+did not bind would excuse the measured collapse as thoroughly as the one it was written for — and
+the **text**, matched against the lines this run actually printed, with `grep`-style literal
+comparison in the section that printed it. A reason written for one image's cause cannot carry
+another image's, and a stale excuse stops matching rather than outliving its cause quietly.
+
+**The dates do not expire, and that is a decision `V.101` already made.** An expiry turns a
+single upstream rotation into a board that goes red and *stays* red, and a permanently red board
+is the failure this mechanism exists to prevent, arriving by the other road. Every run that
+honours an excuse prints the section, the count and the number it was excused to.
+
+**The gap this leaves open, said here rather than discovered.** These are the container matrix's
+numbers. `scripts/integration-windows.sh` and the macOS native sweep print no section tally, so
+the file holds nothing for them and the gate is in force on neither — the same half-open state
+`V.101`'s "and it goes in both harnesses" was written to prevent, on the second file. Porting
+the tally is the prerequisite, and the honest reading of "both harnesses carry it" is that this
+has not been done yet. `tests/the_review_apparatus_is_rust_tests.rs` is what keeps the two
+floors from drifting apart, and `scripts/harness-logic-test.sh` drives the whole mechanism in
+both directions — including a record whose excuse matched nothing, which is the case a gate
+about excusals must be able to fail.

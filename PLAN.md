@@ -1,7 +1,7 @@
 # PLAN — Shall (work top to bottom, one issue per worker session)
 
 Worker loop: top unchecked item only, fix + resolving test, commit, check off, stop.
-Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35.
+Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99.
 
 ## SKIP — duplicates of one event, do not re-work
 - #32 DUP of #23+#24; #48 DUP of #32; #49 DUP of #33; #45 DUP of #26 (same file:line, same fix).
@@ -24,10 +24,15 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   and are named in the issue, not here)
 - [x] #40 two oracles that cannot fail. (Medium — both shipped; the `unstubbed` half has a
   measured follow-up of 66 tests, recorded in `docs/spec/plan.md` Tier 14)
-- [ ] #99 a harness section that stops running is invisible: `crash/groupkill` lost 10 checks on
+- [x] #99 a harness section that stops running is invisible: `crash/groupkill` lost 10 checks on
   ubuntu and the run still went green. (High — there is no floor on *checks run*, which is the
   exact mirror of `CAUGHT_FLOOR`, and three of the five properties only the matrix can verify are
-  driven by that section. **The per-section tally ships; the FLOOR does not** — see `docs/spec/plan.md` Tier 14c)
+  driven by that section. **BUILT, both halves** — the per-section tally in 5794ac3 and the floor
+  in `scripts/section-floor.txt`, an absolute count per host class per section, measured off four
+  runs of the matrix. A `soft` excuses a shortfall only against a dated line carrying both the
+  count it covers and the text this run printed, so the ubuntu run in the finding fails.
+  **NOT the Windows/macOS half**: neither prints a section tally, so the gate is in force on
+  neither — see `docs/spec/plan.md` Tier 14c)
 - [x] #96 CI: the 8 distro integration images are red on the container harness's `dir:` check (a
   check that never observes what it asserts). (**BUILT — and it was one missing line of harness,
   not a product defect.** `gone_ok "the dir is gone from disk" dir-dst` had no `witness dir-dst`

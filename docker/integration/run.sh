@@ -40,8 +40,8 @@ if ! has_cr "$probe"; then
     exit 1
 fi
 rm -f "$probe"
-# The floor file is mounted into the container and parsed there too, so it is in this list even
-# though it is data rather than a script.
+# The floor files are mounted into the container and parsed there too, so they are in this list
+# even though they are data rather than scripts.
 #
 # The Dockerfiles are here for the reason this whole check is: `.gitattributes` pins them
 # `eol=lf`, and that governs what *checkout* writes, not what an editor writes afterwards.
@@ -50,7 +50,7 @@ rm -f "$probe"
 # line and a heredoc inside one does not, which is a failure that arrives with the next
 # Dockerfile somebody writes rather than with this one.
 for f in docker/integration/*.sh scripts/*.sh scripts/lifecycle-floor.txt \
-         docker/integration/Dockerfile.*; do
+         scripts/section-floor.txt docker/integration/Dockerfile.*; do
     [ -f "$f" ] || continue
     if has_cr "$f"; then
         crlf="$crlf $f"
@@ -147,6 +147,11 @@ for d in $DISTROS; do
     # carry the most (N-5). Mounted rather than copied, for the same cache reason and following
     # the pattern CI already uses for `harness-mutation-test.sh`.
     FLOOR_MOUNT="$PWD/scripts/lifecycle-floor.txt:/src/scripts/lifecycle-floor.txt:ro"
+    # The section floor's record, for the same reason and by the same argument: it is data
+    # under `scripts/`, so no image carries it, and a gate whose file is in no image is a gate
+    # in force on no host class. A local `DISTROS="..."` run measures the same sections CI does
+    # on a disposable image, so the numbers it prints are the numbers to paste here.
+    SECTION_FLOOR_MOUNT="$PWD/scripts/section-floor.txt:/src/scripts/section-floor.txt:ro"
     # Forward the run-mode toggle into the container: SMOKE_ONLY=1 skips real mutation
     # (discovery and plan-smoke only), for a source-building image like gentoo. gentoo is
     # ALWAYS smoke-only — a real emerge install→remove builds from source and costs hours — so a
@@ -183,7 +188,7 @@ for d in $DISTROS; do
     [ "$d" = gentoo ] && smoke=1
     [ -n "$smoke" ] && ENVFLAGS="$ENVFLAGS -e SMOKE_ONLY=$smoke"
     # shellcheck disable=SC2086
-    if docker run --rm $PRIV $ENVFLAGS -v "$SCRIPT_MOUNT" -v "$FLOOR_MOUNT" \
+    if docker run --rm $PRIV $ENVFLAGS -v "$SCRIPT_MOUNT" -v "$FLOOR_MOUNT" -v "$SECTION_FLOOR_MOUNT" \
             "shall-it-$d" "$be" "$(package_for "$d")"; then
         summary="${summary}\n  ${d} (${be}): PASS"
     else

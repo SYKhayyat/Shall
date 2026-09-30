@@ -419,30 +419,179 @@ fn the_pre_commit_hook_runs_the_formatting_gate_ci_runs() {
     );
 }
 
-/// **Every container leg that runs the harness must also mount the ratchet's floor file.**
+/// **Every container leg that runs the harness must also mount every floor file it parses.**
 ///
 /// `.dockerignore` excludes `scripts/` deliberately — editing a host script must not bust the
 /// image's cargo cache — so `scripts/lifecycle-floor.txt` is in no image and reaches a container
 /// only by being mounted. It was not, on any leg: the ratchet was in force on the Windows sweep,
 /// which has the least coverage, and absent from the four distro legs and the `tools` image,
 /// which have the most. Every one of those runs was green (N-5).
+///
+/// **The list is a list, and the second entry is the one that was nearly missed.** The section
+/// floor was added later, and the obvious way to add it is to paste a `-v` line into the legs
+/// that look like the gate — which is all of them, and also none of them by the time the next
+/// leg is added. So this scans a LIST rather than one name, and a leg that mounts the harness
+/// without mounting a floor the harness reads runs that floor's "not in force" branch, which
+/// measures nothing and says so in the vocabulary of a broken product.
 #[test]
-fn every_container_leg_that_runs_the_harness_mounts_the_lifecycle_floor() {
-    let ci = read(".github/workflows/ci.yml");
-    let harness = ci
-        .matches("run-in-container.sh:/src/docker/integration/run-in-container.sh")
-        .count();
-    let floor = ci
-        .matches("lifecycle-floor.txt:/src/scripts/lifecycle-floor.txt")
-        .count();
+fn every_container_leg_that_runs_the_harness_mounts_every_floor() {
+    // Every file that bind-mounts the harness is a leg, wherever it is: the workflow, the local
+    // matrix runner, and the release script's mutation step. Scanning `ci.yml` alone is the
+    // version of this gate that would have passed with `run.sh` mounting a floor nobody else did.
+    for file in [
+        ".github/workflows/ci.yml",
+        "docker/integration/run.sh",
+        "scripts/release-check.sh",
+    ] {
+        let body = read(file);
+        let harness = body
+            .matches("run-in-container.sh:/src/docker/integration/run-in-container.sh")
+            .count();
+        if harness == 0 {
+            continue;
+        }
+        for floor in ["lifecycle-floor.txt", "section-floor.txt"] {
+            let mounted = body
+                .matches(&format!("{floor}:/src/scripts/{floor}"))
+                .count();
+            assert_eq!(
+                harness, mounted,
+                "{file}: {harness} leg(s) mount the harness, {mounted} mount {floor}. A leg \
+                 without it runs that floor's \"not in force\" branch, which measures nothing."
+            );
+        }
+    }
     assert!(
-        harness > 0,
+        read(".github/workflows/ci.yml")
+            .matches("run-in-container.sh:/src/docker/integration/run-in-container.sh")
+            .count()
+            > 0,
         "no container leg mounts the harness; this check has stopped matching ci.yml"
     );
-    assert_eq!(
-        harness, floor,
-        "{harness} container leg(s) mount the harness, {floor} mount the floor. A leg without \
-         the floor runs the ratchet's else branch, which measures nothing."
+}
+
+/// **The section floor is compared against a tally, so a harness with no tally is a gate on
+/// nothing.** The `scripts/integration-windows.sh` half of the same shape does not exist yet, and
+/// a file that is absent from a harness reads exactly like a file that is present and passing.
+/// This asks the question the two files together leave open: does every harness that mounts a
+/// section floor also *print* the per-section tally the floor is compared against?
+#[test]
+fn a_section_floor_is_only_mounted_where_the_section_tally_exists() {
+    let mounts = read(".github/workflows/ci.yml")
+        .matches("section-floor.txt:/src/scripts/section-floor.txt")
+        .count();
+    let tallies = read("docker/integration/run-in-container.sh")
+        .matches("shall-it-section:")
+        .count();
+    assert!(
+        tallies > 0,
+        "a leg mounts scripts/section-floor.txt and the harness prints no `shall-it-section:` \
+         tally, so every section in the file is compared against a count that is always zero"
+    );
+    assert!(
+        mounts > 0,
+        "scripts/section-floor.txt is mounted by no leg, so the gate is in force nowhere — the \
+         state N-5 describes, with a second file"
+    );
+}
+
+/// **The two floors must know the same host classes, and a run in the gap is unjudged by both.**
+///
+/// `scripts/lifecycle-floor.txt` records one number per host class for real lifecycles;
+/// `scripts/section-floor.txt` records one per host class per section. Written independently —
+/// and they were — they drift: a class in one and not the other gets a run that answers the
+/// first gate and is invisible to the second, which is the shape of every finding in this file
+/// with a different subject. The class *set* is compared rather than the numbers, because a
+/// number that is legitimately per-class (every one of them) is not the thing that can agree by
+/// accident (V.216).
+#[test]
+fn every_host_class_the_lifecycle_floor_knows_also_has_a_section_floor() {
+    let classes = |file: &str| {
+        let mut out = std::collections::BTreeSet::new();
+        for line in read(file).lines() {
+            let line = line.trim_end();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            // The first whitespace-delimited token, in both files' shapes: the lifecycle
+            // floor writes `container-linux-ubuntu-local 10` and the section floor writes
+            // `container-linux-ubuntu-local  SIGKILL …  41`, where the rest of the line is a
+            // section name with single spaces in it. Only the first token is comparable.
+            let class = line.split_whitespace().next().unwrap_or("");
+            if class.starts_with("container-") {
+                out.insert(class.to_string());
+            }
+        }
+        out
+    };
+    let lifecycle = classes("scripts/lifecycle-floor.txt");
+    let section = classes("scripts/section-floor.txt");
+    assert!(
+        !lifecycle.is_empty(),
+        "no container host class parsed out of scripts/lifecycle-floor.txt; this check has stopped \
+         matching the file"
+    );
+    let missing: Vec<&String> = lifecycle.difference(&section).collect();
+    assert!(
+        missing.is_empty(),
+        "these host classes have a lifecycle floor and no section floor, so a run on them is \
+         judged by one ratchet and silent under the other: {missing:?}"
+    );
+}
+
+/// **A line naming a section the harness no longer has is a claim about a run that cannot
+/// happen, and nothing else notices it.** The floor file is read by *what ran* — the loop walks
+/// the harness's own section list — so a renamed or deleted section leaves its line behind,
+/// still looking like coverage, and the file drifts into fiction one rename at a time. The
+/// reverse is not a defect: a section the file has never heard of is reported by the run as
+/// unrecorded and counted as neither, which is the shape a new section is supposed to take.
+///
+/// The names are compared rather than the counts, for the reason the class check above gives:
+/// the number per class legitimately varies, and only the identity of the thing can be wrong in
+/// a way that matters.
+#[test]
+fn every_section_named_in_the_section_floor_is_a_section_the_harness_declares() {
+    // The harness records `"${1#*] }"` — everything after the `] ` of `section "[16d] Name"`.
+    let mut declared = std::collections::BTreeSet::new();
+    for line in read("docker/integration/run-in-container.sh").lines() {
+        let Some(rest) = line.trim().strip_prefix("section \"[") else {
+            continue;
+        };
+        if let Some((_, name)) = rest.split_once("] ") {
+            declared.insert(name.trim_end_matches('"').to_string());
+        }
+    }
+    assert!(
+        declared.len() >= 20,
+        "only {} section name(s) parsed out of run-in-container.sh; this check has stopped \
+         matching the file",
+        declared.len()
+    );
+    let mut named = std::collections::BTreeSet::new();
+    for line in read("scripts/section-floor.txt").lines() {
+        let line = line.trim_end();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        // `<class>  <name>  <n>[  soft  …]`, split on the file's own TWO-space separator: the
+        // section name is the one field here with single spaces inside it, so whitespace
+        // splitting would read `SIGKILL mid-transaction, then heal` as five fields and match
+        // none of them.
+        let Some((_class, rest)) = line.split_once("  ") else {
+            continue;
+        };
+        let Some((name, _)) = rest.split_once("  ") else {
+            continue;
+        };
+        named.insert(name.to_string());
+    }
+    let missing: Vec<&String> = named.difference(&declared).collect();
+    assert!(
+        missing.is_empty(),
+        "scripts/section-floor.txt records a floor for section(s) the harness does not declare, so \
+         no run will ever read those lines and the file claims coverage that is not there: \
+         {missing:?}\n\nEither the section was renamed — fix the name in the file, which is what \
+         the rename should have done — or it is gone, and its lines go with it."
     );
 }
 

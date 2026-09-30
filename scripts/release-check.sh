@@ -163,6 +163,7 @@ if command -v docker >/dev/null 2>&1 && docker image inspect shall-it-ubuntu >/d
     if docker run --rm --entrypoint sh \
             -v "$REPO_ROOT/docker/integration/run-in-container.sh:/src/docker/integration/run-in-container.sh:ro" \
             -v "$REPO_ROOT/scripts/lifecycle-floor.txt:/src/scripts/lifecycle-floor.txt:ro" \
+            -v "$REPO_ROOT/scripts/section-floor.txt:/src/scripts/section-floor.txt:ro" \
             -v "$REPO_ROOT/scripts/harness-mutation-test.sh:/src/scripts/harness-mutation-test.sh:ro" \
             shall-it-ubuntu -c \
             "cd /src && bash scripts/harness-mutation-test.sh docker/integration/run-in-container.sh --check apt jq"; then

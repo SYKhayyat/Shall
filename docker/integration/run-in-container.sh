@@ -288,7 +288,13 @@ grep_ok() {
 # found nothing to check" and "it never ran" are different and this is where they are told apart.
 SECTIONS=/tmp/shall-it-sections
 SECTION_CHECKS=/tmp/shall-it-section-checks
-rm -f "$SECTIONS" "$SECTION_CHECKS"; : > "$SECTIONS"; : > "$SECTION_CHECKS"
+# Every `soft` this run printed, against the section that printed it. The tally above counts
+# checks; this is the other half of the same question, and the floor below cannot be honest
+# without it — a section that declines to measure says so, and a floor that ignores that turns
+# the instrument's own honesty into a red board.
+SECTION_SOFTS=/tmp/shall-it-section-softs
+rm -f "$SECTIONS" "$SECTION_CHECKS" "$SECTION_SOFTS"
+: > "$SECTIONS"; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
 
 section() { # section "<the same line the harness used to echo>"
     echo "$1"
@@ -310,6 +316,16 @@ _credit_section() {
     return 0
 }
 
+# Called by `soft`, for the same reason `_credit_section` is called by everything that scores.
+# A `soft` does not credit its section — it is the absence of a measurement, and crediting it
+# would make "this section checked nothing and said so" look like "this section checked
+# something" in the one number the floor below reads.
+_record_soft() {
+    _rs_idx="$(tail -1 "$SECTIONS" 2>/dev/null | cut -f1)"
+    [ -n "$_rs_idx" ] && printf '%s\t%s\n' "$_rs_idx" "$1" >> "$SECTION_SOFTS"
+    return 0
+}
+
 # The tally, in the shape a build log can be read by. One line per section, then the total, so
 # `grep shall-it-section:` on any run answers "what did this run actually cover" without a
 # download and without a diff.
@@ -325,6 +341,91 @@ print_section_tally() {
         printf '        shall-it-section: %-58s %3d\n' "$_ts_name" "$_ts_n"
     done < "$SECTIONS"
     printf '        shall-it-section: %-58s %3d\n' "TOTAL" "$_t_total"
+}
+
+# ---- the floor on what each section ran (`scripts/section-floor.txt`) --------------------
+#
+# The tally above is a fact about a run. Nothing compared it to anything, which is how
+# `crash/groupkill` lost 10 of its 10 checks on one image, reported one `soft`, and left the run
+# green — a section that stops running is the failure mode a passing harness cannot see, because
+# every check that did not run is also a check that did not fail.
+#
+# **The shape is `CAUGHT_FLOOR`'s, and for its reason.** A survivor RATE cannot tell "the checks
+# got stronger" from "the checks were deleted"; a count of checks that ran has exactly the same
+# blindness in the other direction, so this is an absolute number per host class, never a
+# proportion of anything.
+#
+# **It is keyed by host class for the reason `lifecycle-floor.txt` gives at length.** The honest
+# number is a property of the machine, not of the harness: `gentoo` runs SMOKE_ONLY and drives
+# nothing that installs; `storage` is the only image with a volume group, so it is the only one
+# whose `Snapshot -> mutate -> restore` section can measure anything; `Real lifecycle` is
+# proportional to how many managers an image ships and ranges from 0 to 125 across the matrix.
+# One number over those is a number that reports eleven images, ten of them wrongly.
+#
+# **A shortfall is not excusable by being soft.** A `soft` is the instrument declining to
+# measure, which is right, and the floor's own header is what stops the decline from being free:
+# a `soft`-bound line names the count it excuses AND the text of the `soft` that excuses it, and
+# is honoured only when this run printed that text. A section that lost checks in silence has
+# printed no such line and is not excused by anything.
+#
+# Fields are separated by TWO spaces because every section name here contains single ones, and
+# matching one is prefix-stripping rather than a quoting exercise nobody should have to win.
+#
+# Shell rather than `awk -v`, and the reason is the sibling file: `harness-logic-test.sh` lifts
+# this body out of the harness by awk and stops at the first line that ends in `}`, so an
+# `awk '…'` program inside a lifted function truncates it into an unterminated quote. The
+# predicate is short enough not to want awk, and a parser that cannot be lifted is a parser
+# nothing tests.
+section_floor_record() { # host-class section file -> "<n>" or "<n>\t<n2>\t<date>\t<why>"
+    [ -f "$3" ] || return 0
+    while IFS= read -r _fr_line; do
+        case "$_fr_line" in '#'*|'') continue ;; esac
+        [ "${_fr_line%%  *}" = "$1" ] || continue
+        _fr_rest="${_fr_line#*  }"
+        [ "${_fr_rest%%  *}" = "$2" ] || continue
+        _fr_tail="${_fr_rest#*  }"
+        case "$_fr_tail" in
+            *"  soft  "*)
+                # "<n>  soft  <n2>  <date>  <why>". Both numbers, because a floor and the
+                # count an excuse covers it down to are different questions: 41 is what this
+                # section does, 22 is what one run may measure and still be honest about it.
+                # Collapsing them into one field is the mistake that made every excusal a
+                # no-op, because the bound it compared against was the floor it was meant to
+                # excuse. Tab-separated on the way out, so nothing re-parses the spacing.
+                _fr_n="${_fr_tail%%  *}"; _fr_t="${_fr_tail#*  }"    # "soft  <n2>  <date>  <why>"
+                _fr_t="${_fr_t#*  }"                                 # "<n2>  <date>  <why>"
+                _fr_n2="${_fr_t%%  *}"; _fr_t="${_fr_t#*  }"         # "<date>  <why>"
+                printf '%s\t%s\t%s\t%s\n' "$_fr_n" "$_fr_n2" "${_fr_t%%  *}" "${_fr_t#*  }"
+                return 0
+                ;;
+            *)  printf '%s\n' "$_fr_tail"; return 0 ;;
+        esac
+    done < "$3"
+    return 0
+}
+
+# Did THIS run print a `soft` carrying that text, in that section?
+#
+# A substring of the line, not a prefix, because a recorded excuse is a phrase and the soft
+# that carries it begins with the check's own name: the record says
+# `the kill opened no new entry in the write-ahead log` and the run printed
+# `crash/groupkill: the kill opened no new entry in the write-ahead log (0 before, 0 after)…`.
+# Matching on the prefix instead found nothing at all, and the gate then failed every run the
+# excuse was written for.
+#
+# A `case` glob with the needles quoted rather than a `grep -F` on a tab-joined line, for two
+# reasons: half of what these lines match is prose with parentheses in it, and an `awk` program
+# ending in `END { … }` ends a lifted function at the wrong brace.
+section_soft_says() { # section text
+    _ss_idx="$(awk -F'\t' -v sec="$1" '$2 == sec { print $1; exit }' "$SECTIONS")"
+    [ -n "$_ss_idx" ] || return 1
+    _ss_found=""
+    while IFS= read -r _ss_line; do
+        case "$_ss_line" in
+            "$_ss_idx"*"$2"*) _ss_found=1; break ;;
+        esac
+    done < "$SECTION_SOFTS"
+    [ -n "$_ss_found" ]
 }
 
 hard() { FAILC=$((FAILC + 1)); _credit_section; FAILED_NAMES="$FAILED_NAMES
@@ -411,7 +512,7 @@ stays_ok() { # stays_ok "desc" <tag> cmd... — cmd must SUCCEED now, having bee
     echo "  FAIL  $_s_desc (it is gone)"; return 1
 }
 
-soft() { SOFTC=$((SOFTC + 1)); echo "  soft  $1"; }
+soft() { SOFTC=$((SOFTC + 1)); _record_soft "$1"; echo "  soft  $1"; }
 
 # Why an install failed — a question, not an assumption (E5).
 #
@@ -4214,6 +4315,131 @@ else
     echo "        coverage collapsed. $LIFECYCLES real lifecycle(s) this run, unmeasured against"
     echo "        $HOST_CLASS. Mount it:  -v \"\$PWD/scripts/lifecycle-floor.txt:$FLOOR_FILE:ro\""
 fi
+
+# --- 18. did every section run, against the record --------------------------------------
+#
+# The tally in the summary block is a fact about this run, and until now nothing compared it to
+# anything. That is the whole defect: a section that stops running cannot fail, because every
+# check it did not make is a check that did not fail — so `crash/groupkill` losing 10 of its 10
+# checks on one image left that run green, and the only way to see it was a diff of two logs.
+#
+# **One verdict for the whole set, not one per section.** It is one question, and per-section
+# verdicts would report twenty catches for a single observation the moment the product is
+# absent, which makes `harness-mutation-test.sh`'s caught count mean something it does not.
+check_section_floors() { # host-class file
+    # Initialised FIRST, before any early return, because the reporter reads them and a
+    # declined check that left the previous run's answer behind would report that instead.
+    # A smoke run installs nothing, so it drives none of the sections that need a package, and a
+    # floor over it would report the MODE rather than the harness — the same reason the
+    # real-lifecycle ratchet above declines to judge one.
+    _cf_short=""; _cf_excused=""; _cf_unrecorded=""; _cf_up=""
+    _cf_compared=0; _cf_judged=0; _cf_class="$1"; _cf_file="$2"
+    if [ -n "${SMOKE:-}" ]; then
+        soft "section floor: not judged — SMOKE_ONLY measures a different run, and a floor over it would report the mode"
+        return 0
+    fi
+    # The four lists are NEWLINE-separated, and that is not a style choice. A space-separated
+    # list word-splits every section name in them — `SIGKILL mid-transaction, then heal` became
+    # six entries, and the failure it printed named `mid-transaction,` as a section of its own.
+    # They are held with a literal `\n` and expanded on the way out, because a real newline
+    # inside a quoted assignment is a formatting accident waiting for the next reader.
+    while IFS='	' read -r _cf_i _cf_name; do
+        [ -n "$_cf_i" ] || continue
+        _cf_n="$(grep -c "^$_cf_i\$" "$SECTION_CHECKS" 2>/dev/null)"
+        [ -n "$_cf_n" ] || _cf_n=0
+        _cf_rec="$(section_floor_record "$1" "$_cf_name" "$2")"
+        if [ -z "$_cf_rec" ]; then
+            _cf_unrecorded="$_cf_unrecorded$_cf_name=$_cf_n\n"
+            continue
+        fi
+        _cf_compared=$((_cf_compared + 1))
+        _cf_floor="${_cf_rec%%	*}"
+        if [ "$_cf_n" -ge "$_cf_floor" ]; then
+            [ "$_cf_n" -gt "$_cf_floor" ] && _cf_up="$_cf_up$_cf_name=$_cf_n\n"
+            continue
+        fi
+        _cf_bound=""; _cf_why=""
+        # A record with NO tab in it is a bare floor, and this branch is only reached by a run
+        # that is already short of one. With tabs it is a `soft` line: the SECOND field is the
+        # count the excuse covers — not the first, which is the floor itself and the whole
+        # point of the comparison — and the LAST is the words that must have been printed.
+        case "$_cf_rec" in
+            *"	"*)
+                _cf_bound="${_cf_rec#*	}"; _cf_bound="${_cf_bound%%	*}"
+                _cf_why="${_cf_rec##*	}"
+                ;;
+        esac
+        if [ -n "$_cf_bound" ] && [ "$_cf_n" -ge "$_cf_bound" ] && section_soft_says "$_cf_name" "$_cf_why"; then
+            _cf_x="$_cf_name($_cf_n, excused to $_cf_bound)"
+            _cf_excused="$_cf_excused$_cf_x\n"
+        else
+            _cf_x="$_cf_name($_cf_n, floor $_cf_floor)"
+            _cf_short="$_cf_short$_cf_x\n"
+        fi
+    done < "$SECTIONS"
+    _cf_judged=1
+}
+
+report_section_floors() { # reads what check_section_floors left in _cf_*
+    # A check that declined (SMOKE_ONLY) has already said so, and reporting on top of that
+    # would be a verdict about a run that was never compared.
+    [ "$_cf_judged" = 1 ] || return 0
+    if [ "$_cf_compared" -eq 0 ]; then
+        # A counted failure, and the reason is the same one the real-lifecycle ratchet gives
+        # above: this branch would otherwise report "nothing is short", which is the passing
+        # answer for a gate that compared nothing at all. An unrecorded class is recorded and
+        # not failed — but a class with NO line anywhere has not been recorded, it is absent,
+        # and the lines below are the edit that fixes it.
+        FAILC=$((FAILC + 1))
+        FAILED_NAMES="$FAILED_NAMES
+    - coverage: no section floor is recorded for $_cf_class, so this run's coverage went uncompared"
+        echo "  FAIL  section floor: $_cf_file holds no record for $_cf_class, so every section"
+        echo "        in this run went uncompared. Add what this run measured:"
+        # One line per section, in the file's own format, so the fix is a copy rather than an
+        # exercise in remembering which column is which.
+        printf '%b' "$_cf_unrecorded" \
+            | awk -F= -v c="$_cf_class" 'NF == 2 { print "            " c "  " $1 "  " $2 }'
+        echo "        Mount it if the file is missing:  -v \"\$PWD/scripts/section-floor.txt:$_cf_file:ro\""
+        return 0
+    fi
+    if [ -n "$_cf_short" ]; then
+        FAILC=$((FAILC + 1))
+        FAILED_NAMES="$FAILED_NAMES
+    - coverage: below the recorded section floor on $_cf_class:$_cf_short"
+        echo "  FAIL  section floor: this run credited fewer checks than $_cf_class has before."
+        printf '%b' "$_cf_short" | sed 's|^|          |'
+        echo "        Nothing failed because of this. A section that stops running does not fail"
+        echo "        its own checks — it never reaches them, and the run ends green."
+        echo "        If a \`soft\` in one of these sections printed above and says why, record it"
+        echo "        with the count it excuses, and every later run repeats the reason:"
+        printf '%b' "$_cf_short" \
+            | awk -v c="$_cf_class" -v d="$(date -u +%Y-%m-%d)" -F'[(),]' \
+                  '{ printf "            %s  %s  %s  soft  <lowest this excuse covers>  <that soft line>  %s\n", c, $1, $4, d }'
+        echo "        If no soft printed, nothing stopped on purpose, and the number above is the"
+        echo "        whole finding: which section, how many checks, against what."
+        return 0
+    fi
+    PASS=$((PASS + 1))
+    _credit_section
+    echo "  PASS  section floor: $_cf_compared section(s) at or above the floor for $_cf_class"
+    # A floor that can only fall is a ceiling nobody set, so a run above its record prints the
+    # edit — the same `sed` the lifecycle ratchet prints, over the same file shape.
+    [ -n "$_cf_excused" ] \
+        && printf '%b' "$_cf_excused" | sed 's|^|        short, and excused by a recorded `soft`: |'
+    [ -n "$_cf_up" ] \
+        && printf '%b' "$_cf_up" \
+            | awk -F= -v c="$_cf_class" -v f="$_cf_file" 'NF == 2 {
+                  printf "        ratchet up:  sed -i %s\n", "\"s|^" c "  " $1 ".*|" c "  " $1 "  " $2 "|\" " f
+              }'
+    [ -n "$_cf_unrecorded" ] \
+        && printf '%b' "$_cf_unrecorded" \
+            | awk -F= 'NF == 2 { printf "        not counted either way, no record yet for: %s (%s)\n", $1, $2 }'
+    return 0
+}
+
+section "[18] Did every section run, against the record"
+check_section_floors "$HOST_CLASS" /src/scripts/section-floor.txt
+report_section_floors
 
 # Commands that cannot be executed in a container, each with the reason. Anything
 # not on this list must have been RUN — `--help` does not count.

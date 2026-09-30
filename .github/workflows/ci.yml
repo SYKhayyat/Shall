@@ -592,6 +592,7 @@ jobs:
           -e GITHUB_TOKEN \
           -v "$PWD/docker/integration/run-in-container.sh:/src/docker/integration/run-in-container.sh:ro" \
           -v "$PWD/scripts/lifecycle-floor.txt:/src/scripts/lifecycle-floor.txt:ro" \
+          -v "$PWD/scripts/section-floor.txt:/src/scripts/section-floor.txt:ro" \
           shall-it-${{ matrix.distro }} ${{ matrix.backend }} ${{ matrix.pkg }}
 
     # **The argv probe, on every image rather than on one of six.**
@@ -640,6 +641,7 @@ jobs:
           -e GITHUB_TOKEN \
           -v "$PWD/docker/integration/run-in-container.sh:/src/docker/integration/run-in-container.sh:ro" \
           -v "$PWD/scripts/lifecycle-floor.txt:/src/scripts/lifecycle-floor.txt:ro" \
+          -v "$PWD/scripts/section-floor.txt:/src/scripts/section-floor.txt:ro" \
           -v "$PWD/scripts/harness-mutation-test.sh:/src/scripts/harness-mutation-test.sh:ro" \
           shall-it-ubuntu -c \
           "cd /src && bash scripts/harness-mutation-test.sh docker/integration/run-in-container.sh --check ${{ matrix.backend }} ${{ matrix.pkg }}"
@@ -720,6 +722,7 @@ jobs:
           -e GITHUB_TOKEN \
           -v "$PWD/docker/integration/run-in-container.sh:/src/docker/integration/run-in-container.sh:ro" \
           -v "$PWD/scripts/lifecycle-floor.txt:/src/scripts/lifecycle-floor.txt:ro" \
+          -v "$PWD/scripts/section-floor.txt:/src/scripts/section-floor.txt:ro" \
           shall-it-${{ matrix.distro }} ${{ matrix.backend }} ${{ matrix.pkg }}
 
     # The argv gates, run where the managers are. Both of them can only ask a manager that is
@@ -835,6 +838,7 @@ jobs:
           -e GITHUB_TOKEN \
           -v "$PWD/docker/integration/run-in-container.sh:/src/docker/integration/run-in-container.sh:ro" \
           -v "$PWD/scripts/lifecycle-floor.txt:/src/scripts/lifecycle-floor.txt:ro" \
+          -v "$PWD/scripts/section-floor.txt:/src/scripts/section-floor.txt:ro" \
           shall-it-storage apt jq
 
     # **The one image with `btrfs`, `lvm` and `zfs` on it had never been asked an argv question.**
