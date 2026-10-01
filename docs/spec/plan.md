@@ -390,6 +390,36 @@ build and what is deferred to hardware.**
     why the one remaining call does not matter. The measurement above is what a triager needs and
     is recorded here so the next session does not re-derive it by flipping a flag in `Drop`.
 
+### Tier 23 — a provider that prints a byte-order mark (`PLAN.md` #83): BUILT
+
+38. ~~**External vars JSON detection is fragile to a BOM or a banner.**~~ **BUILT.**
+    `src/model/vars_provider.rs`'s `parse_output` decided "JSON or `name = value` lines" with
+    `text.starts_with('{')` after `trim()`. **`\u{feff}` is not whitespace**, so `trim()` leaves it
+    in front and a perfectly good document behind one was read as pairs — and that is not a smaller
+    answer, it is a *different* one: the first `{` of `{"HOME": …}` never splits on `=`, so the
+    provider's own output came back as an error naming a line the user never wrote. A banner
+    (`cd` notice, shell startup, deprecation warning) did the same, and a banner is ordinary.
+
+    - **Strip the BOM, then scan for the first JSON object that BEGINS A LINE.** Line-anchored on
+      purpose: `parsers::json_document` — the function the issue points at — also tries the first
+      `{` *anywhere* in the stream, which is right for a manager printing JSON behind a notice and
+      wrong for a provider emitting pairs, because `labels = {"a": {"b": 1}}` is a legitimate
+      variable and a mid-line scan answers with the nested object and **invents a variable called
+      `a`**. Anchored, a brace has to *be* the document. That regression is pinned by a test, and
+      un-anchoring the scan turns it red — so the difference from `json_document` is recorded by a
+      failing case rather than by a comment nobody reads.
+    - **`parse_json_object` split in two**, so a document *found* by a scan and one read from the
+      head of the stream build variables by the same code. That split is what let the scan exist,
+      and it is the same lesson as `#86`'s named rule and `#85`'s entry: two spellings of one thing
+      is how they drift.
+    - **A notice is not the answer**, carried over from `json_document`'s own rule: a lone `{"…"}`
+      ahead of the document would name a variable `warning`, so payload-shaped (more than one key,
+      or anything nested) wins, and a lone `{}` still answers when there is nothing else — the old
+      behaviour rather than silence.
+    - **Four tests, three mutations.** Restoring the old rule reds the BOM and banner tests; the
+      un-anchored scan reds the regression; the plain pair and empty-output cases are asserted
+      unchanged, because a fix that changes what a provider's output *means* is a different fix.
+
 ### Tier 22 — a poisoned cache is not a cache (`PLAN.md` #81, one half of it): BUILT
 
 37. ~~**`help_text` holds a std per-key lock across the probe, and a poison bypasses the

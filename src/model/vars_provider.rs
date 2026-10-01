@@ -243,14 +243,72 @@ fn interpreter_argv(path: &Path) -> Vec<std::ffi::OsString> {
 /// a `name = value` line is read with the same literal rules a `vars` line uses. Returns the
 /// origin of each variable alongside it (W11/W12).
 fn parse_output(stdout: &str, origin: &Origin) -> Result<(Vars, VarOrigins)> {
-    let text = stdout.trim();
+    // A byte-order mark is not whitespace, so `trim()` leaves it, and a perfectly good JSON
+    // document behind one read as `name = value` lines — which is not a smaller answer, it is a
+    // different one: the first `{` of `{"HOME": …}` never splits on `=`, so the provider's own
+    // output came back as an error about a line the user never wrote.
+    let text = stdout.trim().trim_start_matches('\u{feff}').trim_start();
     if text.is_empty() {
         return Ok((Vars::new(), VarOrigins::new()));
     }
     if text.starts_with('{') {
         return parse_json_object(text, origin);
     }
+    // A provider that prints something before its document — a shell banner, a `cd` notice, a
+    // deprecation warning — is as ordinary as one that does not, and the rule above reads the
+    // whole stream as pairs. So: a JSON **object** that begins a line still wins, which is
+    // `parsers::json_document`'s second attempt without its first.
+    //
+    // **Not `json_document` verbatim, and the difference is a regression this shape would
+    // otherwise cause.** That function also tries the first `{` *anywhere* in the stream, which
+    // is right for a manager whose output is JSON with a banner and wrong for a provider that
+    // emits `name = value` lines: `labels = {"a": {"b": 1}}` is a legitimate variable, and a
+    // mid-line scan would answer with `{"a": {"b": 1}}` and report a variable called `a`.
+    // Anchored to a line start, a brace has to *be* the document.
+    if let Some(start) = stdout
+        .lines()
+        .scan(0usize, |off, line| {
+            let here = *off;
+            *off += line.len() + 1;
+            Some((here, line))
+        })
+        .find(|(_, line)| {
+            line.trim_start()
+                .trim_start_matches('\u{feff}')
+                .starts_with('{')
+        })
+        .map(|(here, _)| here)
+    {
+        if let Some(json) = first_json_object(&stdout[start..]) {
+            return vars_from_json(&json, origin);
+        }
+    }
     parse_pairs(stdout, origin)
+}
+
+/// The first JSON **object** at the head of `text`, read value by value the way
+/// `parsers::json_document` reads its stream — so a document followed by a summary line is the
+/// same answer as a document alone.
+fn first_json_object(text: &str) -> Option<serde_json::Value> {
+    let mut first_object: Option<serde_json::Value> = None;
+    for value in serde_json::Deserializer::from_str(text).into_iter::<serde_json::Value>() {
+        // Only an object is a vars document, and a malformed one ends the reading: `json_document`
+        // stops at the first syntax error rather than hunting for a later value, because a later
+        // `{` inside a broken document parses as some sub-object and answers confidently with the
+        // wrong half.
+        let Ok(serde_json::Value::Object(map)) = value else {
+            break;
+        };
+        // A lone-key object ahead of the document is a NOTICE — `{"warning": …}` — and handing a
+        // vars provider one would name a variable `warning`. Anything with more than the one key,
+        // or anything nested, is payload-shaped and wins; a lone `{}` still answers when there is
+        // nothing else, which is the old behaviour rather than silence.
+        if map.len() > 1 || map.values().any(|v| v.is_array() || v.is_object()) {
+            return Some(serde_json::Value::Object(map));
+        }
+        first_object.get_or_insert(serde_json::Value::Object(map));
+    }
+    first_object
 }
 
 fn parse_json_object(text: &str, origin: &Origin) -> Result<(Vars, VarOrigins)> {
@@ -260,6 +318,13 @@ fn parse_json_object(text: &str, origin: &Origin) -> Result<(Vars, VarOrigins)> 
             format!("the provider's JSON did not parse: {}", e),
         )
     })?;
+    vars_from_json(&json, origin)
+}
+
+/// The variables a provider's parsed JSON document names. Split from `parse_json_object` so a
+/// document **found** by a scan and one read from the head of the stream build variables by the
+/// same code — the two used to be the same function and the split is what let the scan exist.
+fn vars_from_json(json: &serde_json::Value, origin: &Origin) -> Result<(Vars, VarOrigins)> {
     let serde_json::Value::Object(map) = json else {
         return Err(GrammarError::new(
             origin.clone(),
@@ -269,9 +334,9 @@ fn parse_json_object(text: &str, origin: &Origin) -> Result<(Vars, VarOrigins)> 
     let mut vars = Vars::new();
     let mut origins = VarOrigins::new();
     for (name, value) in map {
-        check_name(&name, origin)?;
+        check_name(name, origin)?;
         origins.insert(name.clone(), origin.clone());
-        vars.insert(name, json_to_value(&value, origin)?);
+        vars.insert(name.clone(), json_to_value(value, origin)?);
     }
     Ok((vars, origins))
 }
@@ -529,6 +594,74 @@ mod tests {
         let origin = Origin::new("vars.js", 0);
         let err = parse_output(r#"{"x": {"nested": 1}}"#, &origin).unwrap_err();
         assert!(err.what.contains("object"), "{}", err);
+    }
+
+    /// **A byte-order mark in front of a valid document is not a `name = value` line.**
+    ///
+    /// `\u{feff}` is not whitespace, so the old `trim()` left it there and the first `{` of the
+    /// document never split on `=`. The provider's own output came back as an error about a line
+    /// nobody wrote — which is a worse answer than a wrong one, because it points at the user.
+    /// Windows shells and editors emit the mark on their own; a provider inheriting one is
+    /// ordinary.
+    #[test]
+    fn a_byte_order_mark_does_not_turn_json_into_pairs() {
+        let origin = Origin::new("vars.js", 0);
+        let (vars, _origins) = parse_output("\u{feff}{\"HOME\": \"/home/x\", \"N\": 3}", &origin)
+            .expect("a JSON document behind a BOM is still a JSON document");
+        assert_eq!(vars["HOME"], Value::Str("/home/x".into()));
+        assert_eq!(vars["N"], Value::Num(3.0));
+    }
+
+    /// **And a line in front of the document does not either.**
+    ///
+    /// A provider that prints a banner before its answer is as ordinary as one that does not, and
+    /// the old rule read the whole stream as `name = value` — so `{"HOME": "/home/x"}` behind a
+    /// `cd` notice produced a parse error naming the notice. This is the same shape
+    /// `parsers::json_document` exists for on the manager side.
+    #[test]
+    fn a_banner_before_the_document_does_not_either() {
+        let origin = Origin::new("vars.js", 0);
+        let stdout = "Changed current directory to /root\n{\"HOME\": \"/home/x\", \"N\": 3}\n";
+        let (vars, _origins) =
+            parse_output(stdout, &origin).expect("a document after a banner is still a document");
+        assert_eq!(vars["HOME"], Value::Str("/home/x".into()));
+    }
+
+    /// **The regression this shape would otherwise cause, pinned.**
+    ///
+    /// `labels = {"a": {"b": 1}}` is a legitimate `name = value` line whose value happens to be
+    /// JSON. `parsers::json_document` tries the first `{` *anywhere* in a stream, which is right
+    /// for a manager printing JSON behind a notice and wrong here: it would answer with the nested
+    /// object and report a variable called `a`. So the scan here is anchored to a line start, and
+    /// this test is what says so.
+    #[test]
+    fn a_pairs_line_whose_value_is_json_is_still_a_pairs_line() {
+        let origin = Origin::new("vars.js", 0);
+        let stdout = "HOME = /home/x\nlabels = {\"a\": {\"b\": 1}}\n";
+        let (vars, _origins) = parse_output(stdout, &origin).expect("a pair line is a pair line");
+        assert_eq!(vars["HOME"], Value::Str("/home/x".into()));
+        assert_eq!(
+            vars["labels"],
+            Value::Str(r#"{"a": {"b": 1}}"#.into()),
+            "the nested-brace line was swallowed and read as JSON instead"
+        );
+        assert!(
+            !vars.contains_key("a"),
+            "a variable called `a` was invented out of a pair line's value: {:?}",
+            vars
+        );
+    }
+
+    /// **And the plain cases are untouched**, because a fix that changes what a provider's output
+    /// means is a different fix.
+    #[test]
+    fn pairs_and_empty_output_are_unchanged() {
+        let origin = Origin::new("vars.js", 0);
+        let (vars, _origins) = parse_output("A = 1\n# a comment\n\nB = two\n", &origin).unwrap();
+        assert_eq!(vars.len(), 2);
+        assert_eq!(vars["B"], Value::Str("two".into()));
+        let (empty, _) = parse_output("   \n\n", &origin).unwrap();
+        assert!(empty.is_empty(), "whitespace is not a variable");
     }
 
     #[test]

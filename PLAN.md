@@ -1,7 +1,7 @@
 # PLAN — Shall (work top to bottom, one issue per worker session)
 
 Worker loop: top unchecked item only, fix + resolving test, commit, check off, stop.
-Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97, #102, #98, #91, #86, #85, #81.
+Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97, #102, #98, #91, #86, #85, #81, #83.
 
 ## SKIP — duplicates of one event, do not re-work
 - #32 DUP of #23+#24; #48 DUP of #32; #49 DUP of #33; #45 DUP of #26 (same file:line, same fix).
@@ -106,7 +106,14 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   panic, so a single panic anywhere in the process switched the cache off for the rest of the run,
   silently. Now recovered with `into_inner`, and `a_poisoned_cache_is_still_a_cache` poisons both
   locks for real and asks a question the cache can answer from memory.)
-- [ ] #79 forget_all wipes all caches, #80 probe storm, #82 batch deadline, #83 vars JSON fragile, #84 fan-out uncapped, #87 dir-symlink Windows.
+- [x] #83 vars JSON detection fragile to BOM/banner. (**BUILT** — the rule was `starts_with('{')`
+  after `trim()`, and a BOM is not whitespace, so valid JSON behind one was read as `name = value`
+  lines and came back as an error about a line the user never wrote; a banner before the document
+  did the same. Now: BOM stripped, then a **line-anchored** scan for the first JSON object.
+  Deliberately NOT `parsers::json_document` verbatim — that also tries the first `{` *anywhere*,
+  which would read `labels = {"a": {"b": 1}}` as JSON and invent a variable called `a`. That
+  regression is pinned by a test, and the mutation that removes the anchoring turns it red.)
+- [ ] #79 forget_all wipes all caches, #80 probe storm, #82 batch deadline, #84 fan-out uncapped, #87 dir-symlink Windows.
 - [ ] #25 lifecycle jobs on distro containers, #53 nimble Windows, #54 dirty-host fixtures.
 - [x] #55 gentoo (emerge) leg: harness drives the ambiguous canary jq. (**BUILT — the canary is
   `htop` since 2026-08-17, because `jq` is two atoms on Gentoo and a bare `jq` is a name Portage
