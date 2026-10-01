@@ -48,15 +48,24 @@ fn help_text(program: &str, chain: &[String]) -> Option<String> {
     let key = format!("{} {}", program, chain.join(" "));
     // The outer lock only hands out the slot; it is never held across the spawn, so two
     // different programs still probe concurrently.
+    // **A poisoned lock is recovered, not obeyed.** Both arms used to answer `probe(…)` directly,
+    // which reads as prudence and is the opposite: a `Mutex` is poisoned *permanently* by the one
+    // panic, so the branch turned a single panic anywhere in the process into **this cache
+    // switched off for the rest of the run** — every later question about every program spawned a
+    // fresh process, with nothing said, which is the cost the cache exists to avoid. And the
+    // value a poisoned slot holds is not in doubt: `None` means "not probed yet" and `Some(None)`
+    // means "probed, no answer", both of which are answers.
+    //
+    // `into_inner` is the standard recovery and it is sound here because the map is only ever
+    // mutated by `entry().or_default().clone()` — a panic inside that leaves either no entry or a
+    // complete default one, never half of an `Arc`.
     let slot = match cache().lock() {
         Ok(mut map) => map.entry(key).or_default().clone(),
-        // A poisoned cache means some caller panicked mid-probe. Answer without it rather than
-        // propagating a panic into an argv builder.
-        Err(_) => return probe(program, chain),
+        Err(poisoned) => poisoned.into_inner().entry(key).or_default().clone(),
     };
     let mut slot = match slot.lock() {
         Ok(slot) => slot,
-        Err(_) => return probe(program, chain),
+        Err(poisoned) => poisoned.into_inner(),
     };
     if let Some(hit) = slot.as_ref() {
         return hit.clone();
@@ -174,6 +183,64 @@ mod tests {
             "--verify"
         ));
         assert!(mentions_flag("ends the line with --verify", "--verify"));
+    }
+
+    /// **One panic must not switch the cache off for the rest of the run.**
+    ///
+    /// `help_text` used to answer `probe(…)` on a poisoned lock, which reads as prudence — a cache
+    /// nobody trusts, a fresh answer. But a `Mutex` is poisoned *permanently* by the one panic, so
+    /// that branch turned a single panic anywhere in the process into every later question about
+    /// every program spawning a new process, silently, which is exactly the cost the cache exists
+    /// to remove. `PLAN.md` #81.
+    ///
+    /// The test poisons both locks for real — a panic while each is held, which is the only way a
+    /// `Mutex` gets poisoned — and then asks a question the cache can answer from memory. With the
+    /// old arms it spawns a process for a program that does not exist and answers `None`, so the
+    /// cached text is gone and the test is red.
+    #[test]
+    fn a_poisoned_cache_is_still_a_cache() {
+        const PROGRAM: &str = "shall-help-poison-canary-zzz";
+        let key = format!("{PROGRAM} ");
+        // Seed the cache with an answer that no probe could produce, so "answered from memory" and
+        // "probed and found nothing" cannot be confused.
+        {
+            let mut map = cache().lock().expect("the cache starts unpoisoned");
+            map.entry(key.clone())
+                .or_default()
+                .lock()
+                .expect("the slot starts unpoisoned")
+                .clone_from(&Some(Some("cached, not probed".to_string())));
+        }
+
+        // Poison the per-key slot, then the map, each by panicking while the lock is held.
+        let slot = {
+            let map = cache().lock().expect("unpoisoned to take the slot out");
+            map.get(&key).cloned().expect("the slot exists")
+        };
+        let _ = std::panic::catch_unwind(|| {
+            let _held = slot.lock().expect("unpoisoned to hold it");
+            panic!("poison the slot");
+        });
+        let _ = std::panic::catch_unwind(|| {
+            let _held = cache().lock().expect("unpoisoned to hold the map");
+            panic!("poison the map");
+        });
+
+        let answered = help_text(PROGRAM, &[]);
+        assert_eq!(
+            answered.as_deref(),
+            Some("cached, not probed"),
+            "a poisoned lock deleted the cache: the answer came from a fresh probe of a program \
+             that does not exist, so the run silently lost the cache it had already paid for. \
+             A `Mutex` stays poisoned for good after one panic, so this branch is permanent."
+        );
+
+        // Leave the process as we found it — the cache is process-wide and this suite is not.
+        cache().lock().map(|mut m| m.remove(&key)).ok();
+        let _ = std::panic::catch_unwind(|| {
+            let _held = slot.lock();
+            panic!("clear the poison");
+        });
     }
 
     /// The discriminator, against both real versions' help — captured from the tools, and the

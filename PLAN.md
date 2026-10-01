@@ -1,7 +1,7 @@
 # PLAN — Shall (work top to bottom, one issue per worker session)
 
 Worker loop: top unchecked item only, fix + resolving test, commit, check off, stop.
-Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97, #102, #98, #91, #86, #85.
+Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97, #102, #98, #91, #86, #85, #81.
 
 ## SKIP — duplicates of one event, do not re-work
 - #32 DUP of #23+#24; #48 DUP of #32; #49 DUP of #33; #45 DUP of #26 (same file:line, same fix).
@@ -98,7 +98,15 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   kept one. Now `POOL.entry`, which holds the key's slot across the build. Measured, not argued:
   the old shape built **2, 7 and 7** clients for one policy across three runs of the new test,
   and exactly 1 with the fix.)
-- [ ] #79 forget_all wipes all caches, #80 probe storm, #81 Mutex across --help, #82 batch deadline, #83 vars JSON fragile, #84 fan-out uncapped, #87 dir-symlink Windows.
+- [x] #81 Mutex across --help. (**HALF BUILT, and the other half is not a defect.** The wait is
+  intentional singleflight — one `--help` per program per run, the shape `InstalledListings::once`
+  and `VARS_MEMO` already use — so replacing the std lock with a tokio one would not remove the
+  wait, only change which executor thread stalls. **What was a defect is the poison path**: both
+  arms answered `probe(…)` on a poisoned lock, and a `Mutex` is poisoned *permanently* by the one
+  panic, so a single panic anywhere in the process switched the cache off for the rest of the run,
+  silently. Now recovered with `into_inner`, and `a_poisoned_cache_is_still_a_cache` poisons both
+  locks for real and asks a question the cache can answer from memory.)
+- [ ] #79 forget_all wipes all caches, #80 probe storm, #82 batch deadline, #83 vars JSON fragile, #84 fan-out uncapped, #87 dir-symlink Windows.
 - [ ] #25 lifecycle jobs on distro containers, #53 nimble Windows, #54 dirty-host fixtures.
 - [x] #55 gentoo (emerge) leg: harness drives the ambiguous canary jq. (**BUILT — the canary is
   `htop` since 2026-08-17, because `jq` is two atoms on Gentoo and a bare `jq` is a name Portage

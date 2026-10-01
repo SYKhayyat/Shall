@@ -390,6 +390,35 @@ build and what is deferred to hardware.**
     why the one remaining call does not matter. The measurement above is what a triager needs and
     is recorded here so the next session does not re-derive it by flipping a flag in `Drop`.
 
+### Tier 22 — a poisoned cache is not a cache (`PLAN.md` #81, one half of it): BUILT
+
+37. ~~**`help_text` holds a std per-key lock across the probe, and a poison bypasses the
+    cache.**~~ **HALF BUILT, and the other half is not a defect.** The issue offered "tokio::Mutex /
+    double-checked lock (release before spawn), or OnceCell singleflight" — and the code already
+    **is** the singleflight, deliberately: the doc comment on `HelpSlot` names `InstalledListings::
+    once` and `VARS_MEMO` as the same shape, and says why (the hottest fan-outs are multiplexed
+    onto one task, so a duplicate probe stalls every other package in the wave). **Replacing the
+    std lock with a tokio one would not remove the wait, only change which executor thread stalls
+    it**, and releasing before the spawn would trade one wait for N duplicate processes — the
+    check-then-act defect `HelpSlot` already documents having had.
+
+    - **What was real: the poison path.** Both arms read `Err(_) => return probe(program, chain)`,
+      which reads as prudence — a cache nobody trusts, a fresh answer — and is the opposite. **A
+      `Mutex` is poisoned permanently by the one panic**, so that branch turned a single panic
+      anywhere in the process into **this cache switched off for the rest of the run**: every later
+      question about every program spawned a process, with nothing said. That is precisely the cost
+      the cache exists to remove, and it is invisible from outside.
+    - **Now `into_inner`, with the soundness argument written down**: the map is only ever mutated
+      by `entry().or_default().clone()`, so a panic inside that leaves either no entry or a
+      complete default one, never half an `Arc`; and the value a poisoned slot holds is not in
+      doubt, because `None` is "not probed yet" and `Some(None)` is "probed, no answer" — both are
+      answers.
+    - **`a_poisoned_cache_is_still_a_cache` poisons both locks the only way a `Mutex` can be
+      poisoned** — a panic while each is held — and then asks a question the cache can answer from
+      memory, seeded with a string no probe could produce so "answered from memory" and "probed
+      and found nothing" cannot be confused. It restores the process-wide cache afterwards, because
+      the suite is not sequential.
+
 ### Tier 21 — a pool that built sixteen clients to keep one (`PLAN.md` #85): BUILT
 
 36. ~~**The HTTP pool checks, builds, inserts — and two tasks build different clients.**~~ **BUILT.**
