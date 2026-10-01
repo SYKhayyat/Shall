@@ -261,6 +261,21 @@ for src in $SOURCES; do run_against "$src"; done
 # pass, and a gate that cannot fail is what II.23 is about. The floor is the tag count, and the
 # `link:` block's own witness is the control — a harness where the pair exists must not be
 # reported, which is what stops this from flagging every `gone_ok` in existence.
+#
+# ## every_gone_ok_tag_is_witnessed_somewhere
+#
+# **The name is here because three documents cite it and it existed in none of them.**
+# `run-in-container.sh`'s `dir:` block names this gate as what stops the next twin being added
+# without a witness, and `why.md` and `spec/plan.md` both name it too — all three written while
+# this was an inline block with an `echo` header, so a reader who grepped the citation found prose
+# and no gate. That is the same defect this repository files issues about for `V.n`
+# ("a citation that resolves to nothing makes the mandatory read impossible"), in the one corpus
+# that has no test for it yet: **`V.n` citations are checked by
+# `every_citation_of_a_why_entry_resolves_to_one`, and gate names are not checked at all.**
+#
+# It is a block rather than a function because it mutates this file's shared `TOTAL`/`BAD`
+# counters, and wrapping it would be a refactor of a working gate to serve a comment. The marker
+# is the smaller change that makes the three citations true, and `grep` now resolves them.
 for src in $SOURCES; do
     echo "== $src: every gone_ok tag is witnessed in the same harness"
     if [ ! -f "$src" ]; then echo "  FATAL: no such harness"; BAD=$((BAD + 1)); continue; fi
