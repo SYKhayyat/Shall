@@ -390,6 +390,43 @@ build and what is deferred to hardware.**
     why the one remaining call does not matter. The measurement above is what a triager needs and
     is recorded here so the next session does not re-derive it by flipping a flag in `Drop`.
 
+### Tier 24 — a fan-out as wide as the batch (`PLAN.md` #84): BUILT
+
+39. ~~**The batch's pre-rollback prior-state read fans out to the batch's own width.**~~
+    **BUILT.** `src/core/transaction.rs` read every member's prior state before touching anything,
+    with `.buffered(members.len().max(1))` — **a bound on nothing.** It reads no literal and no
+    config field, so a fan-out of *batch size* is also a fan-out the user cannot move, and it is
+    the one call whose stated purpose is to be cheap and to run **before anything is touched**. Its
+    `info()` can list a backend, and some of those spawn a manager process; four hundred members
+    therefore open four hundred listings at once, ignoring the `max_concurrent` semaphore the same
+    type uses, the two sibling `buffer_unordered`s below it, and the planner's cap.
+
+    - **The gate that should have caught it had a hole shaped like its own test.**
+      `fanout_cap_reads_the_setting_tests` asserts no fan-out hard-codes its width, and its way of
+      asking was *"the argument starts with a digit"* — which is a way of saying **a literal**, and
+      a literal is only one of the two ways a width can ignore the setting. The other is **the
+      input's own length**, which reads as no cap at all to a scan looking for literals while being
+      the opposite of one: the wider the batch, the wider the fan-out, so the defect appears only on
+      the machines with the biggest batches and on none of the ones a developer is standing at.
+      `why_not_a_cap` now names both shapes, and a test per direction keeps the widening honest —
+      including that a named local (`width`, `cap`) stays allowed, because the caller computed it
+      and the scan cannot see what from.
+    - **Bounded by `config.max_concurrent`**, which `from_config` already derives from
+      `max_parallel`, so one setting moves this call with its siblings rather than adding a fourth
+      knob the user has to find.
+    - **The mutation nobody would think of: the *combinator*, not the width.** `priors` is indexed
+      by member position — `priors[i]`, three sites — so it is not a set of answers but one answer
+      per **slot**. Lowering the width is safe; `buffer_unordered` compiles, runs, and fills those
+      slots in completion order, so every `priors[i]` becomes some other package's history and
+      `rollback` restores the wrong thing **with nothing to fail** — the shape of bug this
+      repository files issues about. Width lowered, `buffered` kept, and
+      `a_result_that_is_indexed_by_position_stays_ordered` pins the pair of facts that make it a
+      constraint (something indexes the result by position; the combinator preserves it) with a
+      control test for the reordering it exists to catch.
+    - **Two mutations, both watched.** Restoring `members.len().max(1)` reds the scan with the line
+      printed; `buffer_unordered` at the capped width reds the ordering rule while every width check
+      stays green — which is the point, since that is the change the width checks are blind to.
+
 ### Tier 23 — a provider that prints a byte-order mark (`PLAN.md` #83): BUILT
 
 38. ~~**External vars JSON detection is fragile to a BOM or a banner.**~~ **BUILT.**

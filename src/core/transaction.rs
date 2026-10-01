@@ -1,12 +1,12 @@
-use super::batch::{narrow_batch, run_one_command, BatchRecovery, CommandOutcome};
-use crate::app::diagnostics::FailureDiagnosticEngine;
+use super::batch::{BatchRecovery, CommandOutcome, narrow_batch, run_one_command};
 use crate::app::LuaHooks;
+use crate::app::diagnostics::FailureDiagnosticEngine;
 use crate::backends::BackendRegistry;
 use crate::core::journal::JournalAction;
 use crate::core::{Error, Journal, PackageSpec, Result, Retryability};
+use petgraph::Direction;
 use petgraph::graph::NodeIndex;
 use petgraph::stable_graph::StableDiGraph;
-use petgraph::Direction;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -658,8 +658,7 @@ impl Transaction {
                     if task_data.result.is_ok() {
                         trace!(
                             "Node {}:{} succeeded.",
-                            task_data.backend_name,
-                            task_data.package_name
+                            task_data.backend_name, task_data.package_name
                         );
                         in_progress.remove(&task_data.node_index);
                         self.completed_indices.insert(task_data.node_index);
@@ -1062,7 +1061,20 @@ impl Transaction {
                     let backend_cap = backend_cap.clone();
                     async move { Self::prior_state(&backend_cap, &name).await }
                 })
-                .buffered(members.len().max(1))
+                // **The width is the batch's concurrency limit, not the batch.** Every other
+                // fan-out in this file is bounded by `max_concurrent` (the semaphore at 536, the
+                // two `buffer_unordered`s below), because a batch of four hundred members would
+                // otherwise open four hundred listings and four hundred manager processes at
+                // once — on the one call whose whole purpose is to be cheap and to run *before*
+                // anything is touched. `members.len().max(1)` was a bound on nothing (`PLAN.md`
+                // #84).
+                //
+                // **`buffered`, deliberately, not `buffer_unordered`.** The result is indexed by
+                // member position further down (`priors[i]`), so this is not a set of answers but
+                // an answer per slot; the cap changes how many run at once, never which slot an
+                // answer lands in. A future reader who "simplifies" this to `buffer_unordered`
+                // gets a silent mis-index rather than a compile error.
+                .buffered(config.max_concurrent.max(1))
                 .collect()
                 .await
         } else {

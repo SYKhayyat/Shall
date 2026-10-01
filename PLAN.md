@@ -1,7 +1,7 @@
 # PLAN — Shall (work top to bottom, one issue per worker session)
 
 Worker loop: top unchecked item only, fix + resolving test, commit, check off, stop.
-Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97, #102, #98, #91, #86, #85, #81, #83.
+Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97, #102, #98, #91, #86, #85, #81, #83, #84.
 
 ## SKIP — duplicates of one event, do not re-work
 - #32 DUP of #23+#24; #48 DUP of #32; #49 DUP of #33; #45 DUP of #26 (same file:line, same fix).
@@ -113,7 +113,37 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   Deliberately NOT `parsers::json_document` verbatim — that also tries the first `{` *anywhere*,
   which would read `labels = {"a": {"b": 1}}` as JSON and invent a variable called `a`. That
   regression is pinned by a test, and the mutation that removes the anchoring turns it red.)
-- [ ] #79 forget_all wipes all caches, #80 probe storm, #82 batch deadline, #84 fan-out uncapped, #87 dir-symlink Windows.
+- [x] #84 pre-batch prior_state fan-out width = batch size. (**BUILT — and the gate that should
+  have caught it had a hole of its own.** The prior-state read was fanned with
+  `.buffered(members.len().max(1))`: no literal, no config field, so `fanout_cap_reads_the_setting
+  _tests`, which detects a cap that ignores the setting, walked past it — its test for that was
+  *"the argument starts with a digit"*. That is a way of saying *a literal*, and a literal is only
+  one of the two ways a width can ignore the setting; the other is the width of the collection
+  being fanned out, which gets *wider* as the batch grows — four hundred listings, each of which
+  can spawn a manager process, at the one call that runs **before anything is touched**. Now
+  bounded by `config.max_concurrent` (`sync` already derives it from `max_parallel`), and the
+  gate's predicate now catches both shapes with a test per direction.
+  **The other half is a mutation nobody would think of:** the result is indexed by member position
+  (`priors[i]`), so it is one answer per *slot*, not a set — `buffer_unordered` compiles, runs, and
+  puts another package's history in every slot, so `rollback` restores the wrong thing with nothing
+  to fail. Width lowered, `buffered` kept, and a source check plus a control pins the ordering.)
+- [ ] #79 forget_all wipes all caches. (**NOT BUILT, and it contradicts a ruling the register marks
+  answered — left for the owner 2026-10-01, with the evidence for a ruling on the issue.** Y6
+  (*may a manager's answer outlive the run?*, ANSWERED 2026-08-03) binds *"any mutation drops
+  it, on disk as well as in memory"*, and "invalidate only the mutated backend" is the change the
+  register itself names as what would reverse it. Two further things the issue's `Fix:` line does not
+  weigh: **`essentials` is not part of it at all** — no disk layer, run-scoped only, and its own
+  comment says *"the essential set exists to refuse removals"*, so narrowing its invalidation does
+  not cost re-listing, it lets a removal be decided against a pre-install essential set; and **the
+  disk half only exists when `installed_cache_secs` is on**, which is off by default. The narrowing
+  is implementable with no new mapping (`run_locked` holds the *program*, not the backend name —
+  XIII.12 — and `pacman`/`yay` are one program and two backends, so the key is `lock_key`, whose
+  family table already exists in `app::stale_lock`). The register offers the reversal worth
+  building: *"a cheap per-manager change token — `dpkg` status mtime, winget's own database
+  timestamp — which would let a listing be validated rather than merely aged."* Unmeasured here:
+  the suite cannot price a manager listing and there is no container on this host, so a ruling
+  should not be made on the issue's estimate alone. — ISSUE #79)
+- [ ] #80 probe storm, #82 batch deadline, #87 dir-symlink Windows.
 - [ ] #25 lifecycle jobs on distro containers, #53 nimble Windows, #54 dirty-host fixtures.
 - [x] #55 gentoo (emerge) leg: harness drives the ambiguous canary jq. (**BUILT — the canary is
   `htop` since 2026-08-17, because `jq` is two atoms on Gentoo and a bare `jq` is a name Portage
