@@ -81,6 +81,12 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   the same red. (Medium — a list nobody can compare to the last run is not evidence)
 
 ## Phase 3 — Correctness Mediums
+- [ ] **Gate names cited anywhere are not checked for resolving, while `V.n` citations are.**
+  Found 2026-09-30 verifying #96: `every_gone_ok_tag_is_witnessed_somewhere` is cited by
+  `run-in-container.sh`, `why.md` and `spec/plan.md`, and existed in none of them — the check is an
+  inline block with an `echo` header. `every_citation_of_a_why_entry_resolves_to_one` is the same
+  gate for the other corpus and is one `fn` from being this one. A name is greppable now
+  (`## every_gone_ok_tag_is_witnessed_somewhere`) but nothing would notice the next one. (Low)
 - [x] #91 planner template_needs_update compares raw source to rendered target (sibling of the #69 read-back fix). (Low; **BUILT by deletion** — the issue named two options and said not both. `in_effect` is the single authority and it renders before comparing, so the planner's copy went: 24 lines, and no behaviour changes because `link` installs no `Queryable` and the branch never ran. `the_planner_never_reads_the_filesystem` keeps it gone, with the deleted code as its own control)
 - [ ] #79 forget_all wipes all caches, #80 probe storm, #81 Mutex across --help, #82 batch deadline, #83 vars JSON fragile, #84 fan-out uncapped, #85 pool race, #86 zip sum wraps, #87 dir-symlink Windows.
 - [ ] #25 lifecycle jobs on distro containers, #53 nimble Windows, #54 dirty-host fixtures.
