@@ -390,6 +390,33 @@ build and what is deferred to hardware.**
     why the one remaining call does not matter. The measurement above is what a triager needs and
     is recorded here so the next session does not re-derive it by flipping a flag in `Drop`.
 
+### Tier 21 — a pool that built sixteen clients to keep one (`PLAN.md` #85): BUILT
+
+36. ~~**The HTTP pool checks, builds, inserts — and two tasks build different clients.**~~ **BUILT.**
+    `src/core/http.rs`'s `client` read the cache, built on a miss, and inserted. The window
+    between the read and the insert is the width of `build()`, and a `reqwest::Client` is not free
+    to construct, so every caller that walked through it in that window built a client the pool
+    then threw away — **and a discarded client is a discarded connection pool, so the cost lands
+    on the first real request rather than on the ask that caused it.**
+
+    - **`POOL.entry`, matched on its two arms**, because `build` can fail and `or_insert_with`
+      takes a closure that cannot: an occupied slot hands back the first caller's client, a vacant
+      one holds its slot across the build so the second caller finds that client instead of making
+      its own. The error is raised rather than invented, which is why this is a `match`.
+    - **The test needed a build COUNTER, because the pool's contents are identical however many
+      clients were built.** The four existing pool tests ask for one policy in a loop in one
+      thread, which is exactly why the race survived all of them — a sequential caller always
+      finds what the last iteration left. So `BUILDS` counts builds, keyed by user agent for the
+      reason `mine()` gives (the pool is process-wide and the suite is concurrent), and sixteen
+      threads arrive together on a `Barrier`, which is what makes "at once" mean at once rather
+      than in a queue.
+    - **Measured both ways, because a race test that is only ever green is a decoration.** The old
+      `get`-then-`insert` shape built **2, 7 and 7** clients for one policy across three runs of
+      the new test; the `entry` shape builds exactly 1, five runs out of five. The counter is
+      `#[cfg(test)]` and its increment goes through a `count_build_for_tests` that is a no-op
+      outside a test build — **a counter in the hot path is a cost nobody asked for**, and this way
+      the call site reads the same in both.
+
 ### Tier 20 — the bomb bound, and arithmetic written twice (`PLAN.md` #86): BUILT
 
 35. ~~**The zip branch's unpacked-size total can wrap past the bound.**~~ **BUILT.** The tar branch
