@@ -390,6 +390,33 @@ build and what is deferred to hardware.**
     why the one remaining call does not matter. The measurement above is what a triager needs and
     is recorded here so the next session does not re-derive it by flipping a flag in `Drop`.
 
+### Tier 20 — the bomb bound, and arithmetic written twice (`PLAN.md` #86): BUILT
+
+35. ~~**The zip branch's unpacked-size total can wrap past the bound.**~~ **BUILT.** The tar branch
+    walked its entries with `saturating_add`; the zip branch called `.sum()` over the members'
+    declared sizes, and **`Iterator::sum` for integers wraps in a release build** (and panics in a
+    debug one). Every declared size is a field the archive's author wrote, so members claiming
+    `u64::MAX` and `2` totalled **1** there — under any `max_unpacked_bytes` anybody can
+    configure, with the one check that stands between a download and an unbounded write agreeing.
+
+    - **The fix is one named rule, not a saturating operator in one more place.** `add_unpacked`
+      and `declared_unpacked_total` in `src/utils/archive.rs`, and both branches go through them:
+      the tar side accumulates as it walks (it must, to stop before writing the entry that passes
+      the bound), the zip side folds over a collection. **The defect was never the arithmetic
+      being hard to write — it was being written twice, four lines apart**, which is the same
+      shape as `#91`'s raw-vs-rendered pair, and the reason the fix is a name rather than an
+      operator.
+    - **The test that could not be written is recorded rather than faked.** The `zip` crate derives
+      a member's declared size from the data it writes, so an end-to-end fixture claiming
+      `u64::MAX` is a hand-assembled central directory with zip64 extra fields — and a test that
+      mostly asserts its own fixture is worse than one that asserts the rule. So the arithmetic is
+      driven in `archive.rs`'s own `#[cfg(test)]` module (the two functions are crate-private, and
+      `a_writer_that_reaches_the_disk_goes_through_one` is the precedent), and
+      `an_archive_cannot_wrap_past_the_size_bound` holds the two call sites to it from outside.
+    - **Both halves watched red.** Restoring the bare `.sum()` turns the scan red with the line
+      number (`src/utils/archive.rs:221`); making `add_unpacked` wrap turns the unit test red.
+      A test that has only ever been green is a test nobody has checked.
+
 ### Tier 19 — a second answer to a question that has one (`PLAN.md` #91): BUILT
 
 34. ~~**The planner's `template_needs_update` compares a raw template against a rendered

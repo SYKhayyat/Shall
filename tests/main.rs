@@ -28,6 +28,7 @@
 /// `mod mock_providers;` and each got its own copy.
 mod a_drifted_ecosystem_does_not_strand_the_config_tests;
 mod a_removal_token_cannot_be_minted_tests;
+mod an_archive_cannot_wrap_past_the_size_bound_tests;
 
 mod mock_providers;
 

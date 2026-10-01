@@ -109,6 +109,30 @@ fn validate_archive_hard_link(entry: &Path, link: &Path) -> Result<()> {
     })
 }
 
+/// **The unpacked-size total, summed so it cannot pass the bound by wrapping.**
+///
+/// Both archive formats ask the same question — *how big does this expand to?* — and both must
+/// answer it with arithmetic that cannot be defeated by the archive itself. The tar side walked
+/// its entries with `saturating_add`; the zip side called `.sum()` over the members' declared
+/// sizes, and **`Iterator::sum` for integers wraps in a release build** (and panics in a debug
+/// one). Every member's size is a field the archive's author wrote, so a crafted zip declaring
+/// `u64::MAX` and `2` summed to `1`, sat comfortably under any `max_unpacked_bytes`, and the bomb
+/// check — the one thing standing between a download and an unbounded write — said yes. That is
+/// `PLAN.md` #86, and the tar branch is the fixed twin this was measured against.
+///
+/// One named rule rather than an operator spelled in each branch, so the two sides cannot drift
+/// apart again: a second way to total a size is how the raw-vs-rendered pair in the planner
+/// happened (`PLAN.md` #91). The tar branch accumulates as it walks — it has to, to stop before
+/// writing the entry that passes the bound — and the zip branch has every size up front, so the
+/// fold is over a collection. Both go through `add_unpacked`.
+fn add_unpacked(total: u64, size: u64) -> u64 {
+    total.saturating_add(size)
+}
+
+fn declared_unpacked_total(sizes: impl IntoIterator<Item = u64>) -> u64 {
+    sizes.into_iter().fold(0u64, add_unpacked)
+}
+
 pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<()> {
     if !dest_dir.exists() {
         crate::utils::file::ensure_dir(dest_dir)?;
@@ -154,7 +178,7 @@ pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<()> {
             for entry in archive.entries().map_err(Error::from)? {
                 let mut entry = entry.map_err(Error::from)?;
                 if cap > 0 {
-                    expanded = expanded.saturating_add(entry.size());
+                    expanded = add_unpacked(expanded, entry.size());
                     if expanded > cap {
                         return Err(Error::Other(format!(
                             "archive expands past the {}-byte unpacked bound (declared total \
@@ -189,12 +213,11 @@ pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<()> {
             // first byte is written.
             let cap = max_unpacked_bytes();
             if cap > 0 {
-                let declared: u64 = (0..archive.len())
-                    .map(|i| match archive.by_index(i) {
-                        Ok(f) => f.size(),
-                        Err(_) => 0,
-                    })
-                    .sum();
+                let sizes = (0..archive.len()).map(|i| match archive.by_index(i) {
+                    Ok(f) => f.size(),
+                    Err(_) => 0,
+                });
+                let declared: u64 = declared_unpacked_total(sizes);
                 if declared > cap {
                     return Err(Error::Other(format!(
                         "zip expands past the {}-byte unpacked bound (members declare {} bytes)",
@@ -276,6 +299,42 @@ pub fn create_tar_gz(src_dir: &Path, dest_file: &Path, root_name: &str) -> Resul
 mod tests {
     use super::*;
     use crate::backends::artifact::format::Format;
+
+    /// **The bound cannot be passed by an archive that declares more bytes than memory.**
+    ///
+    /// Every declared size in an archive is a field its author wrote, so the arithmetic that
+    /// adds them is inside the trust boundary — and `Iterator::sum` for integers **wraps in a
+    /// release build**, so a zip declaring `u64::MAX` and `2` totalled `1` and sat under any
+    /// `max_unpacked_bytes` (`PLAN.md` #86). The tar side already walked with `saturating_add`;
+    /// this is the same rule under a name both sides call.
+    #[test]
+    fn the_unpacked_total_saturates_rather_than_wrapping() {
+        // The release-build answer, spelled out rather than reached through `sum`, because
+        // `sum` PANICS on overflow in a debug build and this test runs in one. What Shall ships
+        // is a release build, and there the same expression is 1 — asserted here so the case
+        // below is known to be about a real hazard rather than about arithmetic that cannot
+        // happen.
+        assert_eq!(
+            [u64::MAX, 2u64]
+                .iter()
+                .copied()
+                .fold(0u64, u64::wrapping_add),
+            1
+        );
+
+        // The rule, on the numbers a crafted archive carries: a total past the address space is
+        // the largest total there is, and it is over every cap anybody can configure.
+        assert_eq!(declared_unpacked_total([u64::MAX, 2]), u64::MAX);
+        assert!(declared_unpacked_total([u64::MAX, 2]) > 1_000_000_000);
+        // The incremental form the tar branch uses, on the same pair.
+        assert_eq!(add_unpacked(add_unpacked(0, u64::MAX), 2), u64::MAX);
+
+        // And the ordinary cases are untouched, because a fix that changes real totals is a
+        // different fix: a real archive's total is its total.
+        assert_eq!(declared_unpacked_total([1u64, 2, 3]), 6);
+        assert_eq!(declared_unpacked_total(std::iter::empty::<u64>()), 0);
+        assert_eq!(add_unpacked(0, 0), 0);
+    }
 
     /// **The gate F-7 is really about.** `Format` offered `.tar.zst` and `.txz` as tarballs and
     /// nothing could open either, so the selector and the extractor disagreed in silence: the
