@@ -115,6 +115,17 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     *lost*) and `be-life-partial`, non-zero return.
   - Its own small function because `lifecycle` is far past `lift`'s runaway guard. Four cases
     driven; **mutation watched** — `return 0`, the pre-fix behaviour, reds two of them.
+  - **The refactor's own regression, and the best argument this file has for `section-floor.txt`:**
+    `install_delivered` first returned 0 the moment the listing matched, so `assert_binary_reachable`
+    never ran — five checks per backend, gone, on five hosts (alpine 34→29, fedora 44→38, opensuse
+    40→34, arch 56→45, void 37→15). **Nothing about that change looked like a deleted check:** the
+    tests were green, the predicate count was unchanged, and the stated intent was to make the leg
+    *stricter*. It asks "did anything arrive", not "how many questions did it take", so both witnesses
+    are now scored and the answers OR'd after.
+  - **Two floors re-pinned, and the number is the point rather than the problem:** arch 56→53 (`go`)
+    and void 37→18 (six backends), each with a dated excuse naming the `soft` this run must print.
+    Void's old excuse (`appimage`, down to 33) is *replaced* rather than added — a line carries one
+    excuse, and the leg now has a bigger one.
   - **Still open behind it:** *why* those registries answer 0 and serve nothing. This makes it one
     visible class rather than five half-vacuous checks, and deliberately does not guess. — ISSUE #100)
 
