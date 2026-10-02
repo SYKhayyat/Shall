@@ -295,6 +295,26 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     the field's own doc calls the worst kind this repo keeps finding. `overlap_headroom` (1.25) is
     the new key, and it is a multiple of the floor rather than a second absolute constant. — ISSUE
     #90)
+- [ ] #107 `sbom` and `export` ask their managers one at a time. (**Filed out of #90, which was
+  closed on a DIFFERENT signature, and the distinction is the whole point of filing it separately.**
+  Both fail on a 7-manager host at **6 waves over 7 children** — close to one-at-a-time. #90's
+  evidence was a *one-wave* run on a skewed host, where the low ratio was the ratio's ceiling
+  (`summed/slowest`) rather than a scheduler. `Shape::wave_ceiling(7)` is 4, so the wave assertion
+  fails too, and #90's fix deliberately withholds the skew exemption above one wave so a serial run
+  is still judged. **They are judged correctly and they fail correctly** — checked before filing,
+  because re-reading them as "#90 again" and re-closing them would have been easy and wrong.
+  - **Not established: where the serialisation is.** `resolve_managed` is a wrapper over
+    `export::managed_pkgs`, which is `stream::iter(..).buffered(max_parallel)` with `max_parallel`
+    = core count; `info`'s singleflight is keyed **per backend**, so seven backends take seven
+    mutexes; the executor has no spawn semaphore. Every obvious candidate is ruled out by reading.
+  - **And the prior question is whether the fan-out is what is being measured at all.** On a machine
+    with an empty registry `managed_pkgs` fans out over nothing, so the seven children came from
+    elsewhere — an `App::new` warm-up being the obvious candidate. If so this is a *third* instance
+    of the family #89 and #100 both turned out to be: **a gate reading the host instead of the
+    state it meant to set up.**
+  - **Not reproducible here** — this host has ONE manager, below the floor's own minimum of 4, so
+    the test skips and proves nothing locally. The next step is one command on any 4+ manager host,
+    and **which seven commands those are** is the entire question. — ISSUE #107)
 - [ ] #105 the crash window between a per-operation WAL write and the once-per-run registry write.
   (**ROUTE (2) WAS ALREADY BUILT — the issue's own "better next move" — so what was left was its
   residual, and the residual has one cause: the evidence expires.** `heal` calls
