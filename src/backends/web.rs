@@ -782,6 +782,15 @@ mod tests {
         // that knows which. Hard-coded here, it passed on Windows and had never once run on
         // Linux, because the build matrix was producing one target out of four.
         mock.set_response(&removal_argv("dpkg -r fd"), Ok(DryRunOutput::new().into()));
+        // **The reset goes BEFORE the removal, and that ordering is the whole assertion.**
+        // `SUDO_PRIMED` is process-global, so if another escalating test in this binary answered
+        // the credential probe first, `web.remove` below skips the probe entirely — and no
+        // assertion placed after the call can see a probe that never happened. The reset sat
+        // between the call and the assertions, where it read as a guard and was not one: the
+        // first run of the suite passed this and the second failed it on nothing but libtest's
+        // thread order, which is the coin flip `PLAN.md` #88 recorded and this did not fix.
+        // Resetting first makes the probe this test asserts about the probe that actually ran.
+        CommandExecutor::forget_sudo_refusal();
         web.remove(&[url.to_string()], false, reaped())
             .await
             .expect("the removal succeeds");
@@ -791,11 +800,6 @@ mod tests {
         // passwordless sudo and reported its own stub as unmatched everywhere else
         // (`PLAN.md` #88). Asserted in both directions: the probe went *through* the seam, and the
         // escalated command still carried the argv the product builds.
-        // **The reset first, or this assertion is a coin flip.** `SUDO_PRIMED` is process-global,
-        // so if another escalating test answered the probe first this one would skip it and the
-        // assertion below would fail on libtest's thread order rather than on anything about the
-        // seam (`PLAN.md` #88).
-        CommandExecutor::forget_sudo_refusal();
         let calls = mock.get_calls().await;
         assert!(
             calls.iter().any(|c| c == &removal_argv("dpkg -r fd")),
