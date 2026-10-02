@@ -106,6 +106,31 @@ pub struct Shape {
     /// managers on a bare CI runner cannot overlap 2×, and a gate that says they should is a
     /// gate people learn to ignore.
     pub min_children: usize,
+
+    /// How far the *achievable* overlap has to clear the floor before the floor is read against
+    /// it, as a multiple.
+    ///
+    /// **The ratio's ceiling is `summed / slowest`, and a host whose children are skewed has a
+    /// low one.** Overlap is `sum(child time) / wall`, and the smallest wall any scheduler can
+    /// reach is the slowest child — every other child hides inside it. So `summed / slowest` is
+    /// the most any host can score, and when one child holds most of the summed time that
+    /// approaches 1.0 and the floor becomes unreachable *by a perfect scheduler*. Measured on a
+    /// five-manager host where `emacs --batch` alone held 0.36s of 0.46s summed: a ceiling of
+    /// 1.28× against a floor of 1.25×, with every run starting all five children at the same
+    /// instant and finishing in one wave (`PLAN.md` #90).
+    ///
+    /// **So the question is not "is the floor right" but "does this host have a measurement",
+    /// and the answer is no.** Same disease as the 1.5→1.25 move above, with the other
+    /// denominator: that one was contention inflating `sum`, this one is skew pinning `wall`.
+    /// Both make a correct scheduler look serial.
+    ///
+    /// **A quarter's headroom, and not a lower floor.** Lowering the floor to the ceiling would
+    /// be the same mistake twice: on a skewed host a genuinely *serial* run scores ~1.0 and would
+    /// pass a floor set near 1.28, which trades a false failure for a false pass. Skipping says
+    /// the measurement does not exist, and the load-independent half of this pair still runs —
+    /// `waves` is 1 for a perfect fan-out and one-per-child for a serial one whatever the child
+    /// durations are, so collapse stays detectable on exactly the host where the ratio gave up.
+    pub overlap_headroom: f64,
 }
 
 impl Shape {
@@ -121,9 +146,87 @@ impl Shape {
     /// disagree about when the rule is in force. When they could, the failure mode is the worst
     /// kind this repository keeps finding: the rule says "not measurable", the reporter says "no
     /// violation", and the run is green on a question nobody asked.
+    ///
+    /// **The child count is only the first of two ways this host has no measurement**, and it is
+    /// the one that can be read without a duration — see [`shape_measurement_gap`], which is the
+    /// whole answer and delegates here.
     pub fn is_measurable(&self, children: usize) -> bool {
         children >= self.min_children
     }
+}
+
+/// The most overlap ratio any scheduler can reach over these children: `summed / slowest`.
+///
+/// Every child but the slowest hides inside the slowest one's wall time, so a fully concurrent
+/// run's wall clock *is* the slowest child. That is the ceiling the floor has to be read against,
+/// and it is a property of the children's durations rather than of the scheduler — which is what
+/// makes it the difference between "this fan-out collapsed" and "this host cannot express the
+/// difference".
+pub fn overlap_ceiling(summed: Duration, slowest: Duration) -> f64 {
+    summed.as_secs_f64() / slowest.as_secs_f64().max(f64::EPSILON)
+}
+
+/// Why the overlap ratio cannot be read against the floor on this host, or `None` when it can.
+///
+/// **One predicate, two callers, and both of them the reason this is a function.** The rule and
+/// the reporter must not be able to disagree about when a bound is in force — when they can, the
+/// failure mode is the one this repo keeps finding: the rule says "not measurable", the reporter
+/// says "no violation", and the run is green on a question nobody asked. That is why the skip
+/// comes out of here as a sentence rather than as a `bool` some caller is free to invent a
+/// different reason for.
+///
+/// Two ways to have no measurement, and the second is the one that was missing:
+///
+/// 1. **Too few children.** The original condition, and [`Shape::is_measurable`].
+/// 2. **Children too skewed for the floor to be reachable, in a run that demonstrably did
+///    overlap.** The ratio's ceiling is `summed / slowest` ([`overlap_ceiling`]); when that does
+///    not clear the floor by [`Shape::overlap_headroom`], no scheduler on this host could have
+///    scored what the floor asks for. `PLAN.md` #90.
+///
+/// **The `waves` condition is not a detail — it is what stops the exemption from being the blind
+/// spot it looks like.** A run that collapsed to serial has `slowest ≈ summed` *by construction*,
+/// so its ceiling is ~1.0 and it would claim the skew exemption and never be judged: the gate
+/// would exempt precisely the run it exists to catch. One wave is the evidence that the children
+/// really did start together, and a run that finished in one wave cannot have serialised itself.
+/// So the exemption is granted on evidence of concurrency and withheld from everything else.
+///
+/// **A gap here costs the wave check nothing.** `waves` does not depend on child durations at
+/// all — one wave is a perfect fan-out and one wave per child is a serial loop — so the
+/// load-independent half of the pair stays in force on exactly the host where the ratio gave up.
+pub fn shape_measurement_gap(
+    shape: Shape,
+    children: usize,
+    summed: Duration,
+    slowest: Duration,
+    waves: usize,
+) -> Option<String> {
+    if !shape.is_measurable(children) {
+        return Some(format!(
+            "{children} child command(s), under the {} the overlap ratio needs before it measures \
+             anything rather than reading as serial",
+            shape.min_children
+        ));
+    }
+    // Without this the gate would exempt every serial run, because a serial run's slowest child
+    // is the whole run.
+    if waves > 1 {
+        return None;
+    }
+    let ceiling = overlap_ceiling(summed, slowest);
+    let reachable = shape.min_overlap * shape.overlap_headroom;
+    (ceiling < reachable).then(|| {
+        format!(
+            "the slowest child took {:.2}s of the {:.2}s these {} child command(s) summed to, so \
+             no scheduler here can score above {ceiling:.2}x — under the {reachable:.2}x this \
+             host would need before a {:.2}x floor measures anything rather than reading as \
+             serial. Every child finished in one wave, so the run did overlap; the wave count \
+             does not depend on how long a child took and is still checked.",
+            slowest.as_secs_f64(),
+            summed.as_secs_f64(),
+            children,
+            shape.min_overlap
+        )
+    })
 }
 
 impl Class {
@@ -167,6 +270,7 @@ impl Class {
                 waves_per_child: 2,
                 min_waves_allowed: 4,
                 min_children: 4,
+                overlap_headroom: 1.25,
             }),
             Class::ConfigOnly | Class::OneBackend | Class::Mutating => None,
         }
@@ -305,15 +409,20 @@ pub fn shape_violation(
     shape: Shape,
     children: usize,
     summed: Duration,
+    slowest: Duration,
     wall: Duration,
     waves: usize,
 ) -> Option<String> {
-    if !shape.is_measurable(children) {
-        return None;
-    }
     let overlap = summed.as_secs_f64() / wall.as_secs_f64().max(f64::EPSILON);
     let mut faults = Vec::new();
-    if overlap < shape.min_overlap {
+    // **The gap suppresses this half only, and not by returning early.** The wave half below does
+    // not depend on how long a child took, so a serial fan-out on a skewed host — the one case the
+    // ratio cannot judge — is still caught by it. Returning early from the whole function on a gap
+    // is what the first draft did, and its own test caught it: a fully serial run has
+    // `slowest == summed`, so it claimed the skew exemption and went unreported.
+    if shape_measurement_gap(shape, children, summed, slowest, waves).is_none()
+        && overlap < shape.min_overlap
+    {
         faults.push(format!(
             "{:.1}x overlap, under the {:.1}x floor — {} child command(s) summing to {:.2}s ran \
              in {:.2}s of wall clock, which is close to running them one at a time",
@@ -443,15 +552,31 @@ fn report_shape(subcommand: &str, class: Class) {
     }
     let (rows, _, summed) = crate::core::timing::summary();
     let children: usize = rows.iter().map(|r| r.calls).sum();
-    if !shape.is_measurable(children) {
-        unmeasured(
-            subcommand,
-            &format!(
-                "{children} child command(s), under the {} the overlap ratio needs before it \
-                 measures anything rather than reading as serial",
-                shape.min_children
-            ),
-        );
+    // The slowest single child, which is what pins the ratio's ceiling. A `Row`'s `longest` is
+    // its own label's worst call, so the max over rows is the slowest call anywhere in the run.
+    let slowest = rows.iter().map(|r| r.longest).max().unwrap_or_default();
+    let waves = crate::core::timing::waves();
+    if let Some(why) = shape_measurement_gap(shape, children, summed, slowest, waves) {
+        unmeasured(subcommand, &why);
+        // **Still judge the wave half**, because `shape_violation` gates only the overlap fault on
+        // the gap. Reporting "not measured" and then not measuring would leave a serialised fan-out
+        // on a skewed host with nothing said about it — which is the run the sentence above admits
+        // it cannot judge.
+        if let Some(why) = shape_violation(
+            shape,
+            children,
+            summed,
+            slowest,
+            crate::core::timing::elapsed(),
+            waves,
+        ) {
+            tracing::warn!(
+                "`shall {}` did not overlap every manager: {}. The seconds a fan-out costs belong \
+                 to the host; the scheduling does not.",
+                subcommand,
+                why
+            );
+        }
         return;
     }
     // `None` from here is a PASS, not a skip, and says nothing: the rule ran and the run was
@@ -461,8 +586,9 @@ fn report_shape(subcommand: &str, class: Class) {
         shape,
         children,
         summed,
+        slowest,
         crate::core::timing::elapsed(),
-        crate::core::timing::waves(),
+        waves,
     ) else {
         return;
     };
@@ -551,10 +677,17 @@ mod tests {
             ),
             (9, 3_340, 1_760, 3, "macos-latest, CI run 31517073405: 1.9x"),
         ] {
+            // The slowest child is read off the same `--timings` lines: a run whose wall clock
+            // is under `summed / floor` cannot have been this overlapped, so the wall clock is
+            // itself a lower bound on the slowest child and is what these hosts were checked at.
+            // A host whose slowest child really was longer is caught by `shape_measurement_gap`
+            // and skipped, which is the behaviour the next test pins.
+            let slowest_ms = wall_ms;
             let healthy = shape_violation(
                 shape,
                 children,
                 Duration::from_millis(summed_ms),
+                Duration::from_millis(slowest_ms),
                 Duration::from_millis(wall_ms),
                 waves,
             );
@@ -568,6 +701,10 @@ mod tests {
         let serial = shape_violation(
             shape,
             23,
+            Duration::from_millis(23_670),
+            // One at a time, so the slowest child *is* the whole wall clock — the ceiling is
+            // 1.0 and a serial run is therefore judged rather than skipped, which is the case
+            // that must not be given the skew escape.
             Duration::from_millis(23_670),
             Duration::from_millis(23_670),
             23,
@@ -590,9 +727,122 @@ mod tests {
             2,
             Duration::from_millis(2_000),
             Duration::from_millis(2_000),
+            Duration::from_millis(2_000),
             2
         )
         .is_none());
+    }
+
+    /// **The case this whole change exists for: a perfect fan-out on a skewed host.**
+    ///
+    /// Five managers, one of which holds most of the summed time — the five readings in
+    /// `PLAN.md` #90, where `emacs --batch` alone took 0.36s of 0.46s. Every run starts all five
+    /// children at the same instant and finishes in one wave, and the ratio cannot exceed
+    /// `0.46 / 0.36 = 1.28x` against a floor of 1.25x. A scheduler that serialised the lot would
+    /// score 1.0x; a scheduler that overlapped everything scores 1.28x. There is no reading in
+    /// between, so the floor is not measuring this host.
+    ///
+    /// Asserted in both directions, because the two halves fail differently and only one of them
+    /// is a false failure:
+    ///
+    /// - the skewed perfect run must not be reported as a violation — the false failure #90 filed;
+    /// - **and a serial run over the same skewed children must still be caught** — by the wave
+    ///   ceiling, which is the half of the pair that does not depend on child durations. That is
+    ///   what a lowered floor would have thrown away, and why the fix is a skip and not a number.
+    #[test]
+    fn a_skewed_host_cannot_measure_the_ratio_but_can_still_measure_collapse() {
+        let shape = Class::of("list")
+            .shape()
+            .expect("`list` asks every manager");
+        // The numbers off the failing host, to the hundredth of a second they were reported in.
+        let summed = Duration::from_millis(460);
+        let slowest = Duration::from_millis(360);
+        let wall = Duration::from_millis(420); // 460/420 = 1.1x, the reported reading.
+        assert!(
+            overlap_ceiling(summed, slowest) < shape.min_overlap * shape.overlap_headroom,
+            "the ceiling must be below the reachable floor for this test to mean anything: \
+             ceiling {:.2}x, reachable {:.2}x",
+            overlap_ceiling(summed, slowest),
+            shape.min_overlap * shape.overlap_headroom
+        );
+
+        // One wave, which is the signature of a perfect fan-out.
+        assert!(
+            shape_violation(shape, 5, summed, slowest, wall, 1).is_none(),
+            "a one-wave run on a skewed host is a perfect fan-out, not a violation"
+        );
+
+        // The skip says so out loud, and names the number that could not be reached.
+        let gap = shape_measurement_gap(shape, 5, summed, slowest, 1).expect(
+            "this host has no \
+                     measurement",
+        );
+        assert!(gap.contains("no scheduler here can score"), "{gap}");
+        assert!(gap.contains("one wave"), "{gap}");
+
+        // **The control, and the reason the gap needs the `waves` condition at all.** The same
+        // children, serialised: five waves, so `slowest == summed` and the ceiling is 1.0 — a
+        // serial run looks maximally skewed *by construction*. Without requiring evidence of
+        // concurrency, the very run this gate exists to catch would claim the exemption and go
+        // unreported, which is what the first draft of this fix did; this assertion is what
+        // caught it.
+        let serial = shape_violation(shape, 5, summed, slowest, summed, 5)
+            .expect("a serial fan-out is a serial fan-out on a skewed host too");
+        assert!(serial.contains("5 wave(s)"), "{serial}");
+        assert!(
+            serial.contains("overlap"),
+            "and the overlap half judges it too, because a run of more than one wave has not \
+             demonstrated that it overlapped anything: {serial}"
+        );
+    }
+
+    /// **A run that is skewed *and* took more than one wave is judged on both halves.** The
+    /// exemption is for "the ratio cannot see this host", not for "the ratio is inconvenient".
+    #[test]
+    fn a_skewed_run_that_took_more_than_one_wave_is_still_judged() {
+        let shape = Class::of("list").shape().unwrap();
+        let summed = Duration::from_millis(460);
+        let slowest = Duration::from_millis(360);
+        assert!(
+            shape_measurement_gap(shape, 5, summed, slowest, 2).is_none(),
+            "more than one wave is not evidence of overlap, so the ratio is read as usual"
+        );
+        let reported = shape_violation(shape, 5, summed, slowest, Duration::from_millis(460), 2)
+            .expect("1.0x under a 1.25x floor is a fault, whatever the children look like");
+        assert!(reported.contains("overlap"), "{reported}");
+    }
+
+    /// The escape is for skew, and **not** for a run that is merely slow — a run whose slowest
+    /// child is a small share of the summed time can always reach the floor, however long it took.
+    #[test]
+    fn a_balanced_host_is_measured_however_long_it_took() {
+        let shape = Class::of("list").shape().unwrap();
+        // Five children, none holding more than a fifth of the time: ceiling is ~5x.
+        assert!(
+            shape_measurement_gap(
+                shape,
+                5,
+                Duration::from_millis(5_000),
+                Duration::from_millis(1_000),
+                1,
+            )
+            .is_none(),
+            "a balanced fan-out has a measurement, and this host is judged by the floor"
+        );
+        // And a slow one is judged, not excused: 4s of the slowest against a 1.25x floor over
+        // 5s summed still overlaps 1.25x exactly, which is the boundary.
+        let at_the_floor = shape_violation(
+            shape,
+            5,
+            Duration::from_millis(5_000),
+            Duration::from_millis(1_250),
+            Duration::from_millis(4_000),
+            1,
+        );
+        assert!(
+            at_the_floor.is_none(),
+            "exactly at the floor is inside it, and it was measured to get there: {at_the_floor:?}"
+        );
     }
 
     /// `Mutating` carries no [`Shape`] because the heuristic is the wrong instrument for it, not
@@ -741,6 +991,7 @@ mod tests {
                 16,
                 Duration::from_secs(16),
                 Duration::from_secs(8),
+                Duration::from_secs(8),
                 2
             )
             .is_none(),
@@ -767,6 +1018,21 @@ mod tests {
         assert!(
             shape.is_measurable(shape.min_children),
             "and the floor itself is"
+        );
+        // And the same predicate answers the *other* way there is no measurement, so the two
+        // callers of `shape_measurement_gap` are guarded by one question rather than two that
+        // can drift apart — which is the failure this file's own comment above calls the worst
+        // kind it keeps finding.
+        assert!(
+            shape_measurement_gap(
+                shape,
+                shape.min_children,
+                Duration::from_secs(10),
+                Duration::from_secs(9),
+                1,
+            )
+            .is_some(),
+            "enough children, one holding 90% of the time, and one wave — leaves no ratio to read"
         );
 
         // (5) The scheduling rule, at its own site: a plan with one package has no reachable
