@@ -599,9 +599,19 @@ for _src in $SOURCES; do
         # shellcheck disable=SC2034
         _prepath=""
 
-        # (1) The listing shows it — delivered, and nothing else asked.
+        # (1) The listing shows it — delivered. **And the PATH check is still asked**, which is
+        # the regression the section floor caught first: an earlier version returned 0 as soon as
+        # the listing matched, so `assert_binary_reachable` never ran and every backend lost its
+        # "is on PATH" line (alpine 34 -> 29). The count of PASS lines is the assertion, because
+        # "delivered" and "still asked the second witness" are different facts.
         lx() { echo "the-pkg 1.0"; return 0; }
+        path_of() { case "$1" in the-binary) echo /usr/bin/the-binary ;; *) echo "" ;; esac; }
+        PASS=0; FAILC=0
         install_delivered be || { echo "  BAD   a package its own listing reports was judged undelivered"; _bad=1; }
+        [ "$PASS" -eq 2 ] || {
+            echo "  BAD   the listing matched and the PATH check was never asked ($PASS credit(s), wanted 2) — the gate returns early and silently drops a check"
+            _bad=1
+        }
 
         # (2) The listing does NOT show it, but the binary is on PATH — still delivered, and the
         # PATH check is what caught it. Both signals are evidence.

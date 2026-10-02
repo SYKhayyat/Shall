@@ -1941,13 +1941,18 @@ install_delivered() { # backend
     if [ -n "$(list_cannot_show "$_id_be")" ]; then
         return 0            # cannot show it; the PATH check below is the only witness
     fi
-    if grep_ok "$_id_be: list shows $ctok" "$ctok" lx list --backend "$_id_be"; then
-        return 0
-    fi
+    # **Both witnesses are asked, and neither returns early.** Asking the listing and stopping
+    # there dropped the PATH check on every backend whose listing matched — five checks per run,
+    # and the section floor caught it on alpine (34 -> 29). The gate wants "did anything arrive",
+    # not "how many questions did it take to find out", so it ORs the two answers *after* both
+    # have been scored. That is also why `install_delivered` is not the place the PASS lines come
+    # from: they come from the checks it calls.
+    _id_arrived=0
+    grep_ok "$_id_be: list shows $ctok" "$ctok" lx list --backend "$_id_be" && _id_arrived=1
     if [ -n "$cbin" ] && assert_binary_reachable "$_id_be" "$cbin" "$LIFELOG" "$_prepath"; then
-        return 0
+        _id_arrived=1
     fi
-    return 1
+    [ "$_id_arrived" -eq 1 ]
 }
 
 # lifecycle <backend> — the real install → list → PATH → remove → gone cycle.
