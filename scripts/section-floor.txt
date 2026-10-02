@@ -155,7 +155,7 @@ container-linux-arch-local  Idempotency  1
 container-linux-arch-local  Install  3
 container-linux-arch-local  Negative path  3
 container-linux-arch-local  Plan-smoke, every backend this image cannot run  46
-container-linux-arch-local  Real lifecycle, every other manager on this image  56
+container-linux-arch-local  Real lifecycle, every other manager on this image  56  soft  53  2026-10-02  go: install returned 0 and delivered nothing
 container-linux-arch-local  Remove  2
 container-linux-arch-local  SIGKILL mid-transaction, then heal  41  soft  22  2026-09-30  the kill opened no new entry in the write-ahead log
 container-linux-arch-local  Silence is not a no  3
@@ -407,7 +407,13 @@ container-linux-void-local  Idempotency  1
 container-linux-void-local  Install  3
 container-linux-void-local  Negative path  3
 container-linux-void-local  Plan-smoke, every backend this image cannot run  48
-container-linux-void-local  Real lifecycle, every other manager on this image  37  soft  33  2026-09-30  appimage: no real lifecycle here
+# The void leg's excuse was `appimage: no real lifecycle here` down to 33, written 2026-09-30. It
+# is REPLACED, not added, because a line carries one excuse and the leg now has a bigger one: six
+# backends whose install returns 0 and delivers nothing, which the lifecycle ends with a loud
+# `soft` instead of scoring three removal checks against a package that was never installed. That
+# is #100's fix, and the floor is what noticed it — see the `Real lifecycle` rows for `arch` too,
+# where `go` alone accounts for the shortfall.
+container-linux-void-local  Real lifecycle, every other manager on this image  37  soft  18  2026-10-02  install returned 0 and delivered nothing
 container-linux-void-local  Remove  2
 container-linux-void-local  SIGKILL mid-transaction, then heal  3
 container-linux-void-local  Silence is not a no  3
