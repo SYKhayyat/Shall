@@ -358,6 +358,37 @@ pub struct QuerySettings {
     pub retries: usize,
 }
 
+/// The `[receipts]` table. One key today, and it is here because the file it governs has no
+/// other off switch.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReceiptSettings {
+    /// Whether Shall records what it installs, in `receipts.jsonl` beside the journal.
+    ///
+    /// **On by default, and the default is the ruling.** The file exists because the journal
+    /// expires — `cleanup_expired_logs(7)` drops a finished entry after a week — while the thing
+    /// the entry witnesses does not: a kill between the per-operation WAL write and the
+    /// once-per-run registry write leaves a package installed and owned by nobody, and the
+    /// evidence that Shall put it there is what repairs that. A receipt file that is off by
+    /// default is a file nobody has, which restores the seven-day hole for every machine that
+    /// never read this.
+    ///
+    /// **Turning it off is a real loss and says so.** Not writing a receipt cannot break an
+    /// install — the install already happened — but a package whose ownership claim rests on a
+    /// receipt and loses it falls back to what its manager's listing reports, and a package a
+    /// crash left *unpacked but not configured* is correctly reported by `dpkg-query` as not
+    /// installed. That is the lister being right, and it is why this toggle exists rather than
+    /// the behaviour simply being always-on.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+impl Default for ReceiptSettings {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LockSettings {
@@ -878,6 +909,11 @@ pub struct Config {
     #[serde(default)]
     pub guard: GuardSettings,
 
+    /// The `[receipts]` table: whether Shall keeps the non-expiring record of what it installed.
+    /// See [`ReceiptSettings`].
+    #[serde(default)]
+    pub receipts: ReceiptSettings,
+
     /// The `[lock]` table: which axes a bare `lock` freezes, which managers get version pins,
     /// and whether an ordinary `sync` replays them. See [`LockSettings`].
     #[serde(default)]
@@ -1290,6 +1326,7 @@ impl Default for Config {
             backend_settings: HashMap::new(),
             allow_mass_install: false,
             guard: GuardSettings::default(),
+            receipts: ReceiptSettings::default(),
             lock: LockSettings::default(),
             query: QuerySettings::default(),
             journal: JournalSettings::default(),

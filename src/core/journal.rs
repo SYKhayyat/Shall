@@ -158,6 +158,14 @@ pub struct Journal {
     /// How many may sit in `pending` before the next one forces a flush. Never zero; the
     /// clamp is in [`Journal::set_buffer_limit`].
     buffer_limit: usize,
+
+    /// What Shall installed, kept beside the WAL in a file that does not expire.
+    ///
+    /// **`None` is the receipt turned off** (`[receipts] enabled = false`), and it is a whole
+    /// second reader rather than a flag on this one, because a receipt that is not written must
+    /// not be readable either — a file left behind by an earlier run and a toggle switched off
+    /// now is one question with two answers.
+    receipts: Option<crate::core::receipt::Receipts>,
 }
 
 impl Journal {
@@ -190,7 +198,15 @@ impl Journal {
             entries: HashMap::new(),
             pending: Vec::new(),
             buffer_limit: crate::config::JournalSettings::default().flush_every.max(1),
+            receipts: None,
         };
+        // **Opened here and not at the record site**, so the file's path is derived from the
+        // journal's own directory exactly once. A receipt written from somewhere that re-derived
+        // "where Shall keeps its data" is the second derivation the WAL's own doc comment says
+        // is how the registry came to be isolated and the WAL not.
+        journal.receipts = Some(crate::core::receipt::Receipts::at(
+            crate::core::receipt::Receipts::sibling_of(&journal.path),
+        )?);
 
         if journal.path.exists() {
             journal.load_sync()?;
@@ -392,13 +408,71 @@ impl Journal {
     }
 
     pub fn record_success(&mut self, id: &str) -> Result<()> {
+        // **Read the action before `close`,** because `close` is where the terminal transition
+        // is buffered and the entry it reads is the only place that still says what the
+        // operation *was*. An install is the one action that leaves a package on the machine, so
+        // it is the one that earns a receipt.
+        let installed = match self.entries.get(id).map(|e| &e.action) {
+            Some(JournalAction::Install(spec)) => Some((spec.backend.clone(), spec.name.clone())),
+            _ => None,
+        };
         let closed = self.close(id, ActionStatus::Completed, None);
         if closed {
             trace!("Operation {} marked as Completed.", id);
+            if let Some((backend, name)) = installed {
+                // A receipt that cannot be written must not fail the install that already
+                // happened, and must not be silent either: the cost is that one package's
+                // ownership claim rests on a listing that may not report it.
+                if let Some(receipts) = self.receipts.as_mut() {
+                    if let Err(e) = receipts.record(&backend, &name, Utc::now().timestamp()) {
+                        warn!(
+                            "the install receipt for {}:{} could not be written: {e}. The package \
+                             is installed; if a crash loses the registry's row for it, ownership \
+                             will fall back to what the manager's listing says.",
+                            backend, name
+                        );
+                    }
+                }
+            }
         } else {
             warn!("Attempted to mark unknown operation {} as successful.", id);
         }
         self.flush_if_full()
+    }
+
+    /// Whether Shall's own record says it put this package here, and the record never expires.
+    ///
+    /// **The durable half of what `completed_installs` answers**, and the reason that reader is
+    /// not enough: `cleanup_expired_logs(7)` drops a finished entry after a week, and the claim
+    /// it supports — that a package is installed and owned by nobody because a kill landed
+    /// between the two writes — does not expire with it. See [`crate::core::receipt`].
+    pub fn receipt_claims(&self, backend: &str, name: &str) -> bool {
+        self.receipts
+            .as_ref()
+            .is_some_and(|r| r.claims(backend, name))
+    }
+
+    /// Every `backend:name` on the install receipts.
+    pub fn receipted_installs(&self) -> Vec<(String, String)> {
+        self.receipts
+            .as_ref()
+            .map(|r| {
+                r.entries()
+                    .map(|e| (e.backend.clone(), e.name.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Turn the receipt off (`[receipts] enabled = false`).
+    ///
+    /// Drops the reader as well as the writer, so a file an earlier run wrote stops being an
+    /// answer — otherwise the toggle would only govern what is recorded and not what is believed,
+    /// which is the kind of half-setting this repo keeps paying to find.
+    pub fn set_receipts_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.receipts = None;
+        }
     }
 
     /// Buffer one terminal transition. Returns whether the id was one this journal knows.

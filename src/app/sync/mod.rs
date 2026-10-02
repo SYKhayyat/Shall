@@ -1019,11 +1019,26 @@ impl SyncEngine {
         // claimed on that evidence, whatever the manager's listing says today. The two sources
         // answer different questions — *is it here* and *did we put it here* — and ownership is
         // the second one.
+        //
+        // **Two readers of "did we put it here", because one of them expires.** The journal's
+        // `Completed` entries are the fresh answer, and `cleanup_expired_logs(7)` drops them
+        // after a week — which is sound for recovery and unsound here: the orphan this repairs
+        // has no deadline, so a machine left alone for a week lost the only evidence that would
+        // have repaired it, and fell back to a listing that reports an unpacked-but-not-
+        // configured package as *not installed*. That is the lister being right
+        // (`Journal::completed_installs`'s own comment records it being found in practice).
+        // `receipt_claims` is the same statement with no expiry, and the union is what makes the
+        // repair survive a machine that is not switched on for a week (`PLAN.md` #105).
         let recorded_by_us: std::collections::HashSet<String> = {
             let j = self.journal.lock().await;
             j.completed_installs()
                 .into_iter()
                 .map(|(backend, name)| format!("{}:{}", backend, name))
+                .chain(
+                    j.receipted_installs()
+                        .into_iter()
+                        .map(|(backend, name)| format!("{}:{}", backend, name)),
+                )
                 .collect()
         };
 

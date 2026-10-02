@@ -115,6 +115,7 @@ impl App {
         // before a `hook-reconcile` and the WAL from after it holds a pair that never agreed.
         // `stable` reads them again if a writer committed in between, and never waits for one.
         let flush_every = config.journal.flush_every;
+        let receipts_enabled = config.receipts.enabled;
         let read_records = || {
             let state_path = state_path.clone();
             let journal_dir = journal_dir.clone();
@@ -137,6 +138,9 @@ impl App {
                             Some(d) => Journal::at(d.join(Journal::FILE_NAME)),
                             None => Journal::new(),
                         }?;
+                        // The install receipt is written from the same seam as the WAL entry, so
+                        // the only thing a setting has to reach is whether the file exists at all.
+                        journal.set_receipts_enabled(receipts_enabled);
                         journal.set_buffer_limit(flush_every);
                         Ok::<_, Error>(journal)
                     })
