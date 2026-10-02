@@ -431,6 +431,38 @@ build and what is deferred to hardware.**
       mid-question case — the last one written before the round stamp's role could be discussed
       honestly at all, and reported as not isolating it.
 
+### Tier 29 — a spec that said a function was deleted, and a coverage that does not exist (`PLAN.md` #95): BUILT
+
+44. ~~**V.186 and Q55 say `completed_installs` was deleted; the code still has it.**~~ **BUILT as
+    a spec correction — and the docs were wrong in two places, not one.**
+    `Journal::completed_installs` exists (`journal.rs:531`), is read in production
+    (`sync/mod.rs:1024`), and decides whether a declared package is reclaimed. `why.md` and
+    `decisions.md` both said it was deleted. A spec that says a function is gone while the function
+    decides something is a spec nobody can trust on the next question about ownership.
+
+    - **What the ruling did delete, and what remains, are different things.** The log cannot make
+      Shall adopt anything: `reconcile_ownership` only ever *claims a package the manifest already
+      declares*, on the evidence that Shall's own journal recorded installing it. So the manifest
+      remains the whole of ownership, which is what Q55 ruled, and the reader is not a second
+      record of one relationship — it is evidence of Shall's own action.
+    - **The second falsehood, which the issue did not have.** `why.md` also claimed the crash
+      orphan "is covered by the manifest as a special case rather than needing its own mechanism.
+      Nothing is left that only the log can see" — while the function it described as deleted is the
+      only mechanism there is. `heal` filters on `InProgress | Abandoned` (`journal.rs:514`) and the
+      orphan's entry is `Completed`, so recovery walks past it exactly as it always has.
+    - **"The manifest is king" is right about ownership and does not reach the rest.** Ownership
+      is a statement about *who owns a package*; what a kill between a per-operation WAL write and a
+      once-per-run registry write loses is the *manifest's own write*. Removing the reader would not
+      make the manifest more authoritative — it would leave an installed, declared package that
+      converges, plans nothing, and then has a removal report success and take nothing away.
+    - **The gap is filed, not fixed here** (`PLAN.md` #105): closing the window and removing the
+      reader are two decisions, and only the first is available. Written into the spec rather than
+      left to whoever reads the comment next, because that is the failure this correction is about.
+    - **No test, deliberately.** A spec correction has nothing to assert, and the code it describes
+      is unchanged and already tested. The hermetic suite cannot produce a real kill between the two
+      writes either, so #105's evidence is the status filter and the comment beside the reader, both
+      checkable by reading.
+
 ### Tier 28 — a mutation that forgets forty-eight managers to change one (`PLAN.md` #79): BUILT
 
 43. ~~**Any mutation wipes every backends' on-disk installed cache.**~~ **BUILT, as a setting and
