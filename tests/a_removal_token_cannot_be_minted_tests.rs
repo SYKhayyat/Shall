@@ -42,9 +42,41 @@ fn rust_sources() -> Vec<(String, String)> {
         .into_iter()
         .filter_map(|p| {
             let body = std::fs::read_to_string(&p).ok()?;
-            Some((p.display().to_string(), body.replace("\r\n", "\n")))
+            // **The separator is normalised here, once, and this line is not cosmetic.** The gate
+            // below recognises the guard by `ends_with("src/app/sync/guard.rs")`, and on Windows
+            // `Path::display()` hands back `D:\a\Shall\Shall\src\app\sync\guard.rs` — so the
+            // guard failed its own exclusion and the Windows job reported the one file allowed to
+            // build a removal token as an offender. Line endings were already normalised here for
+            // the same class of reason, one line above.
+            Some((
+                p.display().to_string().replace('\\', "/"),
+                body.replace("\r\n", "\n"),
+            ))
         })
         .collect()
+}
+
+/// **The control for the separator, in the platform's own spelling.** This gate failed on Windows
+/// because it recognised the guard by a `/`-joined suffix, so the predicate is asked directly with
+/// the two spellings the same file has on the two platforms. A gate that reads a path and a gate
+/// that compares one are the same gate, and only one of them had been run on both platforms.
+#[test]
+fn the_guard_is_recognised_by_a_path_however_the_platform_spells_it() {
+    for spelled in [
+        "/home/runner/work/Shall/Shall/src/app/sync/guard.rs",
+        "D:\\a\\Shall\\Shall\\src\\app\\sync\\guard.rs",
+    ] {
+        let normalised = spelled.replace('\\', "/");
+        assert!(
+            normalised.ends_with("src/app/sync/guard.rs"),
+            "the guard's own path went unrecognised on this platform, so the gate reported the one \
+             file allowed to build a removal token as an offender: {spelled}"
+        );
+        assert!(
+            !normalised.ends_with("src/app/sync/other.rs"),
+            "the predicate accepted a path that is not the guard: {normalised}"
+        );
+    }
 }
 
 /// The oracle, first: a scan that has stopped matching passes by finding nothing, and this file
