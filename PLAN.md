@@ -1,7 +1,7 @@
 # PLAN — Shall (work top to bottom, one issue per worker session)
 
 Worker loop: top unchecked item only, fix + resolving test, commit, check off, stop.
-Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97, #102, #98, #91, #86, #85, #81, #83, #84, #79, #82, #87.
+Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97, #102, #98, #91, #86, #85, #81, #83, #84, #79, #82, #87, #95.
 
 ## SKIP — duplicates of one event, do not re-work
 - #32 DUP of #23+#24; #48 DUP of #32; #49 DUP of #33; #45 DUP of #26 (same file:line, same fix).
@@ -244,6 +244,21 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   `no` records the line and says what is missing, and a setting can answer automatically instead.
   (Info by priority; the ruling is settled, the work is not, and #95 is its prerequisite) — ISSUE
   #94
+- [x] #95 V.186/Q55 say `completed_installs` was deleted; the code still has it. (**BUILT — and the
+  docs were wrong in **two** places, not one.** `why.md` said the function "was deleted rather than
+  kept as a second source" and `decisions.md` said the same; both were false, and `why.md` made a
+  second false claim on the way — that "the crash orphan the log was introduced for is covered by
+  the manifest as a special case rather than needing its own mechanism". **It is not covered:** `heal`
+  filters on `InProgress | Abandoned` (`journal.rs:514`) and this entry is `Completed`, so nothing but
+  the surviving reader can see it. Both passages now say what is true: ownership is the manifest
+  alone, and the reader that remains is not an ownership source — it may only *claim a package the
+  manifest already declares*, on Shall's own record, which is the crash window between a per-operation
+  WAL write and a once-per-run registry write. **The owner's question — "the manifest is king, no?" —
+  is right about ownership and does not reach this**: what a crash loses is the manifest's own write,
+  so deleting the reader would not make the manifest more authoritative, it would make a class of
+  package permanently unremovable. The gap itself is filed as **#105** with both closure routes in
+  safe order, because closing the window and removing the reader are two decisions and only the first
+  is available. — ISSUE #95)
 - [ ] Interop/process: #42, #43, #44. Process: #17–#21 bundles (split per sub-item when working).
 
 ## Routing rule for new issues

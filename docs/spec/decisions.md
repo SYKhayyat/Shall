@@ -8030,8 +8030,14 @@ Rule in **II.56**, reasoning in **V.186**.
   however it got there. An installed set is not a manifest.
 - Only `present` declarations count — an `absent:` line says the package must not be here.
 - The lost case is covered by `Q54`'s `--absent`, which removes regardless of ownership.
-- `completed_installs` and `unmanage`'s log-clearing were **deleted**, not left beside the new
-  reader. `unmanage` drops the manifest line, which is now the whole of the forgetting.
+- `unmanage`'s log-clearing was **deleted**, not left beside the new reader. `unmanage` drops the
+  manifest line, which is now the whole of the forgetting. **`completed_installs` was not deleted**
+  (corrected 2026-10-01, `PLAN.md` #95): one reader remains, and it is not a second source of
+  ownership — it may only *claim a package the manifest already declares*, on Shall's own record
+  that it installed it, because the registry write is once per run and the WAL write is per
+  operation, and a kill between them strands a package that `heal` cannot see (`Completed` is not
+  `InProgress`). What the ruling deleted is the log's ability to say a package is Shall's when the
+  manifest does not say so.
 
 ---
 

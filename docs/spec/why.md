@@ -6375,12 +6375,25 @@ have makes it Shall's, and once that is the rule the manifest is simply the bett
 the one the user wrote, it does not expire, and it is already resolved on every sync.
 
 The declaration is also written *before* the install, by the same `install` that P1 defines as a
-file edit. So it survives every kill the registry does not, and the crash orphan the log was
-introduced for is covered by the manifest as a special case rather than needing its own
-mechanism. Nothing is left that only the log can see: `requires` wires edges inside the declared
-set rather than pulling in undeclared packages, and the dependent phase installs shims, services
-and links — not packages. `completed_installs` was deleted rather than kept as a second source,
-because two records of one relationship is how this repo got into trouble.
+file edit. So it survives every kill the registry does not. `requires` wires edges inside the
+declared set rather than pulling in undeclared packages, and the dependent phase installs shims,
+services and links — not packages. **The log cannot make Shall adopt anything**, so two records of
+one *ownership* relationship is not what is left: two records of one relationship is how this repo
+got into trouble, and the ownership record is the manifest alone.
+
+**One reader of the log remains, and it is not an ownership source.** `completed_installs` was not
+deleted; `Journal::completed_installs` exists and `reconcile_ownership` reads it. What it may do is
+narrower than ownership: it can **claim a package the manifest already declares**, on the evidence
+that Shall's own journal records having installed it, and it can never make Shall manage something
+undeclared. (Corrected 2026-10-01, `PLAN.md` #95 — the two spec files said the function was
+deleted, and it is load-bearing.)
+
+**Why it is still there: the registry write is once per run, the WAL write is per operation.** A
+kill between them leaves an installed, declared package that the manifest says is Shall's and the
+registry has no row for. The earlier version of this paragraph claimed the manifest covered that
+"as a special case", and **it does not**: `heal` filters on `InProgress | Abandoned`, and this
+entry is `Completed`, so nothing else can see it. The reader is what covers it, and without it the
+package converges, plans nothing, and then a removal reports success and takes nothing away.
 
 **What this gives up, stated plainly.** Undeclare a package by hand and then try to uninstall it
 and Shall cannot tell it was ever managed — there is no record left saying so. Ruled acceptable:
