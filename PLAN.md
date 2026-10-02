@@ -52,13 +52,30 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   job runs without `--nocapture`, so the crash discards its own evidence — **one**
   `--test-threads=1 --nocapture` run should name the test outright. I first reported the two
   `FAILED` lines here as two failures; the exit codes showed the process died before libtest
-  could flush them, so they may only have been in flight. **DEFERRED by an agent, 2026-09-30**: no
-  Windows and no Wine here, so the crash cannot be reproduced or bisected, and the fix for the
-  missing evidence (#102) is now in place instead. What the log does add: **no `stdout ----`
-  block appears for any test**, which is what makes those two `FAILED` lines in-flight rather
-  than failures, and four lines before the death libtest printed
-  `a_reader_writes_nothing_tests::no_reader_subcommand_writes_anything has been running for over
-  60 seconds` — a lead, not a conclusion)
+  could flush them, so they may only have been in flight.
+  - **THE `#102` RERUN HAS NOW NAMED IT, so the 2026-09-30 DEFERRED verdict no longer holds — and
+    the crash is deterministic, which is what makes it tractable.** The serial
+    `--test-threads=1` rerun dies in the same *module* as the parallel run:
+    - `--lib`: **268 of 2222** reported, then died. Last module `app::adopt::tests`; the next is
+      `app::apply`, whose first test is `dotfiles::tests::outside_home_uses_the_selected_user_home`.
+      That calls `Account::current()`, whose Windows half is `LookupAccountNameW` →
+      `ConvertSidToStringSidW` → `RegOpenKeyExW`/`RegQueryValueExW` on `ProfileList` →
+      `ExpandEnvironmentStringsW`. **The first raw-Win32 call the lib binary reaches.**
+    - `--test suite`: **480 of 723** reported, then died. Last module
+      `ansi_is_for_terminals_tests`; the next is **`argv_drift_tests`**, which reports nothing and
+      has exactly **one** test, `every_subcommand_shall_invokes_still_exists_upstream` — the only
+      test in the suite that shells out to dozens of real managers through `Command::output()`.
+    - **The `running 0 tests` lines in that log are the DOC-TESTS target, not the lib.** Recorded
+      because reading them the other way round makes the lib look like it died before starting,
+      and that misreading is a large part of why this looked unnameable.
+  - **STILL NOT FIXED, and deliberately not pretended to be.** No Windows and no Wine here, so it
+    cannot be reproduced or bisected. What is new is a *name* on both halves, which turns "cannot be
+    reproduced" into "run these two tests". The next step is `cargo test --test suite
+    argv_drift_tests -- --nocapture` and `cargo test --lib app::apply::dotfiles -- --nocapture`
+    on a Windows runner: both dying alone means two independent bugs, both passing alone means an
+    interaction with a concurrent test.
+  - **#106's one remaining failure is blocked on this**, since a `FAILED` line flushed before an
+    access violation is not a count of what is broken.)
 - [x] #102 CI: the main test step discards a crash's own evidence, on every platform.
   `.github/workflows/ci.yml:363` ran for **every** row of the build matrix with no `--nocapture`
   and no `--test-threads`, so a binary that dies mid-run never reaches libtest's failure report —
@@ -76,9 +93,30 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   already carrying the reasoning in their own prose **without the citation**. 53 → 48, and
   `UNCITED_CEILING` re-pinned 52 → 48 in the same change, which the ratchet's second assertion
   demands)
-- [ ] #100 the `void` leg's failure list is a sample of the network: six of eleven backend
-  failures name a backend that passed in the next run, and `uv`/`yarn` fail in every run inside
-  the same red. (Medium — a list nobody can compare to the last run is not evidence)
+- [x] #100 the `void` leg's failure list is a sample of the network. (**BUILT — and the issue's
+  own log contradicts its proposed mechanism, which is why the fix is a different one.** Reading
+  the run rather than the summary: **four** backends fail in both runs (`github`, `pnpm`, `uv`,
+  `yarn`), not two, and each printed `PASS <be> installed <pkg> for real` *first*. So routing the
+  per-backend verdicts through `CLASS` could not be the mechanism — `classify_install` runs only
+  when the install **failed**, and these returned 0. **The rc was the untrustworthy thing, not the
+  backend:** `uv tool install pyjokes` returned 0 having delivered nothing, a registry that
+  answered and served nothing, silently.
+  - **And the removal half was vacuous in the same breath.** `nok "$be: $ctok is gone from list"`
+    passes when the grep finds *nothing*, so on a package that was never installed it is a green
+    line. Five checks ran per backend and three of them scored a package that was never on the
+    machine — which is the mechanism behind the issue's own complaint. The four systematic failures
+    were indistinguishable from the six that rotated **because they were the same shape**.
+  - `install_delivered` asks whether the package arrived (its listing reports it, **or** its binary
+    is on PATH) before the removal half is scored. A backend whose listing cannot show the package
+    (`cabal`) counts as delivered — the listing is the wrong witness for it — and that is asserted
+    as the *control* against the failing case: same empty listing, opposite answers, differing only
+    in whether the lister can speak for the backend.
+  - Undelivered ⇒ one loud `soft`, `be-life-unmeasured` (measurable-in-principle, not coverage
+    *lost*) and `be-life-partial`, non-zero return.
+  - Its own small function because `lifecycle` is far past `lift`'s runaway guard. Four cases
+    driven; **mutation watched** — `return 0`, the pre-fix behaviour, reds two of them.
+  - **Still open behind it:** *why* those registries answer 0 and serve nothing. This makes it one
+    visible class rather than five half-vacuous checks, and deliberately does not guess. — ISSUE #100)
 
 ## Phase 3 — Correctness Mediums
 - [ ] **Gate names cited anywhere are not checked for resolving, while `V.n` citations are.**
