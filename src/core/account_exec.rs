@@ -13,7 +13,7 @@ impl CommandExecutor {
     ) -> Result<StdOutput> {
         let output = self.run_on_as(account, cmd, args, sudo).await?;
         let checked = self.ensure_status(cmd, output);
-        self.forget_run_scoped_answers();
+        self.forget_run_scoped_answers(None);
         checked
     }
 

@@ -86,6 +86,10 @@ pub struct InstalledListings {
     generation: std::sync::atomic::AtomicU64,
     /// How long a listing on disk stays usable. `None` — the default — is no disk layer.
     ttl: Option<Duration>,
+    /// How wide a mutation's invalidation reaches. A `OnceLock` because it is config, set once
+    /// before the run and read from every clone of every backend's executor: unset means the
+    /// ruling's scope, so a test that builds this type directly is never accidentally narrow.
+    scope: std::sync::OnceLock<crate::config::config::InvalidationScope>,
     /// Questions that are not listings and are not essentials, and are asked once per run anyway.
     ///
     /// **Here rather than beside it, for the reason `essentials` gives above: a second map with a
@@ -109,6 +113,24 @@ impl InstalledListings {
         Self::default()
     }
 
+    /// [`crate::config::Config::listing_invalidation`], set once from config before any backend
+    /// holds a clone of the executor.
+    pub fn set_scope(&self, scope: crate::config::config::InvalidationScope) {
+        let _ = self.scope.set(scope);
+    }
+
+    /// What a mutation invalidates. `manager` is the lock key of the manager just run, and only
+    /// `run_exclusive` has one — a command position holds the *program*, and for a user-defined
+    /// backend those are different strings (XIII.12) — so every other caller passes `None` and
+    /// forgets everything rather than guessing (`PLAN.md` #79).
+    pub fn forget_after_mutation(&self, manager: Option<&str>) {
+        match (self.scope.get().copied(), manager) {
+            (Some(crate::config::config::InvalidationScope::MutatedManager), Some(manager)) => {
+                self.forget_manager(manager)
+            }
+            _ => self.forget_all(),
+        }
+    }
 
     /// Whether a run of `subcommand` may be answered from disk at all.
     ///
@@ -376,6 +398,47 @@ impl InstalledListings {
         let value = exec.run_output(cmd, args, sudo).await?;
         *held = Some((round, value.clone()));
         Ok(value)
+    }
+
+    /// Forget the listings of the backends that share `manager`'s lock, and keep the rest.
+    ///
+    /// **The key is the manager, not the backend, and that is `app::stale_lock`'s one table
+    /// rather than a second one here.** `pacman` and `yay` are two backends and one lock, so an
+    /// install through either has to drop both listings; asking `lock_key(name)` per cached entry
+    /// gets that from the table that already answers it, with no registration step and nothing to
+    /// forget to wire up.
+    ///
+    /// **No generation bump, deliberately — and that is the whole difference from `forget_all`.**
+    /// The bump is what makes an answer that was already being fetched stale on arrival, and it is
+    /// global: bumping it here would invalidate the forty-odd listings this scope exists to keep.
+    /// Dropping the map entries is enough for the ones being forgotten, because a task already
+    /// holding a cloned `Arc<Slot>` writes into an entry no caller can reach any more.
+    ///
+    /// **The other two caches go whole, under both scopes.** `essentials` is the set that refuses
+    /// removals, so remembering less of it is less safe rather than faster; `queries` has nothing
+    /// mapping an argv to the manager that would have to survive.
+    pub fn forget_manager(&self, manager: &str) {
+        let doomed: Vec<String> = self
+            .by_backend
+            .iter()
+            .filter(|entry| crate::app::stale_lock::lock_key(entry.key()) == manager)
+            .map(|entry| entry.key().clone())
+            .collect();
+        for name in doomed {
+            self.by_backend.remove(&name);
+            // The disk layer goes with it, or the memo is cleared over a file that survives and
+            // the next run re-reads the pre-mutation answer straight off disk. **Only the `.json`:
+            // a `.tmp` left by a run killed between the write and the rename is inert** — nothing
+            // reads it but `clean-cache` — so sweeping it here would be tidying rather than
+            // correctness, and `forget_on_disk` still empties the directory wholesale.
+            if self.ttl.is_some() {
+                if let Some(path) = Self::cache_file(&name) {
+                    let _ = std::fs::remove_file(path);
+                }
+            }
+        }
+        self.essentials.clear();
+        self.queries.clear();
     }
 
     /// Forget everything. Called after any mutating command, because that is the only thing
@@ -757,6 +820,128 @@ mod tests {
             std::env::remove_var("SHALL_DATA_DIR");
             let _ = std::fs::remove_dir_all(&dir);
         });
+    }
+
+    /// **The narrowed forget, and the family it narrows by.** `pacman` and `yay` are two
+    /// backends over one manager lock, so an install through either must drop both listings —
+    /// and a backend that shares no lock with it must keep its own (`PLAN.md` #79).
+    #[tokio::test]
+    async fn a_narrow_forget_drops_the_whole_lock_family_and_nothing_else() {
+        let memo = InstalledListings::new();
+        let fetches = std::sync::Arc::new(AtomicUsize::new(0));
+        let counting = |name: &'static str| {
+            let fetches = fetches.clone();
+            async move {
+                fetches.fetch_add(1, Ordering::SeqCst);
+                Ok(vec![pkg(name)])
+            }
+        };
+
+        for backend in ["pacman", "yay", "brew"] {
+            memo.once(backend, counting(backend))
+                .await
+                .expect("first listing");
+        }
+        assert_eq!(fetches.load(Ordering::SeqCst), 3);
+
+        memo.forget_manager("pacman");
+
+        // The family is asked again: `yay` shares `pacman`'s lock, so it is not safe to keep.
+        memo.once("pacman", counting("pacman"))
+            .await
+            .expect("pacman again");
+        memo.once("yay", counting("yay")).await.expect("yay again");
+        assert_eq!(
+            fetches.load(Ordering::SeqCst),
+            5,
+            "a narrow forget through `pacman` left a listing in its own lock family standing"
+        );
+
+        // And the backend that shares nothing with it is still answered from memory, which is
+        // the entire reason the setting exists.
+        memo.once("brew", counting("brew"))
+            .await
+            .expect("brew again");
+        assert_eq!(
+            fetches.load(Ordering::SeqCst),
+            5,
+            "a narrow forget re-listed `brew`, which no mutation of `pacman` could have changed"
+        );
+    }
+
+    /// **A narrow forget is still a forget.** The OS-essential set is the one that refuses
+    /// removals, so remembering less of it is less safe rather than faster — it goes whole under
+    /// the narrow scope exactly as it does under the wide one.
+    #[tokio::test]
+    async fn a_narrow_forget_still_drops_the_essential_set() {
+        let memo = InstalledListings::new();
+        let fetches = std::sync::Arc::new(AtomicUsize::new(0));
+        let counting = || {
+            let fetches = fetches.clone();
+            async move {
+                fetches.fetch_add(1, Ordering::SeqCst);
+                Ok(vec!["apt".to_string()])
+            }
+        };
+
+        memo.essential_once("brew", counting())
+            .await
+            .expect("essentials");
+        memo.essential_once("apt", counting())
+            .await
+            .expect("essentials");
+        assert_eq!(fetches.load(Ordering::SeqCst), 2);
+
+        memo.forget_manager("apt");
+
+        memo.essential_once("brew", counting())
+            .await
+            .expect("essentials again");
+        assert_eq!(
+            fetches.load(Ordering::SeqCst),
+            3,
+            "a narrow forget kept the essential set, and that set is what refuses removals"
+        );
+    }
+
+    /// **The disk layer goes with it, per backend.** The memo files are one per backend, so a
+    /// narrow forget removes exactly the files of the lock family it dropped — and Y6's ruling
+    /// that "any mutation drops it, on disk as well as in memory" is why the narrow path has to
+    /// delete rather than merely skip the write.
+    #[tokio::test]
+    async fn a_narrow_forget_deletes_the_family_s_files_and_leaves_the_others() {
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("SHALL_DATA_DIR", dir.path());
+        let memo = InstalledListings::with_ttl(600);
+
+        let fetch = |name: &'static str| async move { Ok(vec![pkg(name)]) };
+        for backend in ["pacman", "yay", "brew"] {
+            memo.once(backend, fetch(backend)).await.expect("listing");
+        }
+        let file = |backend: &str| InstalledListings::cache_file(backend).expect("a cache file");
+        for backend in ["pacman", "yay", "brew"] {
+            assert!(
+                file(backend).exists(),
+                "{backend} wrote no cache file to forget"
+            );
+        }
+
+        memo.forget_manager("pacman");
+
+        for backend in ["pacman", "yay"] {
+            assert!(
+                !file(backend).exists(),
+                "{backend} shares `pacman`'s lock, so its cache file survived the narrow forget \
+                 and the next run will read the pre-mutation answer straight off disk"
+            );
+        }
+        assert!(
+            file("brew").exists(),
+            "the narrow forget deleted a cache file for a manager no mutation could have changed"
+        );
+
+        std::env::remove_var("SHALL_DATA_DIR");
+        let _ = std::fs::remove_dir_all(dir.path());
     }
 
     #[tokio::test]

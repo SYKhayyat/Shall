@@ -59,6 +59,17 @@ query_idle_timeout_secs = 120
 # for the better part of an hour bothers you more than a long install does.
 # manager_command_timeout_secs = 300
 
+# What a mutating command invalidates. `all` (the default) forgets every manager's cached
+# listing after any install or removal, which is what Shall has always done and what it does
+# because an install is assumed to have changed only the manager it drove — an assumption an
+# `apt` package whose own scripts populate a `pip` listing breaks routinely.
+#
+# `mutated_manager` forgets only the managers that share the lock of the one just run (`yay`
+# and `pacman` are two backends and one database), which is most of what an install was
+# invalidating for nothing. The OS-essential set is forgotten either way: it is what refuses
+# removals, so remembering less of it is less safe rather than faster.
+# listing_invalidation = "all"
+
 # How many times a read whose failure is classified TRANSIENT is asked again. 1 disables it.
 # Reads only, and that is the justification: asking a manager what it has, twice, costs a
 # second, while a mutation retried on a guess installs something twice. Measured: winget

@@ -1291,7 +1291,7 @@ impl CommandExecutor {
         // during a one-shot run. Installing `npm` and then asking whether `npm` is available is
         // a real sequence inside one `sync`. Every read stays memoised; a mutation is the edge
         // that invalidates them.
-        self.forget_run_scoped_answers();
+        self.forget_run_scoped_answers(None);
         checked
     }
 
@@ -1582,16 +1582,16 @@ impl CommandExecutor {
         // and removals actually take, and it reaches `run_raw` directly rather than through
         // `run`. Without it the run-scoped listings would still be answering from before the
         // install — which `Prior` reads to decide what a rollback puts back.
-        self.forget_run_scoped_answers();
+        self.forget_run_scoped_answers(Some(lock_key));
         // Enforce status only after releasing the lock, so a failed mutation still frees it.
         self.ensure_status(cmd, result?)
     }
 
     /// Forget everything memoised for the length of a run that a mutation could have changed:
     /// what is on `PATH`, and what each manager has installed.
-    pub(crate) fn forget_run_scoped_answers(&self) {
+    pub(crate) fn forget_run_scoped_answers(&self, manager: Option<&str>) {
         forget_path_lookups();
-        self.installed.forget_all();
+        self.installed.forget_after_mutation(manager);
     }
 
     /// What a failed command's own output is allowed to put on a terminal.

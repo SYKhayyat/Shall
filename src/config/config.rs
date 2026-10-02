@@ -729,6 +729,27 @@ pub struct Config {
     #[serde(default = "default_manager_command_timeout_secs")]
     pub manager_command_timeout_secs: u64,
 
+    /// What a mutating command invalidates: every manager's cached listing, or only the ones
+    /// that share the lock of the manager it just ran.
+    ///
+    /// **`all` is the default, and Y6's ruling is `all`.** The register records that ruling as
+    /// *"any mutation drops it, on disk as well as in memory"*, and chose the safe side of a
+    /// speed/correctness trade deliberately; this setting does not reverse it, it adds the lever
+    /// the ruling's own reasoning implies — a user who has measured their machine can move it.
+    ///
+    /// **`mutated_manager` is faster because one install no longer re-lists the other forty-odd
+    /// managers, and it is opt-in because it is wrong sometimes.** A mutation is assumed to have
+    /// changed only the manager it ran through, which is false whenever a package's own scripts
+    /// reach another manager's tree — an `apt` package that populates a `pip` or `venv` listing
+    /// is the ordinary case, not an exotic one. Under `all` that cannot be missed, because
+    /// nothing survives. A user who sets this is choosing to be wrong occasionally in exchange
+    /// for not paying for 47 listings they did not touch.
+    ///
+    /// The two caches that are not per-manager listings are dropped whole under **both** values:
+    /// the OS-essential set (which exists to refuse removals, so remembering less is less safe
+    /// rather than faster) and the `PATH` lookup memo (`PLAN.md` #79).
+    #[serde(default)]
+    pub listing_invalidation: InvalidationScope,
 
     /// Timeout (seconds) for outbound HTTP requests (registry/PyPI/marketplace search).
     #[serde(default = "default_network_timeout_secs")]
@@ -1043,6 +1064,17 @@ fn default_network_parallel() -> usize {
 /// The honest default for a tool whose job is to be right about the machine. Every other
 /// speed-up in II.19 costs nothing but concurrency; this one costs correctness when it is
 /// wrong, so it is the one the user turns on deliberately.
+/// How wide a mutation's invalidation reaches. See [`Config::listing_invalidation`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InvalidationScope {
+    /// Every manager. The ruling, and the default.
+    #[default]
+    All,
+    /// Only the backends sharing the lock of the manager just run.
+    MutatedManager,
+}
+
 fn default_manager_command_timeout_secs() -> u64 {
     300
 }
@@ -1242,6 +1274,7 @@ impl Default for Config {
             network_parallel: default_network_parallel(),
             installed_cache_secs: default_installed_cache_secs(),
             manager_command_timeout_secs: default_manager_command_timeout_secs(),
+            listing_invalidation: InvalidationScope::default(),
             network_timeout_secs: default_network_timeout_secs(),
             command_idle_timeout_secs: default_command_idle_timeout_secs(),
             query_idle_timeout_secs: default_query_idle_timeout_secs(),

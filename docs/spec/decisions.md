@@ -4981,6 +4981,32 @@ command surviving instead of 24. Rule in **II.19**, reason in **V.120**.
 - **Every read failure is a miss, never an error.** Corrupt, unreadable, or a clock that moved
   backwards all mean "ask the manager", never "this machine is empty".
 
+**The lever this ruling already implies, added 2026-10-01 (`listing_invalidation`).** *"it costs
+correctness when it is wrong, and being wrong about the machine is how a declarative tool removes
+something it should not have"* is the reason the setting is **off by default and defaults to
+`all`** — Y6 is untouched, and `mutated_manager` is the user's own machine opting in. Under it, a
+mutation through `run_exclusive` forgets the listings of the backends sharing that manager's lock
+and keeps the rest, which is most of the 47 managers an `apt install` was invalidating for nothing.
+
+**The owner's ruling, 2026-10-01, in three parts:**
+
+- **A setting, not a reversal.** Offered the per-manager change token as the destination and
+  declined it *for now*: a token has to be named per manager family (dpkg's status mtime,
+  pacman's local dir, brew's Cellar, winget's database, npm's global `node_modules`), each one
+  that cannot be named reliably must fall back to forgetting — the safe side — and the resulting
+  failure mode that matters is a token that does **not** move when something was installed. That
+  is a stale listing, invisible to the hermetic suite, and testable only against real managers in
+  the container harness. So the shape is right and the verification is not available here.
+- **Scope, not mechanism.** The setting chooses *what is forgotten*, and only where the manager is
+  known: `run_exclusive` is the sole narrowing call site because it is the sole one handed the
+  lock key. The other two mutation paths are handed a *program*, which for a user-defined backend
+  is a different string (XIII.12), and they keep forgetting everything — a narrowing that guessed
+  would be a narrowing that guessed wrong.
+- **The two caches that are not per-manager listings go whole under both values.** The
+  OS-essential set exists to refuse removals, so remembering less of it is less safe rather than
+  faster; the `PATH` lookup memo has nothing mapping a program to the manager that would have to
+  survive. What narrows is exactly the `by_backend` listing map and its per-backend disk files.
+
 **What could reverse it:** a cheap per-manager change token — `dpkg` status mtime, winget's
 own database timestamp — which would let a listing be validated rather than merely aged, and
 would make an on-by-default cache defensible. Not built: it is one investigation per manager,

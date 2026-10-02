@@ -194,6 +194,9 @@ impl App {
     pub async fn new(config: Config) -> Result<Self> {
         let mut executor = CommandExecutor::new(config.dry_run, config.verbose);
         executor.set_installed_cache(config.installed_cache_secs);
+        executor
+            .installed_listings()
+            .set_scope(config.listing_invalidation);
         Self::new_with_executor_and_state_path(config, executor, None).await
     }
 

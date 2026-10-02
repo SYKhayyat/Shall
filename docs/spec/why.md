@@ -2795,6 +2795,39 @@ renamed, because a half-flushed one read back is a **shorter** machine and a sho
 a list of things to remove. And every read failure — corrupt, unreadable, a clock that moved
 backwards — is a miss that asks the manager, never an error and never an empty machine.)*
 
+**V.120b — Why a mutation forgets every manager, and why that is now a setting.** *(Owner ruling,
+2026-10-01 — `PLAN.md` #79. Rule in II.19.)*
+
+**The cost being paid is real and it is paid on every mutating command.** `forget_all` clears the
+`by_backend` map, the `essentials` map, the probe memo and every cache file on disk, so one
+`apt install` invalidates the listings of all ~48 managers, and the next read-only question —
+`list`, `check`, the drift report inside the same `sync` — re-asks every manager that had already
+answered. Nothing about that is wrong: a mutation is assumed to have changed only the manager it
+drove, and that assumption is false often enough to matter (an `apt` package whose own scripts
+populate a `pip` or `venv` listing is ordinary, not exotic). Under `all` the assumption is never
+made, because nothing survives to make it.
+
+**The lock key is what makes the narrower scope expressible at all.** `pacman` and `yay` are two
+backends, two programs and one database, so "which manager was mutated" is not "which backend ran"
+— it is `app::stale_lock::lock_key`, the table that already answers it for the lock file itself.
+Asking it per cached listing entry is why this needs no registration step: every key in the map is
+a backend name and the function is total.
+
+**And the narrower scope fails in the safe direction.** `run_exclusive` is the only caller that
+narrows, because it is the only one handed the manager's lock key; the other two mutation paths are
+handed the *program*, which XIII.12 makes a different string for a user-defined backend
+(`firewall:` runs `ufw`), and they keep forgetting everything. `essentials` — the set that refuses
+removals — is cleared whole under both scopes, because for it "remember less" is not faster but less
+safe, and the `PATH` memo has no program-to-manager mapping to narrow by.
+
+**What was declined, and why it is still the destination.** The register names the reversal as a
+per-manager *change token* — dpkg's status mtime, winget's own database timestamp — which would
+validate a listing rather than age it and make the whole question disappear. It was declined for
+now on verification grounds rather than design ones: a token must be named per manager family, an
+unnamedable one must fall back to forgetting, and the failure that matters is a token that does not
+move when something was installed — a stale listing, invisible to a hermetic suite, and
+exercisable only against real managers in the container harness.
+
 **V.121 — Why a package name may be quoted.** *(Owner ruling, 2026-08-03 — `Y7`. Rule in
 II.19.)*
 

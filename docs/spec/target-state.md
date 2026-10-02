@@ -2644,6 +2644,15 @@ prefix. Asked once per run, and a mutating command is what forgets that too. **V
 what the code does. A vars provider is a program the user wrote, and running it three times runs
 its side effects three times. **V.116.**
 
+**A mutation forgets every manager's listing, unless the machine's owner says otherwise.**
+`listing_invalidation` is `all` by default — that is Y6's ruling and it is not a default to be
+improved on. Set to `mutated_manager`, a mutation forgets the listings of the backends sharing the
+manager it ran, and keeps the rest. **The key is the manager, not the backend** (`pacman` and
+`yay` are two backends over one database), and the only caller that narrows is the one handed the
+lock key: a command position holds the *program*, and for a user-defined backend those are
+different strings. The OS-essential set and the `PATH` memo are forgotten whole under both values —
+the first refuses removals, so remembering less of it is less safe rather than faster. **V.120b.**
+
 **A manager's answer may outlive its run, only if the machine's owner says so.**
 `installed_cache_secs` is `0` — never — until set. When set, a listing is reused for that many
 seconds; **any mutation drops it, in memory and on disk**, `--no-cache` bypasses it for one run,

@@ -19,7 +19,7 @@
 //!
 //! **Scope: the family, not the field.** The scan below reads every `pub` field of every struct
 //! in `src/config/config.rs` and asks whether the name appears anywhere outside `src/config/`.
-//! On this tree that is 76 fields and exactly one answer, so the instrument is not
+//! On this tree that is 78 fields and exactly one answer, so the instrument is not
 //! over-reporting — it is naming the single case. Any future setting that is offered and not
 //! wired fails here on the day it is added.
 //!

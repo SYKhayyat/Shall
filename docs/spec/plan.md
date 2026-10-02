@@ -431,6 +431,39 @@ build and what is deferred to hardware.**
       mid-question case — the last one written before the round stamp's role could be discussed
       honestly at all, and reported as not isolating it.
 
+### Tier 28 — a mutation that forgets forty-eight managers to change one (`PLAN.md` #79): BUILT
+
+43. ~~**Any mutation wipes every backends' on-disk installed cache.**~~ **BUILT, as a setting and
+    not as a reversal of Y6.** Y6 binds *"any mutation drops it, on disk as well as in memory"*, and
+    that stands: `listing_invalidation` **defaults to `all`**, which is the ruling. What the owner
+    added on 2026-10-01 is the lever that ruling's own reasoning implies — a user who has measured
+    their machine can move it — and the ruling is written into `decisions.md` under Y6 rather than
+    left in a commit.
+
+    - **The key is the *manager*, not the backend.** `pacman` and `yay` are two backends, two
+      programs and one database, so "which manager was mutated" is not "which backend ran". It is
+      `app::stale_lock::lock_key` — the table that already answers it for the lock file — which is
+      why this needs **no registration step**: every key in the listing map is a backend name and
+      the function is total. One table, one answer, no second copy to go stale.
+    - **Only one call site may narrow.** `run_exclusive` is handed the manager's lock key; the
+      other two mutation paths are handed the *program*, and XIII.12 makes those different strings
+      for a user-defined backend (`firewall:` runs `ufw`). They keep forgetting everything — a
+      narrowing that guessed would be a narrowing that guessed wrong, and the failure is a stale
+      listing.
+    - **The essential set is not part of this.** `essentials` is the cache that *refuses removals*,
+      so remembering less of it is less safe rather than faster; it is cleared whole under both
+      values, as is the `PATH` memo (nothing maps a program to the manager that would have to
+      survive). What narrows is exactly the listing map and its per-backend cache files — which are
+      deleted, or the memo is cleared over a file that survives and the next run re-reads the
+      pre-mutation answer off disk.
+    - **No generation bump in the narrow path, deliberately.** The bump is what makes an answer
+      already being fetched stale on arrival, and it is global: bumping it here would invalidate the
+      forty-odd listings this scope exists to keep. Dropping the map entries is enough, because a
+      task holding a cloned `Arc<Slot>` writes into an entry no caller can reach any more.
+    - **Seven tests**, including both directions end-to-end through `run_exclusive`: the lock family
+      goes together, an unrelated manager survives, the essential set still goes whole, the
+      family's cache files are deleted and the others are not, and the default still re-lists.
+
 ### Tier 27 — a deadline that could not be observed (`PLAN.md` #82): BUILT
 
 42. ~~**The batch deadline scales wrong both ways.**~~ **BUILT, and not as the fix the issue
