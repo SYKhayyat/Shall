@@ -431,6 +431,35 @@ build and what is deferred to hardware.**
       mid-question case — the last one written before the round stamp's role could be discussed
       honestly at all, and reported as not isolating it.
 
+### Tier 27 — a deadline that could not be observed (`PLAN.md` #82): BUILT
+
+42. ~~**The batch deadline scales wrong both ways.**~~ **BUILT, and not as the fix the issue
+    asked for — because both failure modes it describes are unreachable with the defaults.** The
+    formula was `node_timeout * len.clamp(1, 16)` with `node_timeout` = 300 s. The issue does not
+    mention the other bound: **`total_timeout` is 3600 s and wraps `execute_internal` whole**
+    (`transaction.rs`). So one package got 5 minutes, eleven got 55, **twelve got 60, and sixteen or
+    more got 80 — inside a sixty-minute run.**
+
+    - **The claimed spurious timeout cannot happen.** "A 100-package batch times out, bisects, and
+      repays apt ten times" needs an 80-minute node deadline to fire inside a 60-minute
+      transaction. The transaction ends first and reports the global timeout.
+    - **The claimed waste is bounded by the other number.** "A generous per-node deadline pins the
+      wave and holds the manager lock" is bounded by the remaining total budget, not by `16 ×
+      300 s`. What is true is duller and worth having: **the clamp is dead above twelve packages**,
+      a magic number with no relationship to the budget it was supposed to fit inside, and nothing
+      tested any of it.
+    - **`node_deadline()` caps at `total_timeout`, and the cap changes no outcome** — the
+      transaction timeout already dominates — while making the two constants' relationship a fact
+      about the code instead of an accident nobody compared. Four tests: the per-package budget,
+      monotonicity, the cap across batch sizes, and **that the cap did not swallow the shape**,
+      because a fix that flattened everything to the total would pass the cap test and hand one
+      package an hour.
+    - **`manager_command_timeout_secs`, default 300** — the owner's ruling (2026-10-01): expose it,
+      change no default. The number was already 300 s with nothing to raise it, and what is slow on
+      a given machine is the disk and the network rather than the manager, so the failure the
+      setting trades against is the worse one — a run that kills a healthy install part way and
+      rolls the transaction back.
+
 ### Tier 26 — a third copy of "which removal call does this need" (`PLAN.md` #87): BUILT
 
 41. ~~**`copy_over` mishandles a directory symlink on Windows.**~~ **BUILT.** `copy_over` asked

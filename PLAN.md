@@ -176,6 +176,48 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   across packages is the outer fan-outs' business and those are capped (`max_concurrent`,
   #84), so what is left here is measurement on a machine with real managers, which this host does
   not have. — ISSUE #80)
+- [x] #79 forget_all wipes all caches. (**BUILT, as a setting rather than a reversal.**
+  Y6 binds *"any mutation drops it, on disk as well as in memory"*, and that stands: the new
+  `listing_invalidation` key **defaults to `all`**, which is the ruling. `mutated_manager` is the
+  lever the ruling's own reasoning implies — a user who has measured their machine can move it —
+  and it forgets the listings of the backends sharing the mutated manager's lock
+  (`app::stale_lock::lock_key`, the table that already answers "which manager", so **no
+  registration step and nothing to forget to wire up**) plus that family's per-backend cache
+  files. **Only `run_exclusive` narrows**, because it is the only mutation path handed the
+  *manager*; the other two are handed the program, which XIII.12 makes a different string for a
+  user-defined backend, and they keep forgetting everything. `essentials` — the set that refuses
+  removals — is cleared whole under both scopes, as is the `PATH` memo. No generation bump in the
+  narrow path, because it is global and would invalidate the listings the scope exists to keep.
+  Ruling, the declined change-token destination and the reasoning are in `decisions.md` under Y6;
+  II.19 and V.120b record the rule. Seven tests: the lock family goes together and an unrelated
+  manager does not, the essential set still goes, the family's cache files are deleted and the
+  others are not, plus end-to-end both ways through `run_exclusive`. — ISSUE #79)
+
+- [x] #82 batch deadline. (**BUILT — and what was built is not the fix the issue asked for,
+  because both failure modes it describes are unreachable with the defaults.** The formula is
+  that is worth more than the fix the issue asks for.** The formula is
+  `node_timeout * names.len().clamp(1, 16)` with `node_timeout = 300s` and — the part the issue
+  does not mention — **`total_timeout = 3600s`, wrapping `execute_internal` whole**
+  (`transaction.rs:454`). So: 1 package gets 5 min, 11 get 55 min, **12 get 60 min, and 16+ get
+  80 min — which the transaction-level timeout has already killed.** The issue's second claim (*a
+  100-package batch times out spuriously, bisects, and repays apt ten times*) needs an 80-minute
+  node deadline to fire inside a 60-minute run, so it cannot happen; and the first claim (*a
+  generous per-node deadline pins the wave and holds the manager lock*) is bounded by the remaining
+  total budget, not by `16 × 300s`. What is actually true is duller and worth fixing: **the clamp
+  is dead above 12 packages**, a magic number with no relationship to the budget it is supposed to
+  fit inside, and nothing tests any of it. The buildable half needs no ruling — extract the
+  deadline as a named function, cap it at `total_timeout` (**behaviour-preserving, because the
+  transaction timeout already dominates**), and pin that it is monotone in the batch size and
+  reachable for every batch the clamp admits. The part that *does* need the owner is the one the
+  issue is really about: **how long a hung manager should be allowed to hold the lock**, which is
+  a user-visible timing choice with no measurement available on this host. **Owner ruling,
+  2026-10-01: expose it as a config key and change no default** — so `manager_command_timeout_secs`
+  (default 300, the value `node_timeout` always had with nothing to raise it), and
+  `node_deadline()` capping the scaled budget at `total_timeout`, which changes no outcome and
+  makes the two constants' relationship a fact instead of an accident. Four tests in
+  `core::batch`: the per-package budget, monotonicity, the cap across batch sizes, and **that the
+  cap did not swallow the shape** (a fix that flattened everything to an hour would pass the cap
+  test and give one package an hour). — ISSUE #82)
 - [ ] #25 lifecycle jobs on distro containers, #53 nimble Windows, #54 dirty-host fixtures.
 - [x] #55 gentoo (emerge) leg: harness drives the ambiguous canary jq. (**BUILT — the canary is
   `htop` since 2026-08-17, because `jq` is two atoms on Gentoo and a bare `jq` is a name Portage

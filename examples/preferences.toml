@@ -48,6 +48,17 @@ command_idle_timeout_secs = 900
 # learn what two could have told you. 0 removes it; anything above the bound above is moot.
 query_idle_timeout_secs = 120
 
+# How long ONE package's worth of manager work may take, in seconds. A batch is sized from
+# this — a node's budget is this times the number of packages in the batch — and is capped by
+# the run's own total timeout, so a batch is never given a budget the transaction around it
+# would have ended first. Defaults to 300.
+#
+# The idle timeouts above bound SILENCE; this bounds duration. A manager that keeps printing
+# for longer than this is stopped, which is the trade: raise it if a slow disk or a cold page
+# cache makes a legitimate install look hung, and lower it if a wedged manager holding its lock
+# for the better part of an hour bothers you more than a long install does.
+# manager_command_timeout_secs = 300
+
 # How many times a read whose failure is classified TRANSIENT is asked again. 1 disables it.
 # Reads only, and that is the justification: asking a manager what it has, twice, costs a
 # second, while a mutation retried on a guess installs something twice. Measured: winget

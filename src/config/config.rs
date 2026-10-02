@@ -711,6 +711,25 @@ pub struct Config {
     #[serde(default = "default_installed_cache_secs")]
     pub installed_cache_secs: u64,
 
+    /// How long **one package's worth** of manager work may take, in seconds, before Shall
+    /// gives up on it. A batch is sized from this: a node's budget is this multiplied by the
+    /// number of packages in the batch, capped by the run's own total timeout.
+    ///
+    /// Five minutes, which is not a new number: `node_timeout` was 300 s with nothing to raise
+    /// it, and this is that number with a way to change it. A single `apt install` builds whatever
+    /// it depends on, and on a cold page cache or a slow disk that is not a small thing.
+    ///
+    /// **Raisable, because Shall cannot see the machine it is on.** What is slow is the disk and
+    /// the network, not the manager, and the failure this setting trades against is the worse one:
+    /// a run that kills a healthy install part way through, which rolls the transaction back.
+    /// That is why the setting exists rather than the bound being chosen once for every machine.
+    ///
+    /// A batch cannot be given a budget the transaction around it would have ended first — see
+    /// `core::batch::node_deadline`, which is where that cap is applied (`PLAN.md` #82).
+    #[serde(default = "default_manager_command_timeout_secs")]
+    pub manager_command_timeout_secs: u64,
+
+
     /// Timeout (seconds) for outbound HTTP requests (registry/PyPI/marketplace search).
     #[serde(default = "default_network_timeout_secs")]
     pub network_timeout_secs: u64,
@@ -1024,6 +1043,10 @@ fn default_network_parallel() -> usize {
 /// The honest default for a tool whose job is to be right about the machine. Every other
 /// speed-up in II.19 costs nothing but concurrency; this one costs correctness when it is
 /// wrong, so it is the one the user turns on deliberately.
+fn default_manager_command_timeout_secs() -> u64 {
+    300
+}
+
 fn default_installed_cache_secs() -> u64 {
     0
 }
@@ -1218,6 +1241,7 @@ impl Default for Config {
             max_parallel: default_max_parallel(),
             network_parallel: default_network_parallel(),
             installed_cache_secs: default_installed_cache_secs(),
+            manager_command_timeout_secs: default_manager_command_timeout_secs(),
             network_timeout_secs: default_network_timeout_secs(),
             command_idle_timeout_secs: default_command_idle_timeout_secs(),
             query_idle_timeout_secs: default_query_idle_timeout_secs(),
