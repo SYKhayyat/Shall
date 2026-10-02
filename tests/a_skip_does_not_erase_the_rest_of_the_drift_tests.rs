@@ -145,16 +145,60 @@ fn drift_row(dir: &Path) -> String {
         .to_string()
 }
 
+/// Everything `shall check` printed, and the status it exited with.
+///
+/// **Both, and this exists because the first version of the control below printed neither.**
+/// On the Windows runner the row it was looking for did not exist, so the failure said `row: `
+/// and stopped — which cannot distinguish "check said nothing about drift", "check said
+/// something else entirely", and "check died before printing". That is the discarded-evidence
+/// mistake `PLAN.md` #102 was filed about, one level down: a diagnostic that cannot say what
+/// the command printed cannot say what the command did. `check --json` on the same fixture
+/// *does* emit a drift section, so the two renderings disagree and the disagreement is the clue.
+fn check_said(dir: &Path) -> (String, String) {
+    let out = Command::new(shall())
+        .args(["check"])
+        .env("SHALL_CONFIG_DIR", dir)
+        .env("SHALL_DATA_DIR", dir.join("data"))
+        .current_dir(dir)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("the binary should run");
+    let status = out.status.code();
+    (
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        ),
+        match status {
+            Some(0) => "exited 0".to_string(),
+            Some(c) => format!("exited {c}"),
+            None => "was killed by a signal".to_string(),
+        },
+    )
+}
+
 /// The control, and the whole finding rests on it: with nothing skipped, `check` reports the
 /// pending resource, so the omission below is a loss and not a thing `check` never did.
 #[test]
 fn check_reports_a_file_it_would_place() {
     let dir = one_file_to_place("control");
     let row = drift_row(&dir);
-    assert!(
-        row.contains("1 to place"),
+    if row.contains("1 to place") {
+        return;
+    }
+    // **Say what `check` actually did.** A control that fails with `row: ` and no output is a
+    // control that has to be re-run with a print statement added to find out why, and this one
+    // had already been re-run four times that way.
+    let (everything, status) = check_said(&dir);
+    panic!(
         "the control never held: `check` does not report a declared, absent file as drift, so \
-         the tests below would be measuring nothing.\nrow: {row}"
+         the tests below would be measuring nothing.\n\
+         matched row: {row:?}\n\
+         `shall check` {status} and printed:\n{everything}\n\
+         If that has no drift line at all, compare it with `shall check --json` over the same \
+         directory — the JSON path does emit a drift section, and the two renderings disagreeing \
+         is a different defect from `check` omitting the resource (`PLAN.md` #106)."
     );
 }
 

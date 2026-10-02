@@ -223,7 +223,57 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   `htop` since 2026-08-17, because `jq` is two atoms on Gentoo and a bare `jq` is a name Portage
   itself refuses; `Dockerfile.gentoo:96` and the nightly leg is green. The issue is stale, not
   wrong: it was true when filed)
-- [ ] Suite-isolation bugs (Rust suite green only on NOPASSWD-sudo/adoptable hosts): #88 mock-layer tests probe real sudo, #89 guard-reachability control builds vacuous fixture, #90 fan-out floor vs skewed hosts.
+- [x] #90 fan-out overlap floor fails a skewed host. (**BUILT, and the fix is a skip rather than a
+  number, which is the whole argument.** The ratio is `sum(child)/wall`, and the smallest wall any
+  scheduler can reach is the *slowest* child — every other child hides inside it. So the ceiling is
+  `summed/slowest`, and when one child holds most of the summed time that approaches 1.0: measured
+  on the five-manager host, `emacs --batch` alone took 0.36s of 0.46s summed, giving a ceiling of
+  **1.28x against a floor of 1.25x** while every run started all five children at once and finished
+  in one wave. No scheduler on that host can score what the floor asks for.
+  - **The issue offered three routes and named this one the only safe one.** Lowering the floor to
+    the ceiling (`min(floor, ceiling*0.9)`) is the same mistake twice — a genuinely *serial* run
+    scores ~1.0 there and would pass. Raising `min_children` silences legitimate small CI hosts the
+    field's own comment wants included. Skipping says the measurement does not exist, and the
+    load-independent half of the pair still runs.
+  - **`waves` is what covers the gap**, and this is why the skip costs no detection: one wave is a
+    perfect fan-out and one wave per child is a serial loop *whatever the child durations are*. So
+    collapse stays detectable on exactly the host where the ratio gave up. Asserted in both
+    directions — the skewed one-wave run must not be reported, and the same children run five waves
+    deep must still be caught.
+  - **One predicate, two callers, unchanged discipline.** `shape_measurement_gap` replaced
+    `is_measurable` as the single answer to "is this host measurable", and returns the *sentence*
+    rather than a bool, so the rule and the reporter cannot disagree — which is the failure mode
+    the field's own doc calls the worst kind this repo keeps finding. `overlap_headroom` (1.25) is
+    the new key, and it is a multiple of the floor rather than a second absolute constant. — ISSUE
+    #90)
+- [ ] #105 the crash window between a per-operation WAL write and the once-per-run registry write.
+  (**ROUTE (2) WAS ALREADY BUILT — the issue's own "better next move" — so what was left was its
+  residual, and the residual has one cause: the evidence expires.** `heal` calls
+  `reconcile_ownership` first and *unconditionally*, and `reconcile_ownership` reads
+  `completed_installs`, so an orphan **is** repaired on the next sync. But
+  `cleanup_expired_logs(7)` drops a `Completed` entry after a week, while the claim it witnesses
+  does not expire: a machine left alone for a week loses the only evidence that would have repaired
+  its orphan, and falls back to a listing that correctly reports an unpacked-but-not-configured
+  package as *not installed* — which is the lister being right. Closed by #94's receipt below.
+  **Route (1)** (ownership written per operation / same commit point as the WAL entry, then the
+  reader goes) is the better end state and remains the owner's; it is an architecture change to the
+  transaction, not a fix, and deleting the reader before either route is the one unavailable option.
+- [ ] #106 Windows MSVC. (**DOWN TO ONE OBSERVED FAILURE, and the count in the issue was not
+  reliable — the crash got there first.** `a_ledger_without_a_floor_refuses_to_audit` is a
+  `#[should_panic]` test, so `--nocapture` printing its panic is *success*, not failure; it never
+  appears in any `FAILED` list. The removal-token gate is fixed. One real failure remains,
+  `check_reports_a_file_it_would_place`, whose control printed `row: ` and nothing else — so the
+  control now prints all of `check`'s output and its exit status. **BLOCKED ON #101**: the suite
+  ran **480 of 723** tests before dying with `0xc0000005`, so every test after the crash point —
+  including all four ledger tests — never ran at all, and a `FAILED` line flushed before the crash
+  is not a count of what is broken. Fix the crash before reading this list again. — ISSUE #106)
+- [x] Suite-isolation bugs (Rust suite green only on NOPASSWD-sudo/adoptable hosts). **All three
+  closed**: #88 (mock-layer tests probe real sudo — the probe now goes through
+  `layer.execute("sudo", &["-n","-v"], &{})`), #89 (see its own entry), #90 (see below).
+  **What the family was:** a gate that reads the host when it meant to read a fixture. #88 and #89
+  both failed *for having nothing to measure* and both are now built rather than found — and #89's
+  finding generalises: a count taken from the wrong file is the same mistake as a control whose
+  fixture never held.
 - [ ] #41 prose tax distill, #36 doc-comment layer, #38 eopkg RETIRED honesty.
 - [ ] #95 `V.186` and `Q55` say `completed_installs` was deleted; the code still has it, and reads
   it in production inside `reconcile_ownership` (`src/app/sync/mod.rs:1024`). A spec that says a
@@ -237,30 +287,63 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 - [ ] Export: #66 from-scan, #67 from-declaration.
 - [ ] #72 nixos activation gap (CI leg), #73 search-index noun, #74 crown-jewel invariant.
 - [ ] #94 Shall records what it installs, and asks before adopting a bare tool name (owner ruling
-  2026-09-28; two halves). **1.** A `completed_installs`-shaped receipt in a file of its own
-  under the data root, non-expiring, toggleable, on by default — a *record* of what Shall put on
-  this machine, not an ownership source (II.56/V.186 own that). **2.** A bare viable tool name in
-  a manifest is a declaration of something the machine may not have, so Shall asks: install it? —
-  `no` records the line and says what is missing, and a setting can answer automatically instead.
-  (Info by priority; the ruling is settled, the work is not, and #95 is its prerequisite) — ISSUE
-  #94
-- [ ] #89 guard-reachability control builds a vacuous fixture. (**HALF BUILT — the fixture was the
-  bug and it is fixed; the state the control needs is not, so this stays open.** `init` scaffolds
-  `modules/starter.txt` *with lines in it* and the fixture counted every `modules/*.txt` line as
-  though `adopt` had written it, so on a host where `adopt` adopts nothing the fixture was built
-  anyway and the control **failed for having nothing to say** — on its own diagnostic, which said the
-  guard was behaving correctly.
-  - **Which module files exist before `adopt` runs is now recorded, and only the ones it wrote are
-    counted.** The starter stays, because deleting it was my first attempt and the run rejected it
-    outright: the `active` manifest names it, so every later command refused with "no module named
-    `starter`" — a fixture breaking the commands it exists to run. It is emptied with everything
-    else, because *"the whole inventory is now undeclared"* has to be true of all of it; only the
-    count excludes it.
-  - **The silent skip is now loud**, in `assert_not_serial`'s shape, because a gate that skips
-    without saying so reads as a pass — which is the failure this control exists to prevent.
-  - **What is left:** the fixture now builds here (the failure changed shape, which is how I know),
-    but `plan` writes **2 removals carrying no guard refusal**, so the state the control needs is
-    closer and not yet there. Leaving it open rather than closing on a diagnosis I have not
+  2026-09-28; two halves). **1. BUILT** (and it closes #105's residual, which is the same defect
+  wearing a different hat). `core::receipt` — `receipts.jsonl` beside `journal.jsonl` under the
+  data root, one line per install, **never expires**, `[receipts] enabled` (default on).
+  - **Written from `Journal::record_success`, which is the one place that already sees every install
+    completion** — `journalled`'s nine callers, the engine, `apply`'s execs, `heal`. Not a new
+    registration step, and the file's path is derived from the WAL's own directory exactly once
+    (the mistake `Journal::at`'s own doc records: every `cargo test` appending to the developer's
+    real journal).
+  - **A record, never an ownership source.** `reconcile_ownership` unions it with
+    `completed_installs`, and it only ever claims a package the manifest **already declares**, on
+    evidence of Shall's own action. II.56/V.186/Q55 are untouched.
+  - **Idempotent, and the claim is *whether* not *when*** — a package installed, removed and
+    installed again is one receipt, so the file cannot become a count of attempts. The timestamp is
+    carried anyway so the file could be aged later if that is ever wanted.
+  - **Turning it off drops the reader as well as the writer**, or the toggle would govern only what
+    is recorded and not what is believed.
+  - **Why this is #105's residual and not a new feature:** `cleanup_expired_logs(7)` expires the
+    evidence for a claim that does not expire.
+  - **2. NOT BUILT, and the gap is bigger than it looks — it is the owner's call, not a schedule.**
+    The premise was confirmed first: a bare `htop` on a machine without it is *silently planned as
+    an install today*, with no prompt. So the missing piece is the `ask`. It cannot go in the
+    resolver — that runs for `plan`, `check` and `status` too, and a read-only command may not
+    prompt (`plan`'s own doc has the rule) — so it belongs on the sync/apply path, and the model
+    carries **no tag saying a given install came from a bare declaration**. Deriving one from
+    `BareLock` is unreliable, because the lock is only written when resolution is recording. So
+    half 2 needs a decision on where the question lives and on what "records the line anyway" means
+    for a declaration no backend owns — both of which change behaviour a user notices. Left open
+    deliberately rather than half-built: a `[declare] install = "ask"` that quietly behaved like
+    `"always"` would be the worst outcome available. — ISSUE #94
+- [x] #89 guard-reachability control builds a vacuous fixture. (**BUILT — and the state the control
+  needs turned out to be reachable, but not through any of the three shapes the fixture had tried.**
+  `plan` wrote 2 removals with no guard refusal because nothing protected them, and the missing
+  piece was an *objection*, not a declaration.
+  - **A count ceiling is the only objection a fixture can manufacture.** The
+    `would be removed (...)` lines come from OS-essential protection, and nothing a fixture sets
+    reaches it; the fixture now writes `[guard] max_removals = 1`, so two removals are over it.
+  - **`[guard] protected_packages` looks available and is not.** Protecting every adopted name makes
+    the *planner* decline each removal before the guard is consulted (`planner.rs`'s
+    `Declined::Protected`, which matches config rules and deliberately not OS essentials), so `plan`
+    writes an empty plan and refuses nothing. Measured with `protected_packages = ["*"]`: *"2
+    package(s) installed and declared nowhere that `sync` will not remove"*, and no refusal. That is
+    why the control accepts a refusal **or** a protected-package line rather than the second alone.
+  - **A fixed `1` rather than one below what `adopt` found**, because such a number must count
+    package declarations while ignoring the `service:`/`link:` rows in the same files; an over-count
+    raises the ceiling above the removals and the guard goes quiet again.
+  - **The "is there anything here" count moved to where the question is asked.** It was
+    `s.lines().count()` over the module files, which counted `init`'s scaffolded starter and then
+    the ~35 comment lines every adoption manifest carries — so a host that adopted one package and a
+    host that adopted none both read as "the fixture built". `removals_planned` reads it out of the
+    plan `plan` wrote, which is also the only place that knows which declarations became removals.
+  - **Which makes it a control rather than a gate that fails for having nothing to say:** no
+    objection over fewer than two removals skips loudly (`max_removals = 1` refuses two and cannot
+    refuse one); no objection over two or more **fails**, naming the count. That branch is the
+    mutation watched — with `preview_refusals` removed from `verbs/plan.rs` the control fails, and
+    the old control would have skipped it.
+  - The protected-names test skips **loudly** here with its reason and still measures on the tools
+    image, where the adopted set really does include OS essentials. — ISSUE #89)
     finished. — ISSUE #89)
 - [x] #88 hermetic mock-layer tests probe the host's real sudo. (**BUILT, in the second of three
   proposed shapes, because the first two treat the symptom.** `ensure_sudo_credentials` spawned
