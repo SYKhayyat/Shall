@@ -146,6 +146,10 @@ impl TransactionConfig {
             },
             batch_recovery: config.sync.batch_recovery,
             manager_lock_wait: Duration::from_secs(config.manager_lock_wait_secs),
+            // The per-package budget, and the number `patient()` hard-codes is this key's
+            // default, so the default is unchanged and the key has a lever. `.max(1)` is a floor
+            // rather than politeness: zero would kill every manager command on arrival.
+            node_timeout: Duration::from_secs(config.manager_command_timeout_secs.max(1)),
             ..Self::patient()
         }
     }
@@ -2465,6 +2469,32 @@ mod from_config_tests {
             TransactionConfig::from_config(&none).max_concurrent,
             1,
             "nought parallelism is one worker, not none"
+        );
+
+        // The per-package budget and its floor. **This key was declared, documented and
+        // defaulted and read nowhere** — the exact shape
+        // `a_setting_the_config_declares_is_a_setting_that_acts_tests` is named for, and that gate
+        // caught it on CI before I looked. A gate doing its job is the reason to keep one.
+        for secs in [1u64, 900] {
+            let mut config = base();
+            config.manager_command_timeout_secs = secs;
+            assert_eq!(
+                TransactionConfig::from_config(&config).node_timeout,
+                std::time::Duration::from_secs(secs),
+                "`manager_command_timeout_secs = {secs}` did not reach the per-package budget"
+            );
+        }
+        assert_eq!(
+            TransactionConfig::from_config(&base()).node_timeout,
+            std::time::Duration::from_secs(300),
+            "the default budget is not the default the key documents"
+        );
+        let mut floored = base();
+        floored.manager_command_timeout_secs = 0;
+        assert_eq!(
+            TransactionConfig::from_config(&floored).node_timeout,
+            std::time::Duration::from_secs(1),
+            "a zero budget kills every manager command on arrival"
         );
 
         // Purge is an OR of a persistent setting and a this-run flag, and each half must be
