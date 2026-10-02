@@ -244,6 +244,22 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   `no` records the line and says what is missing, and a setting can answer automatically instead.
   (Info by priority; the ruling is settled, the work is not, and #95 is its prerequisite) — ISSUE
   #94
+- [x] #103 four duplicated comment blocks, two of them merge artifacts. (**BUILT — and the sweep
+  found a fifth the hand-scan had missed.** Two were unambiguous internal repeats, now gone:
+  `backends/generic.rs` carried its three-line note about rpm's `%{name}` twice on consecutive lines,
+  and `model/resolve.rs` carried a **six-line `///` doc paragraph twice inside one doc comment** — so
+  `cargo doc` published the set-math rule as a paragraph written twice. The gate
+  (`tests/no_comment_says_the_same_thing_twice_tests`) then found **`parsers/ecosystem.rs`**, where
+  two *near*-copies of a pixi doc had been merged with the opening line reworded and the other five
+  lines duplicated; the two halves each carried something, so they are merged into one paragraph
+  rather than one deleted. **The rule is deliberately narrow** — one comment run may not contain a
+  copy of itself — because a comment repeated in *another item* is not a merge: the two `--json` flags
+  in `cli/args.rs` share a note because rustdoc renders each field's docs separately, and the three
+  registrar copies in `registry/os_native.rs` are a smell whose fix is a judgement about where the
+  constraint belongs, so both sites are **named in the gate** rather than left as an omission. One
+  predicate, its control in both directions, and the mutation watched: a two-line paragraph planted
+  twice in a parser is caught with its file and line. **And the gate's first version printed
+  "lines 19+4" with no file to open, which is how the file-line got carried.** — ISSUE #103)
 - [x] #95 V.186/Q55 say `completed_installs` was deleted; the code still has it. (**BUILT — and the
   docs were wrong in **two** places, not one.** `why.md` said the function "was deleted rather than
   kept as a second source" and `decisions.md` said the same; both were false, and `why.md` made a

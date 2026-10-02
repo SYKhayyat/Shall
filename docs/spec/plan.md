@@ -431,6 +431,35 @@ build and what is deferred to hardware.**
       mid-question case — the last one written before the round stamp's role could be discussed
       honestly at all, and reported as not isolating it.
 
+### Tier 30 — one comment saying the same thing twice (`PLAN.md` #103): BUILT
+
+45. ~~**Four duplicated comment blocks, two of them merge artifacts.**~~ **BUILT, and the gate
+    found a fifth the hand-scan had missed.** A comment that states its constraint once is doing its
+    job; stated twice, it states it once and owes a maintenance update twice, and the copies drift.
+
+    - **`backends/generic.rs`** carried its three-line note about rpm's `%{name}` twice on
+      consecutive lines. **`model/resolve.rs`** carried a **six-line `///` paragraph twice inside one
+      doc comment**, so `cargo doc` published the set-math rule as a paragraph written twice — which
+      is a different claim from the one it makes.
+    - **The fifth, found by the gate rather than by hand: `parsers/ecosystem.rs`**, where two
+      *near*-copies of a pixi doc paragraph had been merged with the opening line reworded and the
+      other five lines left duplicated. **The two halves each carried something** — one had the
+      framing ("no unread case, and saying so is the honest answer"), the other the rule ("must
+      resolve to one of three things") — so they are merged into one paragraph rather than one
+      deleted. A duplicate detector that only recognises *identical* copies misses the case a merge
+      actually produces, which is why the predicate compares line runs rather than whole blocks.
+    - **The rule is narrow on purpose.** One comment run may not contain a copy of itself; a comment
+      repeated in *another item* is not a merge. Two such sites were found by hand and **named in the
+      gate** rather than left as an omission: the `--json` flags in `cli/args.rs`, which share a note
+      because rustdoc renders each field's docs separately, and the three registrar copies in
+      `registry/os_native.rs`, which are a smell whose repair is a judgement about where a
+      constraint belongs rather than a merge to clean up. A gate that flagged either would be
+      switched off, which is how a gate stops being a gate.
+    - **One predicate, a control in both directions, and a watched mutation**: a two-line paragraph
+      planted twice in a parser is caught with its file and line. **The gate's first version printed
+      "lines 19+4" with no file to open**, found by running it, so each run now carries the line it
+      starts at — a gate that costs more to use than it saves gets switched off for the same reason.
+
 ### Tier 29 — a spec that said a function was deleted, and a coverage that does not exist (`PLAN.md` #95): BUILT
 
 44. ~~**V.186 and Q55 say `completed_installs` was deleted; the code still has it.**~~ **BUILT as

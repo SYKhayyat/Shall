@@ -483,16 +483,10 @@ pub fn emerge_search(output: &str, backend: &str) -> Vec<Package> {
 /// its version. The depth is the tool's own structure, so this reads that rather than
 /// blocklisting the property names pixi happens to print today.
 ///
-/// **This parser has no unread case, and saying so is the honest answer** rather than inventing
-/// one. Every unindented line resolves to exactly one of three things it understands: a package,
-/// pixi's own banner (a multi-word left side before the colon, which is what
-/// `Global environments as specified in 'C:\…'` is), or noise it already names. The failure mode
-/// this parser has ever had is *junk*, not emptiness — `exposes: rg` reported as a tool — and
-/// there are captured fixtures for that. Forcing a made-up emptiness rule on it would redden a
-/// machine with pixi installed and nothing in it, which is the one case its banner covers.
-/// **Every unindented line must resolve to one of three things**: a package, pixi's own
-/// banner (a multi-word left side before the colon, which is what
-/// `Global environments as specified in 'C:\…'` is), or noise it already names. The failure mode
+/// **Every unindented line must resolve to one of three things**: a package, pixi's own banner
+/// (a multi-word left side before the colon, which is what
+/// `Global environments as specified in 'C:\…'` is), or noise it already names. **This parser has
+/// no unread case, and saying so is the honest answer** rather than inventing one. The failure mode
 /// this parser has ever had is *junk*, not emptiness — `exposes: rg` reported as a tool — and
 /// there are captured fixtures for that. Forcing a made-up emptiness rule on it would redden a
 /// machine with pixi installed and nothing in it, which is the one case its banner covers.

@@ -151,6 +151,7 @@ mod lock_default_tests;
 mod lock_scope_tests;
 mod lock_unlock_scope_tests;
 mod named_commands_exist_tests;
+mod no_comment_says_the_same_thing_twice_tests;
 mod one_parser_reads_a_removal_target_tests;
 mod option_table_coverage_tests;
 mod os_native_argv_coverage_tests;

@@ -713,12 +713,6 @@ impl<'a> Resolver<'a> {
     /// each `intersect`, then everything subtracted is removed. **Subtraction always wins** —
     /// otherwise `use gaming` after `-steam` would quietly put steam back, and which line
     /// won would depend on the order you happened to write them in.
-    /// Apply a profile's set math to what it reaches (II.4).
-    ///
-    /// Order is fixed and stated in II.4: everything is gathered first, then narrowed by
-    /// each `intersect`, then everything subtracted is removed. **Subtraction always wins** —
-    /// otherwise `use gaming` after `-steam` would quietly put steam back, and which line
-    /// won would depend on the order you happened to write them in.
     ///
     /// `expr_seen` is the in-flight trail of Capitalized names whose set math is currently
     /// being applied. The `use` trail inside [`ProfileLoader::resolve`] cannot see this

@@ -784,9 +784,6 @@ impl MetadataProvider for GenericBackendCore {
         // The operand is the argument that IS `{name}`, never one that merely contains it:
         // dnf asks with `--queryformat %{name}`, where those six characters are rpm's own
         // format language and substituting the package into them produces `%jq`.
-        // The operand is the argument that IS `{name}`, never one that merely contains it:
-        // dnf asks with `--queryformat %{name}`, where those six characters are rpm's own
-        // format language and substituting the package into them produces `%jq`.
         let has_operand = probe.args.iter().any(|a| a.as_str() == "{name}");
         // **A probe row without `{name}` is a broken row, not a command.** It used to run
         // verbatim — `dpkg -s` with no package asked the state of nothing — and its stdout was
