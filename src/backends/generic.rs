@@ -1669,9 +1669,15 @@ impl PropertyProbe {
     /// one — which is what the hand-written backends did, each in its own words.
     async fn resolve(&self, core: &GenericBackendCore, name: &str) -> Option<String> {
         let args: Vec<&str> = self.args.iter().map(String::as_str).collect();
+        // **Once per run, and the argv is why that is sound.** `{name}` is substituted into the
+        // template below and never into these args, so the answer depends on `cmd` + `args` and on
+        // nothing else — and the outer fan-outs ask about many packages at once, so without the
+        // memo `shall info` over twenty packages ran `npm prefix -g` twenty times to learn one
+        // prefix (`PLAN.md` #80).
         let base = core
             .executor
-            .run_output(core.binary(), &args, false)
+            .installed_listings()
+            .run_output_once_per_run(&core.executor, core.binary(), &args, false)
             .await
             .ok()?;
         let base = base.trim();

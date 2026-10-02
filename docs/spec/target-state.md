@@ -2635,6 +2635,11 @@ because a silent fifty-second pause reads as a hang. **V.118.**
 **A manager is asked what it has installed once per run.** The answer cannot change while
 nothing is being installed; a mutating command is what forgets it. **V.115.**
 
+**And so is a question whose answer cannot depend on what it is asked about.** A backend's
+`property_probes` row answers `npm prefix -g` to say where a package lives; `{name}` goes into the
+probe's *template*, never into its argv, so twenty packages asked about are one question about one
+prefix. Asked once per run, and a mutating command is what forgets that too. **V.115.**
+
 **Variables resolve exactly once per invocation**, which II.6b has always said and which is now
 what the code does. A vars provider is a program the user wrote, and running it three times runs
 its side effects three times. **V.116.**

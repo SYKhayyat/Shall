@@ -86,12 +86,29 @@ pub struct InstalledListings {
     generation: std::sync::atomic::AtomicU64,
     /// How long a listing on disk stays usable. `None` — the default — is no disk layer.
     ttl: Option<Duration>,
+    /// Questions that are not listings and are not essentials, and are asked once per run anyway.
+    ///
+    /// **Here rather than beside it, for the reason `essentials` gives above: a second map with a
+    /// second policy invents a second version of R2's staleness window.** A backend's
+    /// `property_probes` row runs a subprocess whose answer cannot depend on which package asked
+    /// (`PLAN.md` #80), so `queries` is a listing-shaped thing with a listing's lifetime and
+    /// inherits this type's `generation` and this type's `forget_all` — including the bump that
+    /// makes an answer taken across a mutation stale on arrival, which is the half a second round
+    /// counter would have had to be argued into existence for.
+    ///
+    /// No disk layer, for the same reason `essentials` has none: this is run-scoped only, and
+    /// `installed_cache_secs` is a bargain about a *report* being stale.
+    queries: DashMap<String, QuerySlot>,
 }
+
+/// A question's answer, and the round it was taken in. See [`InstalledListings::generation`].
+type QuerySlot = Arc<tokio::sync::Mutex<Option<(u64, String)>>>;
 
 impl InstalledListings {
     pub fn new() -> Self {
         Self::default()
     }
+
 
     /// Whether a run of `subcommand` may be answered from disk at all.
     ///
@@ -314,6 +331,53 @@ impl InstalledListings {
         Ok(handle)
     }
 
+    /// [`CommandExecutor::run_output`](crate::core::CommandExecutor::run_output) for a question
+    /// whose answer **cannot** depend on what it is asked about, keyed by the whole argv.
+    ///
+    /// **The caller has to be able to say why, which is why this takes the argv rather than a
+    /// name.** A memo is sound only when everything the answer depends on is in the key. The one
+    /// caller is a backend's `property_probes` row: `PropertyProbe::resolve` substitutes `{name}`
+    /// into the probe's **template** and hands `args` to the subprocess untouched, so the answer
+    /// depends on `cmd` + `args` and on nothing else. Twenty packages asked about were twenty
+    /// `npm prefix -g` processes to learn one prefix (`PLAN.md` #80); a row that put the package
+    /// in its *argv* would get another package's answer back for the rest of the run, and
+    /// `a_probe_argv_never_names_the_package` is what says that has not happened.
+    ///
+    /// **Three properties copied from `once` rather than reinvented here.** The lock is held
+    /// *across* the question, because two callers asking the same thing at once must produce one
+    /// subprocess — that is the whole point of the lock. A failure is not memoised, for the reason
+    /// `once` gives: a manager that could not answer this time may answer next time. And the round
+    /// travels in the answer, for `once`'s reason — an entry stamped with the round it *started*
+    /// in describes a machine that has since changed. **Kept rather than proved:** dropping the
+    /// stamp check leaves every test green, because `forget_all` bumps the generation and clears
+    /// the map adjacently, so a question in flight writes into a slot no caller can reach. It
+    /// stays because it is the defence `once` has, and two memos should not differ in their one
+    /// safety property for the sake of a line that saves a comparison.
+    pub(crate) async fn run_output_once_per_run(
+        &self,
+        exec: &crate::core::CommandExecutor,
+        cmd: &str,
+        args: &[&str],
+        sudo: bool,
+    ) -> Result<String> {
+        let round = self.generation.load(std::sync::atomic::Ordering::Acquire);
+        let key = format!("{cmd}\u{1f}{}", args.join("\u{1f}"));
+        let slot = self
+            .queries
+            .entry(key)
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(None)))
+            .clone();
+        let mut held = slot.lock().await;
+        if let Some((taken_at, value)) = held.as_ref() {
+            if *taken_at == round {
+                return Ok(value.clone());
+            }
+        }
+        let value = exec.run_output(cmd, args, sudo).await?;
+        *held = Some((round, value.clone()));
+        Ok(value)
+    }
+
     /// Forget everything. Called after any mutating command, because that is the only thing
     /// during a run that can change what is installed.
     ///
@@ -329,6 +393,7 @@ impl InstalledListings {
             .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         self.by_backend.clear();
         self.essentials.clear();
+        self.queries.clear();
         if self.ttl.is_some() {
             let _ = Self::forget_on_disk();
         }

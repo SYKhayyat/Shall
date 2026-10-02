@@ -26,6 +26,18 @@ use std::path::{Path, PathBuf};
 
 /// The stream combinators that take a width. `buffered` and `buffer_unordered` are futures';
 /// `Semaphore::new` is tokio's, and it is a cap by another name.
+///
+/// **`join_all` is deliberately not here, and the reason is written here rather than left at the
+/// call site.** `join_all` takes no width at all, so it is *worse* than a hard-coded one rather
+/// than better, and a gate that quietly omitted it would be the omission this gate exists to
+/// catch. It has exactly one user in the tree — the property-probe fan-out in
+/// `backends::generic` — whose width is a number the user wrote in their own row, and whose
+/// site says why: *"a user who declared four property probes asked for four questions, not for
+/// them to be rationed."* That is a decision about what a row means, so it belongs beside the
+/// code that makes it, and the per-package redundancy that fan-out *did* have is gone
+/// (`PLAN.md` #80: one `npm prefix -g` for the run rather than one per package). Were a second
+/// `join_all` added, this paragraph is the thing that should have stopped it.
+
 const CAPS: &[&str] = &["buffer_unordered(", "buffered(", "Semaphore::new("];
 
 /// Why a width argument is not a cap, or `None` when it is one.

@@ -390,6 +390,47 @@ build and what is deferred to hardware.**
     why the one remaining call does not matter. The measurement above is what a triager needs and
     is recorded here so the next session does not re-derive it by flipping a flag in `Drop`.
 
+### Tier 25 — twenty `npm prefix -g` to learn one prefix (`PLAN.md` #80): BUILT
+
+40. ~~**Unbounded per-package x per-probe subprocess storm.**~~ **BUILT — and the defect was not
+    the fan-out's width.** `GenericQueryable::info` enriches the entry it found with whatever the
+    backend's `property_probes` rows can add, and each row runs a **subprocess**: npm's
+    `install_path` from `npm prefix -g`, pnpm's `bin_path` from `pnpm bin -g`, pipx's from `pipx
+    environment --value PIPX_HOME`. The outer fan-outs ask `info` about many packages at once, so
+    `shall info` over twenty packages ran twenty `npm prefix -g` to learn one prefix.
+
+    - **The argv is what makes that a defect rather than a design.** `PropertyProbe::resolve`
+      substitutes `{name}` and `{base}` into the probe's **template** and hands `args` to the
+      subprocess untouched — so the answer depends on `cmd` + `args` and on nothing else, and a
+      memo keyed by the argv is keyed by everything the answer depends on. npm's row is the
+      fixture that makes it visible: `{base}/lib/node_modules/{name}`, package-named in the answer
+      and package-blind in the question.
+    - **The memo lives in `core::installed`, not beside it**, for the reason `essentials` gives in
+      that same file: *a second map with a second policy invents a second version of R2's staleness
+      window.* It inherits the generation counter and `forget_all` outright — no new round, no new
+      invalidation, and no call to forget to wire up — plus the per-run scoping that keeps one
+      test's mock answer out of the next test's.
+    - **The lock is held across the question**, because two callers asking the same thing at once
+      must produce one subprocess; **a failure is not memoised**, for the reason `once` gives; and
+      **the round travels in the answer** — that last one kept rather than proved, because
+      `forget_all` bumps the generation and clears the map adjacently, so a question already in
+      flight writes into a slot no caller can reach. The code says so instead of implying
+      otherwise.
+    - **The invariant the memo rests on is a gate over every shipped row**: a probe argv that named
+      the package would be answered once per run with whichever package asked first, and
+      `a_probe_argv_never_names_the_package` holds the rows to it. Planting `--name={name}` into
+      npm's argv was watched to fail it.
+    - **The width needed no change and is not in the gate's `CAPS`.** It is the number of probes a
+      user declared in their own row, and the comment at the call site says why — *"a user who
+      declared four property probes asked for four questions, not for them to be rationed"*. That
+      is a decision about what a row means, so it stays beside the code, and the gate now records
+      why `join_all` is absent from it: it takes no width at all, so a second one has to argue with
+      that paragraph.
+    - **Four tests**: the count, the per-package half (a memo that collapsed the whole answer would
+      satisfy the count and lose the property), a mutation making the next question real, and the
+      mid-question case — the last one written before the round stamp's role could be discussed
+      honestly at all, and reported as not isolating it.
+
 ### Tier 24 — a fan-out as wide as the batch (`PLAN.md` #84): BUILT
 
 39. ~~**The batch's pre-rollback prior-state read fans out to the batch's own width.**~~

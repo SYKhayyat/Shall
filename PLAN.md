@@ -127,23 +127,38 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   (`priors[i]`), so it is one answer per *slot*, not a set — `buffer_unordered` compiles, runs, and
   puts another package's history in every slot, so `rollback` restores the wrong thing with nothing
   to fail. Width lowered, `buffered` kept, and a source check plus a control pins the ordering.)
-- [ ] #79 forget_all wipes all caches. (**NOT BUILT, and it contradicts a ruling the register marks
-  answered — left for the owner 2026-10-01, with the evidence for a ruling on the issue.** Y6
-  (*may a manager's answer outlive the run?*, ANSWERED 2026-08-03) binds *"any mutation drops
-  it, on disk as well as in memory"*, and "invalidate only the mutated backend" is the change the
-  register itself names as what would reverse it. Two further things the issue's `Fix:` line does not
-  weigh: **`essentials` is not part of it at all** — no disk layer, run-scoped only, and its own
-  comment says *"the essential set exists to refuse removals"*, so narrowing its invalidation does
-  not cost re-listing, it lets a removal be decided against a pre-install essential set; and **the
-  disk half only exists when `installed_cache_secs` is on**, which is off by default. The narrowing
-  is implementable with no new mapping (`run_locked` holds the *program*, not the backend name —
-  XIII.12 — and `pacman`/`yay` are one program and two backends, so the key is `lock_key`, whose
-  family table already exists in `app::stale_lock`). The register offers the reversal worth
-  building: *"a cheap per-manager change token — `dpkg` status mtime, winget's own database
-  timestamp — which would let a listing be validated rather than merely aged."* Unmeasured here:
-  the suite cannot price a manager listing and there is no container on this host, so a ruling
-  should not be made on the issue's estimate alone. — ISSUE #79)
-- [ ] #80 probe storm, #82 batch deadline, #87 dir-symlink Windows.
+- [x] #80 probe storm. (**BUILT, and the half that needed no judgement call is the half that
+  was the defect.** The issue offers two fixes: cap the fan-out with `max_parallel`, or cache probe
+  answers per run. **The cap half is already ruled at the site and the gate now enforces it** — the
+  probe fan-out's width is the number of probes the user declared, and its own comment says why
+  (*"a user who declared four property probes asked for four questions, not for them to be
+  rationed"*), which `fanout_cap_reads_the_setting_tests` (extended by #84 to catch a width taken
+  from the collection being fanned out) would otherwise have flagged as a literal-free width. The
+  `join_all` there is deliberately **not** in that gate's `CAPS`, and the reason is written in the
+  gate rather than left at the call site. **The caching half was a real defect and is fixed:** a
+  probe's `{name}` is substituted into its **template**, never into its argv, so `npm prefix -g`
+  cannot depend on the package — and `info` runs one subprocess per package to ask it anyway, so
+  twenty packages cost twenty `npm prefix -g` to learn one prefix. Now `run_output_once_per_run`:
+  keyed by the whole argv, singleflight, **failures not cached** (the `once` rule), carrying the
+  round in the answer so an answer taken across a mutation is stale on arrival, and dropped by
+  `forget_all()` — which `forget_run_scoped_answers` already called, so there is no second
+  invalidation to forget to call. Measured as a count, not a clock: three `info` calls issued the
+  probe three times, now once. **And the whole cost of `info` over N packages is now one listing
+  and one subprocess per distinct probe argv, for the run** — reading `GenericQueryable::info`
+  says so: `installed_listing()` (memoised per backend per run), then the probes (memoised per
+  argv per run), and nothing else in it spawns anything. The invariant that makes the memo
+  sound — no probe argv may name the package — is a gate over every shipped row, and planting
+  `{name}` in npm's argv was watched to fail it. **The memo went into `core::installed` rather
+  than `core::executor`:** written in the executor it broke
+  `no_file_grows_past_readable_without_a_written_reason`, which sits at **exactly** its recorded
+  3,150-line ceiling, and the answer to "where does a second run-scoped memo live" was already
+  written in that file — beside `by_backend` and `essentials`, so it inherits the generation and
+  `forget_all` instead of inventing a second staleness policy. **Said so rather than implied:**
+  the round-stamp check is kept because `once` keeps it, and dropping it leaves every test green,
+  so nothing here claims it isolated. **Remaining:** the *width* of the probe fan-out
+  across packages is the outer fan-outs' business and those are capped (`max_concurrent`,
+  #84), so what is left here is measurement on a machine with real managers, which this host does
+  not have. — ISSUE #80)
 - [ ] #25 lifecycle jobs on distro containers, #53 nimble Windows, #54 dirty-host fixtures.
 - [x] #55 gentoo (emerge) leg: harness drives the ambiguous canary jq. (**BUILT — the canary is
   `htop` since 2026-08-17, because `jq` is two atoms on Gentoo and a bare `jq` is a name Portage

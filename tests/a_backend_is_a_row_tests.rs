@@ -18,6 +18,11 @@
 //! - **An `install_source_option` the grammar does not know about.** The option is written in
 //!   the row; the grammar decides whether `@url` is legal on this backend from
 //!   `capability::install_source_key`. Two spellings of one fact, in two files.
+//! - **A `property_probes` argv that names the package.** `{name}` belongs in a probe's template,
+//!   which is why `npm`'s `install_path` can be `{base}/lib/node_modules/{name}` and its question
+//!   stays `npm prefix -g`. The run-scoped query memo keys on the argv alone, so an argv naming
+//!   the package would be answered once per run with whichever package asked first — see
+//!   `a_probe_argv_never_names_the_package`.
 //!
 //! The argv assertions the twenty-three already had did not move: `registry.rs`'s test module
 //! keeps them, with `rows_as_registrars!` standing in for the deleted functions. What did move
@@ -33,6 +38,61 @@ use shall::parsers::named;
 /// Far below twenty-three, and it is a floor on the *scan*, not a count of the backends: a
 /// parse that returned nothing would pass every assertion in this file.
 const FLOOR: usize = 15;
+
+/// **A `property_probes` argv that names the package.** The one row field whose answer a memo
+/// cannot hold: `PropertyProbe::resolve` substitutes `{name}` into the probe's **template** and
+/// hands `args` to the subprocess untouched, so today a probe's argv cannot depend on the package
+/// and the run-scoped query memo keys on exactly that argv
+/// (`run_output_once_per_run`, `PLAN.md` #80). That memo is one `npm prefix -g` for a whole run
+/// instead of one per package, and it is sound *only* while no probe argv names the package — a
+/// row that did would get another package's answer back, with nothing to notice.
+///
+/// So the invariant is checked rather than argued, and it is checked here because this file is
+/// where a row's fields are checked for the ways a function could not have been wrong. The planted
+/// case at the bottom is the self-test: a prohibition that cannot fail is a gate reporting green
+/// having examined nothing.
+#[test]
+fn a_probe_argv_never_names_the_package() {
+    fn names_a_package(arg: &str) -> bool {
+        arg.contains("{name}") || arg.contains("{base}")
+    }
+
+    let all = rows();
+    let probes: Vec<(&str, &str, &Vec<String>)> = all
+        .iter()
+        .flat_map(|r| {
+            r.property_probes
+                .iter()
+                .map(move |p| (r.name.as_str(), p.property.as_str(), &p.args))
+        })
+        .collect();
+    assert!(
+        probes.len() >= 5,
+        "read {} property probes out of the table; the scan is matching nothing, and \"no probe \
+         names a package\" is the passing answer for a scan that examined nothing",
+        probes.len()
+    );
+
+    for (backend, property, args) in probes {
+        for arg in args {
+            assert!(
+                !names_a_package(arg),
+                "backend `{backend}`'s `{property}` probe runs `{arg}` as argv, and the \
+                 placeholders are substituted into its template, never into its argv. The \
+                 run-scoped query memo keys on the argv alone, so a probe that named the package \
+                 here would be answered once per run with whichever package asked first."
+            );
+        }
+    }
+
+    // The self-test: the predicate catches the planted case and spares the real ones.
+    assert!(names_a_package("--queryformat %{name}"));
+    assert!(names_a_package("{base}"));
+    assert!(!names_a_package("prefix"));
+    assert!(!names_a_package("--queryformat"));
+    assert!(!names_a_package("--value"));
+    assert!(!names_a_package("tool"));
+}
 
 fn rows() -> Vec<CustomBackendDef> {
     let rows = builtin_rows();

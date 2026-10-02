@@ -2512,6 +2512,29 @@ cost **~247 ms more per additional declaration**, because `winget list` takes ov
 there is no cheaper question to ask it. A listing does not change while nothing is being
 installed, so it is fetched once per manager per run and a mutating command is what forgets it.
 
+**The same shape one layer further down, and the layer where the listing memo could not reach.**
+`GenericQueryable::info` does not stop at the listing: it enriches the entry it found with
+whatever the backend's `property_probes` rows can add — npm's `install_path` from `npm prefix -g`,
+pnpm's `bin_path` from `pnpm bin -g`, pipx's from `pipx environment --value PIPX_HOME`. Each row
+runs a **subprocess**, so a listing memo covering only the listing left `declared` probe processes
+per declared package to learn one prefix.
+
+**Measured in the suite rather than on a machine, and the honest shape of that number:** with
+npm's shipped row, three `info` calls issued `npm prefix -g` three times — the listing was already
+fetched once, so the memo was working one layer up and not here. It is now one call for three
+packages. **No wall-clock is claimed**, because this host has no manager to time and no container
+to time one in; what is measured is the count, which is the thing that was wrong.
+
+**And the argv is what makes it sound, which is why it is a rule and not an optimisation.**
+`PropertyProbe::resolve` substitutes `{name}` and `{base}` into the probe's **template** and hands
+`args` to the subprocess untouched — so the answer depends on `cmd` + `args` and on nothing else,
+and a memo keyed by the argv is keyed by everything the answer depends on. A row that put the
+package in its *argv* would get another package's answer back for the rest of the run, with
+nothing to notice, so `a_probe_argv_never_names_the_package` holds every shipped row to it. The
+memo carries the round in the answer and is dropped by `forget_run_scoped_answers`, for the same
+reason the listing memo is: a memo that outlives the mutation it was taken across is the
+invalidation that covers one layer and not the other.
+
 ---
 
 **V.115a — Why Shall never asks what a package depends on.** *(2026-08-06, `Y9`. Rule in
