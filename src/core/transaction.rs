@@ -1,12 +1,12 @@
-use super::batch::{BatchRecovery, CommandOutcome, narrow_batch, run_one_command};
-use crate::app::LuaHooks;
+use super::batch::{narrow_batch, run_one_command, BatchRecovery, CommandOutcome};
 use crate::app::diagnostics::FailureDiagnosticEngine;
+use crate::app::LuaHooks;
 use crate::backends::BackendRegistry;
 use crate::core::journal::JournalAction;
 use crate::core::{Error, Journal, PackageSpec, Result, Retryability};
-use petgraph::Direction;
 use petgraph::graph::NodeIndex;
 use petgraph::stable_graph::StableDiGraph;
+use petgraph::Direction;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -662,7 +662,8 @@ impl Transaction {
                     if task_data.result.is_ok() {
                         trace!(
                             "Node {}:{} succeeded.",
-                            task_data.backend_name, task_data.package_name
+                            task_data.backend_name,
+                            task_data.package_name
                         );
                         in_progress.remove(&task_data.node_index);
                         self.completed_indices.insert(task_data.node_index);
