@@ -212,10 +212,14 @@ impl GitManager {
         // A pattern the user has commented out is not a pattern they have, which is why this
         // reads the meaningful lines rather than searching the text.
         let present = crate::utils::file::read_lines_filtered(&ignore)?;
-        for pat in ["*.shall-backup"] {
-            if !present.iter().any(|l| l == pat) {
-                crate::utils::file::append_line(&ignore, pat)?;
-            }
+        // One pattern, asked for by name rather than by a one-element `for`. **The loop was
+        // written as a loop because a second pattern was expected**, and it has been the only
+        // place a lint that only the advisory job runs could reach — `single_element_loop`, on
+        // code this commit did not touch, when clippy 1.99 added it. If a second pattern arrives
+        // this becomes a loop again, and the named constant is where it arrives.
+        const BACKUP_GLOB: &str = "*.shall-backup";
+        if !present.iter().any(|l| l == BACKUP_GLOB) {
+            crate::utils::file::append_line(&ignore, BACKUP_GLOB)?;
         }
         Ok(())
     }
@@ -481,6 +485,63 @@ fn parse_log(raw: &str) -> Vec<GitCommit> {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    /// **`init` writes the backup glob exactly once, and re-writes it when the user has commented
+    /// it out.** The behaviour was already there and is what this pins: a commented line is not a
+    /// pattern they have, so a second `init` puts it back — and a second `init` with it present
+    /// must not append a duplicate, because a `.gitignore` that grows on every run is a file the
+    /// user stops trusting.
+    ///
+    /// **Written because the code above it changed for a reason that had nothing to do with
+    /// behaviour**: a lint that only the advisory job runs flagged the one-element loop, and the
+    /// rewrite it forced is exactly the kind of change that should arrive with a test rather than
+    /// on its own.
+    #[test]
+    fn init_writes_the_backup_glob_once_and_restores_a_commented_one() {
+        // `init` refuses on a machine without git (X.5 keeps git optional rather than making its
+        // absence an empty answer), so this is the module's usual skip rather than a special case.
+        if !git_or_skip() {
+            return;
+        }
+        let dir = tempdir().expect("a temp config root");
+        let manager = GitManager::new(dir.path());
+        let ignore = dir.path().join(".gitignore");
+
+        manager.init().expect("first init writes the glob");
+        let after_first = std::fs::read_to_string(&ignore).expect("a .gitignore");
+        assert_eq!(
+            after_first
+                .lines()
+                .filter(|l| l.trim() == "*.shall-backup")
+                .count(),
+            1,
+            "the first init wrote the glob {after_first:?}"
+        );
+
+        manager.init().expect("second init is a no-op");
+        assert_eq!(
+            std::fs::read_to_string(&ignore).expect("a .gitignore"),
+            after_first,
+            "a second init appended to a .gitignore that already had the pattern"
+        );
+
+        std::fs::write(&ignore, "# *.shall-backup\n").expect("the user comments it out");
+        manager.init().expect("third init restores it");
+        let after_third = std::fs::read_to_string(&ignore).expect("a .gitignore");
+        assert!(
+            after_third.lines().any(|l| l.trim() == "*.shall-backup"),
+            "a commented-out pattern is not a pattern the user has, so init must put it back: \
+             {after_third:?}"
+        );
+        assert_eq!(
+            after_third
+                .lines()
+                .filter(|l| l.trim() == "*.shall-backup")
+                .count(),
+            1,
+            "the restored glob was written twice: {after_third:?}"
+        );
+    }
 
     /// **A closed stdin does not stop a credential prompt** — git reads it from `/dev/tty`, the
     /// same way sudo does, which is what made `S88` a fifteen-minute silence rather than an
