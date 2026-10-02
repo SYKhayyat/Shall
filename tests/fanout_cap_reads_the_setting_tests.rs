@@ -37,7 +37,6 @@ use std::path::{Path, PathBuf};
 /// code that makes it, and the per-package redundancy that fan-out *did* have is gone
 /// (`PLAN.md` #80: one `npm prefix -g` for the run rather than one per package). Were a second
 /// `join_all` added, this paragraph is the thing that should have stopped it.
-
 const CAPS: &[&str] = &["buffer_unordered(", "buffered(", "Semaphore::new("];
 
 /// Why a width argument is not a cap, or `None` when it is one.
