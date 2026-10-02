@@ -557,6 +557,95 @@ for _src in $SOURCES; do
     fi
 done
 
+# `install_delivered` — the gate #100 is about, driven in both directions.
+#
+# **`classify_install` cannot catch this, and the reason is the whole finding:** it only runs when
+# the install *failed*, so an install that returned 0 having delivered nothing never reaches it.
+# On 2026-10-02 `void` reported `PASS uv installed pyjokes for real` for four backends whose
+# package was never on the machine, and every removal check below it passed *vacuously* —
+# `nok "... is gone from list"` is satisfied by a grep that finds nothing.
+# **One harness, and that is a fact rather than a loop that forgot to spread.** The Windows
+# harness has no `install_delivered`: it drives its managers through `lx`, has no real-lifecycle
+# section and no `be-life` ledger, so there is nothing for this gate to guard there. A loop over
+# both would report "ok" for a harness the gate was never in.
+for _src in $SOURCES; do
+    # shellcheck disable=SC2043
+    _body="$(lift install_delivered "$_src")"
+    [ -n "$_body" ] || continue          # this harness does not have that lifecycle
+    (
+        # shellcheck disable=SC2034
+        PASS=0; FAILC=0; SOFTC=0
+        soft() { SOFTC=$((SOFTC + 1)); }
+        # Both stubs are lifted too: the point is that `install_delivered` asks them, and a stub
+        # here that the real body does not call would make this test pass for the wrong reason.
+        _ok="$(lift grep_ok "$_src")"
+        _abr="$(lift assert_binary_reachable "$_src")"
+        _lcs="$(lift list_cannot_show "$_src")"
+        # **The body under test is eval'd here, not just its stubs.** The first version of this
+        # lifted the three helpers and forgot the gate, so every case reported
+        # `install_delivered: command not found` and the run failed for the wrong reason — which
+        # is the same discarded-evidence shape as the control in #106.
+        eval "$_body"; eval "$_ok"; eval "$_abr"; eval "$_lcs"
+
+        _bad=0
+        # Read by the `eval`'d body, which shellcheck cannot see across the boundary. These are
+        # the inputs the gate under test reads; shellcheck reports the ones it cannot trace.
+        # shellcheck disable=SC2034
+        cbin="the-binary"
+        # shellcheck disable=SC2034
+        ctok="the-pkg"
+        # shellcheck disable=SC2034
+        LIFELOG=/dev/null
+        # shellcheck disable=SC2034
+        _prepath=""
+
+        # (1) The listing shows it — delivered, and nothing else asked.
+        lx() { echo "the-pkg 1.0"; return 0; }
+        install_delivered be || { echo "  BAD   a package its own listing reports was judged undelivered"; _bad=1; }
+
+        # (2) The listing does NOT show it, but the binary is on PATH — still delivered, and the
+        # PATH check is what caught it. Both signals are evidence.
+        path_of() { case "$1" in the-binary) echo /usr/bin/the-binary ;; *) echo "" ;; esac; }
+        lx() { echo "some other package"; return 0; }
+        install_delivered be || { echo "  BAD   a package on PATH was judged undelivered because its listing was empty"; _bad=1; }
+
+        # (3) Neither — and this is the case that has been passing vacuously.
+        path_of() { echo ""; }
+        lx() { echo "some other package"; return 0; }
+        if install_delivered be; then
+            echo "  BAD   an install that delivered nothing was reported as delivered, so the removal half scores a package that was never here"
+            _bad=1
+        fi
+
+        # (4) A manager whose listing cannot show the package is judged DELIVERED — it still
+        # installed the thing, the listing is simply the wrong witness for it. Refusing to judge
+        # would take every cabal-class backend's PATH check with it, and a backend that installed
+        # correctly would be recorded as having installed nothing. This is the control for (3):
+        # the same empty listing, opposite answers, and the difference is whether the lister can
+        # speak for this backend at all.
+        list_cannot_show() { echo "this lister reports the library DB, not executables"; }
+        install_delivered cabal || {
+            echo "  BAD   a backend whose listing cannot show the package was judged undelivered, so a correct cabal install would be recorded as having installed nothing"
+            _bad=1
+        }
+        # And with a real listing plus nothing on PATH it is judged undelivered — so (4) is the
+        # lister's inability and not the gate having stopped looking.
+        list_cannot_show() { echo ""; }
+        path_of() { echo ""; }
+        if install_delivered cabal; then
+            echo "  BAD   the lister exception made the gate accept a backend with nothing listed and nothing on PATH"
+            _bad=1
+        fi
+
+        exit "$_bad"
+    )
+    if [ $? -eq 0 ]; then
+        echo "  ok    $(basename "$_src") asks whether an install DELIVERED, not whether it returned 0"
+    else
+        BAD=$((BAD + 1))
+    fi
+done
+
 # The drift register, in both harnesses. `classify_install` above degrades an ecosystem failure
 # to `exhausted`, which the real-lifecycle ratchet then counts as coverage merely unmeasured —
 # right for a rate-limit window, wrong for Hackage rotating its TUF root past what the image's

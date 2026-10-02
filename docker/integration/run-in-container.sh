@@ -1917,6 +1917,39 @@ undeclare_canary() {
     mv "$_imp.tmp" "$_imp"
 }
 
+# install_delivered <backend> — did this backend's install put anything on the machine?
+#
+# **The gate #100 is about, and the answer rc=0 does not give.**
+#
+# The whole of `void`'s leg on 2026-10-02 was `uv`, `yarn`, `pnpm` and `github` each reporting
+# `PASS <be> installed <pkg> for real` and then two FAILs — because `uv tool install` returned 0
+# having delivered nothing: a source the network declined to serve, silently. `classify_install`
+# never ran, because it only runs when the install *failed*, so nothing consulted `CLASS`. The
+# rc was the untrustworthy thing, not the backend.
+#
+# **And the checks below it were vacuous in the same breath.** `nok "$be: $ctok is gone from list"`
+# passes when the grep finds NOTHING, so on a package that was never installed it is a green line.
+# A reader counting that leg saw five checks run; three of them measured a package that was never
+# there, which is why the failure list could not be compared run over run and nobody could tell
+# the four systematic failures from the six that rotated.
+#
+# **Either signal is evidence, and a manager that cannot show its listing is not a failure.** A
+# backend whose `list` cannot report the package (`cabal`) still installed it, so it counts as
+# delivered and only the PATH check decides.
+install_delivered() { # backend
+    _id_be="$1"
+    if [ -n "$(list_cannot_show "$_id_be")" ]; then
+        return 0            # cannot show it; the PATH check below is the only witness
+    fi
+    if grep_ok "$_id_be: list shows $ctok" "$ctok" lx list --backend "$_id_be"; then
+        return 0
+    fi
+    if [ -n "$cbin" ] && assert_binary_reachable "$_id_be" "$cbin" "$LIFELOG" "$_prepath"; then
+        return 0
+    fi
+    return 1
+}
+
 # lifecycle <backend> — the real install → list → PATH → remove → gone cycle.
 lifecycle() {
     be="$1"
@@ -1961,12 +1994,33 @@ lifecycle() {
     # Everything below is HARD: the install worked, so the manager answered, and a
     # parser or argv fault from here on is a Shall bug and nothing else.
     _nolist="$(list_cannot_show "$be")"
-    if [ -n "$_nolist" ]; then
-        soft "$be: list does not show $ctok — $_nolist"
-    else
-        grep_ok "$be: list shows $ctok" "$ctok" lx list --backend "$be"
+    # **Did it actually arrive? rc=0 is the manager's opinion, not evidence.**
+    #
+    # The whole of #100 is here. `void` reported `PASS uv installed pyjokes for real` and then
+    # two FAILs and two more PASSes for a package that was never on the machine, because
+    # `uv tool install` returned 0 having delivered nothing — a source the network declined to
+    # serve, silently. Nothing consulted `CLASS`, because `classify_install` only runs when the
+    # install *failed*, and this one did not: **the rc is what was untrustworthy, not the
+    # backend.**
+    #
+    # So the first two checks are asked first and their answer decides whether the rest of the
+    # lifecycle can mean anything. `nok "$be: $ctok is gone from list"` passes when the grep
+    # finds NOTHING, so on a package that was never installed it is a **vacuous pass** — three
+    # green lines above a red leg that a reader counts as five checks run.
+    if ! install_delivered "$be"; then
+        # **Say what happened, and score the backend as unmeasured rather than as five checks
+        # run.** `be-life-unmeasured` is what keeps `lifecycle-floor.txt` from reading this as
+        # coverage *lost* — the ratchet counts an unmeasurable lifecycle as measurable-in-
+        # principle, which is the truth here: the backend works, this registry answered 0 and
+        # served nothing. `be-life-partial` is also written because the lifecycle genuinely did
+        # not complete, and one of the two ledgers has to say so.
+        soft "$be: install returned 0 and delivered nothing — \`$ctok\` is not in its listing and \`$cbin\` is not on PATH, so the removal half below would have scored a package that was never here"
+        excerpt "$LIFELOG" 6
+        echo "$be" >> "$LEDGER/be-life-unmeasured"
+        echo "$be" >> "$LEDGER/be-life-partial"
+        undeclare_canary "$be:$cpkg"
+        return 1
     fi
-    [ -n "$cbin" ] && assert_binary_reachable "$be" "$cbin" "$LIFELOG" "$_prepath"
 
     if [ "$cmode" = "unsupported" ]; then
         # A manager with no uninstall verb must say so. Reporting success would
