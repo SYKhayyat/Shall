@@ -1,7 +1,7 @@
 # PLAN — Shall (work top to bottom, one issue per worker session)
 
 Worker loop: top unchecked item only, fix + resolving test, commit, check off, stop.
-Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97, #102, #98, #91, #86, #85, #81, #83, #84, #79, #82, #87, #95, #103.
+Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97, #102, #98, #91, #86, #85, #81, #83, #84, #79, #82, #87, #95, #103, #88.
 
 ## SKIP — duplicates of one event, do not re-work
 - #32 DUP of #23+#24; #48 DUP of #32; #49 DUP of #33; #45 DUP of #26 (same file:line, same fix).
@@ -244,23 +244,24 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   `no` records the line and says what is missing, and a setting can answer automatically instead.
   (Info by priority; the ruling is settled, the work is not, and #95 is its prerequisite) — ISSUE
   #94
-- [x] #89 guard-reachability control builds a vacuous fixture. (**BUILT — and the fixture was the
-  bug, not the skip.** `init` scaffolds `modules/starter.txt` *with lines in it*, and the fixture
-  counted every module file's lines, so the starter's own lines were counted as though `adopt` had
-  found them. On a host where `adopt` adopts nothing the fixture was built anyway, and emptying it
-  left no installed-but-undeclared package for the control to measure — so `plan` correctly answered
-  "system already matches desired state" and the control **failed for having nothing to say**. The
-  module files that exist before `adopt` runs are recorded, so only the ones it wrote are counted;
-  the starter stays and is emptied with the rest, because "the whole inventory is now undeclared" has
-  to be true of all of it. **Deleting the starter was the first attempt and the wrong one** — the
-  `active` manifest names it, so every command afterwards refused with "no module named `starter`",
-  which is a fixture breaking the very commands it exists to run. **And the silent skip is now loud**, because that is the failure mode the control
-  exists to prevent and the module's own note says it: *"a gate that skips without saying so reads
-  as a pass"*. It returned without a word on any host whose managers hold nothing user-chosen. The
-  line names the reason — nothing adoptable, so no adopted-then-undeclared state and no
-  disagreement to find — in the same shape as `assert_not_serial`'s `SKIPPED — …`. **The guard was
-  behaving correctly throughout**; the test's own diagnostic said so and the assert fired on it as
-  though it were a product regression. — ISSUE #89)
+- [ ] #89 guard-reachability control builds a vacuous fixture. (**HALF BUILT — the fixture was the
+  bug and it is fixed; the state the control needs is not, so this stays open.** `init` scaffolds
+  `modules/starter.txt` *with lines in it* and the fixture counted every `modules/*.txt` line as
+  though `adopt` had written it, so on a host where `adopt` adopts nothing the fixture was built
+  anyway and the control **failed for having nothing to say** — on its own diagnostic, which said the
+  guard was behaving correctly.
+  - **Which module files exist before `adopt` runs is now recorded, and only the ones it wrote are
+    counted.** The starter stays, because deleting it was my first attempt and the run rejected it
+    outright: the `active` manifest names it, so every later command refused with "no module named
+    `starter`" — a fixture breaking the commands it exists to run. It is emptied with everything
+    else, because *"the whole inventory is now undeclared"* has to be true of all of it; only the
+    count excludes it.
+  - **The silent skip is now loud**, in `assert_not_serial`'s shape, because a gate that skips
+    without saying so reads as a pass — which is the failure this control exists to prevent.
+  - **What is left:** the fixture now builds here (the failure changed shape, which is how I know),
+    but `plan` writes **2 removals carrying no guard refusal**, so the state the control needs is
+    closer and not yet there. Leaving it open rather than closing on a diagnosis I have not
+    finished. — ISSUE #89)
 - [x] #88 hermetic mock-layer tests probe the host's real sudo. (**BUILT, in the second of three
   proposed shapes, because the first two treat the symptom.** `ensure_sudo_credentials` spawned
   `Command::new("sudo").args(["-n","-v"])` with its streams nulled, which made it the one command
