@@ -244,6 +244,44 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   `no` records the line and says what is missing, and a setting can answer automatically instead.
   (Info by priority; the ruling is settled, the work is not, and #95 is its prerequisite) — ISSUE
   #94
+- [x] #89 guard-reachability control builds a vacuous fixture. (**BUILT — and the fixture was the
+  bug, not the skip.** `init` scaffolds `modules/starter.txt` *with lines in it*, and the fixture
+  counted every module file's lines, so the starter's own lines were counted as though `adopt` had
+  found them. On a host where `adopt` adopts nothing the fixture was built anyway, and emptying it
+  left no installed-but-undeclared package for the control to measure — so `plan` correctly answered
+  "system already matches desired state" and the control **failed for having nothing to say**. The
+  module files that exist before `adopt` runs are recorded, so only the ones it wrote are counted;
+  the starter stays and is emptied with the rest, because "the whole inventory is now undeclared" has
+  to be true of all of it. **Deleting the starter was the first attempt and the wrong one** — the
+  `active` manifest names it, so every command afterwards refused with "no module named `starter`",
+  which is a fixture breaking the very commands it exists to run. **And the silent skip is now loud**, because that is the failure mode the control
+  exists to prevent and the module's own note says it: *"a gate that skips without saying so reads
+  as a pass"*. It returned without a word on any host whose managers hold nothing user-chosen. The
+  line names the reason — nothing adoptable, so no adopted-then-undeclared state and no
+  disagreement to find — in the same shape as `assert_not_serial`'s `SKIPPED — …`. **The guard was
+  behaving correctly throughout**; the test's own diagnostic said so and the assert fired on it as
+  though it were a product regression. — ISSUE #89)
+- [x] #88 hermetic mock-layer tests probe the host's real sudo. (**BUILT, in the second of three
+  proposed shapes, because the first two treat the symptom.** `ensure_sudo_credentials` spawned
+  `Command::new("sudo").args(["-n","-v"])` with its streams nulled, which made it the one command
+  `with_layer` could not see. It now calls `layer.execute("sudo", &["-n","-v"], &{})` and reads
+  `.status`, so the probe and the escalated command arrive at the same seam. **The credential was
+  never the thing under test; the argv was** — with the probe around the layer, a host without
+  NOPASSWD sudo refused *before* the mock saw the `sudo dpkg -r fd` it had stubbed. **Strictly more
+  capable than skipping the probe**, because a layer can now *answer* it, so the refusal path is
+  reachable in a test at all; skipping makes the three tests green and leaves that path untestable.
+  The issue's proposed assertion ("the probe never appears in `get_calls()`") is the skip shape's, so
+  the test asserts the opposite and would fail under a regression to either shape. All seven
+  `backends::web` tests pass here with no `PATH` shim, and those three have failed in every local run
+  of this session. **And the reset that did not reset, found by the assertion above:**
+  `SUDO_PRIMED` is process-global, so the probe only runs in whichever escalating test reaches it
+  first — the first run of the new assertion passed and the second failed on nothing but libtest's
+  thread order. `forget_sudo_refusal()` cleared the refusal and not the warm flag; it now clears
+  both, and the test calls it before asserting. **Not taken initially because `src/core/executor.rs`
+  sits at exactly its 3,150-line ceiling** — routing the probe through the existing
+  `ExecutionLayer::execute` is *smaller than the code it replaces*, which is why the trait-method
+  route (33 lines, 32 over the ceiling) was dropped, and why these two lines came out of comments
+  that said the same thing more briefly. — ISSUE #88)
 - [x] #103 four duplicated comment blocks, two of them merge artifacts. (**BUILT — and the sweep
   found a fifth the hand-scan had missed.** Two were unambiguous internal repeats, now gone:
   `backends/generic.rs` carried its three-line note about rpm's `%{name}` twice on consecutive lines,

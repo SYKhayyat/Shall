@@ -43,11 +43,14 @@ fn rust_sources() -> Vec<(String, String)> {
         .filter_map(|p| {
             let body = std::fs::read_to_string(&p).ok()?;
             // **The separator is normalised here, once, and this line is not cosmetic.** The gate
-            // below recognises the guard by `ends_with("src/app/sync/guard.rs")`, and on Windows
-            // `Path::display()` hands back `D:\a\Shall\Shall\src\app\sync\guard.rs` — so the
-            // guard failed its own exclusion and the Windows job reported the one file allowed to
-            // build a removal token as an offender. Line endings were already normalised here for
-            // the same class of reason, one line above.
+            // below recognises the guard by a `/`-joined suffix, and on Windows `Path::display()`
+            // hands the path back with backslashes — so the guard failed its own exclusion and the
+            // Windows job reported the one file allowed to build a removal token as an offender.
+            // Line endings were already normalised here for the same class of reason, one line
+            // above. (The control test below asks the predicate the question in both spellings;
+            // it keeps the real Windows path in a string literal, because a backticked one here
+            // would read as a citation to a file this repository does not have — which is the
+            // `a_citation_in_a_comment_still_points_at_its_claim` gate, and it is right to.)
             Some((
                 p.display().to_string().replace('\\', "/"),
                 body.replace("\r\n", "\n"),

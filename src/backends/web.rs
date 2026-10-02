@@ -786,6 +786,27 @@ mod tests {
             .await
             .expect("the removal succeeds");
 
+        // **The credential probe is answered by the mock now, not by the machine running the
+        // test.** It used to spawn a real `sudo -n -v`, so this test passed only on a host with
+        // passwordless sudo and reported its own stub as unmatched everywhere else
+        // (`PLAN.md` #88). Asserted in both directions: the probe went *through* the seam, and the
+        // escalated command still carried the argv the product builds.
+        // **The reset first, or this assertion is a coin flip.** `SUDO_PRIMED` is process-global,
+        // so if another escalating test answered the probe first this one would skip it and the
+        // assertion below would fail on libtest's thread order rather than on anything about the
+        // seam (`PLAN.md` #88).
+        CommandExecutor::forget_sudo_refusal();
+        let calls = mock.get_calls().await;
+        assert!(
+            calls.iter().any(|c| c == &removal_argv("dpkg -r fd")),
+            "the escalated removal argv never reached the mock: {calls:#?}"
+        );
+        assert!(
+            calls.iter().any(|c| c == "sudo -n -v"),
+            "the credential probe went around the layer again, so this test depends on the host \
+             having passwordless sudo: {calls:#?}"
+        );
+
         let calls = mock.get_calls().await;
         assert!(
             calls.iter().any(|c| c.contains("dpkg -r fd")),

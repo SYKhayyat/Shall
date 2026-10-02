@@ -431,6 +431,79 @@ build and what is deferred to hardware.**
       mid-question case — the last one written before the round stamp's role could be discussed
       honestly at all, and reported as not isolating it.
 
+### Tier 32 — a control that counted the scaffolding as if it were the finding (`PLAN.md` #89): BUILT
+
+47. ~~**Guard-reachability control test builds a vacuous fixture on hosts where adopt finds
+    nothing.**~~ **BUILT — and the fixture was the bug, not the skip.** `init` scaffolds
+    `modules/starter.txt` **with lines in it**, and the fixture counted every `modules/*.txt` line as
+    though `adopt` had written it. On a host where `adopt` adopts nothing — an empty `nix profile`,
+    an emacs with no selected packages — the fixture was built anyway, and emptying those lines left
+    no installed-but-undeclared package for the control to measure.
+
+    - **So the control failed for having nothing to say**, on its own diagnostic: *"nothing
+      installed here is protected"* is the guard behaving correctly, and the assert fired on it as
+      though it were a product regression. A control whose job is to refuse a vacuous pass was
+      itself deciding on a fixture that was not what it claimed to be.
+    - **The starter module stays, and it is excluded from the *count* only.** Which module files
+      exist before `adopt` runs is recorded, and only the ones it wrote are counted — the starter's
+      lines are scaffolding, and counting them is what built this fixture on a host where `adopt`
+      adopts nothing. It is still emptied with everything else, because *"the machine's whole
+      inventory is now undeclared"* has to be true of all of it; excluding it from the count while
+      keeping it in the emptying is the distinction that makes the fixture mean what it says.
+    - **Deleting the starter was the first attempt and the wrong one**, and the run said so: the
+      `active` manifest names it, so every command afterwards refused with *"no module named
+      `starter`"* — a fixture that breaks the very commands it exists to run. A fix for a fixture
+      that cannot be measured is still a change to what the fixture *does*, which is why it is
+      watched like one.
+    - **And the silent skip is now a loud one**, because that is the failure mode the control exists
+      to prevent and the module's own note already says it: *"a gate that skips without saying so
+      reads as a pass"*. It returned without a word on any host whose managers hold nothing
+      user-chosen. The line now names the reason — nothing adoptable, so no adopted-then-undeclared
+      state and no disagreement to find — in the same shape as `assert_not_serial`'s `SKIPPED — …`.
+    - **Same host-dependency class as #88 and one commit with it**, because they are the same
+      finding on two sides: a test that claims hermeticity while reaching past the seam, once for
+      writes and once for reads. CI runners have both `NOPASSWD` sudo and an `adopt`-able profile,
+      which is why neither shape was ever visible there.
+
+### Tier 31 — the credential probe that went around the seam (`PLAN.md` #88): BUILT
+
+46. ~~**Hermetic mock-layer tests probe the host's real sudo.**~~ **BUILT — in the second of the
+    three shapes the issue proposed, because the first two treat the symptom.**
+    `ensure_sudo_credentials` spawned `Command::new("sudo").args(["-n","-v"])` with its streams
+    nulled, which made it the one command `with_layer` could not see. It now calls
+    `layer.execute("sudo", &["-n","-v"], &{})` and reads `.status`, so the probe and the escalated
+    command arrive at the same seam as everything else.
+
+    - **The credential was never the thing under test; the argv was.** With the probe around the
+      layer, a host without passwordless sudo refused *before* the mock saw the `sudo dpkg -r fd` it
+      had stubbed — which is why a `PATH` shim for a fake `sudo` made three tests pass, and why the
+      mock reported its own stub as unmatched with "(nothing)" actually run.
+    - **Strictly more capable than skipping the probe**, which is why the skip was not taken: a
+      layer can now *answer* the probe, so the refusal path is reachable in a test. Skipping makes
+      the three tests green and leaves that path unexercisable, which is the trade this repository
+      keeps refusing.
+    - **The issue's proposed resolving assertion is inverted deliberately** — "the probe never
+      appears in `get_calls()`" is the skip shape's assertion. The test asserts that the escalated
+      argv reached the mock **and** that the probe did, so it fails under a regression to either the
+      old behaviour or the skip.
+    - **All seven `backends::web` tests pass on a host with no NOPASSWD sudo and no terminal**, with
+      no `PATH` shim; those three had failed in every local run of this session, and they were the
+      last thing between the tree and a green local suite.
+    - **A reset that did not reset, found by the assertion written above.** `SUDO_PRIMED` is
+      process-global, so the probe only runs in whichever escalating test reaches it first; the
+      first run of the new assertion passed and the second failed on nothing but libtest's thread
+      order. `forget_sudo_refusal()` — the `#[doc(hidden)]` seam built for exactly this — cleared
+      the refusal and not the warm flag, so it now clears both, and the test calls it before
+      asserting. **That is the issue's own point 2, and writing the assertion is what found it.**
+    - **Route, not result, and the ceiling is why.** A `fn spawns_processes()` on `ExecutionLayer`
+      plus a skip was the first attempt: 33 lines against a file sitting at *exactly* its
+      3,150-line ceiling, whose ratchet row says *"it is not a licence to keep adding"*.
+      `shares_stdin` was the tempting reuse and the wrong one — a raw layer configured with
+      `ChildStdin::Closed` spawns real processes and answers false, so a privilege decision gated on
+      it would change behaviour for reads. Routing through the existing `execute` needs no new method
+      and is smaller than the code it replaces, and the two lines the reset cost came out of the
+      comments that said the same thing more briefly.
+
 ### Tier 30 — one comment saying the same thing twice (`PLAN.md` #103): BUILT
 
 45. ~~**Four duplicated comment blocks, two of them merge artifacts.**~~ **BUILT, and the gate

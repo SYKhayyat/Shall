@@ -1880,17 +1880,13 @@ impl CommandExecutor {
         if let Some(why) = SUDO_REFUSED.lock().ok().and_then(|s| s.clone()) {
             return Err(Error::command_failed_permanently(why));
         }
-        // Warm timestamp, `NOPASSWD`, or an already-primed session: `-n` makes this instant and
-        // silent, and it is the common case on every run after the first.
-        let warm = Command::new("sudo")
-            .args(["-n", "-v"])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .kill_on_drop(true)
-            .status()
-            .await;
-        if matches!(warm, Ok(status) if status.success()) {
+        // Warm timestamp, `NOPASSWD`, or an already-primed session — and **through the layer, not
+        // around it**: this spawned `Command::new("sudo")`, the one command `with_layer` could not
+        // see, so an escalation test needed passwordless sudo on the host to pass (`#88`). A layer
+        // can now *answer* the probe.
+        let probe = ["-n".to_string(), "-v".to_string()];
+        let warm = layer.execute("sudo", &probe, &HashMap::new()).await;
+        if matches!(warm, Ok(out) if out.status.success()) {
             SUDO_PRIMED.store(true, Ordering::Relaxed);
             return Ok(());
         }
@@ -1942,7 +1938,10 @@ impl CommandExecutor {
         }
     }
 
-    /// Forget that sudo refused, for a test that needs the next call to ask again.
+    /// Forget what this process concluded about sudo, so the next call asks again. **Both cells,
+    /// because clearing one is half a reset**: an earlier test that answered the probe leaves
+    /// `SUDO_PRIMED` set, and a test wanting to *watch* the probe then skips it — which is how an
+    /// assertion about the seam becomes a coin flip on libtest's thread order (`#88`).
     ///
     /// `#[cfg(test)]`-free on purpose: the integration suite is a separate crate, and a reset
     /// that only exists in unit builds is a reset the harness cannot reach.
@@ -1951,6 +1950,7 @@ impl CommandExecutor {
         if let Ok(mut slot) = SUDO_REFUSED.lock() {
             *slot = None;
         }
+        SUDO_PRIMED.store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Refresh the `sudo` timestamp for as long as the returned guard is held, so a long sync

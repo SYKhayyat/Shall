@@ -106,19 +106,42 @@ fn a_machine_whose_whole_inventory_is_now_undeclared(whose: &str) -> Option<Path
     if !init.status.success() {
         return None;
     }
+    // **Which module files exist before `adopt` runs, because it is the difference between what
+    // `adopt` found and what `init` left.** `init` scaffolds `modules/starter.txt` *with lines in
+    // it*, and counting every module file counted those lines as though `adopt` had discovered
+    // them — so on a host where `adopt` adopts nothing the fixture was built anyway, and emptying
+    // it left no installed-but-undeclared package for the control to measure (`PLAN.md` #89).
+    //
+    // **The starter module stays, and deleting it was the first attempt and the wrong one**: the
+    // `active` manifest names it, so every command afterwards refused with *"no module named
+    // `starter`"* — a fixture that breaks the very commands it exists to run. It is emptied like
+    // everything else, because "the machine's whole inventory is now undeclared" has to be true of
+    // all of it; it is only excluded from the *count*.
+    let modules = dir.join("modules");
+    let before: Vec<String> = std::fs::read_dir(&modules)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "txt"))
+        .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+        .collect();
+
     if !run(&dir, &["adopt", "--yes"]).status.success() {
         return None;
     }
 
-    // Un-declare everything: empty every module file adopt wrote.
-    let modules = dir.join("modules");
+    // Un-declare everything: empty every module file, and count only the ones `adopt` wrote.
     let mut declared = 0usize;
     for entry in std::fs::read_dir(&modules).ok()?.flatten() {
         let p = entry.path();
         if p.extension().is_some_and(|e| e == "txt") {
-            declared += std::fs::read_to_string(&p)
-                .map(|s| s.lines().count())
-                .ok()?;
+            if p.file_name()
+                .is_some_and(|n| !before.contains(&n.to_string_lossy().to_string()))
+            {
+                declared += std::fs::read_to_string(&p)
+                    .map(|s| s.lines().count())
+                    .ok()?;
+            }
             std::fs::write(&p, "").ok()?;
         }
     }
@@ -142,7 +165,16 @@ fn protected_lines(out: &str) -> usize {
 #[test]
 fn plan_reaches_the_guard_on_this_machine() {
     let Some(dir) = a_machine_whose_whole_inventory_is_now_undeclared("control") else {
-        return; // nothing adoptable here; no state to measure
+        // **Loudly, because a silent skip here is the failure this control exists to prevent.**
+        // The module's own note is that "a gate that skips without saying so reads as a pass",
+        // and this one returned without a word on any host whose managers hold nothing
+        // user-chosen — a `nix profile` with no elements and an emacs with no selected packages,
+        // which is what the reporter's machine looked like (`PLAN.md` #89).
+        eprintln!(
+            "guard-reachability control: SKIPPED — this host has nothing adoptable, so there is \
+             no adopted-then-undeclared state to measure and no disagreement to find"
+        );
+        return;
     };
     let out = text(&run(&dir, &["plan"]));
     assert!(
