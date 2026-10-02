@@ -1031,6 +1031,71 @@ c"
             .await
             .is_err());
     }
+
+    /// **The shape `PLAN.md` #87 is about: a *directory* symlink where the file goes.**
+    /// `symlink_metadata` does not follow the link, so this path answered "not a directory" and the
+    /// old arm sent it to `remove_file` — fine on Unix, `Access is denied` on Windows. On this host the
+    /// old arm worked, so **this test characterises the shape rather than watching the fix fail**;
+    /// what it does hold is the half that must not regress on either platform, which is that replacing
+    /// the link leaves what the link pointed at alone.
+    #[tokio::test]
+    async fn replacing_a_directory_symlink_does_not_delete_what_it_pointed_at() {
+        let dir = tempfile::tempdir().unwrap();
+        let real = dir.path().join("real");
+        std::fs::create_dir_all(&real).unwrap();
+        std::fs::write(real.join("keep-me"), b"x").unwrap();
+        let dest = dir.path().join("dest");
+        #[cfg(windows)]
+        let made = std::os::windows::fs::symlink_dir(&real, &dest).is_ok();
+        #[cfg(not(windows))]
+        let made = std::os::unix::fs::symlink(&real, &dest).is_ok();
+        if !made {
+            // Unprivileged Windows without developer mode cannot make one. CI's Windows job can.
+            return;
+        }
+        let src = dir.path().join("src");
+        std::fs::write(&src, b"the new contents").unwrap();
+
+        copy_over(&src, &dest)
+            .await
+            .expect("a symlink in the way is replaceable");
+
+        assert_eq!(
+            std::fs::read(&dest).unwrap(),
+            b"the new contents",
+            "the copy did not land on the symlink's own path"
+        );
+        assert!(
+        real.join("keep-me").exists(),
+        "replacing the link deleted what it pointed at — the tree behind a directory symlink is \
+         not what was in the way"
+    );
+    }
+
+    /// **The refusal, which is the half that a "just reuse `remove_by_kind`" fix would delete.**
+    /// `remove_by_kind` calls `remove_dir_all` on a real directory, so routing every existing path
+    /// through it would empty a directory that was merely *in the way* and then copy into the hole.
+    /// The copy is refused instead, and the refusal is checked by what survives rather than by the
+    /// error text — an assertion about the message passes just as happily when the tree is gone.
+    #[tokio::test]
+    async fn a_directory_in_the_way_is_refused_and_what_is_in_it_survives() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src");
+        std::fs::write(&src, b"the new contents").unwrap();
+        let in_the_way = dir.path().join("in-the-way");
+        std::fs::create_dir_all(&in_the_way).unwrap();
+        std::fs::write(in_the_way.join("keep-me"), b"x").unwrap();
+
+        copy_over(&src, &in_the_way)
+            .await
+            .expect_err("a directory in the way must be refused, not emptied");
+
+        assert!(
+        in_the_way.join("keep-me").exists(),
+        "the refusal emptied the directory that was in the way: a mistake in a destination path \
+         became data loss"
+    );
+    }
 }
 
 #[cfg(test)]
@@ -1076,14 +1141,34 @@ mod suffix_tests {
 pub async fn copy_over(from: &Path, to: &Path) -> Result<()> {
     // Only an existing FILE is removed: a directory in the way is a different fault, and
     // deleting one to make room for a file would turn a mistake into data loss.
-    if tokio::fs::symlink_metadata(to)
-        .await
-        .map(|m| !m.is_dir())
-        .unwrap_or(false)
-    {
-        tokio::fs::remove_file(to)
-            .await
-            .map_err(|e| Error::Io(format!("could not replace {}: {}", to.display(), e)))?;
+    //
+    // **And a symlink is removed by the one place that knows which call it needs.** This used to
+    // ask `symlink_metadata` and then always reach for `remove_file`. `symlink_metadata` does not
+    // follow the link, so a **directory** symlink answered "not a directory" and went to the file
+    // form — right on Unix, where a link is a link, and `Access is denied` on Windows, where
+    // `remove_file` cannot delete a directory symlink (`PLAN.md` #87). `remove_deployed_path` is
+    // the async face of `remove_by_kind`, which tries the file form, then the directory form, and
+    // reports both errors when neither works; it is the arm `force_remove` already uses, so the
+    // Windows symlink rule now has one home here instead of three.
+    //
+    // **Not `remove_by_kind` for every path, and the difference is the refusal above.** On a real
+    // directory that function calls `remove_dir_all`, so reaching for it unconditionally would turn
+    // "a directory in the way is a different fault" into an emptied tree and a successful copy.
+    match tokio::fs::symlink_metadata(to).await {
+        Ok(meta) if meta.is_symlink() => {
+            remove_deployed_path(to)
+                .await
+                .map_err(|e| Error::Io(format!("could not replace {}: {e}", to.display())))?;
+        }
+        Ok(meta) if !meta.is_dir() => {
+            tokio::fs::remove_file(to)
+                .await
+                .map_err(|e| Error::Io(format!("could not replace {}: {}", to.display(), e)))?;
+        }
+        // A real directory, or nothing there at all: both fall through to the copy below, and a
+        // directory in the way is refused there — by the filesystem, which cannot open one for
+        // writing.
+        _ => {}
     }
     tokio::fs::copy(from, to).await.map_err(|e| {
         Error::Io(format!(

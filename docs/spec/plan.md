@@ -431,6 +431,33 @@ build and what is deferred to hardware.**
       mid-question case — the last one written before the round stamp's role could be discussed
       honestly at all, and reported as not isolating it.
 
+### Tier 26 — a third copy of "which removal call does this need" (`PLAN.md` #87): BUILT
+
+41. ~~**`copy_over` mishandles a directory symlink on Windows.**~~ **BUILT.** `copy_over` asked
+    `symlink_metadata` and then always reached for `remove_file`. `symlink_metadata` does not follow
+    the link, so a **directory** symlink answered "not a directory" and went to the file form —
+    correct on Unix, where a link is a link, and `Access is denied` on Windows, where `remove_file`
+    cannot delete one.
+
+    - **Through the one function that already knows.** `remove_deployed_path` is the async face of
+      `remove_by_kind`, which tries the file form, then the directory form, and reports both errors
+      when neither works; `force_remove` uses it. The Windows symlink rule now has **one home here
+      instead of three** — which is what `remove_by_kind`'s own comment predicted when it was
+      written: *"two copies of which removal call a symlink needs is how one of them ends up with
+      the Windows arm and the other without it."*
+    - **And not `remove_by_kind` outright**, because on a real directory it calls `remove_dir_all`.
+      The issue's one-line fix, applied naively, turns *"a directory in the way is a different
+      fault"* into an emptied tree and a successful copy. The symlink case delegates; the directory
+      case is still refused, by the filesystem refusing to open one for writing.
+    - **The refusal is the test that was watched to fail**, because it is the half the naive fix
+      destroys: the assertion is about what survives in the directory that was in the way, not about
+      the error text, since a message assertion passes just as happily when the tree is gone.
+    - **Said so: the Windows symptom cannot be reproduced on this host.** On Linux the old arm
+      worked, so the symlink test characterises the shape rather than watching the fix fail. What is
+      verified here is that replacing a directory symlink leaves what it pointed at alone, and that a
+      directory in the way is refused with its contents intact. CI's Windows job is the instrument
+      for the rest.
+
 ### Tier 24 — a fan-out as wide as the batch (`PLAN.md` #84): BUILT
 
 39. ~~**The batch's pre-rollback prior-state read fans out to the batch's own width.**~~

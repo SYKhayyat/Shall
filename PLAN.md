@@ -113,6 +113,23 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   Deliberately NOT `parsers::json_document` verbatim — that also tries the first `{` *anywhere*,
   which would read `labels = {"a": {"b": 1}}` as JSON and invent a variable called `a`. That
   regression is pinned by a test, and the mutation that removes the anchoring turns it red.)
+- [x] #87 copy_over mishandles a dir-symlink on Windows. (**BUILT, and the one part that could be
+  watched here was the part a naive fix would break.** `copy_over` asked `symlink_metadata` and then
+  always reached for `remove_file`; `symlink_metadata` does not follow the link, so a **directory**
+  symlink answered "not a directory" and went to the file form — right on Unix, and `Access is
+  denied` on Windows, where `remove_file` cannot delete one. The symlink case now goes through
+  `remove_deployed_path`, the async face of the `remove_by_kind` that `force_remove` already uses,
+  so the Windows symlink rule has **one home here instead of three** — which is what this file's own
+  comment at `remove_by_kind` predicted ("two copies of *which* removal call a symlink needs is how
+  one of them ends up with the Windows arm and the other without it"). **And not `remove_by_kind`
+  outright**, because on a real directory it calls `remove_dir_all`: a straight swap would turn "a
+  directory in the way is a different fault" into an emptied tree and a successful copy. That
+  refusal is now a test, and it is the mutation that was watched — the naive swap reds it.
+  **Said so: the Windows symptom itself cannot be reproduced on this host** (on Linux the old arm
+  worked), so the symlink test characterises the shape rather than watching the fix fail; what is
+  verified here is that replacing a directory symlink leaves what it pointed at alone, and that a
+  directory in the way is refused with its contents intact. CI's Windows job is the instrument for
+  the rest. — ISSUE #87)
 - [x] #84 pre-batch prior_state fan-out width = batch size. (**BUILT — and the gate that should
   have caught it had a hole of its own.** The prior-state read was fanned with
   `.buffered(members.len().max(1))`: no literal, no config field, so `fanout_cap_reads_the_setting
