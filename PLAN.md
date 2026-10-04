@@ -337,8 +337,21 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     of the family #89 and #100 both turned out to be: **a gate reading the host instead of the
     state it meant to set up.**
   - **Not reproducible here** — this host has ONE manager, below the floor's own minimum of 4, so
-    the test skips and proves nothing locally. The next step is one command on any 4+ manager host,
-    and **which seven commands those are** is the entire question. — ISSUE #107)
+    the test skips and proves nothing locally.
+  - **WHICH CHILDREN ARE THE SEVEN — ANSWERED, and it was answering itself all along.**
+    `timing::report` has always printed a per-child table under the summary line (`at`, `took`,
+    `command`, one row per label), and the fan-out gate captured that whole string, kept the single
+    line beginning `Timings:`, and **threw the table away**. So every failing CI run of this gate
+    printed the evidence and discarded it in the same breath, which is exactly why the
+    serialisation could be ruled out in every candidate function and still never located.
+    `timings()` now returns the summary line to parse **and** the report to quote, and both failure
+    messages print the table: a failing run names the managers, when each started, and how long
+    each took. The next run that goes red is the answer rather than another question.
+    `render` is split out of `report` so that "the report names every child" is a unit test instead
+    of something a person has to notice in a log. The summary line is byte-identical, because the
+    gate parses it — a report that fixed the diagnosis by breaking its own parser would trade one
+    unreadable failure for another. Mutation watched: dropping `row.label` reds the test. — ISSUE
+    #107)
 - [ ] #105 the crash window between a per-operation WAL write and the once-per-run registry write.
   (**ROUTE (2) WAS ALREADY BUILT — the issue's own "better next move" — so what was left was its
   residual, and the residual has one cause: the evidence expires.** `heal` calls
