@@ -137,19 +137,30 @@ fn assert_not_serial(subcommand: &str) {
     let waves = number_before(&line, " wave(s)").expect("the line prints a wave count") as usize;
     let ceiling = shape.wave_ceiling(children);
 
+    // **Child commands, not managers, and the difference is stated in both messages.** A
+    // five-manager host spawns seven child commands here — `npm list` and `npm prefix`, `pipx list`
+    // and `pipx environment` — so calling 7 "managers" named a number that is neither a manager
+    // count nor a command count. `ceiling` is `wave_ceiling(children)`, and that budget is
+    // calibrated on managers, so the ceiling below is computed over the wrong unit too; it is
+    // reported as the gate's own accounting rather than dressed up as a per-manager width, and
+    // attributing spans to backends is `#107`'s next step.
     assert!(
         overlap >= shape.min_overlap,
-        "`shall {subcommand}` asked {children} managers and overlapped them {overlap:.1}x, under \
-         the {:.1}x floor — that is asking them one at a time. `shall list` overlaps the same \
-         managers on the same host several times over, so the concurrency exists and this \
-         command does not use it. The children, in the order they were asked:\n{report}",
+        "`shall {subcommand}` spawned {children} child command(s) and overlapped them \
+         {overlap:.1}x, under the {:.1}x floor. `shall list` overlaps the same managers on the same \
+         host several times over, so the concurrency exists and this command does not use it. \
+         **Read the table below before concluding it is serial** — it names every child, when it \
+         started, and how long it took, and on the CI host that produced this message the table \
+         showed real overlap (two children starting together) running about two wide. That is \
+         under the floor and not the same thing as one at a time.\n{report}",
         shape.min_overlap
     );
     assert!(
         waves <= ceiling,
-        "`shall {subcommand}` went quiet {} time(s) mid-run ({waves} waves over {children} \
-         children, ceiling {ceiling}). One wave per child is the signature of a serial \
-         run. The children, in the order they were asked:\n{report}",
+        "`shall {subcommand}` went quiet {} time(s) mid-run ({waves} waves over {children} child \
+         command(s), against a ceiling of {ceiling} computed over that child count). A wave per \
+         child is the signature of a serial run; fewer is not, and the table below says which \
+         children shared a wave.\n{report}",
         waves.saturating_sub(1)
     );
 }

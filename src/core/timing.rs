@@ -212,6 +212,24 @@ pub fn report(wall: Duration) {
     eprint!("{}", render(&rows, wall, summed, waves));
 }
 
+/// How many distinct programs a set of rows came from.
+///
+/// The program is the first token of the label, because [`label_of`] builds the label as
+/// *program + first argument*. `npm list` and `npm prefix` are two child commands from one
+/// program; `conda list` is a child command from another.
+///
+/// **This is a count of processes, not of backends.** Two limits, stated rather than papered over:
+/// one backend that shells out to two different programs counts as two, and two backends that
+/// happen to share a program count as one. Neither has been observed, and neither can be settled
+/// without backend attribution in [`Span`] — which is the next step for `#107`, not something this
+/// function pretends to know.
+pub fn distinct_programs(rows: &[Row]) -> usize {
+    rows.iter()
+        .map(|r| r.label.split_whitespace().next().unwrap_or(&r.label))
+        .collect::<std::collections::BTreeSet<_>>()
+        .len()
+}
+
 /// The report as a string, so the per-child table can be asserted on.
 ///
 /// **Separated from [`report`] because the table is evidence and evidence nobody can read is not
@@ -249,6 +267,26 @@ pub fn render(rows: &[Row], wall: Duration, summed: Duration, waves: usize) -> S
         overlap,
         waves,
     ));
+    // **Child commands and programs are counted separately, because conflating them is what made
+    // `#107` unanswerable.** `shall export` on a five-manager host spawns seven child commands —
+    // `npm list` and `npm prefix`, `pipx list` and `pipx environment` — and the gate read that as
+    // "7 managers", then handed 7 to `Shape::wave_ceiling`, which is calibrated on managers. A
+    // number that is neither a count of managers nor a count of commands is a number nobody can
+    // reason about.
+    //
+    // The distinct count is of **programs**, not managers, and deliberately so: a manager is a
+    // Shall-side concept, while a span records a process, and the instrument does not know which
+    // backend asked. Naming it `managers` would be the same overclaim one level down. Where the
+    // two counts differ, that difference is the finding, so it is printed rather than left for a
+    // reader to reconstruct.
+    let programs = distinct_programs(rows);
+    if programs < calls {
+        out.push_str(&format!(
+            "\n  {} child command(s) came from {} distinct program(s) — some program is asked \
+             more than once per run, so the child count is not a manager count",
+            calls, programs
+        ));
+    }
     if waves > 1 {
         out.push_str(&format!(
             "\n  {} wave(s) means the run went quiet {} time(s) — nothing was running, because \
@@ -428,6 +466,18 @@ mod tests {
              manager is not the same as asking one:\n{text}"
         );
 
+        // **Seven child commands, five programs — the exact shape `#107` misread as seven
+        // managers.** The two `npm` rows and the two `pipx` rows are one program each, so the
+        // report has to say so: `Shape::wave_ceiling` is calibrated on managers, and the gate was
+        // handing it a child count and calling it a manager count.
+        let programs = distinct_programs(&rows);
+        assert_eq!(calls_of(&rows), 3, "three child commands in this fixture");
+        assert_eq!(
+            programs, 2,
+            "`solus` and `winget` are two programs however often each is asked; a program asked \
+             twice is still one program"
+        );
+
         // And the empty run still says it asked nobody, rather than rendering an empty table that
         // reads like a truncated one.
         let empty = render(&[], ms(50), Duration::ZERO, 0);
@@ -439,6 +489,11 @@ mod tests {
             !empty.contains("command\n"),
             "an empty run must not print a table header, which would look like rows lost:\n{empty}"
         );
+    }
+
+    /// The child-command count, which is the sum of `calls` and is what `render` prints.
+    fn calls_of(rows: &[Row]) -> usize {
+        rows.iter().map(|r| r.calls).sum()
     }
 
     fn end_records_the_time_that_actually_passed() {
