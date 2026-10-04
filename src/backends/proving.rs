@@ -273,12 +273,29 @@ pub const NO_HARNESS_RAN_IT: &str = "no harness has run it";
 /// the tool. `spack`, `krew`, `asdf` and `slackpkg` read this today.
 pub const BYTES_NEVER_CAPTURED: &str = "its listing bytes were never captured";
 
+/// The row says its manager is gone, so no machine will ever capture its bytes.
+///
+/// **A reason of its own rather than a second reading of `BYTES_NEVER_CAPTURED`.** The two are
+/// different claims with different remedies: *never captured* is a debt this repository could
+/// discharge by running the right image, and *retired* is a fact about the world that running any
+/// image cannot change. A roster line that reads the same for both invites somebody to go looking
+/// for an image of a project that has none (`PLAN.md` #38).
+pub const RETIRED_UPSTREAM: &str = "upstream is retired; its bytes cannot be captured by anyone";
+
 /// Why this backend has never met its manager, in the words a roster line can carry, or `None`
 /// when it has.
 ///
 /// **Two questions, one answer** (owner ruling, 2026-09-27), and the order is the order of how
 /// much the doubt costs: a harness that never ran is the bigger claim, so it is asked first.
 pub fn unproven_reason(backend: &str) -> Option<&'static str> {
+    // **Retirement is asked before either harness question**, and not because it is more
+    // important. A retired manager cannot be driven by a harness either, so leaving it to be
+    // answered as "no harness has run it" would report a fact about the world as a gap in this
+    // repository's coverage — and a gap looks like work, which is how a dead project stays on the
+    // list for ever.
+    if retired_rows().contains(backend) {
+        return Some(RETIRED_UPSTREAM);
+    }
     if UNPROVEN.iter().any(|(name, _)| *name == backend) {
         return Some(NO_HARNESS_RAN_IT);
     }
@@ -295,6 +312,24 @@ pub fn unproven_reason(backend: &str) -> Option<&'static str> {
 /// has been seen from the manager itself.
 pub fn is_proven(backend: &str) -> bool {
     unproven_reason(backend).is_none()
+}
+
+/// The backends whose `[backend.fixture] source` says `RETIRED:` — the rows whose manager is gone.
+///
+/// Kept beside [`uncaptured_listing_bytes`] rather than folded into it, because the two stamps
+/// mean opposite things and a caller has to be able to tell them apart without reading the TOML.
+fn retired_rows() -> &'static std::collections::BTreeSet<String> {
+    static RETIRED: std::sync::OnceLock<std::collections::BTreeSet<String>> =
+        std::sync::OnceLock::new();
+    RETIRED.get_or_init(|| {
+        crate::backends::onboarder::builtin_rows()
+            .into_iter()
+            .filter_map(|row| {
+                let fixture = row.fixture?;
+                fixture.is_retired().then_some(row.name)
+            })
+            .collect()
+    })
 }
 
 /// The backends whose `[backend.fixture] source` still says `UNVERIFIED:` — the rows whose bytes
@@ -359,6 +394,57 @@ mod tests {
                  must not read proven"
             );
         }
+    }
+
+    /// **A `RETIRED` row reads as retired, and a retired manager is never driven.**
+    ///
+    /// This is the whole of `PLAN.md` #38: `eopkg` carried three negatives at once and read as
+    /// *unverified*, which is a claim about somebody's attention rather than about the project. It
+    /// has no publishable image on any public registry and no maintainer, so the bytes cannot be
+    /// captured by anyone and no run of this repository's harness changes that.
+    ///
+    /// Asserted in both directions, because they fail differently. The first is the stamp; the
+    /// second is the check the stamp exists to make possible — **a retired row must never acquire a
+    /// harness lifecycle**, because a harness driving a dead project is either a canary nobody can
+    /// satisfy or a lie about coverage, and the roster is the one place that would say so.
+    #[test]
+    fn a_retired_row_reads_retired_and_is_never_driven() {
+        assert!(
+            retired_rows().contains("eopkg"),
+            "the row still says UNVERIFIED, so its retirement is being read as somebody's \
+             oversight rather than as a fact about Solus"
+        );
+        assert_eq!(
+            unproven_reason("eopkg"),
+            Some(RETIRED_UPSTREAM),
+            "a retired manager reported as 'no harness has run it' reads as a coverage gap, which \
+             is work nobody can do"
+        );
+        assert!(
+            !is_proven("eopkg"),
+            "a row whose bytes nobody can capture must never read proven"
+        );
+        assert!(
+            !DRIVEN.contains(&"eopkg"),
+            "the harness grew a lifecycle for a retired manager: either a canary nobody can \
+             satisfy or a claim of coverage that does not exist"
+        );
+        // And the stamp is not `UNVERIFIED` wearing a new label — the two are different answers
+        // and a row must not be able to be both.
+        let eopkg = crate::backends::onboarder::builtin_rows()
+            .into_iter()
+            .find(|r| r.name == "eopkg")
+            .and_then(|r| r.fixture)
+            .expect("the eopkg row carries a fixture");
+        assert!(eopkg.is_retired(), "the stamp is not RETIRED");
+        assert!(
+            !eopkg.is_unverified(),
+            "a retired row must not also claim nobody looked, or the two states are one again"
+        );
+        assert!(
+            !eopkg.is_verified(),
+            "no byte of eopkg's output came from eopkg, whatever the stamp says"
+        );
     }
 
     /// Every reason says something. A blank excuse is the exemption this table exists to stop

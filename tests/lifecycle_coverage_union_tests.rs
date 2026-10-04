@@ -357,10 +357,28 @@ async fn the_roster_line_keeps_its_promise_for_every_registered_backend() {
             Some(why) => {
                 assert!(
                     why == shall::backends::proving::NO_HARNESS_RAN_IT
-                        || why == shall::backends::proving::BYTES_NEVER_CAPTURED,
+                        || why == shall::backends::proving::BYTES_NEVER_CAPTURED
+                        || why == shall::backends::proving::RETIRED_UPSTREAM,
                     "`{name}` reads unproven for a reason no roster line can carry: {why}"
                 );
-                format!("[READY] {name} (unproven — {why})")
+                // **A retired manager is named as retired rather than as unproven**, because the
+                // roster is the user-visible half of this table and "(unproven — upstream is
+                // retired)" says the opposite of the retirement. Both are true and only one of
+                // them is the answer to "can I use this".
+                if why == shall::backends::proving::RETIRED_UPSTREAM {
+                    // **`[READY]` is kept, and that is deliberate.** The tag is what
+                    // `shall check health | grep '^\[READY\]' | awk '{print $2}'` enumerates,
+                    // and a retired row is still *registered* — it is still in `priority`, still
+                    // resolvable, still answers `--help`. Dropping the tag would remove it from the
+                    // one listing that names every backend this build knows, which is a worse lie
+                    // than the suffix. The suffix says what is true about it.
+                    format!(
+                        "[READY] {name} (RETIRED upstream — the row is kept, and no machine \
+                            will ever install from it)"
+                    )
+                } else {
+                    format!("[READY] {name} (unproven — {why})")
+                }
             }
         };
         assert!(

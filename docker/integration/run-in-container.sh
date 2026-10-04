@@ -1803,7 +1803,13 @@ no_lifecycle_reason() {
         # `nixos-rebuild` and no systemd. `proving.rs` carries the by-hand receipt and the
         # price of closing it; `scripts/nix-validate.sh` is the automated half.
         nixos)    echo "needs the image to BE NixOS (/etc/nixos + nixos-rebuild), and no image in this matrix is — nixos/nix was probed and is the Nix manager on a minimal base, not NixOS; scripts/nix-validate.sh evaluates every generated module against real nixpkgs instead" ;;
-        eopkg)    echo "Solus's native manager, and there is no Solus image in this matrix — argv-tested only" ;;
+        # **RETIRED, and said as a fact about Solus rather than as a gap in this matrix.** The
+        # previous wording — "there is no Solus image in this matrix" — is the reading #38 is about:
+        # it names a hole in *this* repository's coverage, which is work somebody could do, over a
+        # project that has no publishable image on any public registry and no maintainer, which is
+        # work nobody could. `proving.rs` carries the same stamp and the check that keeps it honest:
+        # a `RETIRED` row must never acquire a harness lifecycle.
+        eopkg)    echo "RETIRED upstream — Solus publishes no image on any public registry and the project has no active maintainer, so its bytes cannot be captured by anyone; the row is kept and argv-tested only" ;;
         # AerynOS's native manager. Not "no AerynOS container exists" — that stopped being true
         # when `serpentos/base` appeared — but a measured wall inside it, probed 2026-09-03:
         # `moss remove` answers `Error: remove: Not yet implemented`, and `moss install` 404s

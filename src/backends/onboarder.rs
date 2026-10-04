@@ -638,8 +638,29 @@ pub struct FixtureDef {
 
 impl FixtureDef {
     /// Whether the bytes were captured from the tool rather than written from something else.
+    ///
+    /// **A `RETIRED` row is not verified, and must not read as though it were.** `eopkg` carries
+    /// `RETIRED:` because there is no byte of its output anybody can capture, and the two stamps
+    /// answer different questions — `UNVERIFIED` says *nobody has looked* and leaves open that
+    /// somebody could; `RETIRED` says *somebody looked twice and there is nothing there*. Both
+    /// mean the bytes are not from the tool, so both fail this test, and the stamp is read
+    /// separately by [`Self::is_retired`] for the places that must tell them apart.
     pub fn is_verified(&self) -> bool {
-        !self.source.trim_start().starts_with("UNVERIFIED")
+        !self.is_unverified() && !self.is_retired()
+    }
+
+    /// The row's stamp is `UNVERIFIED:` — nobody has looked.
+    pub fn is_unverified(&self) -> bool {
+        self.source.trim_start().starts_with("UNVERIFIED")
+    }
+
+    /// The row's stamp is `RETIRED:` — somebody looked, and the thing is gone.
+    ///
+    /// **A third state rather than a flavour of `UNVERIFIED`.** The ledgers answer "has this row
+    /// ever met its manager", and a retired manager never will; reporting that as *unverified*
+    /// invites the reading that it is merely pending, which is what `PLAN.md` #38 found.
+    pub fn is_retired(&self) -> bool {
+        self.source.trim_start().starts_with("RETIRED")
     }
 }
 

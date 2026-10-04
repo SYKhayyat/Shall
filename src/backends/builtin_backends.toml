@@ -773,6 +773,14 @@ expect = [
 # verified, adopt nothing.
 
 # Solus eopkg.
+#
+# **RETIRED, which is a different answer from UNVERIFIED and was being read as the same one.**
+# `UNVERIFIED` says *nobody has looked*; it leaves open that somebody could. For eopkg somebody
+# looked twice and there is nothing to look at: Solus publishes no image on any public registry
+# (`proving.rs` records both probes), the project has no active maintainer, and there is therefore
+# no byte of eopkg's output that any machine can capture. Retiring the row keeps it visible and
+# makes the deadness a claim the program checks — `a_retired_row_is_never_driven_by_a_harness`
+# fails if the harness ever grows a lifecycle for it — rather than a footnote.
 [[backend]]
 name = "eopkg"
 os = "linux"
@@ -791,7 +799,7 @@ clean_cache_args = ["delete-cache"]
 # `name - Short description`, and the description is prose that must not become part of the
 # name.
 [backend.fixture]
-source = "UNVERIFIED: written from eopkg's documented `list-installed` layout; the Solus image name in the harvest script did not resolve"
+source = "RETIRED: eopkg has no publishable image on any public registry and no active maintainer, so its listing bytes cannot be captured by anyone; written from its documented `list-installed` layout"
 list = '''
 bash - The GNU Bourne Again SHell
 coreutils - The GNU core utilities
