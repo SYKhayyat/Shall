@@ -422,6 +422,15 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     for it. That is the check the stamp exists to enable, and the mutation (adding `eopkg` to
     `DRIVEN`) reds it.
 - [ ] #41 prose tax distill, #36 doc-comment layer.
+  - **#41 IS DELIBERATELY NOT STARTED, and the reason is that it is not a mechanical edit.** The
+    issue asks for `decisions.md` (641 KB) and `why.md` (521 KB) to be distilled to one line per
+    entry. Every one of those entries is cited by line number from elsewhere in this repository —
+    `docs/spec/plan.md`, the `why_entries_are_attached_to_something` gate, and this file — so the
+    distillation does not leave the prose smaller, it leaves **several hundred citations pointing at
+    nothing**, and the gate that checks citations is what would catch it. Distilling in the right
+    order means: index the citations first, move the durable rule per entry, then delete. That is
+    three passes over 1.2 MB and it wants its own branch, not a commit between two unrelated fixes.
+  - #36 (the doc-comment layer) is the cheaper half and is unblocked.
 - [x] #95 `V.186` and `Q55` said `completed_installs` was deleted; the code still had it, reading
   it in production inside `reconcile_ownership` (`src/app/sync/mod.rs:1024`). (**BUILT as a spec
   correction, and the fork was never needed — the docs were wrong in two places, not one.** The
