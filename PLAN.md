@@ -130,12 +130,32 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     visible class rather than five half-vacuous checks, and deliberately does not guess. — ISSUE #100)
 
 ## Phase 3 — Correctness Mediums
-- [ ] **Gate names cited anywhere are not checked for resolving, while `V.n` citations are.**
-  Found 2026-09-30 verifying #96: `every_gone_ok_tag_is_witnessed_somewhere` is cited by
-  `run-in-container.sh`, `why.md` and `spec/plan.md`, and existed in none of them — the check is an
-  inline block with an `echo` header. `every_citation_of_a_why_entry_resolves_to_one` is the same
-  gate for the other corpus and is one `fn` from being this one. A name is greppable now
-  (`## every_gone_ok_tag_is_witnessed_somewhere`) but nothing would notice the next one. (Low)
+- [x] **Gate names cited anywhere are not checked for resolving, while `V.n` citations are.**
+  (Low — **BUILT, and it found NINE the day it was written**, which is the answer to "would
+  anything notice the next one". `tests/a_gate_name_cited_anywhere_resolves_tests.rs`, the twin of
+  `every_citation_of_a_why_entry_resolves_to_one`.)
+  - **Five shapes, all real:** a gate **renamed** with its citation left behind
+    (`every_os_native_backend_sends_the_argv_its_manager_expects`, cited from two source files and
+    defined nowhere); **truncated** forms of gates that exist under longer names
+    (`every_ledger_prefix_is_claimed`, `no_unbounded_command_holds_the_lock_for_its_lifetime`,
+    `an_offered_archive_has_an_opener`, `a_failing_command_names_its`); a name **split across a
+    line**, so grepping it found nothing; and one that had **lost a character at the wrap**
+    (`..._still_knows_its` + newline + `module`, where the fn is `..._still_knows_its_module`),
+    which joining does not recover.
+  - **Two shapes of the SCAN were wrong before they were right, and both are commented where they
+    bit.** Joining every line break inside a backtick span merged a wrapped sentence into invented
+    names (`apt_like_coresetsorphan_dry_run`), so a break is joined only where it follows an
+    underscore — which is where a wrapped identifier actually breaks. And skipping only whitespace
+    stopped at the `///` that opens a doc comment's continuation line, inventing four more. Same
+    failure both times: **a checker that cries wolf gets switched off**, and each was caught by
+    reading the report rather than by the assertion.
+  - **Four name forms count as defined** (test `fn`, `mod`, file stem, file stem minus `_tests`),
+    because this corpus uses all four and a scanner accepting one reports every gate in the other
+    three as dangling. `EXEMPT` holds fourteen historical citations with their corpus, may only
+    shrink, and the assertion says so.
+  - **The mutation, and the wrong first attempt.** Renaming a gate with **no citations** is invisible
+    to any citation-based check — worth knowing rather than assuming. The watched mutation renames a
+    gate that *is* cited, and the gate names the file and the dangling citation.
 - [x] #91 planner template_needs_update compares raw source to rendered target (sibling of the #69 read-back fix). (Low; **BUILT by deletion** — the issue named two options and said not both. `in_effect` is the single authority and it renders before comparing, so the planner's copy went: 24 lines, and no behaviour changes because `link` installs no `Queryable` and the branch never ran. `the_planner_never_reads_the_filesystem` keeps it gone, with the deleted code as its own control)
 - [x] #86 zip unpacked-size sum can wrap past bomb bound. (**BUILT** — the zip branch called
   `.sum()` where the tar branch walked with `saturating_add`, and `sum` for integers **wraps in a
