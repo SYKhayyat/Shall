@@ -71,7 +71,16 @@ fn fresh(name: &str) -> PathBuf {
 /// Run inside the fixture: `export` writes its output file into the working directory, so a
 /// child inheriting the test runner's cwd leaves `package.json` in the repository — five of
 /// them, once the collision suffixes start.
-fn timings_line(dir: &Path, subcommand: &str) -> String {
+/// The summary line to parse, and the whole report to quote when the assertion fails.
+///
+/// **Both, and the whole report is the half that matters.** `timing::report` already prints a
+/// per-child table under the summary line — `at`, `took`, `command`, one row per label — and this
+/// helper used to throw it away, keeping only the aggregate. That is why `#107` could name neither
+/// the seven commands nor the shape of their serialisation: the evidence was in the captured
+/// string and not in the panic. A failing CI run of this gate now prints the table, so the next
+/// person to read it sees which managers were asked, when each started, and how long each took —
+/// which is the whole of the question this file asks.
+fn timings(dir: &Path, subcommand: &str) -> (String, String) {
     let out = Command::new(env!("CARGO_BIN_EXE_shall"))
         .args(["--timings", subcommand])
         .env("SHALL_CONFIG_DIR", dir.join("config"))
@@ -81,7 +90,7 @@ fn timings_line(dir: &Path, subcommand: &str) -> String {
         .output()
         .expect("the binary should run");
     let report = String::from_utf8_lossy(&out.stderr).into_owned();
-    report
+    let line = report
         .lines()
         .find(|l| l.starts_with("Timings:"))
         .unwrap_or_else(|| {
@@ -90,7 +99,8 @@ fn timings_line(dir: &Path, subcommand: &str) -> String {
                  gate reads is gone:\n{report}"
             )
         })
-        .to_string()
+        .to_string();
+    (line, report)
 }
 
 fn number_before(line: &str, unit: &str) -> Option<f64> {
@@ -105,10 +115,10 @@ fn number_before(line: &str, unit: &str) -> Option<f64> {
 /// One command against `Shape`, or a loud skip when the host cannot answer.
 fn assert_not_serial(subcommand: &str) {
     let dir = fresh(subcommand);
-    let line = timings_line(&dir, subcommand);
+    let (line, report) = timings(&dir, subcommand);
 
     let Some(children) = number_before(&line, " child command(s)") else {
-        eprintln!("fan-out shape ({subcommand}): SKIPPED — no child commands here:\n  {line}");
+        eprintln!("fan-out shape ({subcommand}): SKIPPED — no child commands here:\n{report}");
         return;
     };
     let children = children as usize;
@@ -118,7 +128,7 @@ fn assert_not_serial(subcommand: &str) {
     if children < shape.min_children {
         eprintln!(
             "fan-out shape ({subcommand}): SKIPPED — {children} child command(s), too few for \
-             an overlap ratio to mean anything:\n  {line}"
+             an overlap ratio to mean anything (the children, had there been any):\n{report}"
         );
         return;
     }
@@ -132,14 +142,14 @@ fn assert_not_serial(subcommand: &str) {
         "`shall {subcommand}` asked {children} managers and overlapped them {overlap:.1}x, under \
          the {:.1}x floor — that is asking them one at a time. `shall list` overlaps the same \
          managers on the same host several times over, so the concurrency exists and this \
-         command does not use it.\n  {line}",
+         command does not use it. The children, in the order they were asked:\n{report}",
         shape.min_overlap
     );
     assert!(
         waves <= ceiling,
         "`shall {subcommand}` went quiet {} time(s) mid-run ({waves} waves over {children} \
          children, ceiling {ceiling}). One wave per child is the signature of a serial \
-         run.\n  {line}",
+         run. The children, in the order they were asked:\n{report}",
         waves.saturating_sub(1)
     );
 }
@@ -174,7 +184,7 @@ fn a_command_that_spawns_a_child_per_manager_is_not_config_only() {
     let mut misfiled = Vec::new();
     for subcommand in ["sbom", "export"] {
         let dir = fresh(&format!("class-{subcommand}"));
-        let line = timings_line(&dir, subcommand);
+        let (line, report) = timings(&dir, subcommand);
         let Some(children) = number_before(&line, " child command(s)") else {
             continue; // No managers on this host; the class cannot be judged from here.
         };
@@ -182,7 +192,7 @@ fn a_command_that_spawns_a_child_per_manager_is_not_config_only() {
             && Class::of(subcommand).shape().is_none()
         {
             misfiled.push(format!(
-                "`{subcommand}` is {:?} and spawned {} child command(s):\n    {line}",
+                "`{subcommand}` is {:?} and spawned {} child command(s):\n{report}",
                 Class::of(subcommand),
                 children as usize
             ));

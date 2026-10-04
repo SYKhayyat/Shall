@@ -205,12 +205,34 @@ pub fn report(wall: Duration) {
     let (rows, _, summed) = summary();
 
     if rows.is_empty() {
-        eprintln!(
+        eprint!("{}", render(&[], wall, summed, 0));
+        return;
+    }
+    let waves = waves();
+    eprint!("{}", render(&rows, wall, summed, waves));
+}
+
+/// The report as a string, so the per-child table can be asserted on.
+///
+/// **Separated from [`report`] because the table is evidence and evidence nobody can read is not
+/// evidence.** `report` prints, and a printed table can only be checked by capturing a process's
+/// stderr — which is why `#107` sat unanswerable for as long as it did: the names of the children
+/// were being printed on a CI run, by a gate, and thrown away by the panic message that quoted
+/// only the summary line. Rendering separately makes "the report names every child" a unit test
+/// rather than a thing somebody has to notice in a log.
+///
+/// Empty `rows` renders the no-children line, so a caller cannot report an empty run as though it
+/// had asked nobody anything while `rows` was merely unread.
+pub fn render(rows: &[Row], wall: Duration, summed: Duration, waves: usize) -> String {
+    let mut out = String::new();
+
+    if rows.is_empty() {
+        out.push_str(&format!(
             "\nTimings: {:.2}s wall, no child commands — this run asked no package manager \
              anything.",
             wall.as_secs_f64()
-        );
-        return;
+        ));
+        return out;
     }
 
     let calls: usize = rows.iter().map(|r| r.calls).sum();
@@ -218,26 +240,26 @@ pub fn report(wall: Duration) {
     // them; it is a ratio of sums, so it never divides by zero here (rows is non-empty).
     let overlap = summed.as_secs_f64() / wall.as_secs_f64().max(f64::EPSILON);
 
-    let waves = waves();
-    eprintln!(
-        "\nTimings: {:.2}s wall · {} child command(s) summing to {:.2}s · {:.1}x overlap · {} wave(s)",
+    out.push_str(&format!(
+        "\nTimings: {:.2}s wall · {} child command(s) summing to {:.2}s · {:.1}x overlap · {} \
+         wave(s)",
         wall.as_secs_f64(),
         calls,
         summed.as_secs_f64(),
         overlap,
         waves,
-    );
+    ));
     if waves > 1 {
-        eprintln!(
-            "  {} wave(s) means the run went quiet {} time(s) — nothing was running, because \
+        out.push_str(&format!(
+            "\n  {} wave(s) means the run went quiet {} time(s) — nothing was running, because \
              something had to be answered before the next question could be asked.",
             waves,
             waves - 1,
-        );
+        ));
     }
-    eprintln!("  (only commands Shall spawns are counted; its own parsing is the remainder)");
-    eprintln!("  {:>7}  {:>7}   command", "at", "took");
-    for row in &rows {
+    out.push_str("\n  (only commands Shall spawns are counted; its own parsing is the remainder)");
+    out.push_str(&format!("\n  {:>7}  {:>7}   command", "at", "took"));
+    for row in rows {
         let calls = if row.calls == 1 {
             String::new()
         } else {
@@ -248,14 +270,16 @@ pub fn report(wall: Duration) {
                 row.last_end.as_secs_f64(),
             )
         };
-        eprintln!(
-            "  {:>6.2}s  {:>6.2}s   {}{}",
+        out.push_str(&format!(
+            "\n  {:>6.2}s  {:>6.2}s   {}{}",
             row.first_at.as_secs_f64(),
             row.total.as_secs_f64(),
             row.label,
             calls,
-        );
+        ));
     }
+    out.push('\n');
+    out
 }
 
 #[cfg(test)]
@@ -342,6 +366,81 @@ mod tests {
     /// **Last, and inside the same test.** The recorder is process-global; a second `#[test]`
     /// would run on another thread and add a row to the table the assertions above are
     /// counting.
+    /// **The rendered report names every child, which is the whole of what `#107` was missing.**
+    ///
+    /// The per-child table has always been printed; `report` threw it into stderr where the
+    /// fan-out gate captured the process output and then quoted only the summary line, so a
+    /// failing run named a count and an overlap ratio and not one manager. That is why the issue
+    /// could say "which seven commands these are is the entire question" and never answer it: the
+    /// answer was in the string it had in hand and was discarded.
+    ///
+    /// Asserted on every label, and on the start offsets, because the offsets are what turn "seven
+    /// children" into "these seven, asked in this order, at these times" — the difference between a
+    /// count and a diagnosis.
+    #[test]
+    fn the_rendered_report_names_every_child_and_when_it_started() {
+        let ms = Duration::from_millis;
+        let rows = vec![
+            Row {
+                label: "solus".to_string(),
+                calls: 1,
+                total: ms(300),
+                longest: ms(300),
+                first_at: ms(0),
+                last_end: ms(300),
+            },
+            Row {
+                label: "winget".to_string(),
+                calls: 2,
+                total: ms(900),
+                longest: ms(500),
+                first_at: ms(10),
+                last_end: ms(910),
+            },
+        ];
+        let text = render(&rows, ms(920), ms(1200), 7);
+
+        // The summary line stays exactly as it was: the gate parses `child command(s)`,
+        // `x overlap` and ` wave(s)` out of it, and a report that answers the diagnosis by
+        // breaking its own parser would trade one unreadable failure for another.
+        assert!(
+            text.contains("3 child command(s) summing to 1.20s"),
+            "the aggregate line is what the gate parses; it changed:\n{text}"
+        );
+        for label in ["solus", "winget"] {
+            assert!(
+                text.contains(label),
+                "`{label}` was asked and the report does not say so, which is the `#107` \
+                 failure this test exists to prevent:\n{text}"
+            );
+        }
+        // The start offsets, not just the names: three children in one wave and seven waves is
+        // the serialisation itself.
+        assert!(
+            text.contains("0.00s") && text.contains("0.01s"),
+            "the table reports when each child started, which is how a serial run is told from an \
+             overlapped one:\n{text}"
+        );
+        // A label called more than once says so, or a repeated question reads as one.
+        assert!(
+            text.contains("(2x, longest 0.50s"),
+            "a label asked twice reports both calls, since `sbom` asking two questions of one \
+             manager is not the same as asking one:\n{text}"
+        );
+
+        // And the empty run still says it asked nobody, rather than rendering an empty table that
+        // reads like a truncated one.
+        let empty = render(&[], ms(50), Duration::ZERO, 0);
+        assert!(
+            empty.contains("no child commands"),
+            "an empty run must say so in words:\n{empty}"
+        );
+        assert!(
+            !empty.contains("command\n"),
+            "an empty run must not print a table header, which would look like rows lost:\n{empty}"
+        );
+    }
+
     fn end_records_the_time_that_actually_passed() {
         let started = begin();
         assert!(started.is_some(), "recording is on");
