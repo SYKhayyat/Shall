@@ -367,7 +367,25 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   both failed *for having nothing to measure* and both are now built rather than found — and #89's
   finding generalises: a count taken from the wrong file is the same mistake as a control whose
   fixture never held.
-- [ ] #41 prose tax distill, #36 doc-comment layer, #38 eopkg RETIRED honesty.
+- [x] #38 eopkg RETIRED honesty. (**BUILT, and it is a third stamp rather than a flavour of the
+  existing one.** `UNVERIFIED` says *nobody has looked* and leaves open that somebody could; eopkg
+  cannot be paid off, because Solus publishes no image on any public registry and the project has
+  no maintainer. `FixtureDef` grows `is_unverified`/`is_retired` beside `is_verified`, and **a
+  retired row is not verified** — the two stamps answer different questions and a row must not be
+  both. `proving.rs` asks retirement first and with a reason of its own, because *never captured* is
+  a debt this repository could discharge by running the right image and *retired* is a fact about
+  the world that no image can change; reporting both alike makes a dead project look like
+  outstanding work.
+  - **The roster keeps its `[READY]` tag, deliberately** — that tag is what
+    `shall check health | grep '^\[READY\]' | awk '{print $2}'` enumerates, and a retired row is
+    still registered. Dropping the tag would remove it from the one listing that names every
+    backend this build knows, which is a worse lie than the suffix.
+  - The harness reason said *"there is no Solus image in this matrix"*, which is the exact confusion
+    — a hole in **this** repository's coverage over a project with no image anywhere.
+  - `a_retired_row_reads_retired_and_is_never_driven` also asserts the harness has **no lifecycle**
+    for it. That is the check the stamp exists to enable, and the mutation (adding `eopkg` to
+    `DRIVEN`) reds it.
+- [ ] #41 prose tax distill, #36 doc-comment layer.
 - [ ] #95 `V.186` and `Q55` say `completed_installs` was deleted; the code still has it, and reads
   it in production inside `reconcile_ownership` (`src/app/sync/mod.rs:1024`). A spec that says a
   function was deleted while the function has a vote is a spec nobody can trust on the next
