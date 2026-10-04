@@ -335,7 +335,7 @@ fn join_split_names(span: &str) -> String {
     while i < chars.len() {
         if chars[i] == '\n' || chars[i] == '\r' {
             let j = skip_continuation(&chars, i + 1);
-            if out.chars().last() == Some('_') {
+            if out.ends_with('_') {
                 i = j;
                 continue;
             }

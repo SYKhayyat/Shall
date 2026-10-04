@@ -135,16 +135,20 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   anything notice the next one". `tests/a_gate_name_cited_anywhere_resolves_tests.rs`, the twin of
   `every_citation_of_a_why_entry_resolves_to_one`.)
   - **Five shapes, all real:** a gate **renamed** with its citation left behind
-    (`every_os_native_backend_sends_the_argv_its_manager_expects`, cited from two source files and
+    (every_os_native_backend_sends_the_argv_its_manager_expects, cited from two source files and
     defined nowhere); **truncated** forms of gates that exist under longer names
-    (`every_ledger_prefix_is_claimed`, `no_unbounded_command_holds_the_lock_for_its_lifetime`,
-    `an_offered_archive_has_an_opener`, `a_failing_command_names_its`); a name **split across a
+    (every_ledger_prefix_is_claimed, no_unbounded_command_holds_the_lock_for_its_lifetime,
+    an_offered_archive_has_an_opener, a_failing_command_names_its); a name **split across a
     line**, so grepping it found nothing; and one that had **lost a character at the wrap**
     (`..._still_knows_its` + newline + `module`, where the fn is `..._still_knows_its_module`),
     which joining does not recover.
+    **These names are set as plain text on purpose.** A backtick span is what makes the scanner
+    read something as a citation of a gate, so quoting a name the gate *reported* would have this
+    entry fail the gate it is describing — which is the correct behaviour and not a bug to
+    special-case. A finding about dangling citations is the one place a dangling name belongs.
   - **Two shapes of the SCAN were wrong before they were right, and both are commented where they
     bit.** Joining every line break inside a backtick span merged a wrapped sentence into invented
-    names (`apt_like_coresetsorphan_dry_run`), so a break is joined only where it follows an
+    names — apt_like_coresetsorphan_dry_run — so a break is joined only where it follows an
     underscore — which is where a wrapped identifier actually breaks. And skipping only whitespace
     stopped at the `///` that opens a doc comment's continuation line, inventing four more. Same
     failure both times: **a checker that cries wolf gets switched off**, and each was caught by
