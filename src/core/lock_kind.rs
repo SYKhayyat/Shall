@@ -136,9 +136,9 @@ impl LockKind {
     /// Which kind an approval-ledger id belongs to.
     ///
     /// Anything whose prefix is not one of the six named ones is a lifecycle hook, because that
-    /// is the one identity built from the hook's own name. `every_ledger_prefix_is_claimed`
-    /// fails if a seventh prefix is ever added without a kind, which is what keeps the
-    /// by-elimination step honest.
+    /// is the one identity built from the hook's own name.
+    /// `every_ledger_prefix_is_claimed_by_exactly_one_kind` fails if a seventh prefix is ever
+    /// added without a kind, which is what keeps the by-elimination step honest.
     pub fn of_ledger_id(id: &str) -> LockKind {
         let head = id.split_once(':').map_or(id, |(h, _)| h);
         SCRIPTS

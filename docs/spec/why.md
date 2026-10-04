@@ -369,8 +369,7 @@ document predicted it wrongly.** The first draft of this entry said set math cos
 its module name. It does not: the implementation maps expression atoms back to **the
 statements they came from**, not to strings, so a package that survives an intersection still
 carries its `Origin` — its file, and therefore its module. `upgrade --module editors` finds
-`vim` through an `exclude`. There is a test (`a_package_surviving_set_math_still_knows_its
-module`). The only lines that get profile scope alone are ones written in the profile itself,
+`vim` through an `exclude`. There is a test (`a_package_surviving_set_math_still_knows_its_module`). The only lines that get profile scope alone are ones written in the profile itself,
 including a bare package atom inside an expression — which is correct, because that line
 really is in the profile. **Keep mapping back to statements. Mapping back to strings is what
 would make the predicted cost real.**
@@ -5355,8 +5354,8 @@ and its temp name carries the process id because *the rename is only atomic per 
 which is the torn listing the mechanism exists to prevent, arrived at by the mechanism.
 
 **And the comment is replaced by a scan.** A paragraph asserting a singleton is exactly what was
-wrong here: it was true when written, and nothing re-derived it. `tests/a_writer_that_reaches_
-the_disk_goes_through_one_tests.rs` walks `src/`, ignores test modules, and fails on any
+wrong here: it was true when written, and nothing re-derived it. `tests/a_writer_that_reaches_the_disk_goes_through_one_tests.rs`
+walks `src/`, ignores test modules, and fails on any
 rename-into-place outside the two allowed files — each of which carries the sentence saying why
 it is allowed, checked to still be needed. Driven by an oracle over a planted offender, a
 planted innocent, and a planted file whose only offence is inside `#[cfg(test)]` (II.23).

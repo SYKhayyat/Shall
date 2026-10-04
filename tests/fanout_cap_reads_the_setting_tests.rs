@@ -210,8 +210,7 @@ fn the_ordered_rule_would_notice_a_reordering() {
 
 /// Where each `Semaphore` lives, and why that scope is the run.
 ///
-/// **The sibling assertion, and the one the gate above cannot make.** `no_fan_out_hard_codes_its
-/// _width` checks a cap's *value*; nothing checked its *scope*. `StateResolver`'s `remote_gate`
+/// **The sibling assertion, and the one the gate above cannot make.** `no_fan_out_in_the_tree_hard_codes_its_width` checks a cap's *value*; nothing checked its *scope*. `StateResolver`'s `remote_gate`
 /// read `network_parallel` perfectly and was constructed inside `StateResolver::new` — and
 /// `App::resolver()` was not memoised, so it minted a fresh resolver, and a fresh gate, at every
 /// one of its 34 call sites. Every one of those is sequential within its command, which is the

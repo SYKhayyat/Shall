@@ -252,7 +252,7 @@ pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<()> {
         // job, and `github.rs` calls this for every artifact precisely so that one code path
         // handles both. This is the *only* honest reason to land here: a name `Format` calls
         // an archive and has no opener for cannot reach it, which
-        // `an_offered_archive_has_an_opener` is what makes true.
+        // `every_archive_the_selector_offers_has_an_opener` is what makes true.
         None => {
             let filename = archive_path
                 .file_name()

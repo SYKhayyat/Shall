@@ -10,7 +10,7 @@
 //! gates that do exactly this kind of reading.
 //!
 //! **Five of the six are here. The sixth already had a Rust successor** — see the note above
-//! `every_script_is_run_by_something…`, which is the whole argument of this file arriving as a
+//! `every_script_is_run_by_something_or_is_declared_not_to_be_a_gate`, which is the whole argument of this file arriving as a
 //! near-miss on its own author.
 //!
 //! What stayed in shell is the half that lifts function bodies out of the harnesses and drives

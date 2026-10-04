@@ -191,8 +191,7 @@ fn carrying_on_past_a_failure_does_not_erase_its_classification() {
             .find_map(|l| l.trim().strip_prefix("shall-failure-class: "))
     }
 
-    // The same crate that does not exist, for the same reason `a_failing_command_names_its
-    // _failure_class` uses it: cargo says so, and the policy calls it `permanent`. A probe
+    // The same crate that does not exist, for the same reason `a_failing_command_names_its_failure_class` uses it: cargo says so, and the policy calls it `permanent`. A probe
     // Shall refuses instead — a plain-HTTP URL — would exit `Exit::Refused` before the class
     // is printed at all, and print nothing to compare.
     const CLASSIFIED_FAILURE: &str = "cargo:shall-no-such-crate-zzz\n";

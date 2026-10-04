@@ -113,7 +113,7 @@ impl Format {
     /// `None` is not "give up" — it is *this is not an archive*, which is the honest answer for
     /// a `.deb`, an `.exe` or a bare binary, and the case `github.rs` relies on to place a file
     /// it must not unpack. What must never happen again is `None` for something `is_archive`
-    /// said yes to, and `an_offered_archive_has_an_opener` is drawn around exactly that.
+    /// said yes to, and `every_archive_the_selector_offers_has_an_opener` is drawn around exactly that.
     pub fn opener_for(filename: &str) -> Option<Opener> {
         let lower = filename.to_lowercase();
         [

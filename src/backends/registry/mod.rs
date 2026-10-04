@@ -2273,7 +2273,7 @@ mod tests {
     /// The leading word of a repository command is a program, and for two backends it was a
     /// subcommand of a manager that has no such subcommand — `apt add-apt-repository …` and
     /// `apk sh -c …`. Both fail on any real host, so `repo add`/`repo remove` had never worked
-    /// on apt or apk. This is `every_os_native_backend_sends_the_argv_its_manager_expects` for
+    /// on apt or apk. This is `every_registrar_has_an_argv_row_or_a_written_reason` for
     /// the repository surface, and it exists because that test covered install and remove only.
     #[tokio::test]
     async fn every_repo_row_runs_the_program_that_edits_that_managers_sources() {

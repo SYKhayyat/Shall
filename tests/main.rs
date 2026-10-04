@@ -52,6 +52,7 @@ mod a_fan_out_of_managers_is_asked_concurrently_tests;
 mod a_fed_child_is_drained_while_it_is_fed_tests;
 mod a_finished_package_is_recorded_in_batches_tests;
 mod a_firewall_teardown_is_a_removal_tests;
+mod a_gate_name_cited_anywhere_resolves_tests;
 mod a_ledger_is_read_and_written_as_one_step_tests;
 mod a_lister_cannot_report_what_was_removed_tests;
 mod a_machine_converges_tests;

@@ -455,7 +455,7 @@ pub(super) fn register_xbps(reg: &mut BackendRegistry, executor: &CommandExecuto
 /// The two AUR helpers, each a two-argument registrar so the argv table can name it.
 ///
 /// They are registered on Linux only, which makes them exactly the class
-/// `every_os_native_backend_sends_the_argv_its_manager_expects` exists for — and until these
+/// `every_registrar_has_an_argv_row_or_a_written_reason` exists for — and until these
 /// wrappers existed the five-argument `register_aur_helper` could not appear in that table, so
 /// neither could they.
 pub(super) fn register_yay(reg: &mut BackendRegistry, executor: &CommandExecutor) {

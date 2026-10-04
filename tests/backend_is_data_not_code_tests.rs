@@ -306,7 +306,7 @@ fn every_reason_points_at_a_line_that_is_actually_there() {
             h.proof
         );
         let Some((_, src)) = modules.iter().find(|(n, _)| n == h.module) else {
-            continue; // `the_hand_written_list_has_no_stale_entries` owns that failure.
+            continue; // `every_backend_is_data_or_says_why_not` owns that failure.
         };
         if !src.contains(h.proof) {
             unproven.push(format!("{} claims `{}`", h.module, h.proof));

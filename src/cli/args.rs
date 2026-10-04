@@ -999,7 +999,7 @@ pub enum Commands {
 /// Shall command on the machine waits 120 seconds and then fails.
 ///
 /// Making it one enum is what stops the seventh instance. A new subcommand does not compile
-/// until it answers, and `no_unbounded_command_holds_the_lock_for_its_lifetime` fails if an
+/// until it answers, and `no_unbounded_command_holds_the_lock_for_its_whole_run` fails if an
 /// answer of [`Deferred`](LockScope::Deferred) ever turns back into a whole-run lock.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LockScope {
