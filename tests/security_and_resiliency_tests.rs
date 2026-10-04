@@ -389,6 +389,16 @@ async fn a_manager_that_cannot_answer_schedules_nothing_and_names_the_declaratio
         Err(Error::command_failed("brew is wedged")),
     );
 
+    // npm's reader is `language`, not brew's JSON: `npm list -g --depth=0 --json` reports "no
+    // packages" as an object with an empty `dependencies`, and `[]` is not JSON it recognises —
+    // which is read as *unreadable*, not as an empty machine. So the answering manager is given
+    // its own answer rather than the shared `ABSENT` default.
+    let mut npm_empty: std::process::Output = shall::core::executor::DryRunOutput::new().into();
+    npm_empty.stdout = br#"{"dependencies":{}}"#.to_vec();
+    kernel
+        .mock_executor
+        .set_response("npm list -g --depth=0 --json", Ok(npm_empty));
+
     let mut desired: HashMap<String, Vec<shall::core::PackageSpec>> = HashMap::new();
     desired.insert(
         "brew".to_string(),
@@ -396,9 +406,19 @@ async fn a_manager_that_cannot_answer_schedules_nothing_and_names_the_declaratio
     );
     // A second manager that answers — the mock's default is ABSENT — so "the plan stopped" is
     // distinguishable from "nothing was scheduled for the manager that failed".
+    //
+    // **This one is `npm`, not `apt`, and the reason is the host.** Rows in
+    // `builtin_backends.toml` are gated by `os`, so `apt` is registered on a Linux runner and is
+    // not registered on the macOS one — where the declaration below resolved to no backend at all,
+    // nothing was planned for it, and the assertion that the rest of the machine proceeded failed
+    // with "the manager that answered was not planned either". The test was green on Linux and red
+    // on macOS for a reason that had nothing to do with the third answer it exists to check: it
+    // was reading the runner's package managers instead of setting up the state it meant to set
+    // up. `npm` carries no `os` gate, so the two-manager world this test builds is the same world
+    // on every runner.
     desired.insert(
-        "apt".to_string(),
-        vec![create_dummy_spec("pkg-b", "apt", None)],
+        "npm".to_string(),
+        vec![create_dummy_spec("pkg-b", "npm", None)],
     );
 
     let state_guard = kernel.state.lock().await;
@@ -441,7 +461,10 @@ async fn a_manager_that_cannot_answer_schedules_nothing_and_names_the_declaratio
             .graph
             .node_weights()
             .any(|action| matches!(action, GraphAction::Install(s) if s.name == "pkg-b")),
-        "the manager that answered was not planned either, so the plan really did stop"
+        "the manager that answered was not planned either, so the plan really did stop. If this \
+         fires on a runner whose package managers differ from the test's, check that the manager \
+         named above still has no `os` gate in `builtin_backends.toml` — a gated row makes this \
+         assertion a statement about the runner."
     );
 }
 
