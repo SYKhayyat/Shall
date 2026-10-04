@@ -48,6 +48,7 @@ mod a_config_travels_between_machines_tests;
 mod a_configured_capability_is_a_registered_one_tests;
 mod a_downloaded_artifact_is_named_by_its_key_tests;
 mod a_failed_sync_fails_under_every_flag_tests;
+mod a_fan_out_of_managers_is_asked_concurrently_tests;
 mod a_fed_child_is_drained_while_it_is_fed_tests;
 mod a_finished_package_is_recorded_in_batches_tests;
 mod a_firewall_teardown_is_a_removal_tests;
