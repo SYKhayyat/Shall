@@ -352,6 +352,29 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     gate parses it — a report that fixed the diagnosis by breaking its own parser would trade one
     unreadable failure for another. Mutation watched: dropping `row.label` reds the test. — ISSUE
     #107)
+  - **THE SEVEN CHILDREN ARE NOW NAMED, and they say the gate was measuring the wrong unit.**
+    Run 37232355019 was the first to print the table, and it names them: `npm list` 2.02s,
+    `conda list` 1.60s, `dotnet tool` 0.69s, `pipx environment` 0.47s, `pipx list` 0.40s,
+    `npm prefix` 0.17s, `dpkg-query -W` 0.04s (`sbom` the same seven with different durations).
+    - **Seven child commands, FIVE managers.** npm is asked twice (`list`, `prefix`) and pipx twice
+      (`list`, `environment`), so "asked 7 managers" named a number that is neither a manager count
+      nor a command count — and `children` is what goes to `is_measurable` and `wave_ceiling`,
+      **both calibrated on managers**. The gate was measuring in commands and reporting in
+      managers. `render` now prints the distinct count when it differs, and `distinct_programs`
+      counts **programs** rather than managers on purpose: a manager is a Shall-side concept and a
+      span records a process, so calling it `managers` repeats the overclaim one level down.
+    - **"That is asking them one at a time" was refuted by the table printed under it.** `npm list`
+      and `dotnet tool` both start at 1.65s; `pipx list` overlaps `npm prefix` and `pipx
+      environment`. It runs about **two wide**. The assertion is right to be red; the prose was
+      wrong about why, and both messages now say to read the table before concluding serial.
+    - **So `managed_pkgs` is not what these two commands use** — these seven children arrive in
+      pairs per backend, which is not the shape of a `buffered(n)` over packages.
+    - **Next step, now specific rather than a question:** attribute each `Span` to the backend
+      that spawned it, so `is_measurable`/`wave_ceiling` count managers and the overlap ratio keeps
+      counting commands (a ratio of sums, correct as it stands); then account for the second call
+      per backend — `npm prefix` and `pipx environment` are `PropertyProbeDef` probes — and say
+      whether it runs behind the fan-out or inside it. That is what makes a five-way fan-out run
+      two wide over six waves.
 - [ ] #105 the crash window between a per-operation WAL write and the once-per-run registry write.
   (**ROUTE (2) WAS ALREADY BUILT — the issue's own "better next move" — so what was left was its
   residual, and the residual has one cause: the evidence expires.** `heal` calls
