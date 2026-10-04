@@ -399,12 +399,26 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     for it. That is the check the stamp exists to enable, and the mutation (adding `eopkg` to
     `DRIVEN`) reds it.
 - [ ] #41 prose tax distill, #36 doc-comment layer.
-- [ ] #95 `V.186` and `Q55` say `completed_installs` was deleted; the code still has it, and reads
-  it in production inside `reconcile_ownership` (`src/app/sync/mod.rs:1024`). A spec that says a
-  function was deleted while the function has a vote is a spec nobody can trust on the next
-  question about ownership. **Needs the owner's fork**, not an implementation: the code loses the
-  reader, or the docs gain it and say what it may decide. (Medium — the code is defensible, the
-  drift is not)
+- [x] #95 `V.186` and `Q55` said `completed_installs` was deleted; the code still had it, reading
+  it in production inside `reconcile_ownership` (`src/app/sync/mod.rs:1024`). (**BUILT as a spec
+  correction, and the fork was never needed — the docs were wrong in two places, not one.** The
+  entry sat here reading *"needs the owner's fork: the code loses the reader, or the docs gain it
+  and say what it may decide"*, long after `docs/spec/plan.md` had already ruled it (Tier 29,
+  item 44). **This file was the stale one**, which is the drift in the opposite direction from the
+  one the issue filed, and worth recording: the issue was fixed and the ledger kept asking.
+  - `why.md` and `decisions.md` both said the function was deleted. Both now say it was not, and
+    say what it may decide: `reconcile_ownership` only ever **claims a package the manifest already
+    declares**, on the evidence that Shall's own journal recorded installing it. The reader is
+    never an adoption source — the manifest stays the whole of ownership, which is what Q55 ruled
+    — so it is evidence of Shall's own action rather than a second record of one relationship.
+  - The second falsehood, which the issue did not have: `why.md` also claimed the crash orphan
+    *"is covered by the manifest as a special case… nothing is left that only the log can see"*,
+    while describing as deleted the very reader that saw it. That sentence is what made the loss of
+    the reader look survivable.
+  - **The ruling deleted nothing in the code, and that was the right side to leave alone** — the
+    reader decides whether a declared orphan is reclaimed, and a crash-stranded package is
+    unpacked but not configured, which every listing correctly reports as *not installed*. Removing
+    the reader would have restored that defect rather than fixed a documentation error.)
 
 ## Phase 4 — Feature gaps (Info, after core is safe)
 - [ ] Adopt discovery: #59 dotfiles, #60 schedules, #61 repos/PPAs, #62 shell, #63 settings, #64 services, #65 firewall.
