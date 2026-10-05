@@ -139,10 +139,6 @@ impl shall::core::executor::ExecutionLayer for Counting {
     }
 }
 
-fn registry_of(count: usize) -> Arc<BackendRegistry> {
-    registry_and_mock_of(count).0
-}
-
 /// The same registry, with the mock kept so a test can read the call log.
 ///
 /// **The call log, not a clock.** Every timing assertion in this file can be moved by another
@@ -251,7 +247,7 @@ fn registry_and_mock_of(
 /// On an empty registry there is nothing to ask anyone, which is the question #107 raises first.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn seven_managers_are_asked_at_once_and_not_one_after_another() {
-    let (registry, mock, peak) = registry_and_mock_of(MANAGERS);
+    let (registry, _mock, peak) = registry_and_mock_of(MANAGERS);
     let state = Arc::new(tokio::sync::Mutex::new(StateRegistry::default()));
     {
         let mut guard = state.lock().await;
@@ -311,7 +307,7 @@ async fn a_manager_is_listed_once_however_many_packages_are_asked_about_it() {
     const BACKENDS: usize = 4;
     const PER_BACKEND: usize = 3;
 
-    let (registry, mock, peak) = registry_and_mock_of(BACKENDS);
+    let (registry, mock, _peak) = registry_and_mock_of(BACKENDS);
     let state = Arc::new(tokio::sync::Mutex::new(StateRegistry::default()));
     {
         let mut guard = state.lock().await;
@@ -357,7 +353,7 @@ async fn a_manager_is_listed_once_however_many_packages_are_asked_about_it() {
 /// fan-out, then the fan-out test above would be measuring something other than concurrency.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_width_of_one_is_serial_because_it_is_meant_to_be() {
-    let (registry, mock, peak) = registry_and_mock_of(MANAGERS);
+    let (registry, _mock, peak) = registry_and_mock_of(MANAGERS);
     let state = Arc::new(tokio::sync::Mutex::new(StateRegistry::default()));
     {
         let mut guard = state.lock().await;
