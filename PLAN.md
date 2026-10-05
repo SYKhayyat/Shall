@@ -369,12 +369,32 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
       wrong about why, and both messages now say to read the table before concluding serial.
     - **So `managed_pkgs` is not what these two commands use** — these seven children arrive in
       pairs per backend, which is not the shape of a `buffered(n)` over packages.
-    - **Next step, now specific rather than a question:** attribute each `Span` to the backend
-      that spawned it, so `is_measurable`/`wave_ceiling` count managers and the overlap ratio keeps
-      counting commands (a ratio of sums, correct as it stands); then account for the second call
-      per backend — `npm prefix` and `pipx environment` are `PropertyProbeDef` probes — and say
-      whether it runs behind the fan-out or inside it. That is what makes a five-way fan-out run
-      two wide over six waves.
+    - **The seven children decompose: FIVE listings plus TWO property probes.** `npm list` +
+      `npm prefix` and `pipx list` + `pipx environment` are one listing and one
+      `PropertyProbeDef` probe each, so the second call per backend is a probe running *after* its
+      listing. Real, and not yet the whole story.
+    - **The hypothesis that SHOULD have held, tested, and did not.** `max_parallel` bounds
+      *processes* and defaults to `available_parallelism()` — **2 on that runner** — while
+      `managed_pkgs` fans out over *packages*, so a package whose backend is already being asked
+      holds a slot waiting on the per-backend singleflight instead of asking anything. The table
+      fits: `conda list` alone for 3.1s on a two-slot runtime. I implemented it (group by backend,
+      fan out over backends, restore document order by index); it is **correct** — all twelve
+      packages returned, order preserved — and **not a win**: 815ms vs 318ms for one package each,
+      a **2.6x** ratio where grouping predicts ~1.0x. **Reverted.**
+    - **That 2.6x is the actual finding.** 815ms is very near `12 × 120ms / 2`: twelve lookups
+      produced twelve child processes, so **`installed_listing` is not being reused within the run
+      at all**. The slot-wasting was second-order behind a first-order miss. **The next question is
+      a cache question, not a concurrency one** — and it is narrow: why does it miss? Candidates
+      are `InstalledListings::generation` bumping between lookups, `read_from_disk`/`to_disk`
+      against the mock VFS, and `installed_cache()`'s key. On a real host that singleflight is
+      documented as saving `declared + 1` `dpkg-query` invocations, so either the mock harness does
+      not reproduce the sharing or something invalidates it mid-run — and which decides whether
+      this is a production bug or a harness artifact.
+    - **The timing assertions in this file are host-sensitive, with receipts.**
+      `seven_managers_are_asked_at_once_and_not_one_after_another` failed at 875ms against an
+      840ms serial baseline purely because `ksav` on this machine was running a `--release`
+      build; it passes at 0.28s idle, before and after the change. **Ratio assertions here need a
+      quiet machine or a counter, not a clock.**
 - [ ] #105 the crash window between a per-operation WAL write and the once-per-run registry write.
   (**ROUTE (2) WAS ALREADY BUILT — the issue's own "better next move" — so what was left was its
   residual, and the residual has one cause: the evidence expires.** `heal` calls
