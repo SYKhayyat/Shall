@@ -381,15 +381,23 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
       fan out over backends, restore document order by index); it is **correct** — all twelve
       packages returned, order preserved — and **not a win**: 815ms vs 318ms for one package each,
       a **2.6x** ratio where grouping predicts ~1.0x. **Reverted.**
-    - **That 2.6x is the actual finding.** 815ms is very near `12 × 120ms / 2`: twelve lookups
-      produced twelve child processes, so **`installed_listing` is not being reused within the run
-      at all**. The slot-wasting was second-order behind a first-order miss. **The next question is
-      a cache question, not a concurrency one** — and it is narrow: why does it miss? Candidates
-      are `InstalledListings::generation` bumping between lookups, `read_from_disk`/`to_disk`
-      against the mock VFS, and `installed_cache()`'s key. On a real host that singleflight is
-      documented as saving `declared + 1` `dpkg-query` invocations, so either the mock harness does
-      not reproduce the sharing or something invalidates it mid-run — and which decides whether
-      this is a production bug or a harness artifact.
+    - **CORRECTED: THE MEMO WAS NEVER BROKEN. THE FIXTURE WAS.** Every fan-out measurement in
+      `a_fan_out_of_managers_is_asked_concurrently_tests` was taken on the **error path**. The
+      mock registered `AptParser` and answered `mock0 list` with `mock0-pkg 1.0`; `read_row`
+      requires a status word dpkg can emit, so the row was **unreadable** — and unreadable is an
+      **error**, not an empty machine. `once` deliberately **does not cache a failure**, so every
+      fetch errored, the memo never filled, and 4 managers × 3 packages produced **12** child
+      commands where 4 were intended. Correct row: `installed  mock0-pkg  1.0`.
+      **Consequences, stated so neither is repeated:** (a) `installed_listing` is fine — 4 listings
+      for 12 lookups, asserted by a count test with two mutations watched; (b) **the grouping
+      change reverted above is still unproven, not refuted** — its 2.6x was measured on the error
+      path and says nothing either way; (c) the CI observation is untouched and still stands.
+    - **The timing assertions in that file are not trustworthy, with receipts.** The same test
+      failed at 875ms and then 1.6s against an 840ms serial baseline purely because `ksav` was
+      running a `--release` build here (load 33), and passed at 0.28s idle. **Both are now
+      peak-concurrency counts**, wrapped in the test as an `ExecutionLayer` — adding the counter to
+      `MockExecutor` was refused by `a_module_is_a_subject_not_a_pile_tests` at 3223 lines against a
+      3150 ceiling, correctly. A clock measures the host as well as the code.
     - **The timing assertions in this file are host-sensitive, with receipts.**
       `seven_managers_are_asked_at_once_and_not_one_after_another` failed at 875ms against an
       840ms serial baseline purely because `ksav` on this machine was running a `--release`
