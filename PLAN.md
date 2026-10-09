@@ -403,7 +403,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
       840ms serial baseline purely because `ksav` on this machine was running a `--release`
       build; it passes at 0.28s idle, before and after the change. **Ratio assertions here need a
       quiet machine or a counter, not a clock.**
-- [ ] #105 the crash window between a per-operation WAL write and the once-per-run registry write.
+- [x] #105 the crash window between a per-operation WAL write and the once-per-run registry write.
   (**ROUTE (2) WAS ALREADY BUILT — the issue's own "better next move" — so what was left was its
   residual, and the residual has one cause: the evidence expires.** `heal` calls
   `reconcile_ownership` first and *unconditionally*, and `reconcile_ownership` reads
@@ -415,6 +415,17 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   **Route (1)** (ownership written per operation / same commit point as the WAL entry, then the
   reader goes) is the better end state and remains the owner's; it is an architecture change to the
   transaction, not a fix, and deleting the reader before either route is the one unavailable option.
+  **BUILT — the resolving test, 2026-10-09.** The entry above said the residual was closed by the
+  receipt and nothing said so in code, so it was a claim with no gate: remove `receipted_installs`
+  from the union in `reconcile_ownership` and nothing fails, because no test aged a journal entry
+  past the purge rule. `an_orphan_whose_wal_entry_has_expired_is_taken_back_on_the_receipt` does
+  exactly that — one `Completed` install aged past `cleanup_expired_logs(7)` by hand, a manager whose
+  listing holds nothing, and the orphan still taken back. **Mutation watched:** with the `chain`
+  taken out, 17 of the file's 18 tests pass and this one fails with *"the only evidence left was the
+  receipt, and it was not read"*. Two controls inside it so it cannot pass for the wrong reason:
+  the purge must report having dropped something, and the journal must be empty of the entry
+  afterwards — otherwise the test is measuring `completed_installs` again, which is the reader this
+  residual is about not depending on. — ISSUE #105)
 - [ ] #106 Windows MSVC. (**DOWN TO ONE OBSERVED FAILURE, and the count in the issue was not
   reliable — the crash got there first.** `a_ledger_without_a_floor_refuses_to_audit` is a
   `#[should_panic]` test, so `--nocapture` printing its panic is *success*, not failure; it never

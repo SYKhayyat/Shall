@@ -637,6 +637,63 @@ async fn a_preview_takes_nothing_back() {
     );
 }
 
+/// The journal's evidence expires; the claim it supports does not, and the receipt is what
+/// carries it across.
+///
+/// A kill between the per-operation WAL write and the once-per-run registry write is repaired
+/// by the next sync — but only while the evidence that there is something to repair still
+/// exists. `cleanup_expired_logs(7)` drops the `Completed` entry after a week, and the orphan
+/// outlives the week: a machine switched off for that long kept the package for ever, with the
+/// only repair left to it a listing that correctly reports an unpacked-but-not-configured
+/// package as *not installed* (`#105`, and the reason `receipts.jsonl` never expires).
+///
+/// The watched mutation: take `receipted_installs` out of the union in `reconcile_ownership`
+/// and this fails with an empty journal and a manager that lists nothing.
+#[tokio::test]
+async fn an_orphan_whose_wal_entry_has_expired_is_taken_back_on_the_receipt() {
+    let kernel = TestKernel::new().await;
+    declares(&kernel, "brew:orphan-pkg\n");
+    // Half-installed is the crash's own shape: on disk, on PATH, and not configured — so the
+    // manager does not list it. The lister is right, and that is exactly why nothing here may
+    // rest on it.
+    brew_holds(&kernel, &[]);
+
+    {
+        let mut j = kernel.app.journal.lock().await;
+        let id = j
+            .record_start(JournalAction::Install(spec("orphan-pkg")))
+            .expect("could not write the WAL");
+        j.record_success(&id).expect("could not close the entry");
+
+        // Aged past the purge rule by hand, so the week this describes does not have to pass.
+        let week_ago = 1_600_000_000;
+        for entry in j.entries.values_mut() {
+            entry.finished_at_unix = Some(week_ago);
+        }
+        assert!(
+            j.cleanup_expired_logs(7).expect("the purge failed"),
+            "nothing was expired, so the fixture has not lost the journal's evidence"
+        );
+        assert!(
+            j.completed_installs().is_empty(),
+            "the control failed: the journal still carries the finished entry, so this run \
+             would have been repaired by it rather than by the receipt"
+        );
+    }
+
+    kernel
+        .app
+        .sync_engine()
+        .heal(&declared(&kernel).await)
+        .await
+        .expect("heal failed");
+
+    assert!(
+        manages(&kernel, "orphan-pkg").await,
+        "the only evidence left was the receipt, and it was not read"
+    );
+}
+
 /// Recovery answers the same ceilings a sync does. Its installs used to skip
 /// `enforce_installs` — and with it `max_total_changes` — so a ceiling a user set to make
 /// "never change more than N things in one command" true was ignored by exactly the command
