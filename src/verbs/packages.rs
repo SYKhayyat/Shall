@@ -1881,7 +1881,7 @@ mod tests {
                 boxed(Error::command_failed("`mix` failed: something")),
                 WhyKept::Unclassified,
             ),
-            // W35/R-3: this case used to expect `Unclassified`, and that expectation WAS the
+            // B35/R-3: this case used to expect `Unclassified`, and that expectation WAS the
             // defect — a dpkg lock someone else holds is the textbook passing failure, and
             // telling the user "nothing classified the failure above, so if it repeats
             // unchanged the cause is not a passing one" is the exact inversion R-3 measured on

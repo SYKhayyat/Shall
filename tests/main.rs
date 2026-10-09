@@ -103,6 +103,7 @@ mod dry_run_marker_tests;
 mod dry_run_tests;
 mod every_documentation_link_resolves_tests;
 mod every_example_is_checked_tests;
+mod every_ruling_cited_in_code_resolves_to_one_tests;
 mod every_shipped_script_is_executable_tests;
 mod exec_lifecycle_tests;
 mod exit_code_contract_tests;

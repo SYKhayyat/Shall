@@ -1252,7 +1252,7 @@ impl SyncEngine {
         // or it is registered and cannot install or remove. Until 2026-08-04 the loop below was
         // two nested `if let`s with **no `else` on either**, so such an entry was neither
         // recovered, nor failed, nor mentioned: `heal` did nothing about it and returned Ok.
-        // That is W36's finding one branch over — W36 was "says it could not recover and exits
+        // That is B36's finding one branch over — B36 was "says it could not recover and exits
         // 0", this is "says nothing and exits 0", and the second is worse because there is
         // nothing in the output to read.
         let mut unreachable: Vec<String> = Vec::new();

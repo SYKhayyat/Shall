@@ -2354,7 +2354,7 @@ mod tests {
     ///
     /// The option terminator is Shall's, and it was measured rather than assumed: both of the
     /// commands above were run in that exact shape, because two managers in this tree turned
-    /// out to read `--` as a package name (W25) and mix does not.
+    /// out to read `--` as a package name (B25) and mix does not.
     /// ```
     #[tokio::test]
     async fn a_mix_archive_is_pinnable_and_its_removal_does_not_wait_for_an_answer() {

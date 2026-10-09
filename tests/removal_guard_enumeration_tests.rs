@@ -54,7 +54,7 @@ const LEDGER: &[Accounted] = &[
     Accounted {
         file: "src/app/apply/extras.rs",
         guarded_by: "guard::enforce_extras over the whole drift set before \
-                     any kind is dispatched (W21) — including the shim a package line asks \
+                     any kind is dispatched (B21) — including the shim a package line asks \
                      for with `@shim`/`@sandbox`, which resolves to a `shim:` extra (G-1)",
     },
     // `src/verbs/plan.rs` used to be here, and its entry named `guard::enforce` at
@@ -94,7 +94,7 @@ const LEDGER: &[Accounted] = &[
     // surface — the guard covering it is the engine's, counted under `core/transaction.rs`.
     Accounted {
         file: "src/verbs/declare.rs",
-        guarded_by: "guard::enforce_extras in `declare`, GuardScope::Remove (W21) — the \
+        guarded_by: "guard::enforce_extras in `declare`, GuardScope::Remove (B21) — the \
                      imperative twin of the `repo:` teardown",
     },
     Accounted {

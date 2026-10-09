@@ -507,7 +507,7 @@ fn a_preview_does_not_store_a_new_config_root() {
 /// was no control — and ruled it with `bundle` on the reasoning rather than on a measurement.
 /// The measurement says `export` **already honours the flag**: it prints `[DRY-RUN] would write
 /// <path>` per manifest and writes none of them. So this test is a regression guard, not a fix,
-/// and W43's code change is `bundle` alone.
+/// and B43's code change is `bundle` alone.
 ///
 /// It is here rather than in `CASES` because a host with no packages to export makes the
 /// control write nothing, which the table correctly reads as a broken fixture. Such a host is

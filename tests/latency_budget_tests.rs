@@ -295,7 +295,7 @@ go
 }
 
 // ---------------------------------------------------------------------------------------
-// BUILDER round 6, W41 / R-9 — and a correction to the finding that asked for it.
+// BUILDER round 6, B41 / R-9 — and a correction to the finding that asked for it.
 //
 // R-9 says "nothing measures latency". **This file already did**, committed in `02a4ec9` with
 // W14's fix: two ceilings and one call-counting property test. What did not exist is what

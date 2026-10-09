@@ -89,7 +89,7 @@ impl GrammarError {
 
 impl fmt::Display for GrammarError {
     /// Both halves are drawn through [`printable`](crate::core::validator::printable), because a
-    /// refusal quotes the line it refused and the line is untrusted text. W38 gave the character
+    /// refusal quotes the line it refused and the line is untrusted text. B38 gave the character
     /// validator this rule and left the grammar's own refusals with the raw bytes: a module saved
     /// by Notepad begins with a byte-order mark, and the refusal then reads
     /// `` `cargo` is not a backend Shall uses — add `cargo` to your priority file ``, naming two

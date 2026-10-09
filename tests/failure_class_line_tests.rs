@@ -1,4 +1,4 @@
-//! BUILDER round 6, W35's second half — the classification Shall computes has to reach the
+//! BUILDER round 6, B35's second half — the classification Shall computes has to reach the
 //! caller that needs it.
 //!
 //! `Error::retryability()` answers "could a second attempt differ" from the backend's own exit

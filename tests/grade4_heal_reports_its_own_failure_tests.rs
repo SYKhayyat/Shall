@@ -1,4 +1,4 @@
-//! BUILDER round 6, W36 / R-5's sibling R-6 — `heal` reported an operation it could not
+//! BUILDER round 6, B36 / R-5's sibling R-6 — `heal` reported an operation it could not
 //! recover at rc=0, in Rust's `Debug` syntax, with advice its own classifier contradicts.
 //!
 //! Measured by the round-5 grader, an `InProgress` install planted for a package that does not

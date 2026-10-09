@@ -150,7 +150,7 @@ fn info_agrees_with_list_about_what_is_installed() {
 }
 
 // ---------------------------------------------------------------------------------------
-// BUILDER round 6, W37 / R-4. The test above takes the FIRST row `list` prints, so which
+// BUILDER round 6, B37 / R-4. The test above takes the FIRST row `list` prints, so which
 // backend it examines is whatever that host happens to list first. On macOS that was a
 // launchd agent and it went red; on Windows it is a package and the same defect was invisible.
 //

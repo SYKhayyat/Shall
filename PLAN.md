@@ -469,7 +469,39 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     nothing**, and the gate that checks citations is what would catch it. Distilling in the right
     order means: index the citations first, move the durable rule per entry, then delete. That is
     three passes over 1.2 MB and it wants its own branch, not a commit between two unrelated fixes.
-  - #36 (the doc-comment layer) is the cheaper half and is unblocked.
+  - [x] #36 the ruling vocabulary cited from code had no venue and no resolving test. (**BUILT, and
+    the twelve it found the day it was written had been lying for a year.**) The issue asked for a
+    new `docs/rulings.md`; **it was not built, because `docs/SPEC.md` already names the venue** —
+    "`docs/spec/` is the specification", `decisions.md` the register and `bugs.md` the S-series — and
+    `id_namespaces_do_not_collide_tests` already treats that whole directory as the register and its
+    annotations. A new file would be a *second* venue, which is the disease this repo keeps finding.
+    `every_ruling_cited_in_code_resolves_to_one` is the twin of `every_citation_of_a_why_entry_
+    resolves_to_one`, over the register's reserved prefixes (`D W K N T U`) plus `Q` and `S`, and
+    `V` is deliberately left to the gate that already resolves it — a second oracle for one citation
+    is a contradiction waiting to happen.
+    - **Two families, and both were the document's fault rather than the code's.** Ten citations
+      were BUILDER's own work orders: `docs/BUILDER.md` renumbered `W1`–`W43` to `B*` when
+      `id_namespaces_do_not_collide_tests` shipped, and the fifteen places citing them did not
+      follow — so `W21`, `W25`, `W35`, `W36`, `W37`, `W38`, `W41` and `W43` had been reading as
+      *"stop and ask the owner"* ever since, which is the one reading a stale citation should never
+      keep. All sixteen renumbered (`W38` was in two files; the twelfth surfaced only after the
+      exemption was made per-corpus). The other two were **`S22` and `S23`, real bugs that were
+      fixed and never given a row in `bugs.md`** — `pixi`'s empty-result banner read as a package
+      called `No`, and `nimble`'s format legend read as two — so the three places naming the
+      failure class cited nothing. Both rows now exist, reconstructed from the two commits that
+      fixed them and marked as reconstructions, because a row written after the fact that does not
+      say so is indistinguishable from one that was always there.
+    - **The exemption is per-corpus, and that was a bug in the first draft.** Keyed by ID alone it
+      excused `W43` *everywhere*, including a stale citation in `dry_run_every_verb_tests.rs` —
+      a permission granted to one file and silently extended to the tree. **Mutation watched, and
+      it is the better of the two:** re-pointing an exempt citation reds both halves at once, the
+      exemption naming itself stale and the new dangling name in the same run.
+    - Two controls that stop the scan reading vacuously: the tree must have >100 Rust files and the
+      venue >100 definitions, `U27` (a `## U27` heading) and `S87` (a `| **S87** |` row) must be
+      found and `U999` must not. **`W32Time` — the Windows service — was read as a citation of a
+      work order called `W32`,** and the first version's own example text (`W32`, `U999`) was
+      cited by the file that quotes examples; both are why the scan skips self and requires a
+      boundary *behind* the digits as well as in front. — ISSUE #36)
 - [x] #95 `V.186` and `Q55` said `completed_installs` was deleted; the code still had it, reading
   it in production inside `reconcile_ownership` (`src/app/sync/mod.rs:1024`). (**BUILT as a spec
   correction, and the fork was never needed — the docs were wrong in two places, not one.** The

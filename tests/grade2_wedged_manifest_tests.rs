@@ -110,7 +110,7 @@ fn a_name_no_backend_can_install_is_never_left_in_the_manifest() {
         };
         // A rate limit is the one failure that makes this measurement meaningless, and it is
         // not hypothetical: the macOS runner hit one (`does not reset for 999s`) and Shall
-        // correctly kept the line, because a window that moves IS a passing failure and W35
+        // correctly kept the line, because a window that moves IS a passing failure and B35
         // exists to say so. The premise here — "this failure is permanent" — is false in that
         // environment, so the case is skipped and NAMED rather than asserted around.
         //

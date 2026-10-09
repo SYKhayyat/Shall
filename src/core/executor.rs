@@ -2930,7 +2930,7 @@ mod exit_status_tests {
 
     /// Trojan source, in a package manager's output rather than in a module: U+202E reverses
     /// everything after it as it renders, so a failure can be made to read as its opposite.
-    /// The grammar's refusals have named it by codepoint since W38; a command's output did not.
+    /// The grammar's refusals have named it by codepoint since B38; a command's output did not.
     #[test]
     fn an_invisible_character_in_a_managers_output_is_named_not_drawn() {
         let err = executor_for(ExitPolicy::default())

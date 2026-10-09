@@ -181,7 +181,7 @@ fn a_pty_and_a_pipe_report_the_same_packages() {
 ///
 /// `shall-failure-class: permanent` was the first line a new user saw on the first command they
 /// run. The line itself is a good contract — both harnesses read it instead of guessing by
-/// retrying (W35) — so it stays on a pipe and goes on a terminal. Asserted from both sides here,
+/// retrying (B35) — so it stays on a pipe and goes on a terminal. Asserted from both sides here,
 /// because "it is gone" and "it is gone everywhere" are different findings.
 #[test]
 fn the_failure_class_line_is_for_a_pipe_and_not_for_a_terminal() {
