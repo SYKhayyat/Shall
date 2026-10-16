@@ -46,6 +46,7 @@ work on this repo without reading any of them.
 | `GRADE-<date>.md` | What a grading round found, with measurements. Useful as a record of what has actually been driven versus merely argued. |
 | `HANDOFF-<date>.md` | End-of-session state, so the next session resumes without re-deriving. The newest one is the current position. |
 | `attic/lessons.md` | Residue of shipped defects. Its own header says it is for a person, once. |
+| `attic/README-2026-08-12.md` | The user-facing manual as it stood on 12 August 2026, recovered from a working tree that was about to be deleted. Its section list is longer than today's README's and its headings are the ones this README's contents still links to. |
 
 If you want a sense of where the real risk sits, the newest `GRADE-*.md` is the most useful thing
 in this list: it is written by someone trying to break the program and it says where it succeeded.
