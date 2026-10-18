@@ -114,7 +114,8 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   - **The lib-side Win32 fix also type-checks on the cross target**, with
     `cargo check --target x86_64-pc-windows-gnu --lib` and `RUSTFLAGS=-D warnings`, using the Nix
     mingw C toolchain. It supplies the required `SID_NAME_USE` output buffer, checks the sizing
-    error correctly, and decodes the UTF-16 SID returned by `ConvertSidToStringSidW`. That is
+    error correctly, and decodes the UTF-16 SID returned by `ConvertSidToStringSidW`. The cross-target
+    `--tests` check passes with warnings denied. That is
     compile evidence from a Linux host, complementing the Windows runtime run above.)
 - [x] #102 CI: the main test step discards a crash's own evidence, on every platform.
   `.github/workflows/ci.yml:363` ran for **every** row of the build matrix with no `--nocapture`
