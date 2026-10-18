@@ -33,7 +33,7 @@ use std::time::Duration;
 
 use dashmap::DashMap;
 use shall::backends::generic::{
-    GenericBackendCore, GenericQueryable, ManagerConfig, ManualListing,
+    GenericBackendCore, GenericQueryable, ManagerConfig, ManualListing, PropertyProbe,
 };
 use shall::backends::BackendRegistry;
 use shall::core::executor::{CommandExecutor, DryRunOutput, MockExecutor};
@@ -87,7 +87,7 @@ struct Counting {
     seen: Arc<tokio::sync::Mutex<Peak>>,
 }
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 struct Peak {
     in_flight: usize,
     peak: usize,
@@ -152,6 +152,20 @@ fn registry_and_mock_of(
     Arc<MockExecutor>,
     Arc<tokio::sync::Mutex<Peak>>,
 ) {
+    registry_and_mock_with_probes(count, &[])
+}
+
+/// The production evidence shape: five managers, with npm/pipx-like second commands on two of
+/// them. The second command belongs to the manager whose listing just finished; it is not another
+/// manager, and it must not make the output order or the outer process cap disappear.
+fn registry_and_mock_with_probes(
+    count: usize,
+    probed: &[usize],
+) -> (
+    Arc<BackendRegistry>,
+    Arc<MockExecutor>,
+    Arc<tokio::sync::Mutex<Peak>>,
+) {
     let vfs: Arc<DashMap<PathBuf, String>> = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
     // The layer is the counting wrapper; the mock underneath still records the call log, which is
@@ -188,6 +202,23 @@ fn registry_and_mock_of(
             }
             .into()),
         );
+        let property_probes = if probed.contains(&i) {
+            mock.set_response(
+                &format!("{name} prefix"),
+                Ok(DryRunOutput {
+                    stdout: format!("/tmp/{name}\n").into_bytes(),
+                    stderr: vec![],
+                }
+                .into()),
+            );
+            vec![PropertyProbe {
+                property: "install_path".into(),
+                args: vec!["prefix".into()],
+                template: "{base}/{name}".into(),
+            }]
+        } else {
+            Vec::new()
+        };
         let config = ManagerConfig {
             name: name.clone(),
             binary: None,
@@ -222,7 +253,7 @@ fn registry_and_mock_of(
             install_source_option: None,
             extra_probes: None,
             upgrade_reinstall_args: None,
-            property_probes: Vec::new(),
+            property_probes,
             machine_list: None,
             outdated: None,
             search_source: shall::backends::generic::SearchSource::Command,
@@ -241,6 +272,43 @@ fn registry_and_mock_of(
         ));
     }
     (Arc::new(reg), mock, peak)
+}
+
+/// Five managers produce seven child commands when two of them have one property probe each.
+/// This is the shape named by the CI timing table, without a wall-clock assertion or a real
+/// manager. It proves the count is not the manager count, that the probe does not serialize the
+/// other managers, and that `buffered(max_parallel)` still caps the process fan-out.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn five_managers_and_two_probes_keep_order_and_the_process_cap() {
+    const BACKENDS: usize = 5;
+    let (registry, mock, peak) = registry_and_mock_with_probes(BACKENDS, &[0, 1]);
+    let state = Arc::new(tokio::sync::Mutex::new(StateRegistry::default()));
+    {
+        let mut guard = state.lock().await;
+        guard.set_managed(
+            (0..BACKENDS).map(|i| managed(&format!("mock{i}"), &format!("mock{i}-pkg"))),
+        );
+    }
+
+    let pkgs = shall::app::export::managed_pkgs(&state, &registry, 2).await;
+    let expected: Vec<String> = (0..BACKENDS).map(|i| format!("mock{i}-pkg")).collect();
+    assert_eq!(
+        pkgs.iter()
+            .map(|(_, name, _)| name.clone())
+            .collect::<Vec<_>>(),
+        expected,
+        "buffered fan-out must preserve state order"
+    );
+
+    let calls = mock.get_calls().await;
+    let listings = calls.iter().filter(|call| call.ends_with("list")).count();
+    let probes = calls.iter().filter(|call| call.ends_with("prefix")).count();
+    assert_eq!(listings, BACKENDS, "one listing per manager");
+    assert_eq!(probes, 2, "one property probe for each of the two probed managers");
+    assert_eq!(calls.len(), 7, "five listings plus two probes is the observed child shape");
+
+    let c = peak.lock().await.clone();
+    assert_eq!(c.peak, 2, "the configured process cap must remain in force: {:?}", c);
 }
 
 /// Seven managers, one managed package each — the state that makes `managed_pkgs` fan out at all.

@@ -546,6 +546,13 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
         in `tests/latency_budget_tests.rs`. Every gate that reads them is still asked, none was
         deleted or weakened, and the two in this entry were re-pointed at the reading that means
         the same thing on a 2-core runner as on a 16-core one. — ISSUE #107)
+    - **CONTROL ADDED: the reported seven-child shape is now exercised without a clock.** A
+      deterministic five-backend fixture gives two backends one `PropertyProbe`, so
+      `managed_pkgs` must produce five listings plus two probes. The regression asserts exactly
+      seven calls, preserves the state/document order, and reaches but does not exceed a
+      `max_parallel = 2` peak. It passes with the corrected successful-listing fixture. This
+      covers the observed `npm list`/`npm prefix` and `pipx list`/`pipx environment` shape and
+      proves the probe is not a seventh manager or a bypass of the process cap.
 - [ ] #111 the manager fan-out is bounded by the core count, and no instrument reports the degree
   it lost. (**Filed 2026-10-18 from the two measurements above, as a budget question rather than a
   defect.** `max_parallel` defaults to `available_parallelism()`, which is right for work that ends
