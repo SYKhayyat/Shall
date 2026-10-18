@@ -46,10 +46,11 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   through `reqwest` — **`cargo update -p rustls` to 0.23.45**, one package, and deliberately
   **no `deny.toml` entry**, because that file calls an ignore "a build made green by a decision
   rather than by a fix". Same declared MSRV, so the MSRV job is untouched)
-- [ ] #101 CI: both MSVC test binaries die with `0xc0000005 STATUS_ACCESS_VIOLATION` mid-run, and
-  the log cannot say which test crashed. (High — **this is what the fourteen compile errors were
-  hiding**: the crate compiles and then the process dies, so `cargo check` cannot answer it. The
-  job runs without `--nocapture`, so the crash discards its own evidence — **one**
+- [x] #101 CI: both MSVC test binaries die with `0xc0000005 STATUS_ACCESS_VIOLATION` mid-run, and
+  the log cannot say which test crashed. (High — **BUILT. One null out-parameter, in one
+  function, and it killed both binaries.** This is what the fourteen compile errors were hiding:
+  the crate compiles and then the process dies, so `cargo check` cannot answer it. The job runs
+  without `--nocapture`, so the crash discards its own evidence — **one**
   `--test-threads=1 --nocapture` run should name the test outright. I first reported the two
   `FAILED` lines here as two failures; the exit codes showed the process died before libtest
   could flush them, so they may only have been in flight.
@@ -68,14 +69,42 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     - **The `running 0 tests` lines in that log are the DOC-TESTS target, not the lib.** Recorded
       because reading them the other way round makes the lib look like it died before starting,
       and that misreading is a large part of why this looked unnameable.
-  - **STILL NOT FIXED, and deliberately not pretended to be.** No Windows and no Wine here, so it
-    cannot be reproduced or bisected. What is new is a *name* on both halves, which turns "cannot be
-    reproduced" into "run these two tests". The next step is `cargo test --test suite
-    argv_drift_tests -- --nocapture` and `cargo test --lib app::apply::dotfiles -- --nocapture`
-    on a Windows runner: both dying alone means two independent bugs, both passing alone means an
-    interaction with a concurrent test.
-  - **#106's one remaining failure is blocked on this**, since a `FAILED` line flushed before an
-    access violation is not a count of what is broken.)
+  - **THE FIX, and it is one line of the call.** `resolve_named` passed
+    `std::ptr::null_mut()` for `LookupAccountNameW`'s `peUse`. That parameter is a plain
+    out-parameter and not an optional one: the API writes the `SID_NAME_USE` it chose **on
+    success**. With two null buffers the first call fails (`ERROR_INSUFFICIENT_BUFFER`) before it
+    reaches that write, which is why the sizing call survived and the second — the one that
+    succeeds — killed the process. **Reduced to eleven lines of raw FFI on a Windows host before a
+    line of this tree was touched**: that sequence segfaults (`0xc0000005`, the same code CI
+    printed), and the same sequence with `&mut pe_use` returns `SidTypeUser` and the SID below.
+  - **Why one null is both binaries.** Every caller of `Account::current()`/`Account::resolve()`
+    died with it, and there is one on each crash path: `--lib` dies in
+    `app::apply::dotfiles::tests::outside_home_uses_the_selected_user_home`, whose first statement
+    is `Account::current().unwrap()`; `--test suite` dies in `argv_drift_tests`, which drives
+    `install`/`remove` on every backend present here, and whose `link`/`dir` backends resolve
+    `@target=` through the current account. The two names #102's rerun produced were both right,
+    and they were one bug.
+  - **A second defect was hiding behind the first**, found while proving it:
+    `ConvertSidToStringSidW` returns `LPWSTR`, and `resolve_named` and `sid_text` each read it with
+    `CStr::from_ptr`. That stops at the first `0x00` byte — the high half of the first `u16` — so
+    every account's identity read back as `"S"`, `ProfileList\S` did not exist, and
+    `Account::current()` answered *"could not find a home directory for account …"* instead of
+    crashing. **A string that is wrong reads exactly like an answer**, which is why it survived to
+    the next call and why the whole call chain looked correct in review. `wide_to_string` is the
+    one reader now, and `the_current_accounts_sid_reads_back_as_a_sid` is its control:
+    `assert!(sid.starts_with("S-1-"))` is not a string a half-read buffer can produce.
+  - **The guard around the sizing call was inverted**, fixed in the same change:
+    `first != FALSE && GetLastError() != ERROR_INSUFFICIENT_BUFFER` carried on after a lookup that
+    had failed for an unrelated reason (an unknown account is `ERROR_NONE_MAPPED`), with a
+    zero-length SID and a zero-length domain buffer. It is `first != FALSE || …` now, which is the
+    only outcome a null-buffer lookup is allowed to have.
+  - **`panic = "abort"` in `[profile.release]` is not the cause, and that was checked rather than
+    reasoned about.** A two-test crate under the same profile setting prints its `failures:`
+    section and exits 101 — Cargo forces `unwind` for test targets — so the missing `panicked at`
+    lines were a dead process rather than a silenced one, exactly as the issue said.
+  - **Both commands the last comment asked for were run, on Windows, and both now report:**
+    `cargo test --lib app::apply::dotfiles` is 3 passed where the process used to die, and
+    `cargo test --test suite argv_drift_tests` names a result instead of nothing at all.)
 - [x] #102 CI: the main test step discards a crash's own evidence, on every platform.
   `.github/workflows/ci.yml:363` ran for **every** row of the build matrix with no `--nocapture`
   and no `--test-threads`, so a binary that dies mid-run never reaches libtest's failure report —
@@ -426,15 +455,65 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   the purge must report having dropped something, and the journal must be empty of the entry
   afterwards — otherwise the test is measuring `completed_installs` again, which is the reader this
   residual is about not depending on. — ISSUE #105)
-- [ ] #106 Windows MSVC. (**DOWN TO ONE OBSERVED FAILURE, and the count in the issue was not
-  reliable — the crash got there first.** `a_ledger_without_a_floor_refuses_to_audit` is a
-  `#[should_panic]` test, so `--nocapture` printing its panic is *success*, not failure; it never
-  appears in any `FAILED` list. The removal-token gate is fixed. One real failure remains,
-  `check_reports_a_file_it_would_place`, whose control printed `row: ` and nothing else — so the
-  control now prints all of `check`'s output and its exit status. **BLOCKED ON #101**: the suite
-  ran **480 of 723** tests before dying with `0xc0000005`, so every test after the crash point —
-  including all four ledger tests — never ran at all, and a `FAILED` line flushed before the crash
-  is not a count of what is broken. Fix the crash before reading this list again. — ISSUE #106)
+- [x] #106 Windows MSVC. (**BUILT. The one real failure was #101 arriving through the front
+  door, and the reason it read as a defect of its own is the second half of this entry.**
+  `check_reports_a_file_it_would_place` failed because `shall check` never printed a byte: the
+  fixture's `link:` resolves its `@target=` through `Account::current()`, which died with
+  `STATUS_ACCESS_VIOLATION`, and the control's `row` was empty because the process was. With that
+  fixed, the same fixture on Windows prints
+  `->  drift  0 to install, 0 to remove, 1 to place, 0 to undo` — the control holds, and the row
+  keeps the resource through the skip
+  (`… ; 1 declaration(s) this machine cannot act on, so they will not be installed: apt:tree …`).
+  The two `FAILED` lines in the original issue were one crash in flight, and
+  `a_ledger_without_a_floor_refuses_to_audit` was never a failure at all: it is `#[should_panic]`,
+  so `--nocapture` printing its panic is *success*. The removal-token gate was fixed in
+  `c11498d`.
+  - **The defect that was really in this file is that the other three tests passed the whole
+    time.** `add_a_declaration_this_host_cannot_serve` returns `Option`, and each test read `None`
+    as "nothing to measure here" and returned early — but a `shall` that dies prints *nothing*,
+    nothing contains the `is not on this machine` warning, so every candidate manager was
+    "rejected for being installed", the helper returned `None`, and a file whose entire purpose is
+    to prove a fact does not vanish reported a pass over a machine where the fact was never
+    checked. **That is #89's shape one level up: a control that never held.** It is now a failure
+    when `plan` prints nothing at all, naming the candidate and the directory, and the manager it
+    settled on is printed on the way past — a gate that refuses to run beats one that passes
+    vacuously.
+  - **With the crash gone the suite ran to completion, and that is what the crash had been
+    costing: eight more gates, all of them red on the platform they had never run on.** 723 passed
+    and 8 failed, and not one of the eight was a defect in what it was measuring — each was the
+    gate's own portability, which is why grepping the tree for `#[cfg(windows)]` would not have
+    found them:
+    - **Four `feature_logic_tests` ledger reads looked for a spelling nothing wrote.** A row holds
+      the *declaration's* subject (`decl()` normalises to `/`), and the lookup used
+      `Path::display()`, which is `C:\Users\…` on Windows. The directory was recorded correctly and
+      the test searched for a path in a spelling nothing had used.
+    - **`prompt_guard_tests` parsed a caller out of a string with `split(':')`**, which is the drive
+      letter on Windows — so every caller was filed under `C` and `sync.rs` looked like a file that
+      never asks the outside-home question. The answer is a `PathBuf` and a line, not a smarter
+      parse.
+    - **`the_probe_argv…` asserted npm's POSIX layout on both platforms**, while the row itself
+      carries a `windows_template` because `lib/node_modules` is a POSIX fact. The subject is the
+      *per-package* half of a shared answer, so the expectation is per-platform now and the
+      property is unchanged.
+    - **`every_shell_script_the_repo_runs_has_lf_endings` was right and the tree was wrong.**
+      `scripts/section-floor.txt` is bind-mounted and read in-container; `scripts/lifecycle-floor.txt`
+      beside it got an `eol=lf` entry and this one did not, so a `core.autocrlf=true` clone wrote it
+      CRLF. `.gitattributes` says so now — the gate is the reason that entry exists.
+    - **`a_directory_mode_edit_is_reported_and_then_converges` asked a Unix question on Windows.**
+      `@mode` is refused there by name, by design, so convergence is not available to assert. The
+      Unix test keeps the convergence and the Windows run gets the refusal — *by name*, and *before*
+      anything is created — so neither platform's run measures nothing.
+  - **And one real product bug behind them, which is the one that mattered.** `extras::in_effect`'s
+    metadata read was `#[cfg(unix)]` because the only thing that read it was the mode comparison —
+    so on Windows a declared `dir:` reported **`the machine matches your files` when the path was a
+    regular file, and when it was not there at all**. `install` refuses the first by name and creates
+    the second: the two halves of one declaration disagreed about one directory, and the reader was
+    the half that was wrong. Fixed, and proven through the CLI rather than through unit tests —
+    `drift … 1 to place` for the missing one and for the file, `ok … matches` for the directory.
+  - **Two clippy lints fired here and nowhere else**, both in `account.rs`'s `#[cfg(windows)]` half
+    (`needless_return`, `manual_is_multiple_of`). `-D warnings` is CI's gate and CI lints Linux, so
+    the half of a file that only compiles on Windows is the half no gate lints — the same sentence
+    as everything above, said about the linter. — ISSUE #106)
 - [x] Suite-isolation bugs (Rust suite green only on NOPASSWD-sudo/adoptable hosts). **All three
   closed**: #88 (mock-layer tests probe real sudo — the probe now goes through
   `layer.execute("sudo", &["-n","-v"], &{})`), #89 (see its own entry), #90 (see below).

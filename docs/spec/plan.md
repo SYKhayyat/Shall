@@ -885,9 +885,11 @@ build and what is deferred to hardware.**
       `--nocapture` dropped, `failure()` dropped, and the main step made serial — each caught by
       the assertion written for it.
 
-    **`#101` is still open and is not answered by this.** The evidence is now produced; nobody has
-    read it yet, because reading it needs a Windows machine. What the log already shows, and what
-    the re-run will make unambiguous: **no `stdout ----` block appears for any test in the whole
+    **`#101` was not answered by this, and has since been closed elsewhere.** This step produced
+    the evidence; reading it took a Windows host, and the answer is in `PLAN.md`'s `#101` entry —
+    a null `peUse` out-parameter that `LookupAccountNameW` writes on success, and, behind it, a
+    wide SID string read as a narrow one. What this step's log already showed, and what the fix
+    had to account for: **no `stdout ----` block appears for any test in the whole
     run**, which is what makes the two `FAILED` lines in-flight rather than failures, and four
     lines before the death libtest printed that
     `a_reader_writes_nothing_tests::no_reader_subcommand_writes_anything` had been running for

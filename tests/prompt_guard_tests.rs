@@ -149,18 +149,22 @@ fn one_function_answers_the_outside_home_question_and_both_commands_ask_it() {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
 
     let mut definitions: Vec<String> = Vec::new();
-    let mut callers: Vec<(String, usize)> = Vec::new();
+    // **A `PathBuf` and a line, not a `"path:line"` string parsed back apart.** The caller used
+    // to be spelled `format!("{}:{}", path.display(), i + 1)` and then read with
+    // `split(':').next()` — which is the drive letter on Windows, so every caller was filed
+    // under `C` and `sync.rs` looked like a file that never asks. The parse was the bug, and the
+    // answer is not a smarter parse: a path is not a string with a colon in it.
+    let mut callers: Vec<(PathBuf, usize)> = Vec::new();
     for path in sources() {
         let body = std::fs::read_to_string(&path).unwrap_or_default();
         for (i, line) in body.lines().enumerate() {
             if line.trim_start().starts_with("//") || !line.contains("confirm_outside_home") {
                 continue;
             }
-            let at = format!("{}:{}", path.display(), i + 1);
             if line.contains("fn confirm_outside_home") {
-                definitions.push(at);
+                definitions.push(format!("{}:{}", path.display(), i + 1));
             } else {
-                callers.push((at, i + 1));
+                callers.push((path.clone(), i + 1));
             }
         }
     }
@@ -173,9 +177,13 @@ fn one_function_answers_the_outside_home_question_and_both_commands_ask_it() {
     );
 
     let mut asked_by: BTreeSet<String> = BTreeSet::new();
-    for (at, _) in &callers {
-        let file = at.split(':').next().unwrap_or_default();
-        asked_by.insert(file.rsplit('/').next().unwrap_or_default().to_string());
+    for (path, _) in &callers {
+        asked_by.insert(
+            path.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned(),
+        );
     }
     for verb in ["sync.rs", "plan.rs"] {
         assert!(

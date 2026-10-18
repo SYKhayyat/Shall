@@ -24,6 +24,13 @@ Dockerfile* text eol=lf
 # core.autocrlf=true.
 scripts/lifecycle-floor.txt text eol=lf
 
+# Its sibling in the same directory, mounted by `docker/integration/run.sh` and named four times
+# by `ci.yml`, and read in-container by shell. `scripts/lifecycle-floor.txt` got the entry and
+# this one did not, so on a `core.autocrlf=true` checkout every container run read a CRLF copy —
+# and `every_shell_script_the_repo_runs_has_lf_endings`, which reads bytes precisely because
+# MSYS `grep` cannot see this, reported it on the clone it was written on and nowhere else.
+scripts/section-floor.txt text eol=lf
+
 # A parser fixture's line endings ARE the content under test. These files are captured from a
 # real manager's stdout and compared byte for byte by the parser that reads that manager; letting
 # a Windows clone rewrite them to CRLF changes the input and can only change the answer — a

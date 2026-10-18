@@ -273,6 +273,21 @@ mod tests {
         }
     }
 
+    /// An absolute directory that is on no platform's disk.
+    ///
+    /// `dir:` refuses a *relative* path, because one is read against wherever the process
+    /// happened to start — and `/srv/state` **is** relative on Windows, where it is rooted but
+    /// driveless and therefore exactly the ambiguity the refusal exists for. The subject of
+    /// these tests is what a declaration freezes, not which directory it names, so the fixture
+    /// asks the platform for a path that is absolute on the platform it is running on.
+    fn an_absolute_dir() -> &'static str {
+        if cfg!(windows) {
+            r"C:\srv\state"
+        } else {
+            "/srv/state"
+        }
+    }
+
     fn dir(path: &str, options: &[(&str, &str)]) -> crate::config::grammar::Statement {
         let mut opts = crate::config::grammar::Options::default();
         for (name, value) in options {
@@ -305,7 +320,7 @@ mod tests {
 
     #[test]
     fn a_directories_mode_is_part_of_the_plan_and_not_only_its_key() {
-        let path = "/srv/state";
+        let path = an_absolute_dir();
         let tight = resources_for(&dir(path, &[("mode", "0700")]));
         let loose = resources_for(&dir(path, &[("mode", "0750")]));
 
@@ -329,7 +344,7 @@ mod tests {
 
     #[test]
     fn a_directories_owner_is_part_of_the_plan_and_not_only_its_key() {
-        let path = "/srv/state";
+        let path = an_absolute_dir();
         let alice = resources_for(&dir(path, &[("owner", "alice")]));
         let bob = resources_for(&dir(path, &[("owner", "bob")]));
 
@@ -349,7 +364,7 @@ mod tests {
 
     #[test]
     fn an_unchanged_declaration_freezes_a_byte_identical_plan() {
-        let path = "/srv/state";
+        let path = an_absolute_dir();
         let first = artifact(&resources_for(&dir(
             path,
             &[("mode", "0700"), ("owner", "alice")],

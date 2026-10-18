@@ -432,6 +432,11 @@ fn ledger_body(f: &Fixture) -> String {
         .expect("a sync that placed a resource records it")
 }
 
+/// **The question is asked in the spelling the declaration used**, and that is the whole of
+/// this helper's portability. A row's `subject` is the `dir:` line's subject, so a declaration
+/// written `C:/Users/…/shall-made` is recorded that way — while `Path::display()` on Windows
+/// spells the same directory `C:\\Users\\…`, and the lookup found no row at all. The directory
+/// was recorded correctly and the test was looking for a spelling nothing had written.
 fn origin_of(body: &str, subject: &str) -> Option<DirOrigin> {
     let wanted = format!("subject = {subject:?}");
     body.lines()
@@ -464,7 +469,7 @@ fn a_directory_shall_created_is_recorded_as_its_own_and_removed_on_undeclare() {
         "the ledger is not written to the schema this build reads:\n{body}"
     );
     assert_eq!(
-        origin_of(&body, &dir.display().to_string()),
+        origin_of(&body, &decl(&dir)),
         Some(DirOrigin::ShallCreated),
         "a directory Shall made was not recorded as Shall's, so nothing on undeclare would be \
          authorized to remove it:\n{body}"
@@ -496,7 +501,7 @@ fn a_pre_existing_empty_directory_is_recorded_as_the_users_and_preserved() {
 
     let body = ledger_body(&f);
     assert_eq!(
-        origin_of(&body, &dir.display().to_string()),
+        origin_of(&body, &decl(&dir)),
         Some(DirOrigin::PreExisting),
         "a directory that was already on the machine was recorded as Shall's own:\n{body}"
     );
@@ -536,7 +541,7 @@ fn a_shall_created_directory_with_contents_is_preserved_and_its_row_kept() {
     );
     let body = ledger_body(&f);
     assert_eq!(
-        origin_of(&body, &dir.display().to_string()),
+        origin_of(&body, &decl(&dir)),
         Some(DirOrigin::ShallCreated),
         "a teardown that left the directory in place must keep its row, or the next sync has \
          forgotten that Shall owns the path:\n{body}"
@@ -558,11 +563,11 @@ fn two_directories_keep_separate_rows_and_separate_origins() {
     let body = ledger_body(&f);
     assert_ne!(made, found, "two directories wrote one row");
     assert_eq!(
-        origin_of(&body, &made.display().to_string()),
+        origin_of(&body, &decl(&made)),
         Some(DirOrigin::ShallCreated)
     );
     assert_eq!(
-        origin_of(&body, &found.display().to_string()),
+        origin_of(&body, &decl(&found)),
         Some(DirOrigin::PreExisting)
     );
 

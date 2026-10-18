@@ -108,6 +108,14 @@ fn one_file_to_place(name: &str) -> PathBuf {
 /// unlisted manager is refused at the grammar before the planner ever sees it. Appending it is
 /// what a machine that *lost* a manager looks like — which is what `secure_path` does to
 /// `cargo` on every `sudo` invocation.
+///
+/// **A candidate is only "present here" if `plan` said so, and silence is not an answer.** The
+/// test this feeds took an early `return` on `None`, so a `shall` that answered nothing at all
+/// left every one of these tests green while measuring nothing — which is exactly what happened:
+/// on Windows both binaries were dying with `STATUS_ACCESS_VIOLATION` (#101), `plan` printed not
+/// one byte, every candidate was "rejected for being installed", and the file reported a pass.
+/// A gate that cannot tell "absent" from "never answered" is the defect #106 was filed about,
+/// one level up; so an empty run is a failure here rather than the next candidate.
 fn add_a_declaration_this_host_cannot_serve(dir: &Path) -> Option<String> {
     let priority_path = dir.join("priority");
     let modules = dir.join("modules").join("starter.txt");
@@ -127,9 +135,22 @@ fn add_a_declaration_this_host_cannot_serve(dir: &Path) -> Option<String> {
 
         // The warning is the proof the manager is genuinely absent, rather than merely unlisted
         // — in which case a real install would be planned and there would be no skip to measure.
-        if run(dir, &["plan"]).contains("is not on this machine") {
+        let planned = run(dir, &["plan"]);
+        if planned.contains("is not on this machine") {
+            eprintln!(
+                "fixture: `{candidate}` is the manager this machine cannot act on, so the skip \
+                 these tests measure is a real one"
+            );
             return Some((*candidate).to_string());
         }
+        assert!(
+            !planned.trim().is_empty(),
+            "`shall plan` printed nothing for `{candidate}`, so this fixture cannot tell \
+             \"that manager is installed here\" from \"the binary never answered\" — and every \
+             test built on it below would pass without measuring anything. `shall` in {} is not \
+             running; run `shall plan` there by hand and see what it does.",
+            dir.display()
+        );
         std::fs::write(&priority_path, &original_priority).unwrap();
         std::fs::write(&modules, &original_modules).unwrap();
     }

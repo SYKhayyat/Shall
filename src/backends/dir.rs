@@ -431,10 +431,15 @@ mod tests {
         let root = tempdir().unwrap();
         let account = Account::current().unwrap();
         let path = root.path().join("nested").join("state");
-        let declaration = spec(
-            path.to_str().unwrap(),
-            &[("user", account.name()), ("mode", "0750")],
-        );
+        // **The mode is declared only where it can be honoured.** `install` refuses a `mode` on a
+        // platform with no mode bits, by name — so a fixture that declares one there is asking
+        // for a refusal and then failing on it, which measures the fixture rather than the
+        // backend. The per-user half is the subject, and `@user` is real on both platforms.
+        let mut declared: Vec<(&str, &str)> = vec![("user", account.name())];
+        if cfg!(unix) {
+            declared.push(("mode", "0750"));
+        }
+        let declaration = spec(path.to_str().unwrap(), &declared);
         std::fs::create_dir_all(&path).unwrap();
         let installer = installer();
         installer

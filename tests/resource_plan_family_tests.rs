@@ -251,6 +251,12 @@ fn a_resource_that_cannot_be_read_back_is_named_rather_than_assumed() {
     );
 }
 
+/// **A POSIX mode is a Unix question, and this gate was only ever asked on Unix.** `dir:`'s
+/// `@mode` is refused by name on a platform with no mode bits — `install` says so rather than
+/// pretending — so "a mode edit is reported and then converges" cannot hold there, and asserting
+/// it there measured the platform rather than the product. The refusal has its own gate below,
+/// so the Windows run still asks this file something about `@mode`.
+#[cfg(unix)]
 #[test]
 fn a_directory_mode_edit_is_reported_and_then_converges() {
     let f = setup("resource-family-dir-mode");
@@ -279,4 +285,49 @@ fn a_directory_mode_edit_is_reported_and_then_converges() {
     let (out, code) = f.run(&["check"]);
     assert!(code == 0 || code == 2, "`check` failed ({code}):\n{out}");
     assert!(out.contains("the machine matches your files"), "{out}");
+}
+
+/// The other half, on the platform where a mode has no meaning: **a refusal by name, before
+/// anything is created.**
+///
+/// `dir:` parses `@mode` and refuses it before it touches the filesystem, and `check` reports the
+/// line as drift rather than as a match — the two answers agree that this declaration is not
+/// converged here, which is the property `extras::in_effect` lost when its metadata read was
+/// gated for the mode's sake. A refusal that had already created the directory would be the
+/// worse shape: half a resource, and a message blaming the mode for a directory that is now
+/// there.
+#[cfg(not(unix))]
+#[test]
+fn a_directory_mode_is_refused_by_name_where_there_are_no_mode_bits() {
+    let f = setup("resource-family-dir-mode-refused");
+    let dir = f.root.join("dest").join("state");
+    f.write_module(&format!("dir:{} @mode=0750\n", decl(&dir)));
+
+    let (out, code) = f.run(&["sync", "-y"]);
+    assert_ne!(
+        code, 0,
+        "a `dir:` whose mode this host cannot honour reported success:\n{out}"
+    );
+    assert!(
+        out.contains("mode ownership permissions are not supported"),
+        "the refusal did not name the mode as the reason, so a reader is pointed at the \
+         directory instead:\n{out}"
+    );
+    assert!(
+        !dir.exists(),
+        "the refusal left {} behind, so the machine now carries half the resource",
+        dir.display()
+    );
+
+    let (out, code) = f.run(&["check"]);
+    assert!(code == 0 || code == 2, "`check` failed ({code}):\n{out}");
+    assert!(
+        !out.contains("the machine matches your files"),
+        "`check` called a declaration it cannot converge a match, which is the read-back half of \
+         the refusal disagreeing with the write half:\n{out}"
+    );
+    assert!(
+        out.contains("to place"),
+        "a refused declaration was not reported as work either:\n{out}"
+    );
 }

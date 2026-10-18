@@ -100,6 +100,21 @@ async fn one_prefix_query_serves_every_package_asked_about() {
     );
 }
 
+/// What npm's row answers for a package, in the spelling the row uses on this platform.
+///
+/// `npm prefix -g` reports the *prefix*, and the tree below it is not the same shape on both
+/// platforms: POSIX puts modules under `lib/node_modules`, Windows directly under
+/// `node_modules`. The row carries a `windows_template` for exactly that reason, so the expected
+/// value has to as well. It did not, and the test read as "the per-package half of the answer
+/// changed" on the platform where the row is right and the expectation was the POSIX one.
+fn expected_install_path(name: &str) -> String {
+    if cfg!(windows) {
+        format!("/usr/lib/node_modules/{name}")
+    } else {
+        format!("/usr/lib/lib/node_modules/{name}")
+    }
+}
+
 /// **The family, and the half a memo could plausibly break.** The prefix is shared; the
 /// *installed path* is per package. A memo that collapsed the whole answer would satisfy the test
 /// above and lose the property, so both are asserted on the same three calls.
@@ -123,22 +138,12 @@ async fn a_shared_probe_still_answers_per_package() {
                 .expect("npm's row declares install_path"),
         ));
     }
+    let expected: Vec<(String, String)> = ["alpha", "beta", "gamma"]
+        .into_iter()
+        .map(|name| (name.to_string(), expected_install_path(name)))
+        .collect();
     assert_eq!(
-        paths,
-        vec![
-            (
-                "alpha".to_string(),
-                "/usr/lib/lib/node_modules/alpha".to_string()
-            ),
-            (
-                "beta".to_string(),
-                "/usr/lib/lib/node_modules/beta".to_string()
-            ),
-            (
-                "gamma".to_string(),
-                "/usr/lib/lib/node_modules/gamma".to_string()
-            ),
-        ],
+        paths, expected,
         "the per-package half of the answer changed; a shared question must not become a shared \
          answer"
     );

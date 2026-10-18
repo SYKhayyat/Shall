@@ -805,11 +805,24 @@ mod tests {
             calls.iter().any(|c| c == &removal_argv("dpkg -r fd")),
             "the escalated removal argv never reached the mock: {calls:#?}"
         );
-        assert!(
-            calls.iter().any(|c| c == "sudo -n -v"),
-            "the credential probe went around the layer again, so this test depends on the host \
-             having passwordless sudo: {calls:#?}"
-        );
+        // **Asked of `escalates`, not assumed, because the answer is a fact about the host.**
+        // The probe exists on a platform that escalates with `sudo`; on Windows there is no
+        // `sudo` and `escalates` says so, so asserting the probe ran was asserting a POSIX
+        // behaviour on a host that has none. Both directions are asserted, so "the probe is
+        // gone" and "this host never raises one" cannot be mistaken for each other.
+        if CommandExecutor::escalates(true) {
+            assert!(
+                calls.iter().any(|c| c == "sudo -n -v"),
+                "the credential probe went around the layer again, so this test depends on the \
+                 host having passwordless sudo: {calls:#?}"
+            );
+        } else {
+            assert!(
+                !calls.iter().any(|c| c.starts_with("sudo ")),
+                "this host does not escalate, and the removal invented an escalation anyway: \
+                 {calls:#?}"
+            );
+        }
 
         let calls = mock.get_calls().await;
         assert!(
