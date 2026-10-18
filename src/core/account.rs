@@ -141,13 +141,25 @@ impl Account {
     }
 
     pub fn sid(&self) -> Option<String> {
+        // **The Windows half lives in its own function, and that is about the lint as well as
+        // the shape.** A `return` inside the `#[cfg(windows)]` block is the only way to write
+        // this with the block inline, and `clippy::needless_return` rates it fatal — on the
+        // target where it is the *only* body, which is the target nothing lints. A named
+        // function has a tail expression like any other and needs no exception.
         #[cfg(windows)]
         {
-            let Identity::Windows { sid } = &self.identity;
-            return sid_text(sid);
+            self.windows_sid()
         }
         #[cfg(not(windows))]
-        None
+        {
+            None
+        }
+    }
+
+    #[cfg(windows)]
+    fn windows_sid(&self) -> Option<String> {
+        let Identity::Windows { sid } = &self.identity;
+        sid_text(sid)
     }
 }
 
@@ -159,9 +171,7 @@ fn sid_text(sid: &[u32]) -> Option<String> {
     if unsafe { ConvertSidToStringSidW(sid.as_ptr().cast_mut().cast(), &mut text) } == 0 {
         return None;
     }
-    let out = unsafe { std::ffi::CStr::from_ptr(text.cast()) }
-        .to_string_lossy()
-        .into_owned();
+    let out = wide_to_string(text);
     unsafe { LocalFree(text.cast()) };
     Some(out)
 }
@@ -394,6 +404,12 @@ fn resolve_named(name: &str) -> Result<Account> {
     let wide = wide_name(name)?;
     let mut sid_size: DWORD = 0;
     let mut domain_size: DWORD = 0;
+    // **`peUse` is not optional, and passing null here was a STATUS_ACCESS_VIOLATION.** This
+    // parameter is a plain out-parameter that the API writes on success — it is not one of the
+    // `_opt_` ones, and nothing in the call's type says so. With two null buffers the first
+    // call fails before reaching the write, which is why the first lookup survived and the
+    // second — the one that succeeds — killed the process (#101).
+    let mut pe_use: DWORD = 0;
     let first = unsafe {
         LookupAccountNameW(
             std::ptr::null_mut(),
@@ -402,15 +418,18 @@ fn resolve_named(name: &str) -> Result<Account> {
             &mut sid_size,
             std::ptr::null_mut(),
             &mut domain_size,
-            // `peUse`: the SID_NAME_USE the lookup chose. Nothing here reads it, and passing a
-            // real buffer for it would be a claim that something does.
-            std::ptr::null_mut(),
+            &mut pe_use,
         )
     };
-    if first != FALSE && unsafe { GetLastError() } != ERROR_INSUFFICIENT_BUFFER {
+    // The only acceptable outcome of a lookup with no buffers: it fails, and it says why.
+    // The condition used to be written the other way round — `first != FALSE && …` — so a lookup
+    // that had already failed for an unrelated reason (an unknown account is `ERROR_NONE_MAPPED`)
+    // was treated as a sized request and carried on with a zero-length SID.
+    if first != FALSE || unsafe { GetLastError() } != ERROR_INSUFFICIENT_BUFFER {
         return Err(Error::Other(format!(
-            "could not look up account `{}`",
-            name
+            "could not look up account `{}`: {}",
+            name,
+            std::io::Error::last_os_error()
         )));
     }
     let sid_words = (sid_size as usize)
@@ -432,13 +451,14 @@ fn resolve_named(name: &str) -> Result<Account> {
             &mut sid_capacity,
             domain.as_mut_ptr(),
             &mut domain_size,
-            std::ptr::null_mut(),
+            &mut pe_use,
         )
     };
     if rc == FALSE {
         return Err(Error::Other(format!(
-            "could not look up account `{}`",
-            name
+            "could not look up account `{}`: {}",
+            name,
+            std::io::Error::last_os_error()
         )));
     }
     let mut sid_text: *mut u16 = std::ptr::null_mut();
@@ -448,9 +468,12 @@ fn resolve_named(name: &str) -> Result<Account> {
             name
         )));
     }
-    let sid_key = unsafe { std::ffi::CStr::from_ptr(sid_text.cast()) }
-        .to_string_lossy()
-        .into_owned();
+    // **A wide string, read as a narrow one.** `ConvertSidToStringSidW` returns `LPWSTR`, and
+    // `CStr::from_ptr` on that buffer stops at the first `0x00` byte — which is the high half of
+    // the first `u16`. The SID therefore read back as `"S"`, the `ProfileList` key below did not
+    // exist, and `Account::current()` failed on Windows for every account. That is #106's
+    // missing drift row: a `link:` target resolves through the current account.
+    let sid_key = wide_to_string(sid_text);
     unsafe { LocalFree(sid_text.cast()) };
 
     let key = wide_string(&format!(
@@ -499,7 +522,7 @@ fn resolve_named(name: &str) -> Result<Account> {
         .filter(|size| *size <= bytes.len())
         .ok_or_else(|| Error::Other("the home directory value length overflowed".into()))?;
     bytes.truncate(size);
-    if bytes.len() % std::mem::size_of::<u16>() != 0 {
+    if !bytes.len().is_multiple_of(std::mem::size_of::<u16>()) {
         return Err(Error::Other(format!(
             "the home for account `{}` is not valid UTF-16",
             name
@@ -694,6 +717,19 @@ fn open_windows_path(path: &Path, write: bool) -> Result<winapi::um::winnt::HAND
     Ok(handle)
 }
 
+/// A NUL-terminated UTF-16 buffer, as Win32 returns them, read as text.
+///
+/// One reader for both SID strings, because the bug was one reader written twice: `sid_text`
+/// and `resolve_named` each decoded a wide buffer with `CStr::from_ptr` and each produced `"S"`.
+#[cfg(windows)]
+fn wide_to_string(wide: *const u16) -> String {
+    let mut len = 0usize;
+    while unsafe { *wide.add(len) } != 0 {
+        len += 1;
+    }
+    String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(wide, len) })
+}
+
 #[cfg(windows)]
 fn wide_name(name: &str) -> Result<Vec<u16>> {
     Ok(name.encode_utf16().chain(std::iter::once(0)).collect())
@@ -736,6 +772,26 @@ mod tests {
         let account = Account::current().unwrap();
         assert!(!account.name().is_empty());
         assert!(!account.home().as_os_str().is_empty());
+    }
+
+    /// The SID reads back as a SID, and not as its first character.
+    ///
+    /// The control for #101 and #106 in one assertion. A null `peUse` out-parameter made this
+    /// lookup kill the process instead of answering, and `CStr::from_ptr` over
+    /// `ConvertSidToStringSidW`'s **wide** buffer stopped at the high half of the first `u16`,
+    /// so the identity of every account on Windows read back as `"S"` — a string that was
+    /// wrong rather than absent, which is why it flowed all the way to `ProfileList` and out the
+    /// other side as "no home directory for this account".
+    #[cfg(windows)]
+    #[test]
+    fn the_current_accounts_sid_reads_back_as_a_sid() {
+        let account = Account::current().unwrap();
+        let sid = account.sid().expect("a Windows account has a SID");
+        assert!(
+            sid.starts_with("S-1-"),
+            "the SID read back as {sid:?}, which is not the identity of {}",
+            account.name()
+        );
     }
 
     /// **Every platform's convention, asserted from any host.** The macOS leg of this is the one
