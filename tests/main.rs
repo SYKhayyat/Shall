@@ -196,6 +196,7 @@ mod unknown_backend_family_tests;
 mod verbs_are_reachable_tests;
 mod wal_enumeration_tests;
 mod why_entries_are_attached_to_something_tests;
+mod windows_ci_runs_nimble_canary_tests;
 
 /// **A file in `tests/` that is not a module here never runs.**
 ///

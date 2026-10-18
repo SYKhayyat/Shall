@@ -948,9 +948,20 @@ jobs:
         irm get.scoop.sh -outfile install.ps1
         .\install.ps1 -RunAsAdmin
         echo "$env:USERPROFILE\scoop\shims" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+    - name: Install Nim and Nimble
+      uses: jiro4989/setup-nim-action@v2
+      with:
+        nim-version: '2.2.12'
+        repo-token: ${{ github.token }}
+    - name: Refresh Nimble package index
+      shell: powershell
+      run: nimble -y refresh
     - name: Native sweep (scoop)
       shell: bash
       run: SHALL="$PWD/target/release/shall.exe" bash scripts/integration-windows.sh scoop jq
+    - name: Native sweep (nimble)
+      shell: bash
+      run: SHALL="$PWD/target/release/shall.exe" bash scripts/integration-windows.sh nimble nimjson
 
   # Does every subcommand Shall invokes still exist in the tool it invokes it on?
   #
