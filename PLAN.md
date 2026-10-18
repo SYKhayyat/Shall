@@ -326,7 +326,10 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   `core::batch`: the per-package budget, monotonicity, the cap across batch sizes, and **that the
   cap did not swallow the shape** (a fix that flattened everything to an hour would pass the cap
   test and give one package an hour). — ISSUE #82)
-- [ ] #25 lifecycle jobs on distro containers, #54 dirty-host fixtures.
+- [ ] #25 lifecycle jobs on distro containers.
+- [x] #54 dirty-host fixtures: the Windows/macOS native sweep now creates a unique run root before
+  deriving config, data, ledger, stall, and helper paths, cleans it on exit and signal paths, and
+  has a source-level isolation control in `dirty_host_fixture_isolation_tests`.
 - [x] #53 Nimble Windows lifecycle: the nightly Windows-native job installs pinned Nim 2.2.12,
   refreshes Nimble's index, and runs `integration-windows.sh nimble nimjson` through Git Bash.
 - [ ] #109 CI: the apt legs install off the image's baked lists, so a mirror rotation reds the leg
