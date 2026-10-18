@@ -1170,8 +1170,9 @@ accepting it.
 **A bare declaration that would install software is asked before it runs.** `sync` and `apply`
 ask after planning and before mutation; `--yes` answers yes in advance. Declining leaves the
 declaration in place and installs nothing, while a non-interactive run without `--yes` refuses
-with the same guidance. `plan`, `check`, `status`, `watch`, and `--dry-run` never ask, because
-they do not perform the install. A qualified declaration does not trigger this question: the
+with the same guidance. `plan`, `check`, `status`, and `--dry-run` never ask because they do not
+perform the install; `watch` is unattended by definition and never waits for an answer. A
+qualified declaration does not trigger this question: the
 provenance is carried from the resolver rather than inferred from `locks/bare.HOST.toml`, which
 is written only when resolution records a choice. (V.217)
 

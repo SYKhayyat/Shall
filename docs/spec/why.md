@@ -7975,7 +7975,9 @@ would make read-only commands such as `plan`, `check`, and `status` ask, while p
 backend would duplicate the rule across managers. `apply` uses the same gate because a saved plan
 can cross machines. `--yes` answers the question in advance; a decline leaves the declaration in
 the file and changes nothing, and a non-interactive run refuses instead of hanging or guessing.
-Dry-run is a preview, so it reports without asking.
+Dry-run is a preview, so it reports without asking. `watch` is the deliberate unattended
+exception: it never waits for a prompt, preserving its daemon posture rather than hanging on a
+terminal that is not there.
 
 The resolver carries the bare-origin bit into the install spec rather than deriving it from the
 bare-name lock. The lock is written only when resolution records a choice, so it cannot reliably
