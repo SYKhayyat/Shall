@@ -95,7 +95,7 @@ uuid = { version = "1.6", features = ["v4", "serde"] }
 # Archive Support
 tar = "0.4"
 flate2 = "1.0"
-zip = "8"
+zip = "9"
 xz2 = "0.1"
 bzip2 = "0.6"
 # Already in the tree as a transitive dependency of `zip`; named here because

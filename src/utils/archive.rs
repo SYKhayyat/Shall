@@ -233,7 +233,13 @@ pub fn extract_archive(archive_path: &Path, dest_dir: &Path) -> Result<()> {
                 let mut member = archive
                     .by_index(i)
                     .map_err(|e| Error::Other(format!("Zip member {}: {}", i, e)))?;
-                let name = PathBuf::from(member.name());
+                // `zip` 9 made the name fallible: a member whose name is not valid UTF-8 is
+                // an error rather than a lossy replacement, because the lossy string could
+                // name a different path than the one being extracted.
+                let reported = member.name().map_err(|e| {
+                    Error::Other(format!("Zip member {} has no usable name: {}", i, e))
+                })?;
+                let name = PathBuf::from(&*reported);
                 validate_archive_path(&name)?;
                 if member.is_symlink() {
                     use std::io::Read;
