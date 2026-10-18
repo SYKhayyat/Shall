@@ -110,7 +110,12 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     lines were a dead process rather than a silenced one, exactly as the issue said.
   - **Both commands the last comment asked for were run, on Windows, and both now report:**
     `cargo test --lib app::apply::dotfiles` is 3 passed where the process used to die, and
-    `cargo test --test suite argv_drift_tests` names a result instead of nothing at all.)
+    `cargo test --test suite argv_drift_tests` names a result instead of nothing at all.
+  - **The lib-side Win32 fix also type-checks on the cross target**, with
+    `cargo check --target x86_64-pc-windows-gnu --lib` and `RUSTFLAGS=-D warnings`, using the Nix
+    mingw C toolchain. It supplies the required `SID_NAME_USE` output buffer, checks the sizing
+    error correctly, and decodes the UTF-16 SID returned by `ConvertSidToStringSidW`. That is
+    compile evidence from a Linux host, complementing the Windows runtime run above.)
 - [x] #102 CI: the main test step discards a crash's own evidence, on every platform.
   `.github/workflows/ci.yml:363` ran for **every** row of the build matrix with no `--nocapture`
   and no `--test-threads`, so a binary that dies mid-run never reaches libtest's failure report —
