@@ -97,6 +97,7 @@ mod config_root_is_absolute_tests;
 mod critical_paths_tests;
 mod declared_options_converge_tests;
 mod deploy_refusal_precedes_the_download_tests;
+mod dirty_host_fixture_isolation_tests;
 mod dotfiles_tree_is_a_pile_of_links_tests;
 mod dry_run_every_verb_tests;
 mod dry_run_marker_tests;

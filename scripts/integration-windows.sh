@@ -28,14 +28,23 @@ BACKEND="${1:-scoop}"
 PKG="${2:-jq}"
 SHALL="${SHALL:-shall}"
 
-export SHALL_CONFIG_DIR="${TMPDIR:-/tmp}/shall-it-win-config"
-export SHALL_DATA_DIR="${TMPDIR:-/tmp}/shall-it-win-state"
-rm -rf "$SHALL_CONFIG_DIR" "$SHALL_DATA_DIR" 2>/dev/null
+# Every fixture belongs to this invocation. A fixed child of TMPDIR lets two sweeps on one
+# machine delete each other's config, data, and ledgers, and lets an interrupted sweep leave the
+# next one judging state it did not create.
+RUN_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/shall-it-win.XXXXXX")" || {
+    echo "FATAL: cannot create an isolated temporary root for the sweep" >&2
+    exit 2
+}
+cleanup_run() { rm -rf "$RUN_ROOT" 2>/dev/null || true; }
+trap cleanup_run EXIT INT TERM
+export TMPDIR="$RUN_ROOT"
+export SHALL_CONFIG_DIR="${TMPDIR}/shall-it-win-config"
+export SHALL_DATA_DIR="${TMPDIR}/shall-it-win-state"
 mkdir -p "$SHALL_CONFIG_DIR" "$SHALL_DATA_DIR"
 
 # The coverage ledger. Files, not variables: `grep_ok` runs its command in a
 # pipeline, and a pipeline is a subshell whose variable writes die with it.
-LEDGER="${TMPDIR:-/tmp}/shall-it-win-ledger"
+LEDGER="${TMPDIR}/shall-it-win-ledger"
 rm -rf "$LEDGER" 2>/dev/null; mkdir -p "$LEDGER"
 : > "$LEDGER/cmd-real"; : > "$LEDGER/cmd-help"
 : > "$LEDGER/be-life"; : > "$LEDGER/be-life-partial"; : > "$LEDGER/be-life-unmeasured"; : > "$LEDGER/be-smoke"
@@ -156,7 +165,7 @@ fi
 if [ -r "$STALL_SNAPSHOT" ] && [ -n "$STALL_PS" ] \
    && command -v cygpath >/dev/null 2>&1; then
     stall_watch & STALL_PID=$!
-    trap 'kill "$STALL_PID" 2>/dev/null' EXIT INT TERM
+    trap 'kill "$STALL_PID" 2>/dev/null; cleanup_run' EXIT INT TERM
     echo "stall capture armed: >${STALL_AFTER}s in one call photographs the process tree into"
     echo "  $STALL_REPORT"
     # Which arm this run is. A stall that only happens with a terminal on stdin is a different
@@ -2596,6 +2605,7 @@ if [ -s "$STALL_REPORT" ]; then
     # instead of the wedged process — the one thing this excerpt exists to show.
     grep -E '^(SHALL PID| +pid=.*cpuMsInWindow)' "$STALL_REPORT" | head -12 | sed 's/^/        /'
 fi
+cleanup_run
 
 # --- Summary ---------------------------------------------------------------
 echo "=============================================================="
