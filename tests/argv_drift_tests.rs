@@ -184,7 +184,12 @@ fn on_path(program: &str) -> bool {
 /// from the one that ships and covered four installed managers less than it claimed.
 fn run(program: &str, args: &[String]) -> Option<String> {
     let (prog, argv) = shall::core::launch::effective_command(program, args);
-    let out = Command::new(prog).args(&argv).output().ok()?;
+    let out = Command::new(prog)
+        .args(&argv)
+        .current_dir(std::env::temp_dir())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .ok()?;
     Some(format!(
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
@@ -243,6 +248,13 @@ async fn every_subcommand_shall_invokes_still_exists_upstream() {
     // its subcommands checked against anything, and asking anyway is how `kubectl krew` got
     // reported as drift when krew simply is not installed here.
     for backend in registry.present_on_this_machine() {
+        // Some built-ins are always available but do not drive an external manager: artifact
+        // downloaders, files and resources. Their install methods perform network or filesystem
+        // work before an argv can be recorded, so this gate must not turn an upstream-help probe
+        // into a real install. A manager with a program to ask is the only meaningful subject.
+        if backend.core().probes().is_empty() {
+            continue;
+        }
         let spec = PackageSpec {
             name: "jq".into(),
             backend: backend.name().into(),
