@@ -1003,7 +1003,10 @@ mod tests {
             Ok(false)
         })
         .unwrap());
-        assert_eq!(prompt.as_deref(), Some("Install apt:htop from a bare declaration?"));
+        assert_eq!(
+            prompt.as_deref(),
+            Some("Install apt:htop from a bare declaration?")
+        );
     }
 
     #[test]

@@ -1167,6 +1167,14 @@ apt. A chain and a bare name record whichever manager answered, in this host's
 `locks/bare.HOST.toml` (II.6), and are re-asked when that manager is gone or the line stops
 accepting it.
 
+**A bare declaration that would install software is asked before it runs.** `sync` and `apply`
+ask after planning and before mutation; `--yes` answers yes in advance. Declining leaves the
+declaration in place and installs nothing, while a non-interactive run without `--yes` refuses
+with the same guidance. `plan`, `check`, `status`, `watch`, and `--dry-run` never ask, because
+they do not perform the install. A qualified declaration does not trigger this question: the
+provenance is carried from the resolver rather than inferred from `locks/bare.HOST.toml`, which
+is written only when resolution records a choice. (V.217)
+
 **Two lines declaring one name with different lists is an error**, naming both. A name resolves
 to one manager on one machine, so picking either list silently would make the other line a lie —
 the same reasoning as rule 5.

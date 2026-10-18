@@ -7961,3 +7961,23 @@ has not been done yet. `tests/the_review_apparatus_is_rust_tests.rs` is what kee
 floors from drifting apart, and `scripts/harness-logic-test.sh` drives the whole mechanism in
 both directions — including a record whose excuse matched nothing, which is the case a gate
 about excusals must be able to fail.
+
+**V.217 — Why a bare declaration asks before it installs.**
+*(Owner ruling 2026-09-28, `PLAN.md` #94.)*
+
+A bare package name is deliberately convenient: it means `list:NAME`, so the resolver can choose
+the manager that answers on this machine. That convenience also makes an install less explicit
+than `apt:NAME` or `cargo:NAME`. Before this rule, a sync could silently turn a new bare line into
+a real install, even though the same line had not named the manager that would act.
+
+The question belongs after planning and immediately before mutation. Putting it in resolution
+would make read-only commands such as `plan`, `check`, and `status` ask, while putting it in a
+backend would duplicate the rule across managers. `apply` uses the same gate because a saved plan
+can cross machines. `--yes` answers the question in advance; a decline leaves the declaration in
+the file and changes nothing, and a non-interactive run refuses instead of hanging or guessing.
+Dry-run is a preview, so it reports without asking.
+
+The resolver carries the bare-origin bit into the install spec rather than deriving it from the
+bare-name lock. The lock is written only when resolution records a choice, so it cannot reliably
+answer whether the declaration was written bare, and a qualified line must not inherit a prompt
+from a previous resolution.

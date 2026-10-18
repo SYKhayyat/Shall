@@ -41,6 +41,7 @@ fn spec_for(tag: &str) -> PackageSpec {
             origin: &at,
             scopes: &["module:dev".to_string(), "profile:Work".to_string()],
             gates: &[],
+            bare: false,
         },
     )
 }
@@ -63,6 +64,7 @@ fn a_key_given_twice_arrives_as_two_values_in_order() {
             origin: &at,
             scopes: &[],
             gates: &[],
+            bare: false,
         },
     );
     assert_eq!(
@@ -122,6 +124,7 @@ fn requires_still_lands_in_its_own_vec() {
             origin: &at,
             scopes: &[],
             gates: &[],
+            bare: false,
         },
     );
     assert_eq!(spec.requires, vec!["curl".to_string(), "jq".to_string()]);
@@ -150,6 +153,7 @@ fn a_saved_spec_round_trips_with_its_lists() {
             origin: &at,
             scopes: &[],
             gates: &[],
+            bare: false,
         },
     );
     let json = serde_json::to_string(&spec).expect("serialises");

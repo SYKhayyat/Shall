@@ -304,11 +304,22 @@ async fn five_managers_and_two_probes_keep_order_and_the_process_cap() {
     let listings = calls.iter().filter(|call| call.ends_with("list")).count();
     let probes = calls.iter().filter(|call| call.ends_with("prefix")).count();
     assert_eq!(listings, BACKENDS, "one listing per manager");
-    assert_eq!(probes, 2, "one property probe for each of the two probed managers");
-    assert_eq!(calls.len(), 7, "five listings plus two probes is the observed child shape");
+    assert_eq!(
+        probes, 2,
+        "one property probe for each of the two probed managers"
+    );
+    assert_eq!(
+        calls.len(),
+        7,
+        "five listings plus two probes is the observed child shape"
+    );
 
     let c = peak.lock().await.clone();
-    assert_eq!(c.peak, 2, "the configured process cap must remain in force: {:?}", c);
+    assert_eq!(
+        c.peak, 2,
+        "the configured process cap must remain in force: {:?}",
+        c
+    );
 }
 
 /// Seven managers, one managed package each — the state that makes `managed_pkgs` fan out at all.

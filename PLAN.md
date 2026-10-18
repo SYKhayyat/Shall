@@ -741,8 +741,8 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 - [ ] Adopt discovery: #59 dotfiles, #60 schedules, #61 repos/PPAs, #62 shell, #63 settings, #64 services, #65 firewall.
 - [ ] Export: #66 from-scan, #67 from-declaration.
 - [ ] #72 nixos activation gap (CI leg), #73 search-index noun, #74 crown-jewel invariant.
-- [ ] #94 Shall records what it installs, and asks before adopting a bare tool name (owner ruling
-  2026-09-28; two halves). **1. BUILT** (and it closes #105's residual, which is the same defect
+- [x] #94 Shall records what it installs, and asks before installing a bare tool name (owner ruling
+  2026-09-28; both halves built). **1. BUILT** (and it closes #105's residual, which is the same defect
   wearing a different hat). `core::receipt` — `receipts.jsonl` beside `journal.jsonl` under the
   data root, one line per install, **never expires**, `[receipts] enabled` (default on).
   - **Written from `Journal::record_success`, which is the one place that already sees every install
