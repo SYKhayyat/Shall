@@ -493,6 +493,11 @@ pub async fn handle_apply(app: &App, plan_path: &str, yes: bool) -> Result<()> {
     changes.withdraw_what_this_machine_cannot_run(&app.registry);
     let skipped = std::mem::take(&mut changes.skipped);
 
+    if !crate::verbs::sync::confirm_bare_installs(&changes, yes || app.config.yes)? {
+        println!("Apply cancelled — no bare declarations were installed.");
+        return Ok(());
+    }
+
     if !yes && !app.config.yes {
         use std::io::IsTerminal;
         if !std::io::stdin().is_terminal() {

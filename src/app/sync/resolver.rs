@@ -1566,6 +1566,7 @@ impl<'a> StateResolver<'a> {
                 origin: &origin,
                 scopes: &[],
                 gates: &[],
+                bare: false,
             },
         );
         Validator::validate_package_name_for(&spec.name, &spec.backend)?;

@@ -6,8 +6,8 @@ use super::modules::{expand, expand_args, ModuleLoader};
 use super::priority::Priority;
 use super::profiles::{read_active, ProfileLoader, SetOp};
 use crate::config::grammar::{
-    statement, BackendNames, Gate, Gates, GrammarError, Options, Origin, PackageDecl, Phase,
-    Result, Selector, Statement,
+    statement, BackendNames, Candidates, Gate, Gates, GrammarError, Options, Origin, PackageDecl,
+    Phase, Result, Selector, Statement,
 };
 use crate::config::parser::HostFacts;
 use crate::core::LockFile;
@@ -984,6 +984,7 @@ impl<'a> Resolver<'a> {
                 }
             };
 
+            let bare = decl.backend.is_none() && matches!(decl.candidates, Candidates::Priority);
             let backend = self.backend_for(&decl, &origin)?;
             // **The manager's spelling wins from here on.** A bare `jq` that resolved to
             // Portage becomes `app-misc/jq` before the key is built, so the set math, the
@@ -1024,6 +1025,7 @@ impl<'a> Resolver<'a> {
                     if gates.len() < e.gates.len() {
                         e.gates = gates;
                     }
+                    e.bare |= bare;
                     merged.insert(key, e);
                 }
                 None => {
@@ -1037,6 +1039,7 @@ impl<'a> Resolver<'a> {
                             declared: incoming,
                             backend,
                             selector: decl.selector.clone(),
+                            bare,
                             origins: vec![origin],
                             gates,
                         },
@@ -1078,6 +1081,7 @@ impl<'a> Resolver<'a> {
                     origin: &e.declared.origin,
                     scopes: &scopes,
                     gates: &e.gates,
+                    bare: e.bare,
                 },
             );
             // A stand-in on the user's `PATH` is a resource with a teardown, so it is declared
@@ -1210,6 +1214,9 @@ struct Entry {
     declared: Declared,
     backend: String,
     selector: Selector,
+    /// Whether any active declaration of this package was a bare name. This is kept separately
+    /// from the winning declaration because an equivalent bare and qualified line may merge.
+    bare: bool,
     /// Every line that declared it, winner and losers alike — the scopes it belongs to.
     origins: Vec<Origin>,
     /// The shortest chain of `when` conditions any of those lines needed.
@@ -1226,6 +1233,8 @@ pub struct Provenance<'a> {
     pub origin: &'a Origin,
     pub scopes: &'a [String],
     pub gates: &'a [Gate],
+    /// The declaration was a bare name resolved through `priority`.
+    pub bare: bool,
 }
 
 /// Build the seam's `PackageSpec` from one declaration. The only place this conversion
@@ -1293,6 +1302,9 @@ pub fn to_spec(
     }
     if let Selector::Regex(p) = selector {
         properties.set("__regex", p.clone());
+    }
+    if from.bare {
+        properties.set("__bare", "true");
     }
     PackageSpec {
         name: selector.as_str().to_string(),
@@ -2391,6 +2403,46 @@ apt:nginx
         let d = resolve(&f).unwrap();
         let spec = d.present().find(|p| p.name == "^fonts-").unwrap();
         assert_eq!(spec.options.one("__regex").unwrap(), "^fonts-");
+    }
+
+    #[test]
+    fn bare_provenance_survives_into_the_install_spec() {
+        let options = Options::default();
+        let origin = Origin::new("modules/base.txt", 1);
+        let spec = to_spec(
+            "apt",
+            &Selector::Name("htop".into()),
+            &options,
+            true,
+            None,
+            Provenance {
+                origin: &origin,
+                scopes: &[],
+                gates: &[],
+                bare: true,
+            },
+        );
+        assert_eq!(spec.options.one("__bare"), Some("true"));
+    }
+
+    #[test]
+    fn qualified_provenance_does_not_look_bare_to_apply() {
+        let options = Options::default();
+        let origin = Origin::new("modules/base.txt", 1);
+        let spec = to_spec(
+            "apt",
+            &Selector::Name("htop".into()),
+            &options,
+            true,
+            None,
+            Provenance {
+                origin: &origin,
+                scopes: &[],
+                gates: &[],
+                bare: false,
+            },
+        );
+        assert_eq!(spec.options.one("__bare"), None);
     }
 
     #[test]

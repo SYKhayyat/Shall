@@ -760,17 +760,12 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     is recorded and not what is believed.
   - **Why this is #105's residual and not a new feature:** `cleanup_expired_logs(7)` expires the
     evidence for a claim that does not expire.
-  - **2. NOT BUILT, and the gap is bigger than it looks — it is the owner's call, not a schedule.**
-    The premise was confirmed first: a bare `htop` on a machine without it is *silently planned as
-    an install today*, with no prompt. So the missing piece is the `ask`. It cannot go in the
-    resolver — that runs for `plan`, `check` and `status` too, and a read-only command may not
-    prompt (`plan`'s own doc has the rule) — so it belongs on the sync/apply path, and the model
-    carries **no tag saying a given install came from a bare declaration**. Deriving one from
-    `BareLock` is unreliable, because the lock is only written when resolution is recording. So
-    half 2 needs a decision on where the question lives and on what "records the line anyway" means
-    for a declaration no backend owns — both of which change behaviour a user notices. Left open
-    deliberately rather than half-built: a `[declare] install = "ask"` that quietly behaved like
-    `"always"` would be the worst outcome available. — ISSUE #94
+  - **2. BUILT.** Bare-origin provenance is carried on the resolved install spec, so it is not
+     inferred from `BareLock`. `sync` and `apply` ask immediately before execution, using the
+     shared prompt convention: `--yes` answers yes, an interactive no leaves the declaration in
+     place and installs nothing, and a noninteractive run refuses with `--yes`/`--dry-run` advice.
+     `plan`, `check`, `status`, and dry-run paths never ask. Saved plans use schema 3 so an older
+     artifact without the provenance cannot bypass the question. — ISSUE #94
 - [x] #89 guard-reachability control builds a vacuous fixture. (**BUILT — and the state the control
   needs turned out to be reachable, but not through any of the three shapes the fixture had tried.**
   `plan` wrote 2 removals with no guard refusal because nothing protected them, and the missing

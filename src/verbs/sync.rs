@@ -45,6 +45,56 @@ pub struct Reconciled {
     pub not_installed: usize,
 }
 
+pub(crate) fn bare_install_names(changes: &crate::app::sync::planner::SyncChanges) -> Vec<String> {
+    changes
+        .graph
+        .node_weights()
+        .filter_map(|action| match action {
+            crate::core::GraphAction::Install(spec)
+                if spec.options.one("__bare") == Some("true") =>
+            {
+                Some(format!("{}:{}", spec.backend, spec.name))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+pub(crate) fn confirm_bare_installs(
+    changes: &crate::app::sync::planner::SyncChanges,
+    yes: bool,
+) -> Result<bool> {
+    confirm_bare_installs_with(changes, yes, |prompt| {
+        Ok(crate::core::prompt::confirm(
+            false,
+            prompt,
+            crate::core::prompt::Unattended::Refuse(
+                "Refusing to install packages selected by bare declarations without confirmation in a non-interactive shell. Re-run with --yes to proceed, or --dry-run to preview.",
+            ),
+        )?)
+    })
+}
+
+fn confirm_bare_installs_with<F>(
+    changes: &crate::app::sync::planner::SyncChanges,
+    yes: bool,
+    ask: F,
+) -> Result<bool>
+where
+    F: FnOnce(&str) -> Result<bool>,
+{
+    let names = bare_install_names(changes);
+    if names.is_empty() || yes {
+        return Ok(true);
+    }
+    let prompt = if names.len() == 1 {
+        format!("Install {} from a bare declaration?", names[0])
+    } else {
+        format!("Install {} packages from bare declarations?", names.len())
+    };
+    ask(&prompt)
+}
+
 /// How many rows of a skip list are declarations that did not arrive.
 ///
 /// `Q-C`'s discriminator, and it is the reason `SkipKind` exists: without it this count would
@@ -247,6 +297,15 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
             applied: applied + extras_undone,
             left_in_place: changes.skipped.len(),
             not_installed: not_installed_of(&changes.skipped),
+        });
+    }
+
+    if opts.confirm && !changes.is_empty() && !confirm_bare_installs(&changes, app.config.yes)? {
+        println!("Declined — no bare declarations were installed. The declarations remain.");
+        return Ok(Reconciled {
+            applied: 0,
+            left_in_place: 0,
+            not_installed: bare_install_names(&changes).len(),
         });
     }
 
@@ -900,6 +959,84 @@ pub async fn handle_watch(
     match failed {
         Some(e) => Err(e),
         None => Ok(()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn spec(bare: bool) -> crate::core::PackageSpec {
+        let mut options = crate::config::grammar::Options::default();
+        if bare {
+            options.set("__bare", "true");
+        }
+        crate::core::PackageSpec {
+            name: "htop".into(),
+            backend: "apt".into(),
+            options,
+            requires: Vec::new(),
+            present: true,
+        }
+    }
+
+    #[test]
+    fn a_qualified_install_does_not_prompt() {
+        let mut changes = crate::app::sync::planner::SyncChanges::default();
+        changes.add_installs(&[spec(false)]);
+        let mut asked = false;
+        assert!(confirm_bare_installs_with(&changes, false, |_| {
+            asked = true;
+            Ok(true)
+        })
+        .unwrap());
+        assert!(!asked);
+    }
+
+    #[test]
+    fn a_bare_install_is_asked_and_can_be_declined() {
+        let mut changes = crate::app::sync::planner::SyncChanges::default();
+        changes.add_installs(&[spec(true)]);
+        let mut prompt = None;
+        assert!(!confirm_bare_installs_with(&changes, false, |text| {
+            prompt = Some(text.to_string());
+            Ok(false)
+        })
+        .unwrap());
+        assert_eq!(prompt.as_deref(), Some("Install apt:htop from a bare declaration?"));
+    }
+
+    #[test]
+    fn a_bare_install_refuses_without_a_terminal() {
+        let mut changes = crate::app::sync::planner::SyncChanges::default();
+        changes.add_installs(&[spec(true)]);
+        let error = confirm_bare_installs(&changes, false).expect_err("stdin is not a terminal");
+        assert!(error.to_string().contains("--yes"), "{error}");
+    }
+
+    #[test]
+    fn explicit_confirmation_skips_the_bare_prompt() {
+        let mut changes = crate::app::sync::planner::SyncChanges::default();
+        changes.add_installs(&[spec(true)]);
+        let mut asked = false;
+        assert!(confirm_bare_installs_with(&changes, true, |_| {
+            asked = true;
+            Ok(false)
+        })
+        .unwrap());
+        assert!(!asked);
+    }
+
+    #[test]
+    fn no_bare_install_does_not_prompt() {
+        let changes = crate::app::sync::planner::SyncChanges::default();
+        let mut asked = false;
+        assert!(confirm_bare_installs_with(&changes, false, |_| {
+            asked = true;
+            Ok(false)
+        })
+        .unwrap());
+        assert!(!asked);
     }
 }
 

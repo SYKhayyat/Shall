@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 /// Bump when the on-disk plan format changes incompatibly.
-pub const PLAN_SCHEMA: u32 = 2;
+pub const PLAN_SCHEMA: u32 = 3;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct PlanRemoval {
@@ -448,11 +448,11 @@ mod tests {
     }
 
     #[test]
-    fn the_plan_schema_is_bumped_so_an_artifact_without_attributes_is_refused() {
+    fn the_plan_schema_is_bumped_so_an_artifact_without_bare_provenance_is_refused() {
         assert_eq!(
-            PLAN_SCHEMA, 2,
-            "a plan that cannot say what it would write is not this format; the number is the \
-             refusal, and it moved when the attributes arrived"
+            PLAN_SCHEMA, 3,
+            "a plan that cannot say whether an install came from a bare declaration is not this \
+             format; the number is the refusal"
         );
     }
 }
