@@ -555,7 +555,38 @@ fn report_shape(subcommand: &str, class: Class) {
     // The slowest single child, which is what pins the ratio's ceiling. A `Row`'s `longest` is
     // its own label's worst call, so the max over rows is the slowest call anywhere in the run.
     let slowest = rows.iter().map(|r| r.longest).max().unwrap_or_default();
-    let waves = crate::core::timing::waves();
+    let (waves, width) = crate::core::timing::schedule();
+    // **A run that was more than one wide overlapped, and neither of this rule's numbers can
+    // judge it from there.** Both were calibrated on a host whose `max_parallel` was large enough
+    // to hide every child inside the slowest one; a two-slot budget over five managers with a
+    // `list` and a `prefix` each is capped at 1.1x overlap and six waves by arithmetic, not by
+    // scheduling. Measured on the CI runners, same code, same thresholds: Windows 7 children
+    // summing to 5.23s inside 4.25s (1.2x, 4 waves) and Linux 7 summing to 1.89s inside 1.68s
+    // (1.1x, 6 waves) — both with two children demonstrably in flight together. Reporting those
+    // as a collapse is the warning-every-time failure this file's neighbours keep naming.
+    //
+    // The reading that does not move with the host's budget is the width, and it is exact: a
+    // `for` loop awaiting each child is 1 wide whatever a child costs. So a one-wide run is
+    // reported as the collapse it is, and a two-wide run is recorded as unmeasured at `info`
+    // rather than shouted about at `warn`.
+    //
+    // **What this gives up is stated rather than buried.** A fan-out that uses two slots where
+    // it had sixteen is no longer reported by the ratio, because the ratio cannot tell that run
+    // from one on a host with two slots. The gates carry it instead and always did: the ratio
+    // and the wave ceiling are asserted directly for `list` by `tests/latency_budget_tests.rs`,
+    // and the width for these two by `tests/the_other_fan_outs_fan_out_too_tests.rs`.
+    if width >= 2 {
+        unmeasured(
+            subcommand,
+            &format!(
+                "{width} child command(s) were in flight at once, so this fan-out overlapped; \
+                 the ratio and the wave ceiling are bounded by the run's own `max_parallel` and \
+                 child count rather than by the scheduler, and the width is the reading they \
+                 cannot supply"
+            ),
+        );
+        return;
+    }
     if let Some(why) = shape_measurement_gap(shape, children, summed, slowest, waves) {
         unmeasured(subcommand, &why);
         // **Still judge the wave half**, because `shape_violation` gates only the overlap fault on

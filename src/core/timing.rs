@@ -11,6 +11,13 @@
 //! them one at a time. A breakdown that printed only the sum would hide the difference the
 //! whole design turns on.
 //!
+//! **The ratio is not the only reading, because it is a measurement of the host as much as of
+//! the scheduler.** `sum / wall` falls when children are slow to *start*, and a machine under a
+//! container runtime, an antivirus or a cold page cache can spend as long creating a process as
+//! the process then runs. [`width`] is the reading that cannot be fooled: it counts how many
+//! children were in flight at the busiest instant, so a `for` loop that awaits each child is 1
+//! however long each child took. Both are printed on the same line.
+//!
 //! Recording is off unless `--timings` asks for it: the lock is uncontended and the cost is a
 //! `String` per child, but a measurement nobody requested is exactly the eager work this
 //! module exists to find.
@@ -172,26 +179,75 @@ pub fn summary() -> (Vec<Row>, Duration, Duration) {
 /// low overlap ratio caused by *slow* children and one caused by *sequenced* ones. Counted here
 /// rather than eyeballed off the start offsets, because that is the reading everyone gets wrong.
 pub fn waves() -> usize {
+    schedule().0
+}
+
+/// The widest the run ever got: how many child commands were in flight at the same instant.
+///
+/// **The one reading that survives a host that spawns processes slowly.** The overlap ratio is
+/// `sum(child time) / wall`, so it reads the host's process-startup cost as well as Shall's
+/// scheduling: on a runner where `CreateProcess` takes about as long as the child itself runs,
+/// every child's span begins late, the ratio collapses towards 1.0, and a perfectly good fan-out
+/// is indistinguishable from a `for` loop that awaits each child. A width cannot be fooled that
+/// way, because it is computed from the spans the run actually produced: a loop asks one child
+/// at a time and its width is exactly 1, whatever a second of it costs on the host.
+///
+/// Measured on the Windows CI runner that made this function necessary: `shall sbom` asked seven
+/// child commands, summed them to 5.23s, finished in 4.25s — 1.2x overlap, under the 1.25x floor
+/// — while two children were demonstrably in flight together. `shall list` on the same host and
+/// the same managers passed the floor, which is what makes the ratio, and not the fan-out, the
+/// thing that could not see: `sbom` declares five managers, `list` probes seventeen, and the
+/// ratio is bounded by the fan-out's width rather than by whether the fan-out exists.
+pub fn width() -> usize {
+    schedule().1
+}
+
+/// Both readings from one pass over the spans, because they answer one question.
+///
+/// `waves` is how many separate times the run had work running, `width` is how many children
+/// shared the busiest of those times. One implementation and not two: a serial run is `width 1`
+/// *and* one wave per child, and two sweeps that disagreed about the tie rule would be two
+/// different answers to "did these overlap".
+pub fn schedule() -> (usize, usize) {
     let spans = match SPANS.lock() {
         Ok(s) => s,
         Err(poisoned) => poisoned.into_inner(),
     };
     let mut intervals: Vec<(Duration, Duration)> =
         spans.iter().map(|s| (s.at, s.at + s.took)).collect();
-    intervals.sort_by_key(|(at, _)| *at);
+    intervals.sort_by_key(|(at, end)| (*at, *end));
 
     let mut waves = 0;
     let mut open_until = Duration::ZERO;
-    for (at, end) in intervals {
+    for (at, end) in &intervals {
         // `>=`, not `>`: a child that starts exactly as the last one ends did wait for it.
-        if at >= open_until {
+        if *at >= open_until {
             waves += 1;
-            open_until = end;
+            open_until = *end;
         } else {
-            open_until = open_until.max(end);
+            open_until = open_until.max(*end);
         }
     }
-    waves
+
+    // Ends first at a tie, so this uses exactly the convention the wave count above uses: a
+    // child that begins at the instant another finishes waited for it and is not in flight
+    // alongside it. Without the `<=` the width would report 2 for every hand-off in a serial
+    // loop, which is the reading this number exists to distinguish.
+    let mut in_flight: std::collections::BinaryHeap<std::cmp::Reverse<Duration>> =
+        std::collections::BinaryHeap::new();
+    let mut width = 0;
+    for (at, end) in &intervals {
+        while in_flight
+            .peek()
+            .is_some_and(|std::cmp::Reverse(finishes)| finishes <= at)
+        {
+            in_flight.pop();
+        }
+        in_flight.push(std::cmp::Reverse(*end));
+        width = width.max(in_flight.len());
+    }
+
+    (waves, width)
 }
 
 /// Print the breakdown to stderr.
@@ -205,11 +261,11 @@ pub fn report(wall: Duration) {
     let (rows, _, summed) = summary();
 
     if rows.is_empty() {
-        eprint!("{}", render(&[], wall, summed, 0));
+        eprint!("{}", render(&[], wall, summed, 0, 0));
         return;
     }
-    let waves = waves();
-    eprint!("{}", render(&rows, wall, summed, waves));
+    let (waves, width) = schedule();
+    eprint!("{}", render(&rows, wall, summed, waves, width));
 }
 
 /// How many distinct programs a set of rows came from.
@@ -241,7 +297,13 @@ pub fn distinct_programs(rows: &[Row]) -> usize {
 ///
 /// Empty `rows` renders the no-children line, so a caller cannot report an empty run as though it
 /// had asked nobody anything while `rows` was merely unread.
-pub fn render(rows: &[Row], wall: Duration, summed: Duration, waves: usize) -> String {
+pub fn render(
+    rows: &[Row],
+    wall: Duration,
+    summed: Duration,
+    waves: usize,
+    width: usize,
+) -> String {
     let mut out = String::new();
 
     if rows.is_empty() {
@@ -258,14 +320,19 @@ pub fn render(rows: &[Row], wall: Duration, summed: Duration, waves: usize) -> S
     // them; it is a ratio of sums, so it never divides by zero here (rows is non-empty).
     let overlap = summed.as_secs_f64() / wall.as_secs_f64().max(f64::EPSILON);
 
+    // **`wide` is appended, never substituted.** Every existing reader finds `child command(s)`,
+    // `x overlap` and ` wave(s)` where it found them before; the one number the ratio cannot
+    // report — how many children actually shared the busiest instant — is added to the end of
+    // the same sentence, so a report and a gate cannot read two different lines.
     out.push_str(&format!(
         "\nTimings: {:.2}s wall · {} child command(s) summing to {:.2}s · {:.1}x overlap · {} \
-         wave(s)",
+         wave(s) · {} wide",
         wall.as_secs_f64(),
         calls,
         summed.as_secs_f64(),
         overlap,
         waves,
+        width,
     ));
     // **Child commands and programs are counted separately, because conflating them is what made
     // `#107` unanswerable.** `shall export` on a five-manager host spawns seven child commands —
@@ -385,6 +452,13 @@ mod tests {
         // This is the reading that matters: same rows, same totals, and a serial run is only
         // distinguishable from an overlapped one here.
         assert_eq!(waves(), 4, "four children, none overlapping, is four waves");
+        // And the half that survives a slow host: a hand-off is not overlap, so a run that
+        // never had two children in flight is 1 wide however the ratio reads.
+        assert_eq!(
+            width(),
+            1,
+            "a child that starts as the last one ends was not in flight alongside it"
+        );
 
         let winget = rows.iter().find(|r| r.label == "winget list").unwrap();
         assert!(
@@ -436,14 +510,20 @@ mod tests {
                 last_end: ms(910),
             },
         ];
-        let text = render(&rows, ms(920), ms(1200), 7);
+        let text = render(&rows, ms(920), ms(1200), 7, 2);
 
         // The summary line stays exactly as it was: the gate parses `child command(s)`,
         // `x overlap` and ` wave(s)` out of it, and a report that answers the diagnosis by
-        // breaking its own parser would trade one unreadable failure for another.
+        // breaking its own parser would trade one unreadable failure for another. `wide` is
+        // appended after all three for the same reason the rest of this function exists.
         assert!(
             text.contains("3 child command(s) summing to 1.20s"),
             "the aggregate line is what the gate parses; it changed:\n{text}"
+        );
+        assert!(
+            text.contains("2 wide"),
+            "the summary line must report how many children shared the busiest instant, which \
+             is the one reading a host that starts processes slowly cannot corrupt:\n{text}"
         );
         for label in ["solus", "winget"] {
             assert!(
@@ -480,7 +560,7 @@ mod tests {
 
         // And the empty run still says it asked nobody, rather than rendering an empty table that
         // reads like a truncated one.
-        let empty = render(&[], ms(50), Duration::ZERO, 0);
+        let empty = render(&[], ms(50), Duration::ZERO, 0, 0);
         assert!(
             empty.contains("no child commands"),
             "an empty run must say so in words:\n{empty}"
