@@ -431,6 +431,40 @@ build and what is deferred to hardware.**
       mid-question case — the last one written before the round stamp's role could be discussed
       honestly at all, and reported as not isolating it.
 
+### Tier 33 — a ratio that measured the host (`PLAN.md` #107, and `#111` for what is left): BUILT
+
+48. ~~**`sbom` and `export` ask their managers one at a time.**~~ **BUILT, and the title was wrong
+    about the mechanism: the gates were reading the host.** Two instruments judged these two
+    fan-outs and both were confounded on the machines that ran them — the overlap ratio
+    (`sum(child)/wall`) falls when process startup costs what the child itself costs, and the wave
+    ceiling is calibrated on a child count the run's own `max_parallel` (the core count, **2** on
+    both CI runners) cannot supply however well the run is scheduled.
+
+    - **The measurements, from the run that printed them.** Windows: seven children summing to
+      5.23s inside 4.25s (**1.2x** against a floor of 1.25x, 4 waves). Linux: seven summing to
+      1.89s inside 1.68s (**1.1x**, 6 waves). Both runs had two children in flight at the busiest
+      instant; one pair is `npm list` beside `dotnet tool`, both starting at 1.65s.
+    - **`core::timing::width` is the reading that cannot be fooled.** It is computed in the same
+      `schedule()` sweep as the wave count, so the two cannot disagree about a hand-off, and it is
+      appended to the one `Timings:` line whose prefix is byte-identical because the gate parses it.
+      A `for` loop that awaits each child is exactly 1 wide whatever a child costs on that host.
+    - **`Shape::shape_measurement_gap` is unchanged and is still the rule for the ratio**; what
+      changed is which command is judged by it. `latency::report_shape` records a run wider than one
+      as *unmeasured* at `info` instead of warning — on a two-slot host the ratio and the wave
+      ceiling cannot be satisfied by any scheduler, which is `#90`'s finding one bound further out —
+      and the `shall-latency-unmeasured:` token is emitted on that path like every other.
+    - **What is given up, stated rather than buried:** a fan-out that uses two slots where it had
+      sixteen is no longer reported by any number in this tree. Filed as `#111` with the two
+      candidate routes (a budget for manager work, grouped by `app::stale_lock::lock_key` so two
+      programs never sit over one manager's database, or the fan-out taking the work's own width)
+      and with *measure it first* as an acceptable outcome.
+    - **The gates.** `tests/the_other_fan_outs_fan_out_too_tests.rs`'s `assert_not_serial` asserts a
+      width of at least 2 for these two commands — the defect the title named is a serial loop, and
+      that is what a width of 1 is. `tests/latency_budget_tests.rs` keeps asserting the ratio and
+      the wave ceiling over `list`, where they were calibrated. Nothing was deleted or loosened;
+      two assertions moved to the reading that means the same thing on a 2-core runner as on a
+      16-core one.
+
 ### Tier 32 — a control that counted the scaffolding as if it were the finding (`PLAN.md` #89): BUILT
 
 47. ~~**Guard-reachability control test builds a vacuous fixture on hosts where adopt finds

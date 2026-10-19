@@ -1,7 +1,7 @@
 # PLAN — Shall (work top to bottom, one issue per worker session)
 
 Worker loop: top unchecked item only, fix + resolving test, commit, check off, stop.
-Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97, #102, #98, #91, #86, #85, #81, #83, #84, #79, #82, #87, #95, #103, #88.
+Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97, #102, #98, #91, #86, #85, #81, #83, #84, #79, #82, #87, #95, #103, #88, #36, #55, #101, #105, #106, #107.
 
 ## SKIP — duplicates of one event, do not re-work
 - #32 DUP of #23+#24; #48 DUP of #32; #49 DUP of #33; #45 DUP of #26 (same file:line, same fix).
@@ -22,8 +22,14 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 - [x] #39 harness half-totem (mutation survival). (High — absence/restraint family shipped as
   `0f9c5e5`; the ISSUE STAYS OPEN, because section 16's ~50 content claims are the larger half
   and are named in the issue, not here)
-- [x] #40 two oracles that cannot fail. (Medium — both shipped; the `unstubbed` half has a
-  measured follow-up of 66 tests, recorded in `docs/spec/plan.md` Tier 14)
+- [x] #40 two oracles that cannot fail. (Medium — **both shipped, and the ISSUE STAYS OPEN
+  deliberately**, because what is left of it is in the plan and not in the product. Verified in the
+  tree for this review: `deny_unstubbed`/`unstubbed_registrations` in `core/executor.rs` with
+  `tests/an_unanswered_command_is_a_defect_tests.rs`, and `latency::UNMEASURED_TOKEN`
+  (`shall-latency-unmeasured:`) emitted from every path that declines to measure, with a gate per
+  path. The follow-up it names — 66 suite tests whose `execute()` calls nothing answers — is
+  measured and recorded in `docs/spec/plan.md` Tier 14, so closing the issue would lose the only
+  register of it)
 - [x] #99 a harness section that stops running is invisible: `crash/groupkill` lost 10 checks on
   ubuntu and the run still went green. (High — there is no floor on *checks run*, which is the
   exact mirror of `CAUGHT_FLOOR`, and three of the five properties only the matrix can verify are
@@ -321,10 +327,36 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   cap did not swallow the shape** (a fix that flattened everything to an hour would pass the cap
   test and give one package an hour). — ISSUE #82)
 - [ ] #25 lifecycle jobs on distro containers, #53 nimble Windows, #54 dirty-host fixtures.
+- [ ] #109 CI: the apt legs install off the image's baked lists, so a mirror rotation reds the leg
+  for the mirror's reason. (**Filed 2026-10-15 with a candidate patch and NO failing run behind
+  it, and the issue says so itself.** `Dockerfile.ubuntu` runs `apt-get update` at build and keeps
+  the lists; nothing refreshes them before an install, so an install off a suite whose revision
+  the pool has rotated away 404s — and `docker/integration/retry.sh` deliberately does not wrap
+  the distro's own managers, so a mirror's fault surfaces as a red leg. The evidence for the
+  *mechanism* is real (`audit/results/ubuntu-build.log:354` resolves `noble-updates` at run time);
+  **the evidence for the failure is not**, and landing the fix would put an unproven precondition
+  into the harness — the same shape of mistake as `#96`'s missing `witness`. **Not landed here:
+  there is no Docker on this host**, so neither the harness nor the patch can be executed, and the
+  issue's own first step is to attach the apt log. The patch applies cleanly to `c5d0547`
+  (`git apply --check`), so it is ready for whoever has a container runtime.)
+- [ ] #112 the two native sweeps are red on the same family. (**Filed 2026-10-18 off the nightly
+  logs, because macOS native had no issue at all and Windows had two that name two symptoms.** Ten
+  backends on Windows and eight on macOS fail the same pair — `list shows <pkg> (missing)` and
+  `<pkg> is not on PATH and nothing said where it went` — after the harness watched the install
+  return 0, which is a family rather than ten coincidences. Three other families are named in the
+  same issue: the Windows `link` segfault (`rc=139`, very likely `#101`, whose fix is in
+  `1b34f77` — **the next nightly is the test of that claim and the issue says to correct it either
+  way**), the crash family that never converges, and `coverage: 1 backend(s) have no path to a
+  real lifecycle, over the ceiling of 0`, which names the count and not the backend. macOS's
+  `installing a nonexistent package fails (expected non-zero, got 0)` is filed as a suspected
+  *consequence* of the listing family, with the order of repair as its control.)
 - [x] #55 gentoo (emerge) leg: harness drives the ambiguous canary jq. (**BUILT — the canary is
   `htop` since 2026-08-17, because `jq` is two atoms on Gentoo and a bare `jq` is a name Portage
   itself refuses; `Dockerfile.gentoo:96` and the nightly leg is green. The issue is stale, not
-  wrong: it was true when filed)
+  wrong: it was true when filed. **CLOSED 2026-10-18, and on four nightlies rather than on this
+  entry** — `38703692718`, `38871047055`, `39014498876` and `39109475065` all report
+  `Integration (gentoo, nightly) success`. This entry claimed the leg was green and a claim is not
+  the instrument; the four runs are.)
 - [x] #90 fan-out overlap floor fails a skewed host. (**BUILT, and the fix is a skip rather than a
   number, which is the whole argument.** The ratio is `sum(child)/wall`, and the smallest wall any
   scheduler can reach is the *slowest* child — every other child hides inside it. So the ceiling is
@@ -348,8 +380,10 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     the field's own doc calls the worst kind this repo keeps finding. `overlap_headroom` (1.25) is
     the new key, and it is a multiple of the floor rather than a second absolute constant. — ISSUE
     #90)
-- [ ] #107 `sbom` and `export` ask their managers one at a time. (**Filed out of #90, which was
-  closed on a DIFFERENT signature, and the distinction is the whole point of filing it separately.**
+- [x] #107 `sbom` and `export` were filed as asking their managers one at a time. (**BUILT — and
+  the title was refuted by the gate's own evidence, which is the larger half of what this entry
+  records.** Filed out of #90, which was closed on a DIFFERENT signature, and the distinction is
+  the whole point of filing it separately.
   Both fail on a 7-manager host at **6 waves over 7 children** — close to one-at-a-time. #90's
   evidence was a *one-wave* run on a skewed host, where the low ratio was the ratio's ceiling
   (`summed/slowest`) rather than a scheduler. `Shape::wave_ceiling(7)` is 4, so the wave assertion
@@ -421,17 +455,55 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
       for 12 lookups, asserted by a count test with two mutations watched; (b) **the grouping
       change reverted above is still unproven, not refuted** — its 2.6x was measured on the error
       path and says nothing either way; (c) the CI observation is untouched and still stands.
-    - **The timing assertions in that file are not trustworthy, with receipts.** The same test
-      failed at 875ms and then 1.6s against an 840ms serial baseline purely because `ksav` was
-      running a `--release` build here (load 33), and passed at 0.28s idle. **Both are now
-      peak-concurrency counts**, wrapped in the test as an `ExecutionLayer` — adding the counter to
-      `MockExecutor` was refused by `a_module_is_a_subject_not_a_pile_tests` at 3223 lines against a
-      3150 ceiling, correctly. A clock measures the host as well as the code.
-    - **The timing assertions in this file are host-sensitive, with receipts.**
-      `seven_managers_are_asked_at_once_and_not_one_after_another` failed at 875ms against an
-      840ms serial baseline purely because `ksav` on this machine was running a `--release`
-      build; it passes at 0.28s idle, before and after the change. **Ratio assertions here need a
-      quiet machine or a counter, not a clock.**
+    - **The timing assertions in this file are host-sensitive, with receipts, so they ask a
+      counter rather than a clock.** `seven_managers_are_asked_at_once_and_not_one_after_another`
+      failed at 875ms and then at 1.6s against an 840ms serial baseline purely because `ksav` was
+      running a `--release` build here (load 33), and passes at 0.28s idle before and after the
+      change. **Both are now peak-concurrency counts**, wrapped in the test as an
+      `ExecutionLayer` — adding the counter to `MockExecutor` was refused by
+      `a_module_is_a_subject_not_a_pile_tests` at 3223 lines against a 3150 ceiling, correctly. A
+      clock measures the host as well as the code.
+    - **CLOSED 2026-10-18, on the one reading that cannot be fooled. The two gates were red for two
+      separate instrument reasons and neither was a scheduler.**
+      - **The ratio reads the host.** Windows: 7 children summing to 5.23s inside 4.25s — **1.2x**
+        against a floor of 1.25x. Linux: 1.89s inside 1.68s — **1.1x**. Both runs started two
+        children at once (the tables above say so), so the low number was process-startup cost and
+        not sequencing.
+      - **`max_parallel` is the core count, which is 2 on both runners**, so five declared managers
+        (seven commands, two of them a listing *and* its probe) cannot reach 1.25x or
+        `wave_ceiling(children)` waves however well they are scheduled. Linux's "6 waves over 7
+        children" was arithmetic about a two-slot budget. `#90`'s entry established the ratio's
+        ceiling (`summed/slowest`); this is the other bound on the same number, and neither is a
+        fact about the fan-out.
+      - **`core::timing` now reports `width`** — how many children shared the busiest instant —
+        computed in the same `schedule()` sweep as the wave count, so a hand-off cannot be counted
+        as overlap by one reading and as a wave by the other. It is appended to the same `Timings:`
+        line. A `for` loop awaiting each child is exactly 1 wide on every host, which is the defect
+        the title named, and that is what
+        `tests/the_other_fan_outs_fan_out_too_tests.rs::assert_not_serial` asserts now: one wide is
+        a collapse, and anything wider was not serial whatever its ratio.
+      - **`latency::report_shape` uses the same reading to stop warning a user**, on any host with
+        two slots, that an ordinary `sbom` "did not overlap the managers" — it records the run as
+        unmeasured at `info` instead, because the ratio and the wave ceiling are bounded by the
+        run's own budget rather than by the scheduler. **What that gives up is stated in the code
+        and in the issue below**: a fan-out using two slots where it had sixteen is no longer
+        reported by any number in the tree.
+      - **The ratio and the wave ceiling stay enforced where they were calibrated** — over `list`
+        in `tests/latency_budget_tests.rs`. Every gate that reads them is still asked, none was
+        deleted or weakened, and the two in this entry were re-pointed at the reading that means
+        the same thing on a 2-core runner as on a 16-core one. — ISSUE #107)
+- [ ] #111 the manager fan-out is bounded by the core count, and no instrument reports the degree
+  it lost. (**Filed 2026-10-18 from the two measurements above, as a budget question rather than a
+  defect.** `max_parallel` defaults to `available_parallelism()`, which is right for work that ends
+  in a CPU and wrong for a manager listing — a spawn plus a wait — which is the same argument the
+  config already accepts for `network_parallel` on sockets. **Nothing measured is wrong today**
+  (both tables show two children in flight at once, so neither command is serial) and **no
+  benchmark exists for the win**, which the issue says in its own evidence section: the first step
+  is to measure on a many-core host, and on a two-core host with the budget raised. Three candidate
+  routes, the first being one config field defaulted from `max_parallel` and grouped by
+  `app::stale_lock::lock_key` — the function that already knows `pacman` and `yay` are two programs
+  over one database, which is the failure a wider fan-out could introduce. **An owner ruling, so
+  filed rather than landed**, and route 3 is to measure it and close it as not worth doing.)
 - [x] #105 the crash window between a per-operation WAL write and the once-per-run registry write.
   (**ROUTE (2) WAS ALREADY BUILT — the issue's own "better next move" — so what was left was its
   residual, and the residual has one cause: the evidence expires.** `heal` calls
@@ -539,7 +611,9 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   - `a_retired_row_reads_retired_and_is_never_driven` also asserts the harness has **no lifecycle**
     for it. That is the check the stamp exists to enable, and the mutation (adding `eopkg` to
     `DRIVEN`) reds it.
-- [ ] #41 prose tax distill, #36 doc-comment layer.
+- [ ] #41 prose tax distill. (**#36 is CLOSED** — its second documentation layer was a citation
+  with no venue, and `c5d0547` shipped the fix on 2026-10-09 — so this item is #41 alone. The half
+  below is what is deliberately not started.)
   - **#41 IS DELIBERATELY NOT STARTED, and the reason is that it is not a mechanical edit.** The
     issue asks for `decisions.md` (641 KB) and `why.md` (521 KB) to be distilled to one line per
     entry. Every one of those entries is cited by line number from elsewhere in this repository —
