@@ -344,12 +344,61 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   backends on Windows and eight on macOS fail the same pair — `list shows <pkg> (missing)` and
   `<pkg> is not on PATH and nothing said where it went` — after the harness watched the install
   return 0, which is a family rather than ten coincidences. Three other families are named in the
-  same issue: the Windows `link` segfault (`rc=139`, very likely `#101`, whose fix is in
-  `1b34f77` — **the next nightly is the test of that claim and the issue says to correct it either
-  way**), the crash family that never converges, and `coverage: 1 backend(s) have no path to a
-  real lifecycle, over the ceiling of 0`, which names the count and not the backend. macOS's
+  same issue: the Windows `link` segfault — **VERIFIED as `#101` on this host, after the issue was
+  filed, rather than inferred from the rc**: a worktree at `c5d0547` built with its own
+  `CARGO_TARGET_DIR` and driven with the sweep's own fixture
+  (`scripts/integration-windows.sh:1620`'s `link:/etc/hostname @target=/tmp/shall-it-hostname`)
+  segfaults with **`rc=139`** on both commands the sweep runs, where current `main` answers `rc=2`
+  (`drift … 1 to place`) and `rc=0` — the crash family that never converges, and `coverage: 1
+  backend(s) have no path to a real lifecycle, over the ceiling of 0`, which names the count and
+  not the backend. macOS's
   `installing a nonexistent package fails (expected non-zero, got 0)` is filed as a suspected
   *consequence* of the listing family, with the order of repair as its control.)
+- [ ] #113 the `guix` leg's section floor is red. (**Filed 2026-10-18 off the nightly logs.**
+  `RESULT pass=316 fail=9 soft=12`, and the most specific line is not one of the nine: **`section
+  floor: this run credited fewer checks than container-linux-guix-local has before`**, naming six
+  sections short — `Chains and the per-host lock` 17→15, `Git history + rollback` 8→3, `rebuild`
+  6→3, `Command surface, executed` 70→68, `The guard` 3→2, `Coverage audit` 5→4. That is `#99`'s
+  instrument firing on a leg nobody has read, and it says how much of the leg stopped being asked
+  where no single `FAIL` does. Several of the nine read like a manager that installs nothing there
+  (`nothing in this run was ever seen as 'lockfile-entry'`), so the floor may be a consequence —
+  **the first step is to say whether `guix install` delivers on that image**, with `#100`'s trap in
+  mind: an `rc` of 0 is not delivery. Slackware's single red is `go: … failed permanently` and is
+  filed here rather than alone, because `go` is the one backend failing on three legs for the same
+  subject (`arch`'s is in `#100`). **Not started here: it needs a container runtime, and there is
+  no Docker on this host.**)
+- [x] The nightly's other red jobs were `#101` and `#107` in disguise. (**REVIEWED 2026-10-18, and
+  this is why the nightly is worth reading even when its subject is elsewhere.** Every nightly from
+  `38129897624` (2026-10-11) through `39109475065` (2026-10-18) is red on head `c5d0547`, and the
+  red decomposes into six families — **three of which were already-filed bugs paying for themselves
+  through jobs that have nothing to do with their subject**:
+  - **Twelve `Mutation (…)` jobs never reach their subject at all.** They fail at `cargo mutants`'
+    own baseline, an unmutated `cargo test --test suite`: `test result: FAILED. 733 passed;
+    2 failed`, the two being
+    `the_other_fan_outs_fan_out_too_tests::{sbom,export}_asks_the_managers_concurrently`
+    (`117622290849` in `39109475065`). Twelve jobs, one cause, and the cause is `#107` — the fan-out
+    gates were red for the host's reasons, fixed by `4294afc`. **The child table that diagnosed
+    `#107` was printed by this job**, which is how the seven children were named at all.
+  - **`Upstream argv drift (nightly) (windows-latest)` never failed a test either**: its log says
+    `process didn't exit successfully` — a dead process, not a failed assertion, on the job that
+    runs `--release`. That job's own command on this host against the current tree:
+    `cargo test --release --test suite -- argv_drift_tests:: --nocapture` → `1 passed; 0 failed`
+    in 155.34s. `#101` again, and the second job that was paying for it.
+  - **The two native sweeps are `#112`**, including the Windows `link` `rc=139` pair now verified
+    as `#101` there.
+  - **The `guix` and `slackware` container legs are `#113`** — guix with nine failures *and* a
+    section-floor breach naming six sections short, slackware with the one `go:` failure that the
+    `arch` leg also sees.
+  - **`Integration (arch)` and `Integration (void)` are the push-time legs** and are `#100`'s and
+    `#109`'s subjects, not the nightly's.
+  - **Three jobs on the same nights were red for reasons this session fixed**: `Advisories and
+    licences`, `Build for x86_64-pc-windows-msvc` and `Build for x86_64-unknown-linux-gnu`, all
+    green on `83653aa`'s push run. The Windows job went from `STATUS_ACCESS_VIOLATION` at test 480
+    of 723 to the whole suite passing.
+  - **Green on every one of those nights, so they are not part of the story:** both install-script
+    jobs, `Integration (gentoo, nightly)`, `Integration (slackware)`'s non-`go` checks,
+    `Harness mutation`, the four non-native builds and the MSRV job. `Integration (tools, nightly)`
+    is `cancelled` rather than failed, which is its own thing and not a leg that ran and broke.)
 - [x] #55 gentoo (emerge) leg: harness drives the ambiguous canary jq. (**BUILT — the canary is
   `htop` since 2026-08-17, because `jq` is two atoms on Gentoo and a bare `jq` is a name Portage
   itself refuses; `Dockerfile.gentoo:96` and the nightly leg is green. The issue is stale, not
