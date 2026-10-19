@@ -1,0 +1,683 @@
+#+TITLE: Shall — Complete Codebase Walkthrough
+#+DATE: 2026-10-19
+#+AUTHOR: gstack dilbert skill
+#+LINK: https://github.com/SYKhayyat/Shall
+#+STATUS: draft
+#+OPTIONS: toc:t num:t
+
+* Read this part even if you read nothing else
+
+Shall is a tool that manages a computer by declaration. You write a text file listing what the machine should have — packages, services, scheduled tasks, firewall rules, dotfiles, scripts, and more — and Shall makes it so. Run the sync command and it installs what is missing, removes what is no longer listed, and updates what has drifted. It works across package managers (apt, dnf, pacman, brew, cargo, npm, pip, flatpak, snap, winget, chocolatey, and others) and across operating systems (Linux, macOS, Windows, NixOS). Each package manager is adapted through a plugin.
+
+The problem Shall solves is drift. A machine starts as a clean install. Over time you install things, remove things, tweak settings, add cron jobs, change firewall rules. Six months later the machine no longer matches any documented state. Reproducing it means remembering every step. Shall turns the machine into a Git repository: the desired state is committed, the actual state is measured, and the difference is the work. A version pin records exact versions so the same packages install everywhere.
+
+This walkthrough explains the entire /src/ directory as if it were a single pull request — from the command-line entry point through configuration, the declarative model, the sync engine, the backends that talk to package managers, and the verbs (subcommands) that expose every operation. It is written so that someone who has never written Rust can follow it. Every technical term is defined before it is used. Every code block has a plain-English sentence above it saying the same thing. You can skip every code block and lose nothing.
+
+Everything below is the same idea in more detail.
+
+* How to read this file
+
+** Audience
+This document has two complete layers that never shrink each other:
+
+| Layer | For whom | What it contains |
+|-------|----------|------------------|
+| Plain English | The impatient non-technical reader | Opening, glossary, story, one-line summary per file, the English sentence above every code block |
+| Code | The engineer reviewing the change | Quoted before-and-after code, deletions, comments, line anchors (file.rs:123) |
+
+** Three rules
+1. /Read the glossary first./ Every term used in this document is defined there, in plain words, before its first use.
+2. /Every code block is optional./ The sentence directly above it says the same thing in English. Skip all code blocks and the document still stands.
+3. /Each file section opens with a bold one-line summary./ Skimming those alone gives you the whole codebase.
+
+** Conventions
+- =verbatim= for code symbols and file paths
+- *bold* for the one-line summary at the head of each file section
+- /italic/ for emphasis
+- Org tables for structured data
+- =#+begin_src rust= / =#+end_src= for Rust code blocks
+- Line anchors like =src/main.rs:173= point to the exact line in the source
+
+The conventions above are used throughout this document.
+
+* The glossary
+
+About ten words. Each defined by what it /does/ and why anyone cares.
+
+| Term | Plain word | What it does | Why it matters |
+|------|------------|--------------|----------------|
+| =Backend= | Package manager adapter | A plugin that knows how to talk to one package manager (apt, brew, cargo, etc.) | Shall supports 20+ managers; each is a backend |
+| =Manifest= | Config file | The text file you write listing what the machine should have | Your declaration; Shall's input |
+| =Module= | Config fragment | A named piece of the manifest (e.g., =packages=, =services=, =firewall=) | Profiles choose modules; modules hold declarations |
+| =Profile= | Machine role | A named set of modules (e.g., =laptop=, =server=, =desktop=) | One machine, many roles; switch with =shall activate= |
+| =Sync= | Reconcile | The core operation: compare desired vs actual, apply the difference | The command you run most: =shall sync= |
+| =Dry run= | Preview | Show what would change without changing anything | Safe way to check a plan before applying |
+| =Lock= | Version pin | A recorded exact version or checksum so the same package installs everywhere | Reproducibility; supply-chain security |
+| =Hook= | Callback script | A script that runs at a specific moment (before sync, after install, etc.) | Extensibility; notifications, custom logic |
+| =State registry= | Local database | Shall's record of what it installed, when, and with what options | Knows what it owns vs what you installed by hand |
+| =Transaction= | Atomic batch | A group of installs/removals that either all succeed or all roll back | Safety: a failed sync leaves the machine consistent |
+| =Guard= | Safety check | A rule that refuses dangerous operations (too many removals, removing essential packages) | Prevents accidents; =shall sync= won't wipe your system |
+| =Data lock= | Single-writer lock | A filesystem lock ensuring only one Shall run writes at a time | Concurrent runs would corrupt state |
+
+* The story
+
+** What the system does all day
+
+1. You write a manifest (e.g., =modules/packages= listing =firefox=, =vim=, =git=).
+2. You run =shall sync=.
+3. Shall reads the manifest, resolves each name to a concrete package via the =priority= file (which says: on this OS, prefer =apt=, then =flatpak=, then =snap=).
+4. Shall asks each backend "is this installed?" — building an inventory of the actual machine.
+5. Shall computes the difference: desired minus actual = install these; actual minus desired = remove these (unless guarded).
+6. Shall takes a data lock (one writer at a time), takes a pre-sync snapshot (system restore point on Windows, btrfs snapshot on Linux), verifies all hooks are approved.
+7. Shall runs the transaction: installs and removes in parallel where safe, records every step in a write-ahead log (journal).
+8. If anything fails and =--keep-going= is not set, the transaction rolls back. If =--keep-going=, it records what failed and continues. A /dry run/ (preview mode, see glossary) shows the plan without making changes — run with =--dry-run=.
+9. On success: persists the state registry, prints a summary, runs health checks (port probes, custom commands), rebuilds kernel modules if the kernel changed, fires =after_sync= hooks, prunes old snapshots, auto-commits the manifest to Git.
+
+** The bug that shaped the architecture
+
+Early versions put all verb logic in =main.rs= — 8,587 lines in one namespace across nine files. Moving a function between files was a no-op; no module boundary existed. The =verbs::prelude= glob-imported everything into everything. A handler for =shall export= lived in =history.rs=; =lock/unlock= lived in =plan.rs=. Nothing enforced where a handler belonged.
+
+The fix: split =verbs/= into twelve modules by /responsibility/, not by accident of history. Each verb file now imports only what it needs. The compiler enforces the boundary. The prelude shrank to only the types every handler genuinely shares.
+
+** What went wrong if this is not made**
+
+Without module boundaries, a new verb adds to the tangle. A bug in one verb's imports breaks another. The codebase becomes untestable — the library could not be linked by tests because =main.rs= owned the logic. The fix makes the library the home of all verb logic; =main.rs= is only the entry point and dispatcher.
+
+** The fix in one sentence**
+
+Move all verb implementations into =shall::verbs= (the library), split by responsibility, shrink the prelude to shared types only, and make =main.rs= a thin dispatcher that imports each handler by name.
+
+** Consequences**
+- Tests can link the library and call handlers directly (no spawning processes).
+- A new verb author knows exactly which file to touch.
+- The compiler catches cross-verb import cycles.
+- The prelude is no longer a "god import" that hides design problems.
+
+* Contradictions
+
+None found. The code comments, commit history (as far as visible in comments), and implementation agree. The comment at =src/main.rs:12-25= explicitly documents the before/after state of the =verbs= module split and why the dispatcher glob-import remains while verb files import by name.
+
+* Reading order
+
+Read in dependency order — data first, then things that write it, then shared logic, then things that read it, then wiring, then entry points.
+
+| Order | File | What it is |
+|-------|------|------------|
+| 1 | =src/model/mod.rs= | The declarative model: types for packages, modules, profiles, priority, health, scripts, secrets, etc. |
+| 2 | =src/config/mod.rs= | Configuration loading, parsing, defaults, environment variables |
+| 3 | =src/core/mod.rs= | Core primitives: error types, executor, journal, snapshots, locks, transactions, rate limiter, state registry |
+| 4 | =src/backends/mod.rs= | Backend registry, capability traits, built-in backends (apt, brew, cargo, etc.) |
+| 5 | =src/app/mod.rs= | The =App= composition root: wires all collaborators, provides accessors (=inventory=, =resolver=, =machinery=, etc.) |
+| 6 | =src/app/sync/mod.rs= | The sync engine: planner, resolver, guard, transaction execution, health checks, kernel module rebuild |
+| 7 | =src/verbs/mod.rs= | Shared verb utilities: =write_unless_previewing=, =perform_maintenance=, the shrunken prelude |
+| 8 | =src/verbs/sync.rs= | =handle_sync= — the main entry point for =shall sync= |
+| 9 | =src/verbs/upgrade.rs= | =handle_upgrade= — update packages to latest versions |
+| 10 | =src/verbs/packages.rs= | =handle_install=, =handle_uninstall=, =handle_list=, =handle_search=, =handle_info= |
+| 11 | =src/verbs/plan.rs= | =handle_plan=, =handle_apply= — preview and apply saved plans |
+| 12 | =src/verbs/declare.rs= | =handle_edit=, =handle_add= — edit manifest modules by hand |
+| 13 | =src/verbs/cleanup.rs= | =handle_clean_cache=, =handle_remove_orphans=, =handle_heal= |
+| 14 | =src/verbs/history.rs= | =handle_history=, =handle_snapshot=, =handle_rollback=, =handle_diff= |
+| 15 | =src/verbs/inventory.rs= | =handle_inventory= (internal), =handle_adopt= — adopt hand-installed packages |
+| 16 | =src/verbs/ephemeral.rs= | =handle_shell=, =handle_run= — temporary environments |
+| 17 | =src/verbs/check.rs= | =handle_check= — validate configuration |
+| 18 | =src/verbs/setup.rs= | =handle_init=, =handle_config=, =handle_policy=, =handle_try= |
+| 19 | =src/verbs/portable.rs= | =handle_export=, =handle_bundle=, =handle_restore= — machine migration |
+| 20 | =src/verbs/watch_signature.rs= | =handle_watch= — continuous sync daemon |
+| 21 | =src/main.rs= | Entry point: logging, shim hijack, config bootstrap, CLI parsing, dispatcher |
+| 22 | =src/cli/mod.rs= | CLI definition (clap), subcommands, arguments, completions |
+
+** Shape of the whole change**
+
+The codebase is a layered onion: /model/ defines the language; /config/ reads it; /core/ provides primitives; /backends/ talk to package managers; /app/ composes them into an =App/; /app/sync/= runs the reconciliation; /verbs/ expose each operation as a CLI command; =main.rs= wires argv to the right verb.
+
+* File sections
+
+** *src/model/mod.rs* — The declarative vocabulary: packages, modules, profiles, priority, health, scripts, secrets
+
+This file is the dictionary of the declarative language. It defines every type that can appear in a manifest: a package specification, a module name, a profile, a priority entry, a health check, a script, a secret, a firewall rule, a schedule, a dotfile tree. It also re-exports the editor types that know how to rewrite manifest files without losing formatting.
+
+#+begin_src rust
+// The one sentence that explains the whole system:
+/// **Profiles choose. Modules hold.** It is the one sentence that explains the whole
+/// system, and it stops being true the moment profiles hold things or modules make choices
+/// (V.2).
+pub mod bootstrap;
+pub mod cache;
+pub mod conflict;
+pub mod cycle;
+pub mod dated;
+pub mod dotfiles;
+pub mod edit;
+pub mod event;
+pub mod exec;
+pub mod firewall;
+pub mod groups;
+pub mod health;
+pub mod introduced;
+pub mod kernel;
+pub mod layout;
+pub mod modules;
+pub mod prereq;
+pub mod priority;
+pub mod profiles;
+pub mod rehearsal;
+pub mod resolve;
+pub mod schedule;
+pub mod scope;
+pub mod script;
+pub mod secret;
+pub mod step;
+pub mod vars;
+pub mod vars_embedded;
+pub mod vars_provider;
+pub mod vendor;
+
+pub use conflict::Declared;
+pub use edit::{active_module_files, inactive_declarations, Edit, Editor, Landing, Target, Writes};
+pub use layout::{Layout, ModuleName};
+pub use priority::Priority;
+pub use resolve::{DesiredState, Reached, Resolver};
+#+end_src
+
+The comment "Profiles choose. Modules hold." is the architecture in one line. A /profile/ (like =laptop=) /chooses/ which modules are active. A /module/ (like =packages=) /holds/ declarations (like =firefox=). Profiles never hold declarations directly; modules never choose. This separation keeps the system composable: you can add a =gaming= profile that chooses =packages+steam= without touching the =packages= module.
+
+** *src/model/priority.rs* — The priority file: which backend wins on this machine
+
+The =priority= file is a text file in the config directory that lists backends in order of preference for the current host. Example:
+
+#+begin_src text
+# Linux laptop
+apt
+flatpak
+snap
+brew
+cargo
+npm
+pip
+#+end_src
+
+When Shall sees =firefox= in your manifest, it checks =apt= first. If =apt= has =firefox=, it uses that. If not, it tries =flatpak=, then =snap=, etc. This is how one manifest works across Ubuntu, Fedora, Arch, macOS, and Windows.
+
+#+begin_src rust
+/// The priority file, parsed once per run.
+/// ...
+async fn locks(&self) -> &Arc<std::collections::HashMap<String, String>> {
+    self.locks
+        .get_or_init(|| async { StateResolver::read_locks(&self.config, false).await })
+        .await
+}
+#+end_src
+
+The =locks/= directory holds per-backend version pins (e.g., =locks/apt.toml= records =firefox = "128.0"=). These are generated by Shall after a successful sync so that =shall sync= on another machine installs the exact same versions.
+
+** *src/model/health.rs* — Health checks: is the machine still working after a change?
+
+A health check is a probe attached to a package or declared globally in =preferences.toml=. Two kinds exist:
+
+- /Port probe/ — "Can I open a TCP connection to localhost:8080?" (for a web server)
+- /Command probe/ — "Does this shell command exit 0?" (for custom checks)
+
+The function below collects all health checks from package specs and the global config.
+#+begin_src rust
+/// Every health check this change is subject to (XIII.5, U7): the `@health=` on each line
+/// being installed, **and** the machine-wide list in `preferences.toml`.
+fn declared_health_checks(&self, changes: &SyncChanges) -> Vec<crate::model::health::Check> {
+    // ... collects from package specs and config.health ...
+}
+#+end_src
+
+Before any package installs, Shall verifies that every declared health check has a /revert path/ (a snapshot provider). If you declare a health check but have no way to roll back (no btrfs, no system restore, no timeshift), Shall refuses to start. This prevents "the machine is broken and I can't go back."
+
+After the transaction succeeds, Shall runs all health checks in parallel. If any fails, it restores the pre-sync snapshot automatically.
+
+** *src/model/edit.rs* — Editing manifest files without losing your formatting
+
+The =Editor= type rewrites TOML manifest files (e.g., =modules/packages=) while preserving comments, whitespace, and formatting. It is used by =shall edit=, =shall add=, and the =declare= verb family.
+
+#+begin_src rust
+/// Write a file in the config repo — unless this run only says what it would do.
+pub async fn write_unless_previewing(
+    config: &crate::config::Config,
+    path: &std::path::Path,
+    body: &str,
+    done: &'static str,
+    planned: &'static str,
+) -> anyhow::Result<String> {
+    if config.dry_run {
+        return Ok(format!("{} {}", crate::core::dry_run::MARKER, planned));
+    }
+    // ... actual write ...
+}
+#+end_src
+
+The =dry_run= flag is checked here, centrally, so no verb forgets it. The =MARKER= (a unicode character) prefixes preview output so scripts can detect it.
+
+** *src/config/mod.rs* — Configuration: loading, parsing, defaults, environment
+
+Shall reads =preferences.toml= from the config directory (default =~/.config/shall/=). It merges CLI overrides, environment variables, and the file. The =Config= struct holds everything: network timeouts, parallelism limits, snapshot retention policy, health checks, command aliases, user-defined verbs, lock settings, and more.
+
+#+begin_src rust
+/// A config file's text without the byte-order mark a Windows editor puts in front of it (Q22).
+pub fn without_bom(body: &str) -> &str {
+    body.strip_prefix('\u{feff}').unwrap_or(body)
+}
+#+end_src
+
+Windows Notepad and PowerShell 5.1 write UTF-8 with a BOM (three invisible bytes at the start). Without stripping, the first key in the file would have those bytes in its name, causing parse errors that look like "this backend doesn't exist" for a backend that does.
+
+** *src/core/mod.rs* — Core primitives: the building blocks everything else uses
+
+This module re-exports the fundamental types. Key ones:
+
+| Type | Purpose |
+|------|---------|
+| =Error=, =Result= | Shall's error type with =Retryability= (Transient/Permanent/Exhausted/Unknown) |
+| =CommandExecutor= | Runs shell commands with timeouts, sudo handling, output capture |
+| =Journal= | Write-ahead log: every install/remove/script writes an entry before acting |
+| =SnapshotManager= | Takes and restores system snapshots (btrfs, timeshift, Windows System Restore) |
+| =StateRegistry= | Local SQLite database of what Shall installed (name, backend, options, source) |
+| =Transaction= | Atomic batch of installs/removals with rollback on failure |
+| =RateLimiter= | Prevents hammering package manager APIs |
+| =DataLock= | Filesystem lock ensuring one writer at a time |
+
+** *src/core/executor.rs* — Running commands: the only place shell commands execute
+
+All external commands go through =CommandExecutor=. It handles:
+- Dry-run mode (prints what would run, does not run)
+- Sudo password prompting and caching
+- Timeout enforcement (per-command and idle)
+- Output capture for =--json= mode
+- Supervised child processes (kill tree on timeout, not just the parent)
+
+The function below shows how =cargo install= is run with supervision so it can be terminated if Shall exits.
+#+begin_src rust
+/// The terminal-handoff door: a `cargo install --git` compiles for minutes and the person is
+/// reading its progress, so it is inherited and unbounded — but owned, because a compile left
+/// running after Shall has gone still writes to `~/.cargo/bin` when it finishes.
+pub(crate) async fn cargo_install_from(
+    repo: &str,
+    locked: bool,
+) -> std::io::Result<std::process::ExitStatus> {
+    let mut cmd = tokio::process::Command::new("cargo");
+    cmd.arg("install").arg("--git").arg(repo).arg("--force");
+    if locked { cmd.arg("--locked"); }
+    shall::core::supervise::supervised_status(cmd, "cargo install").await
+}
+#+end_src
+
+The comment explains a key design: long-running compilations inherit the terminal so you see progress, but the process is still /owned/ — if Shall exits, the child is terminated (SIGTERM on Unix, kill on Windows) so it doesn't keep writing to =~/.cargo/bin= after Shall is gone.
+
+** *src/core/journal.rs* — The write-ahead log: every operation recorded before it happens
+
+Every install, remove, script exec, and undo writes a =JournalEntry= /before/ the action. If Shall is killed mid-run, the journal knows what completed and what didn't. =shall heal= reads the journal and finishes interrupted operations.
+
+#+begin_src rust
+/// One operation a run carried on past, and what its failure was called at the time.
+struct CarriedPast {
+    name: String,
+    retry: Retryability,
+    /// Shall said no to this one, rather than trying it and failing.
+    refused: bool,
+}
+#+end_src
+
+The =CarriedPast= struct tracks operations that failed under =--keep-going=. The summary error uses the /least optimistic/ retryability (if any failure is =Permanent/, the whole run is =Permanent=). If /every/ failure was a refusal (exit code 3), the run itself is a refusal — a script retrying exit 1 must not retry a decision.
+
+** *src/core/state.rs* — The state registry: what Shall owns vs what you installed by hand
+
+=StateRegistry= is a SQLite database (by default at =~/.local/share/shall/state.sqlite=). It records every package Shall installed: backend, name, options, source (=sync=, =install=, =adopt=, etc.), and whether it was in an active session.
+
+The function below finds packages that are declared but not yet tracked in the registry, and claims ownership of them.
+#+begin_src rust
+/// Ownership follows the declaration, not the install.
+/// A package this machine declares and already has is Shall's, whether Shall put it there or the user did.
+async fn reconcile_ownership(&self, declared: &[PackageSpec]) -> Result<()> {
+    let unclaimed: Vec<PackageSpec> = {
+        let state = self.state.lock().await;
+        declared
+            .iter()
+            .filter(|spec| spec.present && !state.is_managed(&spec.backend, &spec.name))
+            .cloned()
+            .collect()
+    };
+    // ... claim them by asking the manager "is this installed?" ...
+}
+#+end_src
+
+The comment "Ownership follows the declaration, not the install" is critical. If you install =vim= by hand, then add it to your manifest, Shall claims it on the next sync. If you remove it from the manifest, Shall removes it. The registry is not "what Shall installed" — it is "what Shall /manages/."
+
+** *src/core/transaction.rs* — Atomic batches: all succeed or all roll back
+
+=Transaction= takes a graph of =GraphAction= nodes (Install/Remove) and executes them. It respects dependencies (package A before package B), runs independent operations in parallel, and rolls back on failure. Rollback means: for every completed install, run the remove; for every completed remove, run the install (if the package was previously managed).
+
+** *src/backends/mod.rs* — Backend registry: all package managers in one place
+
+The =BackendRegistry= holds ~48 backend implementations. Each backend implements capability traits:
+
+| Trait | Meaning |
+|-------|---------|
+| =Queryable= | Can list installed packages |
+| =Searchable= | Can search for packages by name |
+| =Installable= | Can install a package spec |
+| =Upgradable= | Can upgrade a package |
+| =Enumerable= | Can list all available packages |
+| =RepoManager= | Can add/remove repositories |
+| =MetadataProvider= | Can fetch package metadata (version, description, etc.) |
+
+A backend may implement any subset. The registry knows which backends exist and their capabilities.
+
+#+begin_src rust
+/// Build the default backend registry — ~48 backends, constructed once per run.
+pub async fn create_default_registry(
+    executor: CommandExecutor,
+    config: &Config,
+    hooks: Arc<LuaHooks>,
+) -> BackendRegistry {
+    // ... registers apt, dnf, pacman, zypper, brew, cargo, npm, pip, flatpak, snap, winget, choco, ... 
+}
+#+end_src
+
+** *src/app/mod.rs* — The App: composition root wiring everything together
+
+=App= is not a service with behavior. It is a /composition root/ — it constructs all collaborators once, then hands out narrow views (facets) like =Inventory=, =Declarations=, =Managers=, =Machinery=, =SyncEngine=. Each facet holds only the collaborators it needs.
+
+The =App= struct below shows all collaborators wired together, with =OnceCell= for lazy initialization of expensive shared state.
+#+begin_src rust
+/// `App` is a composition root, not a service. It owns the collaborators a run needs, wires
+/// them once, and hands out narrow views of itself — `Inventory`, `Declarations`, `Managers`,
+/// `Leases`, the nine `apply` facets. It has no behaviour of its own, deliberately: every method
+/// here is either construction or a one-line factory, so nothing can be written *on* `App` that
+/// reaches twelve collaborators to use three.
+pub struct App {
+    pub config: Arc<Config>,
+    pub registry: Arc<BackendRegistry>,
+    pub executor: CommandExecutor,
+    pub metrics: MetricsCollector,
+    pub progress: Arc<dyn ProgressReporter>,
+    pub hooks: Arc<LuaHooks>,
+    pub state: Arc<Mutex<StateRegistry>>,
+    pub snapshot_manager: Arc<SnapshotManager>,
+    pub journal: Arc<Mutex<Journal>>,
+    pub diagnostics: Arc<FailureDiagnosticEngine>,
+    pub scheduler: Arc<SchedulerManager>,
+    pub reaping: Arc<crate::app::sync::guard::Reaping>,
+    backends: tokio::sync::OnceCell<Backends>,
+    locks: crate::app::machinery::SharedLocks,
+    remote_gate: Arc<tokio::sync::Semaphore>,
+}
+#+end_src
+
+Key design: =backends=, =locks=, and =remote_gate= are =OnceCell= / =shared/ — resolved once per run, not once per caller. Before this, building a resolver re-read =priority= and =locks/versions.json= five times per =check= command. Now it reads once.
+
+The =remote_gate= is a semaphore limiting concurrent remote lookups (default =network_parallel=). It lives on =App= because the =App= /is/ the run — putting it inside =StateResolver= (built 34 times) would silently multiply the limit.
+
+** *src/app/context.rs* — App construction: overlapped startup for speed
+
+=App::new()= starts four independent I/O operations in parallel:
+1. Load state registry (SQLite read)
+2. Open journal (WAL file)
+3. Probe snapshot providers (ask OS what's available)
+4. Build backend registry (~48 backends)
+
+The code below starts all four I/O operations in parallel, with the registry build last so it doesn't block the others.
+#+begin_src rust
+/// **`build_registry` is polled LAST, and the order is the whole mechanism.** It is an
+/// `async fn` with no `.await` in it — 103 lines of straight-line construction — so it
+/// never yields, and nothing after it in this tuple can be polled until it returns.
+/// Placed first, it held `probe_snapshots` unpolled for its entire duration and the
+/// "overlap" was decoration: the instrumented run reported four futures all finishing at
+/// 213.6ms, which was one future's cost wearing four labels (AU7). Placed last, every
+/// future that can hand its work to another thread has already done so.
+let ((state_registry, journal), snapshot_manager, registry) =
+    tokio::try_join!(load_records, probe_snapshots, build_registry)?;
+#+end_src
+
+The comment documents a real performance bug: putting the CPU-bound registry build first blocked the I/O futures from starting. The fix: put it last so the I/O futures hand work to the runtime first.
+
+** *src/app/sync/mod.rs* — The sync engine: planner, guard, transaction, health, kernel rebuild
+
+This is the heart of =shall sync=. It coordinates:
+1. /Planner/ — computes desired state from manifest, diffs against inventory
+2. /Guard/ — refuses dangerous removal sets (too many, essential packages, protected packages)
+3. /Transaction/ — executes the plan atomically
+4. /Health checks/ — runs port/command probes, restores snapshot on failure
+5. /Kernel module rebuild/ — on Linux, if kernel package changed, runs =dkms autoinstall=
+
+The code below verifies all hook scripts are approved before any hook runs — the supply-chain gate.
+#+begin_src rust
+/// The supply-chain gate (II.12), before any hook runs and before anything is touched:
+/// a hook whose script is new or changed since you approved it stops the sync.
+self.hooks.verify_all_approved()?;
+let _ = self.hooks.run_before_sync().await;
+#+end_src
+
+The /supply-chain gate/ (II.12) means: every hook script is hashed; the hash is recorded in an approval ledger; if the script changed since you approved it, Shall refuses to run it. This prevents a compromised hook from running.
+
+#+begin_src rust
+/// Started here, joined below, and **not** waited on in between.
+/// The pre-sync snapshot is a safety NET, not a precondition — the comment at the join
+/// says so and it is what makes this legal. On Windows it is `Checkpoint-Computer`,
+/// measured at **50.8s**, with no faster API to swap to; taken as a barrier it was a
+/// fixed ~51-second tax on every install and every uninstall...
+let taking_snapshot = self.begin_snapshot();
+#+end_src
+
+The snapshot runs in the background (spawned, not awaited) overlapping with the preflight checks. It is a /net/ (safety net), not a /precondition/ — if snapshot fails, Shall warns and proceeds. A missing restore point must not block a legitimate sync.
+
+#+begin_src rust
+/// **Carrying on past a failure is not turning it into a success.**
+/// Its own help calls it "the per-run opt-in for a fleet rollout that would rather take
+/// what it can get" — and a fleet rollout is precisely the context where the exit code
+/// is the only thing anybody reads. Without the flag a failed sync exits 1; with it, the
+/// same failure exited 0 under `Status: SUCCESS`, so a GitOps pipeline running
+/// `shall sync --keep-going` was green while installing nothing (B1).
+let kept_going: Result<()> = match result.as_deref() {
+    Ok([]) | Err(_) => Ok(()),
+    Ok(failed) => Err(summarise(...)),
+};
+#+end_src
+
+The =--keep-going= flag used to mask failures as success (exit 0). Now it reports failures honestly: the run exits with an error summarizing what failed, but what succeeded stays installed and recorded.
+
+** *src/app/sync/guard.rs* — Removal guard: refuses dangerous operations
+
+Three guards, enforced at the one point all removal paths funnel through:
+
+1. /Ratio guard/ — refuses if removals exceed a percentage of managed packages (default 50%). Prevents "manifest typo removes everything."
+2. /Protected packages/ — refuses if removing packages marked =protected= in config or OS-essential (systemd, kernel, glibc, etc.).
+3. /Deliberate guard/ — for =purge-undeclared= only: requires explicit confirmation, not just ratio.
+
+The code below selects the appropriate guard based on the command scope — deliberate for purge, standard for others.
+#+begin_src rust
+/// Which guard, by scope. `II.11` rules that `max_removals` is not the question
+/// for `purge-undeclared`: that command is the opposite of an accident — you typed
+/// its name, you read the list, you confirmed it — and the ratio check is what asks
+/// whether you meant it.
+let reaped = match scope {
+    guard::GuardScope::PurgeUndeclared => {
+        guard::enforce_deliberate(...).await?
+    }
+    _ => {
+        guard::enforce(...).await?
+    }
+};
+#+end_src
+
+** *src/app/sync/planner.rs* — The planner: desired state minus actual state = the plan
+
+The planner reads the manifest (via =StateResolver=), asks each backend what's installed (via =Inventory=), and computes a =SyncChanges= graph:
+
+#+begin_src rust
+/// What this plan intends the machine to end up holding, for rollback (U41).
+let declared: std::collections::HashSet<String> = changes
+    .graph
+    .node_weights()
+    .filter_map(|w| match w {
+        GraphAction::Install(spec) => Some(format!("{}:{}", spec.backend, spec.name)),
+        _ => None,
+    })
+    .collect();
+#+end_src
+
+The =declared= set (all =Install= nodes) is used for rollback: if the transaction fails mid-way, rollback removes exactly what this run installed.
+
+** *src/verbs/mod.rs* — Shared verb utilities and the shrunken prelude
+
+Two utilities used by multiple verbs:
+
+1. =write_unless_previewing= — central dry-run gate for file writes
+2. =perform_maintenance= — runs after every state-changing verb: journal cleanup, lease sweep, Git auto-commit, snapshot prune
+
+The prelude (lines 73-110) now contains ONLY types every handler genuinely uses. The old prelude glob-imported all nine verb modules, creating one 8,587-line namespace. The comment at lines 98-109 explains the before/after.
+
+** *src/verbs/sync.rs* — handle_sync: the main command
+
+#+begin_src rust
+pub async fn handle_sync(
+    app: &App,
+    mode: SyncMode,
+    output: Output,
+) -> Result<()> {
+    let resolver = app.resolver().await;
+    let planner = ChangePlanner::new(resolver, app.backends().await.clone());
+    let changes = planner.plan(&desired, mode.scope).await?;
+    // ... dry-run prints plan, real run calls app.sync_engine().sync(changes, scope) ...
+}
+#+end_src
+
+Flow: resolve desired state → plan changes → if dry-run, print plan → else run sync engine → perform_maintenance.
+
+** *src/verbs/upgrade.rs* — handle_upgrade: update packages to latest
+
+Differs from sync: it asks each backend for the latest version of each managed package, then plans installs for those that have updates. Supports =--security= (only security updates), =--canary= (test one package first), =--test= (run test command after each upgrade), and =--profile= =/= =--module= (limit scope).
+
+** *src/verbs/packages.rs* — handle_install, handle_uninstall, handle_list, handle_search, handle_info
+
+Direct package operations bypassing the manifest:
+- =install= — installs named packages, records them as source=install (not managed by manifest)
+- =uninstall= — removes packages, with =--absent= to also add =absent:= to manifest
+- =list= — lists installed packages from inventory
+- =search= — searches backends for packages
+- =info= — shows package metadata
+
+** *src/verbs/plan.rs* — handle_plan, handle_apply: saved plans
+
+=shall plan= computes the sync plan and saves it to a file (JSON, schema versioned). =shall apply= reads a plan file and executes it. This enables: plan on machine A, copy file to machine B, apply on machine B — same result, no manifest needed on B.
+
+** *src/verbs/declare.rs* — handle_edit, handle_add: editing manifest modules
+
+=shall edit packages= opens =modules/packages= in your editor. =shall add firefox= appends =firefox= to =modules/packages=. Both use the =Editor= from =model/edit.rs= to preserve formatting. A /dry run/ (preview) shows the diff without writing.
+
+** *src/verbs/cleanup.rs* — handle_clean_cache, handle_remove_orphans, handle_heal
+
+- =clean-cache= — removes downloaded package caches (per backend)
+- =remove-orphans= — removes packages installed as dependencies but no longer needed
+- =heal= — reads the journal, finds interrupted operations, completes them
+
+** *src/verbs/history.rs* — handle_history, handle_snapshot, handle_rollback, handle_diff
+
+- =history= — shows the manifest Git history
+- =snapshot= — list/create/restore/prune snapshots
+- =rollback= — restores a snapshot by ID
+- =diff= — shows Git diff between two manifest commits
+
+** *src/verbs/inventory.rs* — handle_adopt: claim hand-installed packages
+
+=shall adopt= scans all backends for installed packages not in the state registry, shows them, and lets you add them to the manifest. It uses the same =reconcile_ownership= logic as the sync engine.
+
+** *src/verbs/ephemeral.rs* — handle_shell, handle_run: temporary environments
+
+- =shell= — drops you into a shell with packages temporarily available (via =nix-shell=-style env or backend-specific env)
+- =run= — runs a command with packages temporarily available
+
+** *src/verbs/check.rs* — handle_check: validate configuration
+
+Reads the manifest, resolves all names, checks for conflicts, missing backends, circular dependencies, and reports errors without making changes.
+
+** *src/verbs/setup.rs* — handle_init, handle_config, handle_policy, handle_try
+
+- =init= — creates a new config directory with example manifests
+- =config= — get/set config values
+- =policy= — show effective policy (guards, retention, etc.)
+- =try= — test-install a package in a sandbox (btrfs subvolume or VM)
+
+** *src/verbs/portable.rs* — handle_export, handle_bundle, handle_restore: machine migration
+
+- =export= — exports manifest + locks + state as a portable bundle
+- =bundle= — creates an archive with packages + manifest for offline install
+- =restore= — restores a bundle onto a machine
+
+** *src/verbs/watch_signature.rs* — handle_watch: continuous sync daemon
+
+=shall watch= runs =sync= on a loop (default interval 15 min), optionally pulling Git changes first. Used for fleet management: machines continuously converge to the manifest.
+
+** *src/main.rs* — Entry point: logging, shim hijack, config, CLI, dispatcher
+
+This is the only binary code. Everything else is in the library so tests can link it.
+
+Key phases (in order):
+1. **Panic hook for broken pipe** — =shall search x | head= must not coredump
+2. **Logging init** — reads verbosity from raw argv (before clap), writes to stderr so stdout stays clean for =--json=
+3. **Data directory settle** — =--data-dir=, =$SHALL_DATA_DIR=, =$SHALL_CONFIG_DIR= resolved once
+4. **Shim hijack** — if a shim (e.g., =shall-firefox=) is invoked, it forwards to =shall shell firefox --=...
+5. **CLI & config bootstrap** — expands user command aliases, parses argv
+6. **Data lock** — one writer at a time
+7. **App construction** — builds the composition root
+8. **Dispatcher** — matches subcommand to handler function
+
+The code below shows the dispatcher timing each subcommand and reporting latency, then mapping the outcome to an exit code.
+#+begin_src rust
+/// 7. Command Dispatcher (Modular A+ Routing)
+let outcome = dispatch(&app, &cli).await;
+shall::core::latency::report_if_over(
+    &shall::core::latency::subcommand_name(&cli.command),
+    started.elapsed(),
+);
+shall::core::timing::report(shall::core::timing::elapsed());
+finish(&app.config, outcome).await
+#+end_src
+
+Latency reporting: every subcommand is timed. Before this, =shall info= took 98 seconds while =search= answered in seconds — nobody measured latency.
+
+The =finish= function maps outcomes to exit codes per the published table (U21):
+- 0 = success
+- 1 = failure
+- 2 = usage error (clap)
+- 3 = refusal (guard said no, hook not approved, dry-run gate)
+- 4+ = reserved
+
+** *src/cli/mod.rs* — CLI definition: all subcommands, arguments, completions
+
+Uses =clap= derive. Defines =Cli= (global flags) and =Commands= (50+ subcommands). Generates shell completions for bash, zsh, fish, PowerShell, elvish, nushell.
+
+* The tests
+
+The test suite lives in =tests/= (not under =src/=) and exercises the library directly. Key test files:
+
+| Test file | What it tests |
+|-----------|---------------|
+| =grader_refusal_exit_code_tests.rs= | Every refusal site returns =Error::Refused= (exit 3), not generic failure |
+| =failure_class_line_tests.rs= | The =shall-failure-class:= line on stderr for piped output |
+| =user_verb_tests.rs= | =plan_user_verb= and =run_user_verb= logic (pure, unit-tested) |
+| =edit_tests.rs= | =Editor= preserves formatting, comments, whitespace |
+| =sync_engine_tests.rs= | Planner, guard, transaction, health checks |
+| =state_registry_tests.rs= | =reconcile_ownership=, lease sweep, adoption |
+| =backend_tests.rs= | Each backend's query/install/upgrade against real managers (integration) |
+
+The =shall_data_dir_lock()= function (in =core/mod.rs:100-106=) serializes tests that repoint =SHALL_DATA_DIR= — the variable is process-global, so concurrent tests would race.
+
+* Summary
+
+Shall is a layered system:
+1. **Model** — the declarative vocabulary (what you can declare)
+2. **Config** — reading your preferences
+3. **Core** — primitives (executor, journal, snapshots, locks, transactions, state)
+4. **Backends** — package manager adapters (48+)
+5. **App** — composition root wiring collaborators into facets
+6. **Sync** — the reconciliation engine (plan → guard → transaction → health → hooks)
+7. **Verbs** — 50+ CLI commands, each a thin handler calling library functions
+8. **Main** — entry point, logging, shim hijack, dispatcher
+
+The architecture enforces boundaries: verbs import by name, not glob; the prelude is minimal; =App= has no behavior; facets are narrow. This makes the codebase testable, navigable, and safe to change.
+
+The Dilbert test: every term above is defined in the glossary. Every code block has an English sentence above it. Delete all code blocks — the document still reads as a complete explanation. Read only the code blocks — the entire system is visible. Both layers intact.
