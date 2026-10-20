@@ -378,6 +378,89 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   filed here rather than alone, because `go` is the one backend failing on three legs for the same
   subject (`arch`'s is in `#100`). **Not started here: it needs a container runtime, and there is
   no Docker on this host.**)
+- [ ] #115 the removal guard's undo door has never been tested. (**Filed 2026-10-20 off the
+  nightly's own mutation output, and the finding is a family.** `enforce_own_work`
+  (`src/app/sync/guard.rs:1371`) — the door a failed sync uses to undo what it just installed —
+  has **zero callers in any test file**: a grep of `src/` and `tests/` returns its definition and
+  its two production callers (`src/core/transaction.rs:1681`, `src/app/sync/mod.rs:1428`) and
+  nothing else. The guard file carries roughly fifty tests, and this is the one exported front
+  door not among them. Six mutants survive in the file; the sharpest is
+  `src/app/sync/guard.rs:1395:21: delete !`, which **inverts** the refusal — the door would
+  refuse when there is nothing to refuse and wave through when there is, so a failed sync
+  uninstalls a protected package. The two `refusal_for_own_work` arms are the promise the doc
+  comment above makes ("**the refusal names the package**"), and deleting either arm stops the
+  message saying which package it saved, with no test noticing. **Nothing measured is wrong
+  today** — the code behaves correctly; what is missing is the evidence. **The rhythm is the
+  opposite of a bug fix**: the code is right today and the mutant is the artificial break, so
+  each test is expected to be **green on today's tree and red against its named mutant**, and a
+  test that passes on both is worthless. — ISSUE #115)
+- [ ] #116 the mutation gate can report a mutant caught when nothing caught it. (**Filed
+  2026-10-20, found while reproducing `#115`'s survivors on this host.** `cargo mutants` reports a
+  mutant caught when *any* test fails, and cannot tell "failed because of the mutation" from
+  "failed because the host was busy". Reproducing `#115` locally, `guard.rs:1395:21: delete !`
+  came back `CAUGHT` on the strength of
+  `startup_budget_tests::building_the_registry_asks_nothing_and_therefore_costs_almost_nothing`,
+  which failed at `registering 56 backends took 126.3ms, over the 120.0ms budget` — a mutation
+  that cannot affect registry construction, and a number this host's three concurrent `cargo`
+  builds explain (the same file passes in 0.07 s unloaded). **This direction is the dangerous
+  one:** a false catch is a false *negative* on the gap, the mutant is not on the survivor list,
+  nobody writes the test, and a shard whose mutants are all falsely caught exits **0** — a gate
+  reporting `ok` for a tree where the switch is still unpinned, which is II.23's shape. **The
+  repo already knows this hazard in the neighbouring place** — `ci.yml`'s own comment says "a
+  budget that tight goes red on a loaded runner — `run_timed_floor` takes the best of three for
+  exactly that reason", and the budget test's header says "a gate that reddens on load is one
+  people learn to ignore" — but the mutation job is the one place a reddening test is
+  **load-bearing**. Three remedies are named in the issue and **none is ruled**: this is an owner
+  ruling, because it changes what the gate is allowed to claim. — ISSUE #116)
+- [ ] #117 the sync engine's safety checks are unpinned. (**Filed 2026-10-20 off the nightly's
+  mutation output, and it is the largest of the family: 34 surviving mutants in
+  `src/app/sync/mod.rs`, across eleven subjects.** The `Ok(())` family is the sharpest —
+  `require_revert_path`, `require_health_commands_approved` and `rebuild_kernel_modules` are each
+  "the engine checks a precondition before it touches your machine, and refuses if the check
+  fails", and replacing each with `Ok(())` is "**the check always passes**", with no test
+  failing. `probe_ok` → `true` **and** → `false` is the same gate asked in both directions with
+  neither noticed. `prune_snapshots_after_sync` → `()` means the snapshot cleanup never runs, and
+  its `Err(e)` arm deleted means the error is swallowed instead of reported.
+  `execute_transaction`'s `+=` → `*=` is a counter that accumulates becoming one that multiplies
+  — and the two agree perfectly at one and at zero. **Two `GuardScope` arms deleted**
+  (`Rebuild`, `PurgeUndeclared`) are a *removal path with no guard scope*, which is the failure
+  the enum exists to prevent arriving by a different road. — ISSUE #117)
+- [ ] #118 the data lock's contention detection is unpinned. (**Filed 2026-10-20 off the nightly's
+  mutation output: eight surviving mutants in `src/core/datalock.rs`, and every one of them is in
+  the code that decides whether a second Shall is standing in the way.** `is_lock_contended` →
+  `true` makes *every* error read as "someone else holds the lock" — a Shall that fails for any
+  reason at all concludes it is blocked by another Shall and waits, or gives up, so **a bug that
+  is not a lock becomes a lock**. The predicate's own body is unpinned in three ways, and the file
+  asks the question in **both polarities** (`is_lock_contended(&e)` at 144 and 214,
+  `!is_lock_contended(&e)` at 223), so the gate cannot tell whether either polarity is right.
+  **This is one subject with four assertions, not eight bugs.** — ISSUE #118)
+- [ ] #119 the transaction's worker shutdown and lock budget are unpinned. (**Filed 2026-10-20 off
+  the nightly's mutation output: three surviving mutants in `src/core/transaction.rs`, shards 2, 3
+  and 4.** `Transaction::quiesce_workers` → `()` is the bad one: quiescing is how the transaction
+  stops its background workers before it finishes, so that a half-done run leaves no worker still
+  writing to the machine while the rollback decides what to undo — and a transaction that quits
+  without quiescing can leave the WAL, the registry and the machine disagreeing, which is the
+  crash-window family this file exists to handle. `LockBudget::total` → `Default::default()` is a
+  zero wait budget, and the CI calls this file "the transaction that decides whether a failed run
+  gives a package back". — ISSUE #119)
+- [ ] #120 a test layout where every src file has a home. (**Filed 2026-10-20, and it is the
+  mechanism the other five need rather than a style preference.** `src/a/b/c.rs` owns
+  `tests/a/b/c/`; a test that needs `cfg(test)` — because it must see a private item, or must use
+  a constructor that must not ship — stays inline, and that is an **exception** with a reason
+  rather than a default. **This re-derives a ruling already in the register**: `C3` (2026-09-28)
+  says "unit tests use a `#[cfg(test)]` constructor that does not ship; the integration suite asks
+  the guard for real", and `target-state.md`'s "**Tests ask too.**" says the same. What the repo
+  has decided is *how the two sides ask*; what it does not have is a **layout** that says which
+  side a test belongs on — and that is why `#115`'s function had nowhere to put a test. **It would
+  retire most of the repo's own exemption list**: the five files over the 3,000-line ceiling are
+  over it *because of their inline test modules* — `generic.rs` 3,940, `statement.rs` 3,881,
+  `transaction.rs` 3,299, `executor.rs` 3,150, and `guard.rs` 3,473 of which **1,946 are tests**
+  — and all five are rows in `TOO_BIG_FOR_NOW`, a table audited in both directions. The three
+  kinds of test are separated by **what the test drives**: `tests/e2e/` (drives the product, 51
+  files), `tests/review/` (reads the tree — the repo already calls that category "the review
+  apparatus"), and the mirror for the rest. **Phase 1 is `guard.rs` and it is a bug fix, not a
+  refactor**: the missing tests, the test module relocated, and a ceiling row retired in one
+  change. — ISSUE #120)
 - [x] The nightly's other red jobs were `#101` and `#107` in disguise. (**REVIEWED 2026-10-18, and
   this is why the nightly is worth reading even when its subject is elsewhere.** Every nightly from
   `38129897624` (2026-10-11) through `39109475065` (2026-10-18) is red on head `c5d0547`, and the
@@ -390,6 +473,14 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     (`117622290849` in `39109475065`). Twelve jobs, one cause, and the cause is `#107` — the fan-out
     gates were red for the host's reasons, fixed by `4294afc`. **The child table that diagnosed
     `#107` was printed by this job**, which is how the seven children were named at all.
+    **SUPERSEDED 2026-10-20: the baseline is green, and the same jobs are red for the reason they
+    exist.** Run `39392961509` prints `ok Unmutated baseline` and then reports **51 surviving
+    mutants across seven of the thirteen jobs** — eight of the thirteen red, seven of them with
+    survivors, and the eighth (`the batch narrowing`) dead on a cargo-mutants internal error
+    (`interrupted`) rather than on a survivor. The jobs have reached their subject; the subject is
+    **51 unpinned safety switches**, filed as `#115`–`#119`. **And one of the six findings is the
+    gate's own** — `#116`: a mutant reported *caught* on the strength of a timing flake, which is
+    the direction that hides gaps rather than reporting them.
   - **`Upstream argv drift (nightly) (windows-latest)` never failed a test either**: its log says
     `process didn't exit successfully` — a dead process, not a failed assertion, on the job that
     runs `--release`. That job's own command on this host against the current tree:
