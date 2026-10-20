@@ -171,7 +171,7 @@ fn sid_text(sid: &[u32]) -> Option<String> {
     if unsafe { ConvertSidToStringSidW(sid.as_ptr().cast_mut().cast(), &mut text) } == 0 {
         return None;
     }
-    let out = wide_to_string(text);
+    let out = wide_to_string(text)?;
     unsafe { LocalFree(text.cast()) };
     Some(out)
 }
@@ -473,7 +473,11 @@ fn resolve_named(name: &str) -> Result<Account> {
     // the first `u16`. The SID therefore read back as `"S"`, the `ProfileList` key below did not
     // exist, and `Account::current()` failed on Windows for every account. That is #106's
     // missing drift row: a `link:` target resolves through the current account.
-    let sid_key = wide_to_string(sid_text);
+    let sid_key = wide_to_string(sid_text).ok_or_else(|| {
+        Error::Other(format!(
+            "could not read the identity of `{name}` back from Windows"
+        ))
+    })?;
     unsafe { LocalFree(sid_text.cast()) };
 
     let key = wide_string(&format!(
@@ -722,12 +726,17 @@ fn open_windows_path(path: &Path, write: bool) -> Result<winapi::um::winnt::HAND
 /// One reader for both SID strings, because the bug was one reader written twice: `sid_text`
 /// and `resolve_named` each decoded a wide buffer with `CStr::from_ptr` and each produced `"S"`.
 #[cfg(windows)]
-fn wide_to_string(wide: *const u16) -> String {
+fn wide_to_string(wide: *const u16) -> Option<String> {
+    if wide.is_null() {
+        return None;
+    }
     let mut len = 0usize;
     while unsafe { *wide.add(len) } != 0 {
         len += 1;
     }
-    String::from_utf16_lossy(unsafe { std::slice::from_raw_parts(wide, len) })
+    Some(String::from_utf16_lossy(unsafe {
+        std::slice::from_raw_parts(wide, len)
+    }))
 }
 
 #[cfg(windows)]
@@ -825,6 +834,26 @@ mod tests {
     #[test]
     fn unknown_accounts_are_refused() {
         assert!(Account::resolve("shall-no-such-account-71").is_err());
+    }
+
+    /// The UTF-16 reader is the one reader, and it must not read a null buffer.
+    ///
+    /// `ConvertSidToStringSidW` hands back a `LPWSTR` that the caller owns, and the API is
+    /// checked for failure before the buffer is read — but "checked for failure" is a claim about
+    /// the call, not a proof about the pointer. A null that reaches the reader would be walked
+    /// until it faulted, so the reader refuses it rather than trusting the caller.
+    #[cfg(windows)]
+    #[test]
+    fn the_win32_utf16_reader_rejects_null_and_keeps_the_full_sid() {
+        let sid: Vec<u16> = "S-1-5-21-123456789-987654321-42"
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        assert_eq!(
+            wide_to_string(sid.as_ptr()).as_deref(),
+            Some("S-1-5-21-123456789-987654321-42")
+        );
+        assert!(wide_to_string(std::ptr::null()).is_none());
     }
 
     #[cfg(unix)]
