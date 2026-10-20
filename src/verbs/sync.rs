@@ -962,87 +962,6 @@ pub async fn handle_watch(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn spec(bare: bool) -> crate::core::PackageSpec {
-        let mut options = crate::config::grammar::Options::default();
-        if bare {
-            options.set("__bare", "true");
-        }
-        crate::core::PackageSpec {
-            name: "htop".into(),
-            backend: "apt".into(),
-            options,
-            requires: Vec::new(),
-            present: true,
-        }
-    }
-
-    #[test]
-    fn a_qualified_install_does_not_prompt() {
-        let mut changes = crate::app::sync::planner::SyncChanges::default();
-        changes.add_installs(&[spec(false)]);
-        let mut asked = false;
-        assert!(confirm_bare_installs_with(&changes, false, |_| {
-            asked = true;
-            Ok(true)
-        })
-        .unwrap());
-        assert!(!asked);
-    }
-
-    #[test]
-    fn a_bare_install_is_asked_and_can_be_declined() {
-        let mut changes = crate::app::sync::planner::SyncChanges::default();
-        changes.add_installs(&[spec(true)]);
-        let mut prompt = None;
-        assert!(!confirm_bare_installs_with(&changes, false, |text| {
-            prompt = Some(text.to_string());
-            Ok(false)
-        })
-        .unwrap());
-        assert_eq!(
-            prompt.as_deref(),
-            Some("Install apt:htop from a bare declaration?")
-        );
-    }
-
-    #[test]
-    fn a_bare_install_refuses_without_a_terminal() {
-        let mut changes = crate::app::sync::planner::SyncChanges::default();
-        changes.add_installs(&[spec(true)]);
-        let error = confirm_bare_installs(&changes, false).expect_err("stdin is not a terminal");
-        assert!(error.to_string().contains("--yes"), "{error}");
-    }
-
-    #[test]
-    fn explicit_confirmation_skips_the_bare_prompt() {
-        let mut changes = crate::app::sync::planner::SyncChanges::default();
-        changes.add_installs(&[spec(true)]);
-        let mut asked = false;
-        assert!(confirm_bare_installs_with(&changes, true, |_| {
-            asked = true;
-            Ok(false)
-        })
-        .unwrap());
-        assert!(!asked);
-    }
-
-    #[test]
-    fn no_bare_install_does_not_prompt() {
-        let changes = crate::app::sync::planner::SyncChanges::default();
-        let mut asked = false;
-        assert!(confirm_bare_installs_with(&changes, false, |_| {
-            asked = true;
-            Ok(false)
-        })
-        .unwrap());
-        assert!(!asked);
-    }
-}
-
 /// Enforce the `[guard]` install/change rules against the desired state before any change
 /// (II.10). The spec-level rules (`deny_packages`, `pinned_only`) are checked purely by the
 /// guard; the two that need runtime state (`require_snapshot`, `deny_vulnerable`) are checked
@@ -1221,5 +1140,86 @@ pub async fn print_vars_changed(
             (Some(a), None) => println!("    ${}  {} → (gone)", name, a),
             (None, None) => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn spec(bare: bool) -> crate::core::PackageSpec {
+        let mut options = crate::config::grammar::Options::default();
+        if bare {
+            options.set("__bare", "true");
+        }
+        crate::core::PackageSpec {
+            name: "htop".into(),
+            backend: "apt".into(),
+            options,
+            requires: Vec::new(),
+            present: true,
+        }
+    }
+
+    #[test]
+    fn a_qualified_install_does_not_prompt() {
+        let mut changes = crate::app::sync::planner::SyncChanges::default();
+        changes.add_installs(&[spec(false)]);
+        let mut asked = false;
+        assert!(confirm_bare_installs_with(&changes, false, |_| {
+            asked = true;
+            Ok(true)
+        })
+        .unwrap());
+        assert!(!asked);
+    }
+
+    #[test]
+    fn a_bare_install_is_asked_and_can_be_declined() {
+        let mut changes = crate::app::sync::planner::SyncChanges::default();
+        changes.add_installs(&[spec(true)]);
+        let mut prompt = None;
+        assert!(!confirm_bare_installs_with(&changes, false, |text| {
+            prompt = Some(text.to_string());
+            Ok(false)
+        })
+        .unwrap());
+        assert_eq!(
+            prompt.as_deref(),
+            Some("Install apt:htop from a bare declaration?")
+        );
+    }
+
+    #[test]
+    fn a_bare_install_refuses_without_a_terminal() {
+        let mut changes = crate::app::sync::planner::SyncChanges::default();
+        changes.add_installs(&[spec(true)]);
+        let error = confirm_bare_installs(&changes, false).expect_err("stdin is not a terminal");
+        assert!(error.to_string().contains("--yes"), "{error}");
+    }
+
+    #[test]
+    fn explicit_confirmation_skips_the_bare_prompt() {
+        let mut changes = crate::app::sync::planner::SyncChanges::default();
+        changes.add_installs(&[spec(true)]);
+        let mut asked = false;
+        assert!(confirm_bare_installs_with(&changes, true, |_| {
+            asked = true;
+            Ok(false)
+        })
+        .unwrap());
+        assert!(!asked);
+    }
+
+    #[test]
+    fn no_bare_install_does_not_prompt() {
+        let changes = crate::app::sync::planner::SyncChanges::default();
+        let mut asked = false;
+        assert!(confirm_bare_installs_with(&changes, false, |_| {
+            asked = true;
+            Ok(false)
+        })
+        .unwrap());
+        assert!(!asked);
     }
 }
