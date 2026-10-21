@@ -505,6 +505,21 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     double looks like, and policing those "would make this a gate people delete". The exception
     table is for the other case: a test that needs `cfg(test)` for a constructor that must not
     ship, which no amount of visibility can reach from a test crate. — ISSUE #120)
+- [ ] #121 the web backend's credential-probe test fails on a coin flip, and it takes the
+  mutation gate's baseline with it. (**Filed 2026-10-20, while `#115` was being built, and it is
+  the *third* host-dependent test to reach the mutation gate's baseline the same day.** Two failures
+  in five runs of `cargo test --lib` on an idle host, and the assertion that fails is
+  `backends::web::tests::a_resource_a_system_manager_owns_is_removed_through_that_manager`: the
+  recorded calls show the escalated removal went through the mock and the `sudo -n -v` probe did
+  not, because **another thread had already primed the process-global `SUDO_PRIMED`**.
+  **Pre-existing, and documented as unfixed in the file itself** — the comment says the reset
+  "fixes the *ordering*" and that the coin flip `#88` recorded is one "this did not fix". Measured
+  on the tree before this session's move: **one failure in six runs**, so the rate is the same.
+  **CI has not been hit by it** — the race needs a POSIX `sudo` probe, and `escalates` is false
+  on Windows, so the probe never runs there and the global is never set. **The cost is to the
+  mutation gate**: `ERROR cargo test failed in an unmutated tree, so no mutants were tested`.
+  **A shard that answers nothing is not a gate.** Three candidates are named in the issue and the
+  first of them changes production code, so it is a ruling. — ISSUE #121)
   - **The gate's own hazard fired twice while this was being built, and both times it was the
     host's answer wearing the gate's clothes.** Reproducing the survivors locally, the mutant
     `delete !` in `enforce_own_work` came back **`CAUGHT`** on the strength of
