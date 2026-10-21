@@ -505,6 +505,17 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     double looks like, and policing those "would make this a gate people delete". The exception
     table is for the other case: a test that needs `cfg(test)` for a constructor that must not
     ship, which no amount of visibility can reach from a test crate. — ISSUE #120)
+  - **The gate's own hazard fired twice while this was being built, and both times it was the
+    host's answer wearing the gate's clothes.** Reproducing the survivors locally, the mutant
+    `delete !` in `enforce_own_work` came back **`CAUGHT`** on the strength of
+    `startup_budget_tests` reporting `registering 56 backends took 126.3ms, over the 120.0ms
+    budget` — a mutation that cannot affect registry construction, on a host with three concurrent
+    `cargo` builds. Unloaded, the same file passes in 0.03s. **And later the same day the whole
+    suite went red the same way** (`319.6ms` against a `120.0ms` ceiling, with a mutation job
+    running), which took the mutation job's **baseline** with it: `ERROR cargo test failed in an
+    unmutated tree, so no mutants were tested`. **So the gate can answer wrongly and can answer
+    not at all, and both look like a red job.** That is `#116`, and it is not fixed by any of
+    this.
 - [x] The nightly's other red jobs were `#101` and `#107` in disguise. (**REVIEWED 2026-10-18, and
   this is why the nightly is worth reading even when its subject is elsewhere.** Every nightly from
   `38129897624` (2026-10-11) through `39109475065` (2026-10-18) is red on head `c5d0547`, and the
