@@ -7983,3 +7983,44 @@ The resolver carries the bare-origin bit into the install spec rather than deriv
 bare-name lock. The lock is written only when resolution records a choice, so it cannot reliably
 answer whether the declaration was written bare, and a qualified line must not inherit a prompt
 from a previous resolution.
+
+**V.218 — Why a catch has to reproduce before it is credited.**
+*(Owner ruling 2026-10-21, `PLAN.md` #116.)*
+
+The mutation gate is the instrument that finds safety code with no test. Its output is a list of
+survivors, and each survivor is a piece of work somebody has to do. That makes the gate's
+verdicts *load-bearing in the dangerous direction*: a mutant that is wrongly reported caught
+does not appear on the list, so no work is ever scheduled, and the shard exits **0** — a gate
+reporting `ok` over a tree where the safety switch is still unpinned.
+
+It happened, and it was not hypothetical. Reproducing `#115` locally, the mutant
+`src/app/sync/guard.rs:1395:21: delete !` came back `CAUGHT` on the strength of one unrelated
+test: `startup_budget_tests` reported `registering 56 backends took 126.3ms, over the 120.0ms
+budget`. The mutation is one `!` inside a function that test never calls; the measurement was
+the host's, with three concurrent `cargo` builds on the machine. Unloaded, the same file passes
+in 0.07 s.
+
+The same file has the doctrine already: *"a loaded runner is not a defect and a gate that
+reddens on load is one people learn to ignore"*, and the neighbouring latency gate takes the
+best of three for exactly that reason. **That doctrine is right for every gate except this
+one**, because this is the one place where a reddening test is *evidence*: there, a load flake
+is laundered into a claim about coverage. A gate that reddens on load is ignorable; a gate that
+*reports green* on load is a lie, and the lie is in the direction of doing nothing.
+
+So the property to state is narrow and checkable: **a mutation is credited only if the failing
+test fails again on an immediate re-run.** The runner does the asking. A test that fails once
+and passes on the retry is `flaky`, the run exits 0, and the mutant survives — which is the
+conservative direction, because a survivor is a visible piece of work and a false catch is an
+invisible gap. The same mechanism answers the other direction: a flaky baseline used to print
+`ERROR cargo test failed in an unmutated tree, so no mutants were tested`, and a shard that
+answers nothing is not a gate.
+
+The cost was measured rather than guessed, because the obvious remedy — re-running the whole
+suite, or re-running it against the unmutated baseline — doubles the cost of every caught
+mutant, and the shards already sit near their wall-clock ceiling. The record of a flake is kept
+too: the runner prints a `TRY n FAIL` line for every test that failed an attempt, and the job
+uploads that output beside the survivor list, so a catch that was not a catch is on the record
+rather than invisible. Only the *failing test* is
+re-run, so a genuine catch pays one test's duration twice. The runner's other cost is its
+isolation: 165 s against 148 s for the same 3,017 tests, about 11%, which buys the property
+that the tests cannot contaminate each other's verdicts inside the mutation job at all.

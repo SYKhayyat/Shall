@@ -441,7 +441,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   the boundary — *the number announced never exceeds the number of objections* — which is the
   assertion that survives a release build. **Filed separately because `#115` is closed**, and the
   house rule is that a closed issue does not reopen by accretion. — ISSUE #122)
-- [ ] #116 the mutation gate can report a mutant caught when nothing caught it. (**Filed
+- [x] #116 the mutation gate can report a mutant caught when nothing caught it. (**Filed
   2026-10-20, found while reproducing `#115`'s survivors on this host.** `cargo mutants` reports a
   mutant caught when *any* test fails, and cannot tell "failed because of the mutation" from
   "failed because the host was busy". Reproducing `#115` locally, `guard.rs:1395:21: delete !`
@@ -459,6 +459,52 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   people learn to ignore" — but the mutation job is the one place a reddening test is
   **load-bearing**. Three remedies are named in the issue and **none is ruled**: this is an owner
   ruling, because it changes what the gate is allowed to claim. — ISSUE #116)
+  - **RULED AND BUILT 2026-10-21 — the property is narrow and checkable: a mutation is credited
+    only if the failing test fails again on an immediate re-run.** `cargo mutants` reports a
+    mutant caught when the test command exits non-zero, and the exit code cannot tell "this test
+    failed because of the mutation" from "this test failed because the host was busy". So the
+    question moved **into the runner**: the mutation job now runs the suite under **nextest with
+    `--retries 2`**, and a test that fails and then passes on the retry is `flaky` — the run
+    exits 0, **the mutant is not credited**, it survives, it reaches the survivor list, and the
+    gap is visible to whoever reads the list. **The failure direction that matters is the
+    conservative one**: a survivor is a piece of work, a false catch is an invisible gap.
+  - **Both directions of the hazard are one mechanism.** A flaky *baseline* used to print
+    `ERROR cargo test failed in an unmutated tree, so no mutants were tested` — a shard that
+    answers nothing — and a flaky *mutant run* laundered a catch. Both are "did this failure
+    reproduce", which is exactly what the retry asks.
+  - **The retry, not a re-run of the suite, and the difference is the wall clock.** The issue's
+    own cost note said candidate 3 "doubles the cost of a caught mutant", which is true of
+    re-running the suite and false of a retry: **only the failing test is re-run**, so a genuine
+    catch — which fails every time — pays one test's duration twice, not a second run of three
+    thousand. The shards already sit near their six-hour ceiling, so that difference is the
+    difference between a gate that runs and a gate that is cancelled.
+  - **Why not the best-of-three on the measurement, which is the repo's own doctrine.** The
+    doctrine is right for every gate *except* this one, because this is the one place where a
+    reddening test is *evidence*: there, a load flake is laundered into a claim about coverage.
+    **And on that particular measurement the doctrine would also destroy the test**:
+    `startup_budget_tests`' own comment says the *first* construction in a process is the one
+    that matters, because the eager TSC calibration it exists to catch is a one-off global — so
+    a second measurement would be fast *because the defect had already been paid*, and the test
+    would pass over the very thing it was written for. **The measurement wants a fresh process;
+    the retry wants a second opinion.** The retry is the one the gate can have.
+  - **The runner's isolation is part of the bargain, and its cost was measured.** One test per
+    process means the tests cannot contaminate each other's verdicts inside the mutation job,
+    which closes the `#121` family (a process-global the tests share) *for the gate* even where
+    the suite still runs them together. The cost: **165 s against 148 s** for the same 3,017
+    tests, about 11%.
+  - **The policy is asserted, because a policy nobody checks is a convention.**
+    `tests/review/the_mutation_gate_retries_a_failed_test.rs` — the first file in the
+    `tests/review/` folder `#120` names — reads `ci.yml` and asserts the runner, the retry, the
+    install step and the artifact that keeps the runner's own `TRY n FAIL` lines, so a catch that
+    was not a catch is on the record. **It was watched failing**: with
+    `--retries 2` removed from the workflow it fails with *"the mutation job must ask for a
+    retry, or a flaky test is a catch"*.
+  - **What is still open.** The **known instance** — `startup_budget_tests`' 120 ms registry
+    budget — still reddens under load, and the retry is a *second opinion* rather than a repair:
+    the honest fix for it is a measurement in a **fresh process** (three children, best of
+    three), because the first construction is the one that matters. **Not done here**, and it is
+    its own piece of work. Rule in II.68, rationale in V.218, ruling in `decisions.md` C5. —
+    ISSUE #116)
 - [ ] #117 the sync engine's safety checks are unpinned. (**Filed 2026-10-20 off the nightly's
   mutation output, and it is the largest of the family: 34 surviving mutants in
   `src/app/sync/mod.rs`, across eleven subjects.** The `Ok(())` family is the sharpest —

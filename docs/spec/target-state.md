@@ -4244,3 +4244,39 @@ applies to the per-manager listing, where it costs one subprocess and buys a rea
 
 **It is about reads only.** A *write* that fails is a different question, and
 `[sync] continue_past_transient` is already that answer.
+
+## II.68 A catch is a verdict that reproduces, and a flake is not a verdict (`#116`, V.218)
+
+**A mutation may only be credited as caught when the failing test fails again on an immediate
+re-run.** A test that fails and then passes is not evidence about the code; it is evidence about
+the host. The gate's own summary calls this the difference between a *survivor* and a *catch*,
+and the difference is the whole point of the gate: a catch means somebody wrote a test, and a
+flake laundered into a catch means nobody will.
+
+**So the question is asked of the runner, not of the exit code.** `cargo mutants` reports a
+mutant caught when the test command exits non-zero, which cannot tell "this test failed because
+of the mutation" from "this test failed because the machine was busy". The mutation job therefore
+runs the suite under a runner that **re-runs a failed test and reports it as flaky when it
+passes** — a flaky run exits 0, so the mutant is **not** credited: it survives, it reaches the
+survivor list, and the gap is visible to whoever reads the list.
+
+**Both directions of the hazard are the same mechanism.** A flaky *baseline* used to print
+`ERROR cargo test failed in an unmutated tree, so no mutants were tested`, which is a shard that
+answers nothing; a flaky *mutant run* launders a catch. The retry answers both, because in both
+cases the question is whether the failure reproduces.
+
+**And a retry is cheap where a re-run of the suite is not.** Only the failing test is re-run, so
+a genuine catch — which fails every time — pays one test's duration twice, not a second run of
+three thousand.
+
+**A laundered catch must also be visible.** The runner prints a `TRY n FAIL` line for every test
+that failed an attempt, and the job keeps that output as an artifact beside the survivor list —
+because a gate that is honest by accident is not a gate: the property has to be visible where a
+reader will look, and the policy has to be asserted, because a policy nobody checks is a
+convention.
+
+**The runner's isolation is part of the same bargain.** One test per process means the tests
+cannot contaminate each other's verdicts inside the mutation job — which is a whole family of
+hazards closed here rather than one test made robust. **And it is not free**: the same 3,017
+tests took 165 s under the new runner against 148 s under the old one, about 11%, and that is
+the price of the property.

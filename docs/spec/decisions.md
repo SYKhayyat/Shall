@@ -10086,3 +10086,57 @@ driving it would make the binary order-dependent. `Shape::is_measurable` and
 and the gate asserts those. **One condition, two callers** — the rule and the reporter cannot
 come to disagree about when a rule is in force, which is the same defect II.23 exists to stop
 arriving in new places.
+
+## C5
+
+**Status: ANSWERED 2026-10-21, built.** What the mutation gate is allowed to claim.
+Rule in **II.68**, rationale in **V.218**.
+
+**The gate asks the runner, and the runner is nextest.** `cargo mutants` reports a mutant caught
+when the test command exits non-zero, and that cannot tell "this test failed because of the
+mutation" from "this test failed because the host was busy". The mutation job now runs the suite
+under **nextest with `--retries 2`**: a test that fails and then passes on the retry is
+`flaky`, the run exits 0, and the mutant is **not** credited — it survives, it reaches the
+survivor list, and the gap is visible to whoever reads the list.
+
+**Why the retry and not a re-run of the suite.** The issue's own cost note said candidate 3
+"doubles the cost of a caught mutant", which is true of re-running the suite and false of a
+retry: **only the failing test is re-run**, so a genuine catch — which fails every time — pays
+one test's duration twice, not a second run of three thousand. The shards already sit near their
+six-hour ceiling, so the difference between those two costs is the difference between a gate that
+runs and a gate that is cancelled.
+
+**Why the retry and not the best-of-three on the measurement.** The repo already has the
+doctrine — `run_timed_floor` takes the best of three, and `startup_budget_tests` says a loaded
+runner is not a defect — and it is the right doctrine for every gate *except* this one, because
+this is the one place where a reddening test is evidence. **Best-of-three on that particular
+measurement would also destroy it**: the registry test's own comment says the *first*
+construction in a process is the one that matters, because the eager TSC calibration it exists
+to catch is a one-off global — so a second measurement would be fast *because the defect had
+already been paid*, and the test would pass over the very thing it was written for. **The
+measurement wants a fresh process; the retry wants a second opinion.** The retry is what the
+gate can have, and it is the one that answers the question the gate is asking.
+
+**Both directions, one mechanism.** A flaky *baseline* used to print `ERROR cargo test failed in
+an unmutated tree, so no mutants were tested` — a shard that answers nothing — and a flaky
+*mutant run* laundered a catch. Both are "did this failure reproduce", and the retry is the
+answer to exactly that question.
+
+**The runner's isolation is part of the bargain.** One test per process means the tests cannot
+contaminate each other's verdicts inside the mutation job, which closes the `#121` family (a
+process-global the tests share) for the gate even where the suite still runs them together. The
+cost was measured: **165 s against 148 s** for the same 3,017 tests, about 11%.
+
+**And the property is asserted, because a policy nobody checks is a convention.** The job's
+command, the retry it asks for, the runner it installs and the artifact that keeps the runner's
+own log are all asserted by `tests/review/the_mutation_gate_retries_a_failed_test.rs` — the first
+file in the `tests/review/` folder that `#120` names. **The test was watched failing**: with
+`--retries 2` removed from the workflow, it fails with *"the mutation job must ask for a retry,
+or a flaky test is a catch"*.
+
+**What was not chosen, and why.** Excluding the timing-sensitive tests from the mutation run's
+command (candidate 2) would have narrowed what the gate can see, and the CI comment already
+records that scoping that command is what made the *first* mutation report show eight missed
+mutants out of eleven. Best-of-three on the measurement (candidate 1) leaves the class open and,
+as above, would have measured the fix into existence. **The class is closed by the retry; the
+known instance still needs its own answer, and it has not got one.**

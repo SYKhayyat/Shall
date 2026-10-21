@@ -1223,8 +1223,42 @@ jobs:
     - uses: Swatinem/rust-cache@v2
     - name: Install cargo-mutants
       run: cargo install cargo-mutants --locked
+    # **The runner is nextest, because a flaky test must not be able to launder a catch.**
+    # `cargo mutants` reports a mutant caught when the test command *exits non-zero*, so a test
+    # that failed because the host was busy is indistinguishable from a test that failed because
+    # the mutation did something: the mutant is reported caught, it never reaches the survivor
+    # list, nobody writes the missing test, and the shard exits **0** - a gate reporting `ok` for
+    # a tree where the safety switch is still unpinned. That is `II.23`'s exact shape. It was
+    # measured, not argued: reproducing `#115` locally, the `delete !` mutant in
+    # `enforce_own_work` came back `CAUGHT` on the strength of `startup_budget_tests` reporting
+    # `registering 56 backends took 126.3ms, over the 120.0ms budget` - a mutation that cannot
+    # affect registry construction.
+    #
+    # **nextest's retry is what makes the two distinguishable, and it costs nothing on the
+    # common path.** A test that fails and then *passes* on a retry is `flaky`, the run exits 0,
+    # and the mutant is therefore **not** credited: it survives, it reaches the survivor list, and
+    # the gap is visible. The same is true of the baseline, which is the other direction of the
+    # same hazard - a flaky baseline used to print `ERROR cargo test failed in an unmutated tree,
+    # so no mutants were tested`, which is a shard that answers nothing. **Only the failing test
+    # is re-run**, so a genuine catch - which fails every time - costs one test's duration
+    # twice, not a second run of the suite.
+    #
+    # **The cost is the per-test process, and it was measured: 165s against 148s for the same
+    # 3,017 tests, about 11%.** That is the price of a runner where each test is its own
+    # process, and it buys the second thing: **cross-test contamination cannot happen inside
+    # the mutation job at all**, which is the `#121` family (a process-global the tests share)
+    # closed here for the gate even where the suite still runs them together.
+    #
+    # **A laundered catch is visible, because the job keeps the runner's own log.** nextest
+    # prints a `TRY n FAIL` line for every test that failed an attempt, and cargo-mutants writes
+    # that output to `mutants.out/log/<mutant>.log` - which this job uploads as an artifact. So a
+    # test that failed once and passed on the retry is on the record: the line is there, and the
+    # mutant it did not catch is on the survivor list beside it. **A gate that is honest by
+    # accident is not a gate**, so the retry has to be visible somewhere a reader will look.
+    - name: Install cargo-nextest
+      run: cargo install cargo-nextest --locked --version 0.9.149
     - name: Mutate ${{ matrix.file }} (shard ${{ matrix.shard }}), where a silent mutation is a safety failure
-      run: cargo mutants --no-shuffle -j2 --file ${{ matrix.file }} --shard ${{ matrix.shard }} -- --no-fail-fast
+      run: cargo mutants --no-shuffle -j2 --test-tool nextest --file ${{ matrix.file }} --shard ${{ matrix.shard }} -- --no-fail-fast --retries 2
     - name: The survivors, kept whether the run passed or failed
       if: ${{ !cancelled() }}
       uses: actions/upload-artifact@v7

@@ -52,6 +52,11 @@ mod app;
 /// is the test for this?" has an answer before you have to ask it.
 mod core;
 
+/// **The review apparatus.** The tests that read the tree rather than drive the product — the
+/// gates that assert a property of the *code*, and the policies written in a workflow file
+/// rather than in a function. `#120` names this folder; this is the first file to land in it.
+mod review;
+
 mod a_backend_is_a_row_tests;
 mod a_batch_of_installs_is_one_command_tests;
 mod a_blocking_wait_is_off_the_runtime_tests;

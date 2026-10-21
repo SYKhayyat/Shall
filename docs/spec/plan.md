@@ -431,6 +431,59 @@ build and what is deferred to hardware.**
       mid-question case — the last one written before the round stamp's role could be discussed
       honestly at all, and reported as not isolating it.
 
+### Tier 36 — a catch is a verdict that reproduces (`PLAN.md` #116): BUILT
+
+51. ~~**The mutation gate can report a mutant caught when nothing caught it.**~~ **BUILT, and the
+    property it states is narrower and cheaper than the issue's own cost note assumed.**
+
+    - **The hazard, measured rather than argued.** Reproducing `#115` locally,
+      `src/app/sync/guard.rs:1395:21: delete !` came back `CAUGHT` on the strength of one
+      unrelated test: `startup_budget_tests` reported `registering 56 backends took 126.3ms, over
+      the 120.0ms budget`. The mutation is one `!` in a function that test never calls; the
+      measurement was the host's, with three concurrent `cargo` builds running. Unloaded, the same
+      file passes in 0.07 s. **The direction is the dangerous one**: a false catch is an invisible
+      gap — the mutant never reaches the survivor list, nobody writes the test, and the shard
+      exits **0**.
+    - **The property, stated so it can be checked: a mutation is credited only if the failing
+      test fails again on an immediate re-run.** `cargo mutants` reports a catch when the test
+      command exits non-zero, and an exit code cannot tell "this test failed because of the
+      mutation" from "this test failed because the host was busy". So the question moved **into
+      the runner**: the mutation job runs the suite under **nextest with `--retries 2`**, and a
+      test that fails and then passes on the retry is `flaky` — the run exits 0, **the mutant is
+      not credited**, it survives, and the gap reaches the survivor list, which is where the work
+      is scheduled. **The conservative direction is the safe one**: a survivor is a piece of work,
+      a false catch is an invisible gap.
+    - **Both directions are one mechanism.** A flaky *baseline* used to print `ERROR cargo test
+      failed in an unmutated tree, so no mutants were tested` — a shard that answers nothing —
+      and a flaky *mutant run* laundered a catch. Both are "did this failure reproduce".
+    - **The retry, not a re-run of the suite.** The issue priced candidate 3 at "doubles the cost
+      of a caught mutant", which is true of re-running the suite and false of a retry: **only
+      the failing test is re-run**, so a genuine catch pays one test's duration twice, not a
+      second run of three thousand. The shards sit near their six-hour ceiling, so that
+      difference is the difference between a gate that runs and a gate that is cancelled.
+    - **Why not the repo's own best-of-three, which is the doctrine everywhere else.** It is
+      right for every gate *except* this one, because this is the one place where a reddening
+      test is *evidence*. **And on that measurement it would destroy the test**:
+      `startup_budget_tests` measures the **first** construction in a process, because the eager
+      TSC calibration it exists to catch is a one-off global — so a second measurement is fast
+      *because the defect had already been paid*, and the test would pass over the very thing it
+      was written for. **The measurement wants a fresh process; the retry wants a second
+      opinion.**
+    - **The runner's isolation is part of the bargain.** One test per process means the tests
+      cannot contaminate each other's verdicts inside the mutation job, which closes the `#121`
+      family (a process-global the tests share) for the gate even where the suite still runs them
+      together. Measured cost: **165 s against 148 s** for the same 3,017 tests, about 11%.
+    - **The policy is asserted, because a policy nobody checks is a convention.**
+      `tests/review/the_mutation_gate_retries_a_failed_test.rs` — the first file in the
+      `tests/review/` folder `#120` names — reads `ci.yml` and asserts the runner, the retry, the
+      install step, and the artifact that keeps the runner's own `TRY n FAIL` lines, so a catch
+      that was not a catch is on the record. **It was watched failing**: with
+      `--retries 2` removed, it fails with *"the mutation job must ask for a retry, or a flaky
+      test is a catch"*.
+    - **What is still open.** The **known instance** — the 120 ms registry budget — still
+      reddens under load, and the retry is a second opinion rather than a repair. Its honest fix
+      is a measurement in a **fresh process**, and it has not been done.
+
 ### Tier 35 — the credential answer belongs to the run (`PLAN.md` #121): BUILT
 
 50. ~~**The web backend's credential-probe test fails on a coin flip.**~~ **BUILT, and the ruling
