@@ -378,7 +378,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   filed here rather than alone, because `go` is the one backend failing on three legs for the same
   subject (`arch`'s is in `#100`). **Not started here: it needs a container runtime, and there is
   no Docker on this host.**)
-- [ ] #115 the removal guard's undo door has never been tested. (**Filed 2026-10-20 off the
+- [x] #115 the removal guard's undo door has never been tested. (**Filed 2026-10-20 off the
   nightly's own mutation output, and the finding is a family.** `enforce_own_work`
   (`src/app/sync/guard.rs:1371`) — the door a failed sync uses to undo what it just installed —
   has **zero callers in any test file**: a grep of `src/` and `tests/` returns its definition and
