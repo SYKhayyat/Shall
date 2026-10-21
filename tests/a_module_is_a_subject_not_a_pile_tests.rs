@@ -50,14 +50,6 @@ const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[
          retry, and wants a session with no other executor work in flight.",
     ),
     (
-        "src/app/sync/guard.rs",
-        3_500,
-        "One subject — the removal guard: ledger, per-kind ceilings, protection rules, and the \
-         refusal renderer, plus its own test module. The split is ledger/inspect/refuse, and it \
-         grew only by the audit fixes (vet split, unmodelled charges) that belong to the \
-         subject. Split on the next touch that is not itself a fix.",
-    ),
-    (
         "src/config/grammar/statement.rs",
         3_900,
         "One subject — what a line of a manifest means — and three layers of it: the parser, the \
@@ -73,6 +65,12 @@ const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[
          than it looks: the impls share `GenericBackendCore` and the argv-building helpers, and \
          getting the visibility wrong turns a private helper into public API.",
     ),
+    // **`src/app/sync/guard.rs` was on this list and is not any more.** It was 3,473 lines,
+    // 1,944 of them its own test module, and the exemption said so in as many words: *"plus
+    // its own test module."* The tests moved to `tests/app/sync/guard/`, one file per
+    // assertion, and the file is 1,550 lines — under the 3,000 gate, so the row is retired
+    // rather than raised. **A row that stops being needed has to go**, which is the other
+    // direction of this gate and the reason the table is not a graveyard.
 ];
 
 fn rust_files(root: &Path, out: &mut Vec<PathBuf>) {

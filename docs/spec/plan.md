@@ -431,6 +431,61 @@ build and what is deferred to hardware.**
       mid-question case — the last one written before the round stamp's role could be discussed
       honestly at all, and reported as not isolating it.
 
+### Tier 34 — a function with no test, and a tree with no home for it (`PLAN.md` #115, `#120`): BUILT (first instance)
+
+49. ~~**The removal guard's undo door had never been tested.**~~ **BUILT, and the reason it was
+    never written turned out to be a layout, so the two shipped together.**
+
+    - **The door.** `enforce_own_work` (`src/app/sync/guard.rs`) is the guard a failed sync asks
+      when it undoes what it just installed: protection applies, the ceilings do not, and one
+      protected package refuses the whole unwind. **It had zero callers in any test file** — a grep
+      of `src/` and `tests/` returns its definition and its two production callers
+      (`core/transaction.rs`'s rollback and `app/sync/mod.rs`'s `heal`) and nothing else — while the
+      file's other six exported front doors carried roughly fifty tests between them.
+    - **The nightly's mutation gate said so three times over**, and said it in the only way that
+      counts. `delete !` in `enforce_own_work` **inverts** the refusal: it refuses when there is
+      nothing to refuse and waves through when there is, so a failed sync uninstalls a package the
+      user protected. `delete match arm Objection::Protected{key, reason}` and `…UnverifiedEssentials
+      {key, backend}` stop the refusal naming what it saved. **All three survived the whole
+      suite.**
+    - **The four tests, and the rhythm that is not a bug fix's.** The code is *correct today* —
+      nobody broke it — and the mutant is the artificial break, so each test is **green on today's
+      tree and red against its named mutant**, and a test that passes on both is worthless. The
+      re-run reports **three mutants tested, three caught, none missed**, each caught by the named
+      assertion rather than by an accident of timing.
+    - **The fourth survivor needed a different answer.** `Reaped::allowed` → `1` was an *equivalent*
+      mutant: the getter's only reader was the text of a `debug_assert!` whose condition reads the
+      private field instead. The fix was to give it a reader that matters — the control test
+      unwinds **two** packages and asserts the token says two — so the count is a fact rather than
+      an arithmetic coincidence.
+    - **Why the test had nowhere to go.** `src/app/sync/guard.rs` carried its tests inline, in a
+      `#[cfg(test)] mod tests` that saw the file's **private** items; a test crate links the
+      library *without* `cfg(test)`, so a test that needed both had no home. **The layout is the
+      fix.** `src/a/b/c.rs` owns `tests/a/b/c/`, one file per assertion, with the shared helpers in
+      the module file beside them.
+    - **The cost of the move, stated because it is the price of the next 186 files.** Eight items in
+      the file are `pub` for the tests' sake — `MAX_LISTED`, `TOTAL_KEY`, `allow_the_count`,
+      `announcement`, `too_many_changes`, `protected_names`, `enforce_total` and
+      `charge_unmodelled` — and each says so in its own doc comment. **The rule this sets for the
+      sweep: widen visibility rather than rewrite the test**, because
+      `a_pub_fn_nobody_calls_is_dead_tests` says a `pub fn` reached only from tests is what a test
+      double looks like, and policing those "would make this a gate people delete". **None of the
+      eight mints authority** — C3 keeps `Reaped`'s fields private because a token must not be
+      mintable, and these ask the guard rather than standing in for it.
+    - **The file is 1,550 lines**, down from 3,473, and it was over the recorded 3,500 ceiling
+      *because of* its own test module — the exemption row said so in as many words. So the
+      `TOO_BIG_FOR_NOW` row is **retired rather than raised**, which that gate requires of a file
+      that stopped being too big.
+    - **The scan is recursive now, because the tree is.** `every_test_file_is_in_the_suite` walked
+      the top level of `tests/` and matched `mod <name>;` lines, so a folder's contents would have
+      been invisible to it — the exact failure it exists to prevent, one directory down. It now
+      walks the tree, checks every `.rs` file against the module file that owns its directory, and
+      every directory against the module file that owns its parent. **A directory with no Rust
+      anywhere beneath it is data, not a module**: `tests/fixtures/` holds 47 captured command
+      outputs and no source, and requiring a `mod` declaration for it would declare nothing.
+    - **What is not claimed.** The code was never wrong. The instrument's own false-catch hazard
+      is `#116`, and it is not fixed by any of this.
+
 ### Tier 33 — a ratio that measured the host (`PLAN.md` #107, and `#111` for what is left): BUILT
 
 48. ~~**`sbom` and `export` ask their managers one at a time.**~~ **BUILT, and the title was wrong

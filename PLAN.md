@@ -393,7 +393,30 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   today** — the code behaves correctly; what is missing is the evidence. **The rhythm is the
   opposite of a bug fix**: the code is right today and the mutant is the artificial break, so
   each test is expected to be **green on today's tree and red against its named mutant**, and a
-  test that passes on both is worthless. — ISSUE #115)
+  test that passes on both is worthless.
+  - **BUILT 2026-10-20 — and the layout in `#120` is the vehicle, not a separate piece of work.**
+    The four tests are in `tests/app/sync/guard/`, one file per assertion, and the mutation job
+    re-run on the file now reports **three mutants tested, three caught, none missed**:
+    `delete !` in `enforce_own_work` is caught by
+    `a_manager_that_could_not_answer_essentials_stops_the_unwind`, `delete match arm
+    Objection::Protected{key, reason}` by `a_protected_package_stops_the_whole_unwind`, and
+    `delete match arm Objection::UnverifiedEssentials{key, backend}` by the first of those.
+    **The fourth survivor needed a different answer.** `Reaped::allowed` → `1` was an *equivalent*
+    mutant — the getter's only reader was the text of a `debug_assert!` whose condition reads the
+    private field instead — and the fix was to give it a reader that matters: the control test
+    unwinds **two** packages and asserts the token says two, so the count is a fact rather than a
+    coincidence of arithmetic.
+  - **The move was the other half.** `src/app/sync/guard.rs` was 3,473 lines, 1,944 of them the
+    test module, and over the recorded 3,500 ceiling *because of them* — the exemption row said
+    so in as many words ("**plus its own test module**"). The tests are now in
+    `tests/app/sync/guard/`, one file per assertion, and the file is **1,550 lines**: under the
+    3,000 gate, so the `TOO_BIG_FOR_NOW` row is **retired rather than raised**, which that gate
+    requires. **Eight items in the file are `pub` for the tests' sake** and say so in their own
+    doc comments: a `pub fn` reached only from tests is what
+    `a_pub_fn_nobody_calls_is_dead_tests` says a test double looks like, and policing those
+    "would make this a gate people delete". **None of the eight mints authority** — C3 keeps
+    `Reaped`'s fields private because a token must not be mintable, and these ask the guard
+    rather than standing in for it. — ISSUE #115)
 - [ ] #116 the mutation gate can report a mutant caught when nothing caught it. (**Filed
   2026-10-20, found while reproducing `#115`'s survivors on this host.** `cargo mutants` reports a
   mutant caught when *any* test fails, and cannot tell "failed because of the mutation" from
@@ -460,7 +483,28 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   files), `tests/review/` (reads the tree — the repo already calls that category "the review
   apparatus"), and the mirror for the rest. **Phase 1 is `guard.rs` and it is a bug fix, not a
   refactor**: the missing tests, the test module relocated, and a ceiling row retired in one
-  change. — ISSUE #120)
+  change.
+  - **PHASE 1 BUILT 2026-10-20.** `src/app/sync/guard.rs` owns `tests/app/sync/guard/`, and the
+    folder holds **one file per assertion** — 56 moved and 4 written for `#115` — with the
+    shared helpers in the module file beside them, because a helper in `src/` cannot be reached
+    from a test crate. The file is **1,550 lines**, under the 3,000 gate, so its `TOO_BIG_FOR_NOW`
+    row is **deleted**, which that gate requires of a file that stopped being too big.
+  - **The scan is recursive now, because the tree is.** `every_test_file_is_in_the_suite` scanned
+    the top level of `tests/` and matched `mod <name>;` lines, so a folder's contents would have
+    been invisible to it — the exact failure it exists to prevent, one directory down. It now
+    walks the tree, checks every `.rs` file against the module file that owns its directory, and
+    checks every directory against the module file that owns its parent. **A directory with no
+    Rust anywhere beneath it is data, not a module** — `tests/fixtures/` holds 47 captured command
+    outputs and no source, and requiring a `mod` declaration for it would declare nothing.
+  - **What the move cost, stated because it is the price of the next 186 files.** Eight items in
+    `src/app/sync/guard.rs` are `pub` for the tests' sake — `MAX_LISTED`, `TOTAL_KEY`,
+    `allow_the_count`, `announcement`, `too_many_changes`, `protected_names`, `enforce_total` and
+    `charge_unmodelled` — and each says so in its own doc comment. **The rule this establishes
+    for the sweep is: widen visibility rather than rewrite the test**, because
+    `a_pub_fn_nobody_calls_is_dead_tests` says a `pub fn` reached only from tests is what a test
+    double looks like, and policing those "would make this a gate people delete". The exception
+    table is for the other case: a test that needs `cfg(test)` for a constructor that must not
+    ship, which no amount of visibility can reach from a test crate. — ISSUE #120)
 - [x] The nightly's other red jobs were `#101` and `#107` in disguise. (**REVIEWED 2026-10-18, and
   this is why the nightly is worth reading even when its subject is elsewhere.** Every nightly from
   `38129897624` (2026-10-11) through `39109475065` (2026-10-18) is red on head `c5d0547`, and the
