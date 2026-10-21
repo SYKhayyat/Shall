@@ -48,3 +48,17 @@ tests/fixtures/** text eol=lf
 # same spec, one of them dark, and nothing said so. CI is Linux and never saw it, which is the
 # `*.sh` entry's story exactly: broken only on the machine the project is written on.
 *.md text eol=lf
+
+# The workflow, because the tests read it as text and anchor on newlines. Five files read
+# `ci.yml`; two of them search for a job heading as `"\n  windows-native:\n"`, and that
+# sequence does not occur in a CRLF copy — a Windows clone rewrites it, and
+# `windows_ci_runs_nimble_canary_tests` failed there with *"ci.yml must retain the
+# windows-native job"*, a message that blames the file for losing a job it never had.
+# Its sibling is worse, because it does not fail: `a_pinned_toolchain_would_replace_the_
+# version_matrix_tests` splits on `"\n  msrv:"`, and on a CRLF copy the split finds
+# nothing, so the assertion falls back to reading *the whole rest of the file* and stops
+# checking the job it names. A gate that quietly stops being a gate is the failure this
+# repository cares about most, and it is invisible on the machine the file was written on.
+# The reasoning is the `*.md` entry's, one directory over: the file is read by tests as well
+# as by GitHub, so the clone has to be given the bytes the repository holds.
+.github/workflows/*.yml text eol=lf
