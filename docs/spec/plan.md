@@ -431,6 +431,49 @@ build and what is deferred to hardware.**
       mid-question case — the last one written before the round stamp's role could be discussed
       honestly at all, and reported as not isolating it.
 
+### Tier 35 — the credential answer belongs to the run (`PLAN.md` #121): BUILT
+
+50. ~~**The web backend's credential-probe test fails on a coin flip.**~~ **BUILT, and the ruling
+    the issue asked for turned out to be a reading of the spec rather than a new decision.**
+
+    - **The race, in one sentence.** `SUDO_PRIMED` was a process-wide `static`, and every test in
+      a binary shared one answer to "has the credential probe been asked"; a test that wanted to
+      *watch* the probe was at the mercy of whichever test reached it first, so the web backend's
+      test failed on nothing but libtest's thread order — and took the mutation gate's baseline
+      down with it (`ERROR cargo test failed in an unmutated tree, so no mutants were tested`).
+    - **The saving was never per process.** `S88`'s rule says credentials are *"primed once per
+      run"* — and a run is one process and one executor family: `App::new` builds the one
+      `CommandExecutor` a run has (`src/app/context.rs:199`), every backend of that `App` holds a
+      **clone** of it, and the clones share their `Arc`s. So "once per process" and "once per
+      run" were the same number in production, and only the *tests* could tell them apart. **The
+      three `static`s are now `src/core/sudo.rs`'s `SudoState`,** held by the executor in an `Arc`
+      exactly like `installed` — the memo that was moved out of a global for the same reason, one
+      field above it. **Nothing a user can observe changed**: a run still asks once, and the
+      120-second password bound is still paid once per run rather than once per escalated command.
+    - **The reset is deleted, not repaired.** `forget_sudo_refusal()` existed to clear the
+      process-wide cells from a test; with the cells per run there is nothing for it to clear, so
+      it and its three call sites are gone. The web backend's test no longer resets anything and
+      no longer needs to: its own executor is its own run, so the probe it asserts about is the
+      probe that ran.
+    - **Two tests, and the second one is the whole of `#121`.**
+      `a_run_asks_for_credentials_once_and_its_clones_inherit_the_answer` (a run asks once; a
+      clone does not ask again) and `a_second_run_asks_for_its_own_credentials` (two runs are two
+      answers). **The second was watched failing**: with the state shared the way it used to be,
+      it reports *"the second run inherited the first run's answer and never asked"* — 0 probes
+      where it expected 1.
+    - **The mirror rule gave the tests a home and the size gate came with it.** The tests are in
+      `tests/core/sudo/`, because `src/core/sudo.rs` owns that folder — the rule `#120` set. And
+      moving the subject out took `src/core/executor.rs` from 3,150 to **3,052** lines, so the
+      `TOO_BIG_FOR_NOW` ceiling came **down** with it (3,150 → 3,060) rather than up: **no gate
+      was raised to let this land.** The refusal-memo test stayed inline in `src/core/sudo.rs`,
+      because it reads the memo's own cells and a test crate links the library without
+      `cfg(test)`.
+    - **What was not touched.** The probe still runs once per run, the refusal is still remembered
+      in both directions, the priming mutex still admits one task at a time, and
+      `SUDO_PASSWORD_TIMEOUT_SECS` is still a process-wide `OnceCell` — that one is a
+      *configuration* value set once at startup, not run state. **The instrument's own false-catch
+      hazard is `#116`, and it is not fixed by any of this.**
+
 ### Tier 34 — a function with no test, and a tree with no home for it (`PLAN.md` #115, `#120`): BUILT (first instance)
 
 49. ~~**The removal guard's undo door had never been tested.**~~ **BUILT, and the reason it was
@@ -584,6 +627,9 @@ build and what is deferred to hardware.**
       order. `forget_sudo_refusal()` — the `#[doc(hidden)]` seam built for exactly this — cleared
       the refusal and not the warm flag, so it now clears both, and the test calls it before
       asserting. **That is the issue's own point 2, and writing the assertion is what found it.**
+      **SUPERSEDED BY TIER 35 (`#121`)**: the process-global state itself is gone — the answer
+      belongs to the run — so the reset has nothing left to clear and is deleted with it. The
+      reset was the right answer to a question the wrong scope had asked.
     - **Route, not result, and the ceiling is why.** A `fn spawns_processes()` on `ExecutionLayer`
       plus a skip was the first attempt: 33 lines against a file sitting at *exactly* its
       3,150-line ceiling, whose ratchet row says *"it is not a licence to keep adding"*.

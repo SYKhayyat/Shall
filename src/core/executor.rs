@@ -2,6 +2,7 @@ use crate::core::account::Account;
 #[cfg(windows)]
 use crate::core::launch::windows_effective_command;
 use crate::core::launch::{describe, forget_path_lookups, program_exists};
+use crate::core::sudo::SudoState;
 use crate::core::supervise::{Stopping, LOCK_DIRS};
 use crate::core::{Error, ExitPolicy, Result, Retryability};
 use async_trait::async_trait;
@@ -224,66 +225,6 @@ fn sudo_password_timeout() -> Option<std::time::Duration> {
         0 => None,
         secs => Some(std::time::Duration::from_secs(secs)),
     }
-}
-
-/// Whether this process has already proved it can escalate, so the probe runs once per run
-/// rather than once per command.
-///
-/// The keepalive refreshes the timestamp every 60s for as long as a sync holds it, so a run
-/// that primes once stays primed. A false here costs one `sudo -n -v`, which is a few
-/// milliseconds; a true that is wrong costs nothing either, because the command itself still
-/// carries `-n` and fails by name rather than blocking.
-static SUDO_PRIMED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// Why this process cannot escalate, once it has found out.
-///
-/// **Success was remembered and failure was not, and that asymmetry is the whole bug.** A
-/// refusal is as permanent as a success within one run — a wrong password does not become right
-/// during the same command, and a terminal with nobody at it does not grow a person — but
-/// `ensure_sudo_credentials` re-asked from scratch for every escalated invocation. The verbs
-/// that keep going after one backend fails are exactly the ones that pay for it: `update`
-/// refreshes each manager and "does not let one stop the rest", so it spent the full
-/// password bound *per manager*. Measured in the `tools` nightly, twice a night for weeks:
-///
-/// ```text
-/// FAIL  sudo: a wrong password left Shall waiting 900s instead of reporting a failure
-/// FAIL  sudo: a terminal with nobody at it wedged Shall for 900s
-/// ```
-///
-/// Both assertions bound the wait at 120s and both saw 900. The 120-second bound was working
-/// perfectly, once per backend.
-///
-/// Not an `AtomicBool`: the *reason* is what the second caller has to report, and re-deriving
-/// it would mean asking sudo again, which is the thing being avoided.
-static SUDO_REFUSED: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
-
-/// One task at a time may probe and prompt for sudo.
-///
-/// **`SUDO_PRIMED` and `SUDO_REFUSED` are read, then acted on, and nothing joined the two.**
-/// *N* escalated commands start together in the first wave — ordinary with `max_parallel > 1`
-/// and more than one root-needing backend — and all *N* read `primed == false`, all *N* find
-/// no recorded refusal, all *N* run `sudo -n -v` and fail, and all *N* reach `sudo -v` with
-/// **inherited stdin**. That is several processes reading a password from one tty: keystrokes
-/// split between them, prompts interleave, and whichever fails first records a *permanent*
-/// refusal that then fails the whole run for the others.
-///
-/// `S88` and `S89` are what made this reachable, by doing the right thing: `-n` on every
-/// command so no manager invocation sits on a prompt, and a remembered refusal so the bound
-/// costs 120s rather than 900. Both turned the priming call into the single funnel every
-/// escalated command passes through — which is exactly what turns an unsynchronised
-/// check-then-act into a thundering herd.
-///
-/// One task probes and prompts; the rest wait for its answer and then re-read the two cells.
-static SUDO_PRIMING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-
-/// Remember a refusal, and hand back the error to return.
-fn sudo_refused(why: String) -> Error {
-    if let Ok(mut slot) = SUDO_REFUSED.lock() {
-        if slot.is_none() {
-            *slot = Some(why.clone());
-        }
-    }
-    Error::command_failed_permanently(why)
 }
 
 /// Set the process-wide read bounds (called once during startup). Later calls no-op.
@@ -1066,8 +1007,16 @@ pub struct CommandExecutor {
     /// Lives here rather than in a global because every backend of one `App` is built on a
     /// duplicate of that `App`'s executor and every duplicate shares this `Arc` — so the memo
     /// is scoped to the run, which is also what keeps one test's mock listing out of the next
-    /// test's in a suite where a hundred `App`s live in one process.
+    /// test in a suite where a hundred `App`s live in one process.
     installed: Arc<crate::core::installed::InstalledListings>,
+    /// What this run has established about escalating, and the answer it shares with every
+    /// clone of this executor.
+    ///
+    /// **Same shape as `installed`, same reason.** A run asks the machine for credentials once;
+    /// the answer belongs to the run. It was a process-wide `static`, which made it the one
+    /// piece of run state every test in the binary shared — and a test that wanted to watch the
+    /// credential probe was at the mercy of whichever test answered first (`#121`).
+    sudo: Arc<SudoState>,
 }
 
 impl CommandExecutor {
@@ -1089,6 +1038,7 @@ impl CommandExecutor {
             exit_policy: Arc::new(ExitPolicy::default()),
 
             installed: Arc::new(crate::core::installed::InstalledListings::new()),
+            sudo: Arc::new(SudoState::new()),
         }
     }
 
@@ -1110,6 +1060,7 @@ impl CommandExecutor {
             exit_policy: Arc::new(ExitPolicy::default()),
 
             installed: Arc::new(crate::core::installed::InstalledListings::new()),
+            sudo: Arc::new(SudoState::new()),
         }
     }
 
@@ -1854,18 +1805,17 @@ impl CommandExecutor {
     /// asked; a person is at a terminal and gets one bounded chance to type; or there is nobody
     /// to ask and Shall says so immediately instead of waiting to be told what it already knows.
     async fn ensure_sudo_credentials(&self, layer: &Arc<dyn ExecutionLayer>) -> Result<()> {
-        use std::sync::atomic::Ordering;
         if cfg!(windows) || Self::is_root() || self.dry_run {
             return Ok(());
         }
-        if SUDO_PRIMED.load(Ordering::Relaxed) {
+        if self.sudo.is_primed() {
             return Ok(());
         }
         // **The answer is remembered in both directions** (`S89`). A refusal is as permanent
         // within one run as a success is, and asking again costs the whole password bound again
         // — per escalated command, on the verbs that deliberately keep going after one backend
         // fails. That is how a 120-second bound produced a 900-second wedge.
-        if let Some(why) = SUDO_REFUSED.lock().ok().and_then(|s| s.clone()) {
+        if let Some(why) = self.sudo.refusal() {
             return Err(Error::command_failed_permanently(why));
         }
 
@@ -1873,11 +1823,11 @@ impl CommandExecutor {
         // may spawn a probe and may put a prompt on the terminal, so only one task does it —
         // and both cells are re-read after the wait, because the task that held the lock has
         // just written whichever of them applies.
-        let _priming = SUDO_PRIMING.lock().await;
-        if SUDO_PRIMED.load(Ordering::Relaxed) {
+        let _priming = self.sudo.priming().await;
+        if self.sudo.is_primed() {
             return Ok(());
         }
-        if let Some(why) = SUDO_REFUSED.lock().ok().and_then(|s| s.clone()) {
+        if let Some(why) = self.sudo.refusal() {
             return Err(Error::command_failed_permanently(why));
         }
         // Warm timestamp, `NOPASSWD`, or an already-primed session — and **through the layer, not
@@ -1887,14 +1837,14 @@ impl CommandExecutor {
         let probe = ["-n".to_string(), "-v".to_string()];
         let warm = layer.execute("sudo", &probe, &HashMap::new()).await;
         if matches!(warm, Ok(out) if out.status.success()) {
-            SUDO_PRIMED.store(true, Ordering::Relaxed);
+            self.sudo.mark_primed();
             return Ok(());
         }
 
         // Nobody to ask. **Permanent, not transient**: a password does not arrive during a
         // backoff, and retrying spends the whole bound again to learn the same thing.
         if !(layer.shares_stdin() && std::io::stdin().is_terminal()) {
-            return Err(sudo_refused(
+            return Err(self.sudo.refuse(
                 "sudo needs a password and there is no terminal to ask on. Run Shall from a \
                  terminal, give this user a NOPASSWD rule for the package managers it drives, \
                  or run it as root."
@@ -1913,7 +1863,7 @@ impl CommandExecutor {
             Some(bound) => match tokio::time::timeout(bound, ask).await {
                 Ok(status) => status,
                 Err(_) => {
-                    return Err(sudo_refused(format!(
+                    return Err(self.sudo.refuse(format!(
                         "sudo asked for a password and none was entered within {}s. Set \
                          `sudo_password_timeout_secs` to wait longer, or `0` to wait as long as \
                          sudo would.",
@@ -1925,32 +1875,17 @@ impl CommandExecutor {
         };
         match answered {
             Ok(status) if status.success() => {
-                SUDO_PRIMED.store(true, Ordering::Relaxed);
+                self.sudo.mark_primed();
                 Ok(())
             }
             // sudo has already printed its own reason — a wrong password, an account that is
             // not a sudoer — on the terminal it owns. Repeating a guess at it here would be
             // narration over a message the user has already read.
-            Ok(_) => Err(sudo_refused(
-                "sudo refused: Shall cannot run the commands that need root.".to_string(),
-            )),
-            Err(e) => Err(sudo_refused(format!("sudo could not be run: {e}"))),
+            Ok(_) => Err(self
+                .sudo
+                .refuse("sudo refused: Shall cannot run the commands that need root.".to_string())),
+            Err(e) => Err(self.sudo.refuse(format!("sudo could not be run: {e}"))),
         }
-    }
-
-    /// Forget what this process concluded about sudo, so the next call asks again. **Both cells,
-    /// because clearing one is half a reset**: an earlier test that answered the probe leaves
-    /// `SUDO_PRIMED` set, and a test wanting to *watch* the probe then skips it — which is how an
-    /// assertion about the seam becomes a coin flip on libtest's thread order (`#88`).
-    ///
-    /// `#[cfg(test)]`-free on purpose: the integration suite is a separate crate, and a reset
-    /// that only exists in unit builds is a reset the harness cannot reach.
-    #[doc(hidden)]
-    pub fn forget_sudo_refusal() {
-        if let Ok(mut slot) = SUDO_REFUSED.lock() {
-            *slot = None;
-        }
-        SUDO_PRIMED.store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Refresh the `sudo` timestamp for as long as the returned guard is held, so a long sync
@@ -1966,7 +1901,7 @@ impl CommandExecutor {
         // A machine that has already recorded a permanent refusal will not start answering
         // `sudo -n -v`, so refreshing a timestamp that does not exist is one pointless process
         // every sixty seconds for the rest of the run.
-        if SUDO_REFUSED.lock().ok().and_then(|s| s.clone()).is_some() {
+        if self.sudo.refusal().is_some() {
             return SudoKeepalive(None);
         }
         SudoKeepalive(Some(tokio::spawn(async move {
@@ -2262,39 +2197,6 @@ mod child_process_tests {
         let env = mock.last_env.lock().await.clone();
         assert_eq!(env.get("GIT_PAGER").map(String::as_str), Some("cat"));
         assert!(env.contains_key(super::INSIDE_SHALL));
-    }
-
-    /// A sudo refusal is remembered, so the next escalated command does not pay for it again.
-    ///
-    /// **The asymmetry this closes.** `SUDO_PRIMED` cached the *success* and nothing cached the
-    /// *failure*, so every escalated invocation re-ran the probe and re-spent the 120-second
-    /// password bound. `update` refreshes each manager and deliberately does not let one stop
-    /// the rest, so it paid that bound per manager: the `tools` nightly reported a wedge of 900
-    /// seconds against an assertion whose limit was 120, twice a night, for weeks.
-    ///
-    /// The mechanism is what is asserted, not sudo: a test that needs a real password prompt on
-    /// a real tty is the container harness's job (`[16f]`), and one that shells out to `sudo`
-    /// here would answer differently on every developer's machine.
-    #[test]
-    fn a_sudo_refusal_is_remembered_and_the_first_reason_is_the_one_kept() {
-        CommandExecutor::forget_sudo_refusal();
-        assert!(
-            super::SUDO_REFUSED.lock().unwrap().is_none(),
-            "the reset did not clear the memo, so nothing below means anything"
-        );
-
-        let first = super::sudo_refused("no terminal to ask on".to_string());
-        assert!(first.to_string().contains("no terminal"));
-        // A later caller's guess must not overwrite the reason the first one established: the
-        // *first* refusal is the one that happened, and everything after it is this memo.
-        let _ = super::sudo_refused("something else entirely".to_string());
-        assert_eq!(
-            super::SUDO_REFUSED.lock().unwrap().as_deref(),
-            Some("no terminal to ask on")
-        );
-
-        CommandExecutor::forget_sudo_refusal();
-        assert!(super::SUDO_REFUSED.lock().unwrap().is_none());
     }
 
     /// A child that prints nothing and never exits. `Checkpoint-Computer` past its restore

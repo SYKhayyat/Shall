@@ -47,6 +47,11 @@ mod ledger;
 /// row is retired rather than raised.
 mod app;
 
+/// **The mirror, continued.** `src/core/sudo.rs` owns `tests/core/sudo/`, under the same rule
+/// as `src/app/sync/guard.rs`: a src file's tests live in a folder of their own, so that "where
+/// is the test for this?" has an answer before you have to ask it.
+mod core;
+
 mod a_backend_is_a_row_tests;
 mod a_batch_of_installs_is_one_command_tests;
 mod a_blocking_wait_is_off_the_runtime_tests;

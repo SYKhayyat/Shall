@@ -44,10 +44,13 @@ const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[
     ),
     (
         "src/core/executor.rs",
-        3_150,
+        3_060,
         "The spawn/read/retry machinery — one subject, grown by the audit fixes (cwd pin, \
          stderr sanitising, backoff cap) that belong to it. The split is spawn vs wait vs \
-         retry, and wants a session with no other executor work in flight.",
+         retry, and wants a session with no other executor work in flight. **The credential \
+         state left in `#121`**: the three process-wide sudo `static`s became a run's own \
+         state in `src/core/sudo.rs`, which took the file from 3,150 to 3,052 and the ceiling \
+         down with it.",
     ),
     (
         "src/config/grammar/statement.rs",

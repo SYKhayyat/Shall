@@ -417,6 +417,30 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     "would make this a gate people delete". **None of the eight mints authority** — C3 keeps
     `Reaped`'s fields private because a token must not be mintable, and these ask the guard
     rather than standing in for it. — ISSUE #115)
+- [ ] #122 the guard's second capped list — the managers that could not answer — has no boundary
+  test, and two mutants survive. (**Filed 2026-10-21, and it is the remainder of `#115`'s family
+  rather than a new one.** `GuardReport::message` renders **two** capped lists of objections and
+  asks the same question twice — *is there a remainder the reader cannot see?* — at
+  `src/app/sync/guard.rs:391` (`protected.len() > MAX_LISTED`) and `:420`
+  (`unverified.len() > MAX_LISTED`). **`#115` pinned the first** with
+  `tests/app/sync/guard/the_capped_list_claims_more_only_when_there_is_more.rs`; the second has no
+  test at all — `grep "more through managers"` returns **one line in the whole tree** and it is
+  the production one. The nightly says the same thing: `39392961509`'s *Mutation (the removal
+  guard 1/4)* reports `MISSED src/app/sync/guard.rs:417:29: replace > with ==` and `> with >=` in
+  `GuardReport::message` (417 there is the unverified site; today the two are 391 and 420).
+  **What the mutants do is a lie about the machine, not a wrong decision.** `> → ==` with eleven
+  unverified objections never prints the "…and N more" line at all, so ten are listed and the
+  eleventh is dropped without a word — the refusal is still correct (the decision does not read
+  that line) but the sentence under-reports what Shall will not remove; `> → >=` at exactly ten
+  prints "…and 0 more through managers that could not answer". **The third comparison is the
+  interesting one: `> → <` was caught only by the underflow panic in `unverified.len() -
+  MAX_LISTED`, and in a release build that subtraction wraps** — so the mutant the debug gate
+  rejects would print "…and 18446744073709551615 more", and the mutation gate runs in debug while
+  the release scripts run the suite in release. **The resolving test is one subject in the file
+  `#115` opened**: both branches at the cap, both directions, and one property assertion beyond
+  the boundary — *the number announced never exceeds the number of objections* — which is the
+  assertion that survives a release build. **Filed separately because `#115` is closed**, and the
+  house rule is that a closed issue does not reopen by accretion. — ISSUE #122)
 - [ ] #116 the mutation gate can report a mutant caught when nothing caught it. (**Filed
   2026-10-20, found while reproducing `#115`'s survivors on this host.** `cargo mutants` reports a
   mutant caught when *any* test fails, and cannot tell "failed because of the mutation" from
@@ -505,7 +529,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     double looks like, and policing those "would make this a gate people delete". The exception
     table is for the other case: a test that needs `cfg(test)` for a constructor that must not
     ship, which no amount of visibility can reach from a test crate. — ISSUE #120)
-- [ ] #121 the web backend's credential-probe test fails on a coin flip, and it takes the
+- [x] #121 the web backend's credential-probe test fails on a coin flip, and it takes the
   mutation gate's baseline with it. (**Filed 2026-10-20, while `#115` was being built, and it is
   the *third* host-dependent test to reach the mutation gate's baseline the same day.** Two failures
   in five runs of `cargo test --lib` on an idle host, and the assertion that fails is
@@ -520,6 +544,37 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   mutation gate**: `ERROR cargo test failed in an unmutated tree, so no mutants were tested`.
   **A shard that answers nothing is not a gate.** Three candidates are named in the issue and the
   first of them changes production code, so it is a ruling. — ISSUE #121)
+  - **BUILT 2026-10-21 — and the ruling is that the cache was never per process in the first
+    place.** The issue's own question was *"is the per-process saving worth keeping"*, and the
+    answer is that **the saving was never per process: a run is one process and one executor
+    family.** `App::new` builds the one `CommandExecutor` a run has (`src/app/context.rs:199`),
+    every backend of that `App` holds a *clone* of it, and the clones share their `Arc`s — so
+    "once per process" and "once per run" were the same number in production, and only the
+    *tests* could tell them apart. The three process-wide `static`s (`SUDO_PRIMED`,
+    `SUDO_REFUSED`, `SUDO_PRIMING`) are now **`src/core/sudo.rs`'s `SudoState`**, held by the
+    executor in an `Arc` exactly like `installed` — the memo that was moved out of a global for
+    the same reason, in the same struct, one field above it. **Nothing a user can observe
+    changed**: a run still asks once, and the 120-second password bound is still paid once per
+    run rather than once per escalated command.
+  - **The race is gone because it no longer exists, and the test that says so is the one the
+    issue asked for.** The web backend's test no longer resets a process-wide flag before its
+    removal and no longer *needs* to: its own executor is its own run, so the probe it asserts
+    about is the probe that ran. Two tests in `tests/core/sudo/` pin the two properties that
+    were assumptions before — `a_run_asks_for_credentials_once_and_its_clones_inherit_the_answer`
+    (a run asks once, and a clone does not ask again) and `a_second_run_asks_for_its_own_credentials`
+    (two runs are two answers, **which is the whole of `#121`**). **The second one was watched
+    failing**: with the state shared the way it used to be, it reports *"the second run inherited
+    the first run's answer and never asked"*, 0 probes where it expected 1.
+  - **The mirror rule gave the tests a home, and the size gate came with it.** The new tests are
+    in `tests/core/sudo/`, because `src/core/sudo.rs` owns that folder — the rule `#120` set. And
+    moving the subject out took `src/core/executor.rs` from 3,150 to **3,052** lines, so the
+    `TOO_BIG_FOR_NOW` ceiling came down with it (3,150 → 3,060) rather than up: **no gate was
+    raised to let this land.** The refusal-memo test stayed inline in `src/core/sudo.rs`, because
+    it reads the memo's own cells and a test crate links the library without `cfg(test)`.
+  - **What was not touched:** the *saving*. The probe still runs once per run, the refusal is
+    still remembered in both directions, the priming mutex still admits one task at a time, and
+    `SUDO_PASSWORD_TIMEOUT_SECS` is still a process-wide `OnceCell` — because that one is a
+    *configuration* value set once at startup, not run state. — ISSUE #121)
   - **The gate's own hazard fired twice while this was being built, and both times it was the
     host's answer wearing the gate's clothes.** Reproducing the survivors locally, the mutant
     `delete !` in `enforce_own_work` came back **`CAUGHT`** on the strength of

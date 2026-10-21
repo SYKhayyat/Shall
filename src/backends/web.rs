@@ -782,15 +782,12 @@ mod tests {
         // that knows which. Hard-coded here, it passed on Windows and had never once run on
         // Linux, because the build matrix was producing one target out of four.
         mock.set_response(&removal_argv("dpkg -r fd"), Ok(DryRunOutput::new().into()));
-        // **The reset goes BEFORE the removal, and that ordering is the whole assertion.**
-        // `SUDO_PRIMED` is process-global, so if another escalating test in this binary answered
-        // the credential probe first, `web.remove` below skips the probe entirely — and no
-        // assertion placed after the call can see a probe that never happened. The reset sat
-        // between the call and the assertions, where it read as a guard and was not one: the
-        // first run of the suite passed this and the second failed it on nothing but libtest's
-        // thread order, which is the coin flip `PLAN.md` #88 recorded and this did not fix.
-        // Resetting first makes the probe this test asserts about the probe that actually ran.
-        CommandExecutor::forget_sudo_refusal();
+        // **No reset, and no reset is needed.** The credential answer belongs to the run, and
+        // this test's executor is its own run: no other test in this binary can have asked the
+        // question already, so the probe this asserts about is the probe that runs. That was
+        // not true while the answer was a process-wide flag — then another escalating test
+        // answered first, the probe never happened, and this test failed on nothing but
+        // libtest's thread order (`#121`).
         web.remove(&[url.to_string()], false, reaped())
             .await
             .expect("the removal succeeds");
