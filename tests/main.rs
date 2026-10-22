@@ -50,6 +50,8 @@ mod app;
 /// **The mirror, continued.** `src/core/sudo.rs` owns `tests/core/sudo/`, under the same rule
 /// as `src/app/sync/guard.rs`: a src file's tests live in a folder of their own, so that "where
 /// is the test for this?" has an answer before you have to ask it.
+mod backends;
+mod config;
 mod core;
 
 /// **The review apparatus.** The tests that read the tree rather than drive the product — the

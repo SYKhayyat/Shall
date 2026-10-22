@@ -228,7 +228,7 @@ pub struct Transaction {
     completed_indices: HashSet<NodeIndex>,
     /// Each finished node with what its target looked like before it ran. Rollback walks this
     /// backwards, and cannot compensate correctly without the second half.
-    history: Vec<(NodeIndex, Prior)>,
+    pub history: Vec<(NodeIndex, Prior)>,
     cancellation_token: CancellationToken,
     /// Proof that the plan this graph came from passed the removal guard.
     ///
@@ -271,7 +271,7 @@ pub struct Transaction {
     /// [`GuardScope::reconciles`](crate::app::sync::guard::GuardScope::reconciles). There the
     /// old behaviour is right in both arms: a `rebuild`'s removal phase is half of a reinstall
     /// of declared packages, and a hand-typed `uninstall` was not derived from anything.
-    declared: Option<Arc<std::collections::HashSet<String>>>,
+    pub declared: Option<Arc<std::collections::HashSet<String>>>,
     /// What the last execution's scheduling actually looked like â€” packages, graph depth, and
     /// the number of times the engine went idle and handed out more work.
     ///
@@ -369,6 +369,8 @@ impl Transaction {
         self
     }
 
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+    /// test crate links the library without `cfg(test)`, so a private item is invisible there.
     /// Does this plan intend the machine to end up holding this package?
     ///
     /// `None` when the run is not reconciling against a manifest and the question has no
@@ -376,7 +378,7 @@ impl Transaction {
     /// install arm skips its removal on `Some(true)`, the removal arm skips its reinstate on
     /// `Some(false)`, and neither does anything on `None`. Written as a function rather than
     /// twice inline so the symmetry is a fact about the code and not about two comments.
-    fn plan_intends_present(&self, backend: &str, name: &str) -> Option<bool> {
+    pub fn plan_intends_present(&self, backend: &str, name: &str) -> Option<bool> {
         self.declared
             .as_ref()
             .map(|d| d.contains(&format!("{}:{}", backend, name)))
@@ -866,13 +868,15 @@ impl Transaction {
         }
     }
 
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+    /// test crate links the library without `cfg(test)`, so a private item is invisible there.
     /// The most packages Shall will put on one manager command line.
     ///
     /// A bound on argv, not on ambition: `cmd.exe` caps a command line at 8191 characters and
     /// every manager has some limit. A hundred names is far below any of them and far above
     /// the point where batching has taken the win â€” the cost this removes is per *invocation*,
     /// so the second hundred saves almost nothing the first did not.
-    const MAX_BATCH: usize = 100;
+    pub const MAX_BATCH: usize = 100;
     /// â€¦and a byte bound, because package names are not all short. `github:owner/repo@â€¦`
     /// spends far more per name than `jq` does.
     const MAX_BATCH_BYTES: usize = 6000;
@@ -895,7 +899,7 @@ impl Transaction {
     /// purpose is taking what it can get does not want them on one command line; it wants each
     /// package to succeed or fail on its own. That costs invocations, and invocations are what
     /// this flag is explicitly willing to spend.
-    fn batches(
+    pub fn batches(
         graph: &StableDiGraph<GraphAction, ()>,
         mut ready: Vec<NodeIndex>,
         max_batch: usize,
@@ -1745,7 +1749,7 @@ impl Transaction {
 
 /// What to do about a failed attempt whose manager said its lock was taken.
 #[derive(Debug)]
-pub(super) enum LockWait {
+pub enum LockWait {
     /// A live holder, named. Wait for it.
     Wait(String),
     /// Waiting would never end. Fail now, with the sentence that says why.
@@ -1763,13 +1767,13 @@ pub(super) enum LockWait {
 /// another, and neither arithmetic could be reached without a second package manager to hold a
 /// real lock. Here they are two named operations with a test each.
 #[derive(Debug, Clone, Copy)]
-pub(super) struct LockBudget {
+pub struct LockBudget {
     total: Duration,
     spent: Duration,
 }
 
 impl LockBudget {
-    pub(super) fn of(total: Duration) -> Self {
+    pub fn of(total: Duration) -> Self {
         Self {
             total,
             spent: Duration::ZERO,
@@ -1788,12 +1792,12 @@ impl LockBudget {
     /// What is left to wait with. Saturating, because a wait that overran its share leaves
     /// nothing rather than a negative bound â€” and zero is the value `lock_wait_verdict` reads as
     /// "do not wait", which is the right answer once the budget is gone.
-    pub(super) fn remaining(&self) -> Duration {
+    pub fn remaining(&self) -> Duration {
         self.total.saturating_sub(self.spent)
     }
 
     /// Charge a wait that has already happened.
-    pub(super) fn spend(&mut self, waited: Duration) {
+    pub fn spend(&mut self, waited: Duration) {
         self.spent += waited;
     }
 }
@@ -1806,7 +1810,7 @@ impl LockBudget {
 /// `look` is how the machine is asked, so the three verdicts can be exercised without a second
 /// package manager to kill. It is called only *after* the manager's own words have matched, which
 /// is what keeps a successful install from ever reading `/proc`.
-pub(super) fn lock_wait_verdict(
+pub fn lock_wait_verdict(
     last_error: &Option<Error>,
     backend: &str,
     remaining: Duration,
@@ -1870,7 +1874,7 @@ pub(super) fn lock_wait_verdict(
 /// **A wait with no reason given is indistinguishable from a hang**, and a hang is what people
 /// kill â€” which is how a machine ends up with the interrupted transaction this whole module is
 /// about. It announces once, up front, the way the data-directory lock does.
-pub(super) async fn wait_for_manager_lock(
+pub async fn wait_for_manager_lock(
     backend: &str,
     who: &str,
     wait: Duration,
@@ -1921,7 +1925,7 @@ pub(super) async fn wait_for_manager_lock(
 /// the whole suite, because nothing anywhere read which of the two sentences got written. They
 /// are different facts to whoever reads the WAL afterwards: one says another operation in this
 /// run failed, the other says this one did.
-pub(super) fn wal_failure_reason(cancelled: bool, error: &Error) -> String {
+pub fn wal_failure_reason(cancelled: bool, error: &Error) -> String {
     if cancelled {
         "cancelled before this batch ran: another operation in the same run failed".to_string()
     } else {
@@ -1929,13 +1933,15 @@ pub(super) fn wal_failure_reason(cancelled: bool, error: &Error) -> String {
     }
 }
 
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+/// test crate links the library without `cfg(test)`, so a private item is invisible there.
 /// How many of `attempt` tries were retries: all but the first.
 ///
 /// `attempt` counts from 1, so a batch that succeeded first time reports nought. Written out
 /// because three `TaskResult` constructions computed it inline, and a copy of an expression is
 /// a copy of its blind spot â€” the mutation sweep found the same subtraction three times over
 /// and nothing in the suite could tell any of them from `attempt + 1`.
-fn retries_behind(attempt: u32) -> u32 {
+pub fn retries_behind(attempt: u32) -> u32 {
     attempt - 1
 }
 
@@ -1946,7 +1952,7 @@ fn retries_behind(attempt: u32) -> u32 {
 /// more to answer for: a shift inside a multiplication inside a `min` inside a match arm is
 /// three separate numbers, and all three survived â€” `<<` read as `>>`, and `attempt - 2` read
 /// as both `attempt + 2` and `attempt / 2`, without failing anything.
-pub(super) fn backoff_for(attempt: u32, initial: Duration, max: Duration) -> Duration {
+pub fn backoff_for(attempt: u32, initial: Duration, max: Duration) -> Duration {
     std::cmp::min(initial * (1 << (attempt - 2)), max)
 }
 
@@ -1967,7 +1973,7 @@ pub(super) fn backoff_for(attempt: u32, initial: Duration, max: Duration) -> Dur
 /// wget on the PATH could be fixed tomorrow. Withdrawing a declaration is not this function's
 /// to trigger either way: that reads `Error::says_a_name_is_absent`, and no amount of repeating
 /// turns "the download failed" into "the rock does not exist".
-pub(super) fn falsify_transience(err: Error, attempts: u32) -> Error {
+pub fn falsify_transience(err: Error, attempts: u32) -> Error {
     if attempts < 2 {
         return err; // never retried, so nothing was tested
     }
@@ -1989,1311 +1995,5 @@ pub(super) fn falsify_transience(err: Error, attempts: u32) -> Error {
             absent_name,
         },
         other => other,
-    }
-}
-
-/// **What Shall does when another package manager holds the lock** â€” the three verdicts, each
-/// exercised without a second package manager to kill.
-///
-/// The shipped behaviour was one verdict for all three: four retries over three and a half
-/// seconds, then *"the failure did not change, so a further retry will not help â€” this is not the
-/// transient failure its output looks like"*. That sentence was printed most often in the one
-/// case where it was false.
-#[cfg(test)]
-mod executed_removals_tests {
-    use super::*;
-
-    /// A transaction with `history` and `declared` set by hand: the method under test reads
-    /// only those two fields and the graph, and standing up real backends to *earn* them
-    /// would prove nothing about the filter.
-    async fn tx_with(
-        graph: StableDiGraph<GraphAction, ()>,
-        history: Vec<(NodeIndex, Prior)>,
-        declared: Option<&[&str]>,
-    ) -> Transaction {
-        let config = crate::config::Config::default();
-        let journal_dir = tempfile::tempdir().unwrap();
-        let journal = Journal::at(journal_dir.path().join("journal.jsonl")).unwrap();
-        let diagnostics = crate::app::diagnostics::FailureDiagnosticEngine::init(&config).await;
-        let mut tx = Transaction::with_config(
-            graph,
-            Arc::new(BackendRegistry::new()),
-            Arc::new(Mutex::new(journal)),
-            Arc::new(diagnostics),
-            Arc::new(config),
-            TransactionConfig::default(),
-        );
-        tx.history = history;
-        tx.declared = declared
-            .map(|d| Arc::new(d.iter().map(|s| s.to_string()).collect::<HashSet<String>>()));
-        tx
-    }
-
-    fn remove_node(
-        graph: &mut StableDiGraph<GraphAction, ()>,
-        backend: &str,
-        name: &str,
-    ) -> NodeIndex {
-        graph.add_node(GraphAction::Remove {
-            backend: backend.to_string(),
-            name: name.to_string(),
-        })
-    }
-
-    /// The case the summary owes its numbers to: completed removals the plan itself intended,
-    /// which rollback left gone. A run killed after these reports them as removed.
-    #[tokio::test]
-    async fn a_removal_the_plan_intended_and_rollback_left_gone_is_reported() {
-        let mut graph = StableDiGraph::new();
-        let jq = remove_node(&mut graph, "apt", "jq");
-        let tx = tx_with(
-            graph,
-            vec![(jq, Prior::Present(Some("1.6".into())))],
-            Some(&[]),
-        )
-        .await;
-        assert_eq!(
-            tx.executed_removals(),
-            vec![("apt".to_string(), "jq".to_string())]
-        );
-    }
-
-    /// A removal rollback reinstated must not be reported as gone â€” the machine has the
-    /// package back, whatever the history says.
-    #[tokio::test]
-    async fn a_removal_that_was_not_intended_is_treated_as_reinstated() {
-        let mut graph = StableDiGraph::new();
-        let jq = remove_node(&mut graph, "apt", "jq");
-        // Declared still carries `apt:jq`, so rollback put it back (`U41`).
-        let tx = tx_with(
-            graph,
-            vec![(jq, Prior::Present(Some("1.6".into())))],
-            Some(&["apt:jq"]),
-        )
-        .await;
-        assert!(tx.executed_removals().is_empty());
-    }
-
-    /// A removal whose target was never there changed nothing, and counting it would
-    /// inflate the summary with work the machine never noticed.
-    #[tokio::test]
-    async fn a_removal_of_something_absent_is_not_counted_as_gone() {
-        let mut graph = StableDiGraph::new();
-        let jq = remove_node(&mut graph, "apt", "jq");
-        let tx = tx_with(graph, vec![(jq, Prior::Absent)], Some(&[])).await;
-        assert!(tx.executed_removals().is_empty());
-    }
-
-    /// Installs are not this method's business â€” its callers summarise removals.
-    #[tokio::test]
-    async fn an_install_in_the_history_is_not_a_removal() {
-        let mut graph = StableDiGraph::new();
-        let idx = graph.add_node(GraphAction::Install(crate::core::PackageSpec {
-            name: "htop".into(),
-            backend: "apt".into(),
-            options: Default::default(),
-            requires: vec![],
-            present: true,
-        }));
-        let tx = tx_with(graph, vec![(idx, Prior::Absent)], Some(&[])).await;
-        assert!(tx.executed_removals().is_empty());
-    }
-}
-
-#[cfg(test)]
-mod manager_lock_tests {
-    use super::*;
-    use crate::app::stale_lock::Held;
-
-    fn lock_failure(msg: &str) -> Option<Error> {
-        Some(Error::CommandFailed {
-            message: msg.to_string(),
-            retry: Retryability::Transient,
-            absent_name: false,
-        })
-    }
-
-    const PACMAN_SAID: &str = "`pacman` failed (exit 1): error: failed to init transaction \
-                               (unable to lock database)";
-
-    /// A live holder is a queue to join. Waiting is the only thing that helps, and it is what
-    /// Shall already does for its own lock.
-    #[test]
-    fn a_live_holder_is_waited_for() {
-        let verdict = lock_wait_verdict(
-            &lock_failure(PACMAN_SAID),
-            "pacman",
-            Duration::from_secs(300),
-            Duration::from_secs(300),
-            &|_| Held::Live("a `pacman`".into()),
-        );
-        assert!(
-            matches!(&verdict, LockWait::Wait(who) if who.contains("pacman")),
-            "{verdict:?}"
-        );
-    }
-
-    /// A lock nothing holds is a corpse, and waiting for it never ends. It fails at once, and
-    /// the message names the command that clears it rather than three more retries.
-    #[test]
-    fn a_stale_lock_fails_at_once_and_names_heal() {
-        let verdict = lock_wait_verdict(
-            &lock_failure(PACMAN_SAID),
-            "pacman",
-            Duration::from_secs(300),
-            Duration::from_secs(300),
-            &|_| Held::Stale("/var/lib/pacman/db.lck".into()),
-        );
-        let LockWait::Hopeless(err) = verdict else {
-            panic!("waiting on a lock nothing holds never ends: {verdict:?}");
-        };
-        let said = err.to_string();
-        assert!(said.contains("shall heal"), "{said}");
-        assert!(said.contains("db.lck"), "the file has to be named: {said}");
-        assert_eq!(err.retryability(), Retryability::Exhausted);
-    }
-
-    /// The holder let go between the failure and the question. That is an ordinary race, and the
-    /// ordinary backoff is the right answer â€” not a wait for a lock that is already free.
-    #[test]
-    fn a_lock_that_came_free_goes_back_to_the_backoff() {
-        let verdict = lock_wait_verdict(
-            &lock_failure(PACMAN_SAID),
-            "pacman",
-            Duration::from_secs(300),
-            Duration::from_secs(300),
-            &|_| Held::Free,
-        );
-        assert!(matches!(verdict, LockWait::Backoff), "{verdict:?}");
-    }
-
-    /// **The machine is not consulted for a failure that is not about a lock.** A wait on every
-    /// failed install would be a hang on every typo, and the `/proc` scan would be paid on
-    /// every one of them.
-    #[test]
-    fn a_failure_that_is_not_about_a_lock_never_asks_the_machine() {
-        let asked = std::cell::Cell::new(false);
-        let verdict = lock_wait_verdict(
-            &lock_failure("`pacman` failed (exit 1): error: target not found: qqqq"),
-            "pacman",
-            Duration::from_secs(300),
-            Duration::from_secs(300),
-            &|_| {
-                asked.set(true);
-                Held::Live("a `pacman`".into())
-            },
-        );
-        assert!(matches!(verdict, LockWait::Backoff), "{verdict:?}");
-        assert!(
-            !asked.get(),
-            "the machine was scanned over a missing package"
-        );
-    }
-
-    /// And a backend with no lock in the table is never made to wait for one, whatever its
-    /// failure happens to say.
-    #[test]
-    fn a_backend_with_no_manager_lock_backs_off_as_before() {
-        let verdict = lock_wait_verdict(
-            &lock_failure("`npm` failed: could not get lock"),
-            "npm",
-            Duration::from_secs(300),
-            Duration::from_secs(300),
-            &|_| panic!("npm has no manager lock, so nothing should have been asked"),
-        );
-        assert!(matches!(verdict, LockWait::Backoff), "{verdict:?}");
-    }
-
-    /// `manager_lock_wait_secs = 0` opts out of waiting — and still does not print the old
-    /// sentence, because a further retry is exactly what *would* help once the holder is done.
-    #[test]
-    fn opting_out_of_the_wait_still_says_something_true() {
-        let verdict = lock_wait_verdict(
-            &lock_failure(PACMAN_SAID),
-            "pacman",
-            Duration::ZERO,
-            Duration::ZERO,
-            &|_| Held::Live("a `pacman`".into()),
-        );
-        let LockWait::Hopeless(err) = verdict else {
-            panic!("with no wait allowed there is nothing to wait for: {verdict:?}");
-        };
-        let said = err.to_string();
-        assert!(said.contains("manager_lock_wait_secs"), "{said}");
-        assert!(
-            !said.contains("a further retry will not help"),
-            "the old sentence is the false one: {said}"
-        );
-    }
-
-    /// A budget that was SPENT is not a setting of zero. The old message said
-    /// "`manager_lock_wait_secs` is 0" to someone who set 300 and watched Shall wait out all
-    /// 300 — a sentence about a decision they never made, and no hint that waiting longer was
-    /// even possible.
-    #[test]
-    fn an_exhausted_budget_does_not_claim_the_setting_was_zero() {
-        let verdict = lock_wait_verdict(
-            &lock_failure(PACMAN_SAID),
-            "pacman",
-            Duration::ZERO,
-            Duration::from_secs(300),
-            &|_| Held::Live("a `pacman`".into()),
-        );
-        let LockWait::Hopeless(err) = verdict else {
-            panic!("nothing left to wait with: {verdict:?}");
-        };
-        let said = err.to_string();
-        assert!(
-            said.contains("waited its full 300s"),
-            "the message must say Shall spent the budget: {said}"
-        );
-        assert!(
-            !said.contains("`manager_lock_wait_secs` is 0"),
-            "and must not claim the setting was zero: {said}"
-        );
-    }
-
-    /// Nothing has failed yet on the first attempt, so there is nothing to classify.
-    #[test]
-    fn no_failure_yet_is_not_a_lock_failure() {
-        let verdict = lock_wait_verdict(
-            &None,
-            "pacman",
-            Duration::from_secs(300),
-            Duration::from_secs(300),
-            &|_| panic!("there is no error to have been about a lock"),
-        );
-        assert!(matches!(verdict, LockWait::Backoff), "{verdict:?}");
-    }
-
-    /// The wait ends rather than running to its deadline when the run is cancelled â€” a Ctrl-C
-    /// during a five-minute wait must not become a five-minute wait.
-    #[tokio::test]
-    async fn a_cancelled_run_stops_waiting_immediately() {
-        let token = CancellationToken::new();
-        token.cancel();
-        let out = wait_for_manager_lock("pacman", "a `pacman`", Duration::from_secs(300), &token)
-            .await
-            .expect_err("a cancelled wait does not succeed");
-        assert!(matches!(out, Error::Cancelled), "{out:?}");
-    }
-
-    /// Two waits in a row cost the setting once between them.
-    ///
-    /// The value that made this worth extracting: reaching the running total in the engine needs
-    /// a second package manager holding a real lock and letting go of it twice, which no
-    /// hermetic test can arrange. Every intermediate value is asserted, because a budget that
-    /// counted *down* from zero and a budget that never moved both leave the same final answer
-    /// once it saturates.
-    #[test]
-    fn the_wait_budget_is_spent_across_attempts_and_not_per_attempt() {
-        let mut budget = LockBudget::of(Duration::from_secs(300));
-        assert_eq!(budget.remaining(), Duration::from_secs(300));
-
-        budget.spend(Duration::from_secs(120));
-        assert_eq!(
-            budget.remaining(),
-            Duration::from_secs(180),
-            "the second wait gets what the first one left, not the whole setting again"
-        );
-
-        budget.spend(Duration::from_secs(60));
-        assert_eq!(budget.remaining(), Duration::from_secs(120));
-    }
-
-    /// A budget that has been overrun is spent, not negative.
-    ///
-    /// `lock_wait_verdict` reads a zero wait as "the user opted out", which is the right answer
-    /// once there is nothing left â€” and it is reached by saturating rather than by a subtraction
-    /// that would panic on the way past.
-    #[test]
-    fn a_spent_budget_is_zero_rather_than_a_negative_one() {
-        let mut budget = LockBudget::of(Duration::from_secs(30));
-        budget.spend(Duration::from_secs(45));
-        assert_eq!(budget.remaining(), Duration::ZERO);
-    }
-}
-
-#[cfg(test)]
-mod transience_tests {
-    use super::*;
-
-    fn transient(msg: &str) -> Error {
-        Error::CommandFailed {
-            message: msg.to_string(),
-            retry: Retryability::Transient,
-            absent_name: false,
-        }
-    }
-
-    #[test]
-    fn a_transient_failure_that_repeated_stops_calling_itself_transient() {
-        let out = falsify_transience(transient("`luarocks` failed: Failed downloading â€¦"), 3);
-        assert_eq!(out.retryability(), Retryability::Exhausted);
-        assert!(
-            out.to_string().contains("did not change"),
-            "the message must say what was tried: {out}"
-        );
-    }
-
-    #[test]
-    fn a_failure_that_was_never_retried_keeps_its_classification() {
-        // The control. Downgrading on the first attempt would delete the distinction entirely
-        // and make every transient failure Unknown, which is the opposite of the fix.
-        let out = falsify_transience(transient("`apt` failed: Could not get lock"), 1);
-        assert_eq!(out.retryability(), Retryability::Transient);
-        assert!(!out.to_string().contains("did not change"));
-    }
-
-    /// A run that never retried reports no retries.
-    ///
-    /// `attempt` counts tries and `retries` counts the ones after the first, and the three
-    /// `TaskResult` sites that used to spell that out inline each carried the same untested
-    /// subtraction. There is one now, and this is what stops it reading `attempt + 1`.
-    #[test]
-    fn retries_are_every_attempt_but_the_first() {
-        assert_eq!(retries_behind(1), 0, "the first try is not a retry");
-        assert_eq!(retries_behind(2), 1);
-        assert_eq!(retries_behind(4), 3);
-    }
-
-    /// The backoff doubles from the first retry, and the cap is a cap.
-    ///
-    /// Called only with `attempt >= 2`, so attempt 2 â€” the first retry â€” waits `initial`
-    /// exactly. Each value below is one the shift, the exponent or the multiplication would
-    /// get wrong on its own.
-    #[test]
-    fn the_backoff_doubles_from_the_first_retry_and_stops_at_the_cap() {
-        let initial = Duration::from_millis(500);
-        let max = Duration::from_secs(30);
-
-        assert_eq!(
-            backoff_for(2, initial, max),
-            Duration::from_millis(500),
-            "the first retry waits the initial backoff, undoubled"
-        );
-        assert_eq!(backoff_for(3, initial, max), Duration::from_secs(1));
-        assert_eq!(backoff_for(4, initial, max), Duration::from_secs(2));
-        assert_eq!(
-            backoff_for(7, initial, max),
-            Duration::from_secs(16),
-            "still doubling while it is under the cap"
-        );
-        assert_eq!(
-            backoff_for(8, initial, max),
-            max,
-            "thirty-two seconds is over a thirty-second cap, so the cap is what is waited"
-        );
-    }
-
-    /// Two attempts is the experiment; one is not.
-    ///
-    /// The tests above use three attempts and one, and `attempts < 2` reads `<= 2` without
-    /// either of them noticing â€” which quietly raises the bar to three, so the *second*
-    /// identical failure stops counting as evidence. Two is the smallest number of attempts
-    /// that can show a failure repeating, and it is the only value at which the two spellings
-    /// disagree.
-    #[test]
-    fn the_second_attempt_is_already_a_repeat() {
-        let out = falsify_transience(transient("`gem` failed: Connection reset"), 2);
-        assert_eq!(
-            out.retryability(),
-            Retryability::Exhausted,
-            "a failure seen twice has been tested once, which is the whole experiment"
-        );
-        assert!(
-            out.to_string().contains("tried 2 times"),
-            "the message must say how many attempts stand behind it: {out}"
-        );
-    }
-
-    #[test]
-    fn a_permanent_failure_is_not_touched_by_the_retry_count() {
-        // It never entered the retry loop a second time â€” `give_up` breaks on Permanent â€” so
-        // seeing one here at all would mean something else changed. Pinned so it cannot.
-        let e = Error::CommandFailed {
-            message: "`scoop` failed: Couldn't find manifest".into(),
-            retry: Retryability::Permanent,
-            absent_name: true,
-        };
-        assert_eq!(
-            falsify_transience(e, 3).retryability(),
-            Retryability::Permanent
-        );
-    }
-
-    #[test]
-    fn an_unknown_failure_is_left_alone() {
-        let e = Error::CommandFailed {
-            message: "`mix` failed: something".into(),
-            retry: Retryability::Unknown,
-            absent_name: false,
-        };
-        let out = falsify_transience(e, 3);
-        assert_eq!(out.retryability(), Retryability::Unknown);
-        assert!(!out.to_string().contains("did not change"));
-    }
-}
-
-#[cfg(test)]
-mod from_config_tests {
-    use super::*;
-
-    /// Every setting this constructor exists to carry is actually carried.
-    ///
-    /// The doc comment on `from_config` records why it exists: `max_concurrent` had been left
-    /// at the `patient()` default and nobody noticed, because a field that silently falls back
-    /// to a sensible number looks exactly like a field that was read. `..Self::patient()` makes
-    /// that the failure mode for every line in the struct â€” deleting `max_concurrent`, `purge`
-    /// or `manager_lock_wait` left the suite green, which is the same defect the constructor
-    /// was written to prevent, three more times.
-    ///
-    /// `max_concurrent` is asserted at two different values rather than one. The fallback is
-    /// this machine's parallelism, so a single value can agree with it by luck on whatever host
-    /// happens to run the test; two values cannot both be it.
-    #[test]
-    fn every_setting_from_config_claims_to_read_reaches_the_transaction() {
-        let base = crate::config::Config::default;
-
-        for parallel in [1usize, 64] {
-            let mut config = base();
-            config.max_parallel = parallel;
-            assert_eq!(
-                TransactionConfig::from_config(&config).max_concurrent,
-                parallel,
-                "max_parallel = {parallel} did not reach max_concurrent"
-            );
-        }
-        let mut none = base();
-        none.max_parallel = 0;
-        assert_eq!(
-            TransactionConfig::from_config(&none).max_concurrent,
-            1,
-            "nought parallelism is one worker, not none"
-        );
-
-        // The per-package budget and its floor. **This key was declared, documented and
-        // defaulted and read nowhere** — the exact shape
-        // `a_setting_the_config_declares_is_a_setting_that_acts_tests` is named for, and that gate
-        // caught it on CI before I looked. A gate doing its job is the reason to keep one.
-        for secs in [1u64, 900] {
-            let mut config = base();
-            config.manager_command_timeout_secs = secs;
-            assert_eq!(
-                TransactionConfig::from_config(&config).node_timeout,
-                std::time::Duration::from_secs(secs),
-                "`manager_command_timeout_secs = {secs}` did not reach the per-package budget"
-            );
-        }
-        assert_eq!(
-            TransactionConfig::from_config(&base()).node_timeout,
-            std::time::Duration::from_secs(300),
-            "the default budget is not the default the key documents"
-        );
-        let mut floored = base();
-        floored.manager_command_timeout_secs = 0;
-        assert_eq!(
-            TransactionConfig::from_config(&floored).node_timeout,
-            std::time::Duration::from_secs(1),
-            "a zero budget kills every manager command on arrival"
-        );
-
-        // Purge is an OR of a persistent setting and a this-run flag, and each half must be
-        // able to turn it on alone â€” `&&` reads identically until you ask one of them by itself.
-        let mut persistent = base();
-        persistent.remove.purge = true;
-        assert!(
-            TransactionConfig::from_config(&persistent).purge,
-            "`[remove] purge = true` alone must purge"
-        );
-        let mut this_run = base();
-        this_run.purge_this_run = true;
-        assert!(
-            TransactionConfig::from_config(&this_run).purge,
-            "`--purge` alone must purge"
-        );
-        assert!(
-            !TransactionConfig::from_config(&base()).purge,
-            "neither set is not a purge"
-        );
-
-        let mut keep_going = base();
-        keep_going.keep_going_this_run = true;
-        assert_eq!(
-            TransactionConfig::from_config(&keep_going).continue_past,
-            ContinuePast::AnyFailure,
-            "`--keep-going` has to reach the transaction, or the flag is decoration"
-        );
-
-        // All three states of `M2`'s wiring. The flag OUTRANKS the key rather than combining
-        // with it: somebody at a keyboard said `--keep-going`, and the key is only what the
-        // machine does when nobody said anything.
-        assert_eq!(
-            TransactionConfig::from_config(&base()).continue_past,
-            ContinuePast::ClassifiedPassing,
-            "`[sync] continue_past_transient` defaults on, so a stock machine finishes what \
-             it can past a failure Shall classed as passing"
-        );
-        let mut all_or_nothing = base();
-        all_or_nothing.sync.continue_past_transient = false;
-        assert_eq!(
-            TransactionConfig::from_config(&all_or_nothing).continue_past,
-            ContinuePast::Nothing,
-            "turning the key off has to reach the transaction, or the key is decoration"
-        );
-        let mut both = all_or_nothing.clone();
-        both.keep_going_this_run = true;
-        assert_eq!(
-            TransactionConfig::from_config(&both).continue_past,
-            ContinuePast::AnyFailure,
-            "the flag outranks the key: a run told to keep going keeps going"
-        );
-
-        // **`M3`'s key, which a nightly mutant found unasserted.** Deleting
-        // `batch_recovery: config.sync.batch_recovery` from this struct expression leaves the
-        // field at `patient()`'s `Off`, and every test still passed - so the key could have
-        // silently done nothing on every machine and nothing would have said.
-        assert_eq!(
-            TransactionConfig::from_config(&base()).batch_recovery,
-            BatchRecovery::Bisect,
-            "`[sync] batch_recovery` defaults to bisecting, so a failed batch is narrowed"
-        );
-        let mut no_narrowing = base();
-        no_narrowing.sync.batch_recovery = BatchRecovery::Off;
-        assert_eq!(
-            TransactionConfig::from_config(&no_narrowing).batch_recovery,
-            BatchRecovery::Off,
-            "turning the key off has to reach the transaction, or the key is decoration"
-        );
-        let mut every = base();
-        every.sync.batch_recovery = BatchRecovery::Every;
-        assert_eq!(
-            TransactionConfig::from_config(&every).batch_recovery,
-            BatchRecovery::Every,
-            "and the third setting reaches it too, or one of three values is unreachable"
-        );
-
-        // A wait no default would produce, so the fallback cannot pass for the setting.
-        let mut waiting = base();
-        waiting.manager_lock_wait_secs = 4_321;
-        assert_eq!(
-            TransactionConfig::from_config(&waiting).manager_lock_wait,
-            Duration::from_secs(4_321),
-            "manager_lock_wait_secs did not reach the transaction"
-        );
-    }
-}
-
-#[cfg(test)]
-mod wal_reason_tests {
-    use super::*;
-
-    /// **A mutant found this, not a person.** The choice was a match guard inside the journal
-    /// loop, and the nightly shard replaced it with `true` and with `false` - both survived. The
-    /// two sentences are different facts to whoever reads the WAL afterwards, so both are pinned.
-    #[test]
-    fn a_cancelled_batch_and_a_failed_one_leave_different_sentences() {
-        let e = Error::Transaction("`apt` failed (exit 100)".into());
-        let cancelled = wal_failure_reason(true, &e);
-        let failed = wal_failure_reason(false, &e);
-        assert!(
-            cancelled.contains("cancelled before this batch ran"),
-            "a cancelled batch must say so: {cancelled}"
-        );
-        assert!(
-            !cancelled.contains("exit 100"),
-            "a cancelled batch never ran, so quoting the error blames it for something it did \
-             not do: {cancelled}"
-        );
-        assert!(
-            failed.contains("exit 100"),
-            "a failure must carry the manager's own words: {failed}"
-        );
-        assert_ne!(
-            cancelled, failed,
-            "the guard decides nothing if both read the same"
-        );
-    }
-}
-
-#[cfg(test)]
-mod batching_tests {
-    use super::*;
-    use crate::core::journal::ActionStatus;
-    use crate::core::manager::{BackendCapabilities, BackendCore, HealthReport, HealthStatus};
-    use crate::core::{Installable, Package, Queryable};
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    /// A manager that counts how many separate commands it was asked to run, and how many
-    /// packages the widest of them carried.
-    struct Counting {
-        name: String,
-        calls: AtomicUsize,
-        widest: AtomicUsize,
-        listings: crate::core::installed::InstalledListings,
-        /// How long this backend takes to answer. Zero for every test but the ones that need
-        /// a batch to still be in flight when the run stops.
-        stall: Duration,
-        /// Whether this backend refuses everything, so a test can make one manager fail while
-        /// another is mid-command.
-        fails: bool,
-    }
-
-    #[async_trait::async_trait]
-    impl BackendCore for Counting {
-        fn name(&self) -> &str {
-            &self.name
-        }
-        fn is_available(&self) -> bool {
-            true
-        }
-        fn probes(&self) -> Vec<String> {
-            Vec::new()
-        }
-        fn needs_root(&self) -> bool {
-            false
-        }
-        async fn check_health(&self) -> Result<HealthReport> {
-            Ok(HealthReport {
-                status: HealthStatus::Ok,
-                message: None,
-            })
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl Installable for Counting {
-        async fn install(&self, specs: &[PackageSpec], _sudo: bool) -> Result<()> {
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            self.widest.fetch_max(specs.len(), Ordering::SeqCst);
-            tokio::time::sleep(self.stall).await;
-            self.answer()
-        }
-        async fn remove(
-            &self,
-            names: &[String],
-            _sudo: bool,
-            _reaped: crate::app::sync::guard::Reaped,
-        ) -> Result<()> {
-            self.calls.fetch_add(1, Ordering::SeqCst);
-            self.widest.fetch_max(names.len(), Ordering::SeqCst);
-            tokio::time::sleep(self.stall).await;
-            self.answer()
-        }
-    }
-
-    impl Counting {
-        fn answer(&self) -> Result<()> {
-            match self.fails {
-                true => Err(Error::Transaction(format!("`{}` refuses", self.name))),
-                false => Ok(()),
-            }
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl Queryable for Counting {
-        fn installed_cache(&self) -> (&crate::core::installed::InstalledListings, &str) {
-            (&self.listings, &self.name)
-        }
-        async fn fetch_installed(&self) -> Result<Vec<Package>> {
-            Ok(Vec::new())
-        }
-        async fn list_manual(&self) -> Result<Vec<Package>> {
-            Ok(Vec::new())
-        }
-        async fn info(&self, _name: &str) -> Result<Option<Package>> {
-            Ok(None)
-        }
-    }
-
-    fn spec(backend: &str, name: &str) -> PackageSpec {
-        PackageSpec {
-            name: name.to_string(),
-            backend: backend.to_string(),
-            options: Default::default(),
-            requires: Vec::new(),
-            present: true,
-        }
-    }
-
-    struct Harness {
-        tx: Transaction,
-        counters: Vec<Arc<Counting>>,
-        /// The same log the transaction writes to, so a test can ask what it was left holding.
-        journal: Arc<Mutex<Journal>>,
-        _tmp: tempfile::TempDir,
-    }
-
-    async fn harness(graph: StableDiGraph<GraphAction, ()>, backends: &[&str]) -> Harness {
-        harness_with(
-            graph,
-            backends,
-            Duration::ZERO,
-            Duration::from_secs(3600),
-            &[],
-        )
-        .await
-    }
-
-    async fn harness_with(
-        graph: StableDiGraph<GraphAction, ()>,
-        backends: &[&str],
-        stall: Duration,
-        total_timeout: Duration,
-        failing: &[&str],
-    ) -> Harness {
-        let tmp = tempfile::tempdir().unwrap();
-        let mut registry = BackendRegistry::new();
-        let mut counters = Vec::new();
-        for b in backends {
-            let fails = failing.contains(b);
-            let counting = Arc::new(Counting {
-                name: b.to_string(),
-                calls: AtomicUsize::new(0),
-                widest: AtomicUsize::new(0),
-                listings: crate::core::installed::InstalledListings::new(),
-                // A backend that is meant to fail does it at once; the stall exists to keep the
-                // *other* one inside its command while that happens.
-                stall: if fails { Duration::ZERO } else { stall },
-                fails,
-            });
-            counters.push(counting.clone());
-            registry.register(Arc::new(
-                BackendCapabilities::builder(counting.clone())
-                    .with_installable(counting.clone())
-                    .with_queryable(counting)
-                    .build(),
-            ));
-        }
-        let config = crate::config::Config::default();
-        let journal = Arc::new(Mutex::new(
-            Journal::at(tmp.path().join("journal.jsonl")).unwrap(),
-        ));
-        let diagnostics = crate::app::diagnostics::FailureDiagnosticEngine::init(&config).await;
-        let mut tx_config = TransactionConfig::patient();
-        // Rollback off: it would ask each backend what was there before, which is not what
-        // these tests are measuring.
-        tx_config.auto_rollback = false;
-        tx_config.total_timeout = total_timeout;
-        let tx = Transaction::with_config(
-            graph,
-            Arc::new(registry),
-            journal.clone(),
-            Arc::new(diagnostics),
-            Arc::new(config),
-            tx_config,
-        )
-        // These tests hand the executor a graph directly, which is precisely the case the
-        // `reaped` refusal exists to catch in production â€” a plan that reached the engine
-        // without passing the guard. What they are measuring is how the executor *batches*,
-        // and threading a real `Config` and `BackendRegistry` through a guard to measure that
-        // would prove nothing about either.
-        .guarded_by(crate::app::sync::guard::reaped_for_a_unit_test(
-            crate::app::sync::guard::GuardScope::Sync,
-            "a unit test measuring how the executor batches, not whether the guard ran",
-        ));
-        Harness {
-            tx,
-            counters,
-            journal,
-            _tmp: tmp,
-        }
-    }
-
-    /// A run that outlives its deadline closes the entries it opened **as abandoned**.
-    ///
-    /// The timeout drops the whole `JoinSet`, so the batches are killed inside the manager's
-    /// command and reach neither of the calls that close an entry. What those entries may not
-    /// be closed as is *Failed*: a failed attempt reached an outcome (Q33), these reached
-    /// nothing, and only the interrupted set — InProgress and Abandoned — is what `heal`
-    /// finishes. An install killed mid-command may have half-run; that is exactly what heal
-    /// exists for.
-    #[tokio::test]
-    async fn a_run_that_times_out_closes_its_entries_as_abandoned() {
-        let mut graph = StableDiGraph::new();
-        for name in ["jq", "ripgrep", "fd", "bat"] {
-            graph.add_node(GraphAction::Install(spec("apt", name)));
-        }
-        // Each call takes far longer than the whole run is allowed, so the deadline lands
-        // while work is outstanding — which is the only way to reach the cancellation arm.
-        let mut h = harness_with(
-            graph,
-            &["apt"],
-            Duration::from_secs(30),
-            Duration::from_millis(150),
-            &[],
-        )
-        .await;
-
-        let outcome = h.tx.execute().await;
-        assert!(outcome.is_err(), "the deadline must end the run");
-
-        let j = h.journal.lock().await;
-        let interrupted = j.interrupted_actions();
-        let in_progress: Vec<_> = interrupted
-            .iter()
-            .filter(|e| e.status == ActionStatus::InProgress)
-            .collect();
-        assert!(
-            in_progress.is_empty(),
-            "nothing of this run's may read as a crash it did not have: {:?}",
-            in_progress
-                .iter()
-                .map(|e| e.action.key())
-                .collect::<Vec<_>>()
-        );
-        let abandoned = interrupted
-            .iter()
-            .filter(|e| e.status == ActionStatus::Abandoned)
-            .count();
-        assert!(
-            abandoned > 0,
-            "the run opened work that never got an answer, and heal must see it"
-        );
-    }
-
-    /// The macOS nightly's own shape: one manager fails while another is mid-command.
-    ///
-    /// This is the path that actually stranded 22 operations. `continue_past` is `Nothing`, so
-    /// the first failure ends the run — and every batch still inside a manager's command is
-    /// killed where it stands, having opened its WAL entries and closed none. Closed as
-    /// Abandoned, so `heal` finishes them rather than walking past on the Q33 rule.
-    #[tokio::test]
-    async fn a_run_stopped_by_one_managers_failure_closes_its_entries_as_abandoned() {
-        let mut graph = StableDiGraph::new();
-        // The one that fails, and three the slow manager is still working through when it does.
-        graph.add_node(GraphAction::Install(spec("gem", "logger")));
-        for name in ["jq", "ripgrep", "fd"] {
-            graph.add_node(GraphAction::Install(spec("apt", name)));
-        }
-        let mut h = harness_with(
-            graph,
-            &["apt", "gem"],
-            Duration::from_secs(30),
-            Duration::from_secs(3600),
-            &["gem"],
-        )
-        .await;
-
-        assert!(h.tx.execute().await.is_err(), "the failing manager ends it");
-
-        let j = h.journal.lock().await;
-        let statuses: Vec<_> = j
-            .interrupted_actions()
-            .iter()
-            .map(|e| (e.action.key(), e.status))
-            .collect();
-        assert!(
-            statuses.iter().all(|(_, s)| *s == ActionStatus::Abandoned),
-            "every stranded entry is abandoned, which is what heal finishes: {statuses:?}"
-        );
-    }
-
-    /// And the entry a *previous* run left open is not touched.
-    ///
-    /// **This is the half that makes the fix safe rather than merely quiet.** An entry open
-    /// from an earlier run is the record that a process died holding it, and it is the only
-    /// thing that tells `heal` to look. A close-everything-still-open would have erased
-    /// exactly the state this log exists to keep, and the harness assertion it was written to
-    /// satisfy would have gone green either way. This run's own stranded entries close as
-    /// Abandoned beside it; only the ghost stays InProgress.
-    #[tokio::test]
-    async fn an_earlier_runs_open_entry_survives_this_runs_failure() {
-        let mut graph = StableDiGraph::new();
-        graph.add_node(GraphAction::Install(spec("gem", "logger")));
-        for name in ["jq", "ripgrep"] {
-            graph.add_node(GraphAction::Install(spec("apt", name)));
-        }
-        let mut h = harness_with(
-            graph,
-            &["apt", "gem"],
-            Duration::from_secs(30),
-            Duration::from_secs(3600),
-            &["gem"],
-        )
-        .await;
-
-        // A crash, before this run starts: opened and never closed by anybody.
-        let ghost = h
-            .journal
-            .lock()
-            .await
-            .record_start(JournalAction::Install(spec("apt", "left-by-a-crash")))
-            .unwrap();
-
-        assert!(h.tx.execute().await.is_err());
-
-        let j = h.journal.lock().await;
-        let interrupted = j.interrupted_actions();
-        assert!(
-            interrupted
-                .iter()
-                .any(|e| e.id == ghost && e.status == ActionStatus::InProgress),
-            "the earlier run's entry, still open exactly as the crash left it"
-        );
-        assert!(
-            interrupted
-                .iter()
-                .filter(|e| e.id != ghost)
-                .all(|e| e.status == ActionStatus::Abandoned),
-            "this run's own entries are abandoned, not left reading as crashes"
-        );
-    }
-
-    /// **`U41`, both halves, as one question.** Rollback does not undo work that moved the
-    /// machine toward the declared state â€” an install that succeeded of something still
-    /// declared, or a removal that succeeded of something still undeclared. The install arm had
-    /// this rule and the removal arm did not, and nothing in the register said the pair had
-    /// come apart.
-    #[tokio::test]
-    async fn one_rollback_rule_answers_both_directions() {
-        let mut graph = StableDiGraph::new();
-        graph.add_node(GraphAction::Install(spec("apt", "jq")));
-        let h = harness(graph, &["apt"]).await;
-
-        // Nothing to reconcile against: no answer, and both arms fall back to compensating.
-        assert_eq!(h.tx.plan_intends_present("apt", "jq"), None);
-        assert_eq!(h.tx.plan_intends_present("apt", "vim"), None);
-
-        let declared: std::collections::HashSet<String> =
-            ["apt:jq".to_string()].into_iter().collect();
-        let tx = h.tx.reconciling(Arc::new(declared));
-
-        // The install arm: `jq` installed cleanly and is still declared, so the removal that
-        // would compensate it is skipped.
-        assert_eq!(
-            tx.plan_intends_present("apt", "jq"),
-            Some(true),
-            "an install of something still declared is the goal reached early"
-        );
-        // The removal arm: nothing declares `vim`, which is why it was removed, and that fact
-        // has not changed â€” so the reinstate that would compensate it is skipped.
-        assert_eq!(
-            tx.plan_intends_present("apt", "vim"),
-            Some(false),
-            "a removal of something still undeclared must not be put back"
-        );
-        // Keyed by backend and name together, so `apt:jq` does not answer for `cargo:jq`.
-        assert_eq!(tx.plan_intends_present("cargo", "jq"), Some(false));
-    }
-
-    /// Which runs are reconciliations, asserted as the two exceptions rather than as ten rules.
-    #[test]
-    fn only_a_reconciling_run_may_leave_a_removal_in_place() {
-        use crate::app::sync::guard::GuardScope as S;
-        for scope in [
-            S::Apply,
-            S::RemoveOrphans,
-            S::PurgeUndeclared,
-            S::Sync,
-            S::Watch,
-            S::Upgrade,
-            S::Canary,
-            S::ShellExit,
-            S::ExpirySweep,
-            S::Heal,
-        ] {
-            assert!(
-                scope.reconciles(),
-                "{} removes what nothing declares",
-                scope.as_str()
-            );
-        }
-        // A rebuild's removal phase is the first half of a reinstall of DECLARED packages,
-        // split into two transactions so the Remove and the Install cannot race in one graph.
-        // Leaving one of those removals in place is a machine missing software it declares.
-        assert!(!S::Rebuild.reconciles());
-        // And an uninstall was typed by a person, not derived from a manifest.
-        assert!(!S::Remove.reconciles());
-    }
-
-    #[tokio::test]
-    async fn six_independent_installs_are_one_command() {
-        // Measured before this: six declared packages produced six separate apt processes and
-        // 12,465 ms, against 3,161 ms for the same packages as one command. The batching code
-        // in `generic::install_group` was already written and had never been handed more than
-        // one spec.
-        let mut graph = StableDiGraph::new();
-        for name in ["lolcat", "cowsay", "pv", "sl", "toilet", "cmatrix"] {
-            graph.add_node(GraphAction::Install(spec("apt", name)));
-        }
-        let mut h = harness(graph, &["apt"]).await;
-        let results = h.tx.execute_with_telemetry().await.unwrap();
-
-        assert_eq!(
-            h.counters[0].calls.load(Ordering::SeqCst),
-            1,
-            "six packages, one manager, no edges between them â€” that is one command"
-        );
-        assert_eq!(h.counters[0].widest.load(Ordering::SeqCst), 6);
-        assert_eq!(results.len(), 6, "every package still gets its own result");
-        assert!(
-            results.iter().all(|r| r.batch_size == 6),
-            "the telemetry has to say why six durations are identical"
-        );
-    }
-
-    #[tokio::test]
-    async fn two_managers_are_two_commands_and_not_one() {
-        let mut graph = StableDiGraph::new();
-        graph.add_node(GraphAction::Install(spec("apt", "jq")));
-        graph.add_node(GraphAction::Install(spec("apt", "ripgrep")));
-        graph.add_node(GraphAction::Install(spec("npm", "prettier")));
-        let mut h = harness(graph, &["apt", "npm"]).await;
-        h.tx.execute_with_telemetry().await.unwrap();
-
-        assert_eq!(h.counters[0].calls.load(Ordering::SeqCst), 1);
-        assert_eq!(h.counters[0].widest.load(Ordering::SeqCst), 2);
-        assert_eq!(h.counters[1].calls.load(Ordering::SeqCst), 1);
-        assert_eq!(h.counters[1].widest.load(Ordering::SeqCst), 1);
-    }
-
-    #[tokio::test]
-    async fn an_install_and_a_removal_never_share_a_command() {
-        let mut graph = StableDiGraph::new();
-        graph.add_node(GraphAction::Install(spec("apt", "jq")));
-        graph.add_node(GraphAction::Remove {
-            name: "nano".into(),
-            backend: "apt".into(),
-        });
-        let mut h = harness(graph, &["apt"]).await;
-        h.tx.execute_with_telemetry().await.unwrap();
-
-        assert_eq!(
-            h.counters[0].calls.load(Ordering::SeqCst),
-            2,
-            "installing and removing are two different commands to the same manager"
-        );
-        assert_eq!(h.counters[0].widest.load(Ordering::SeqCst), 1);
-    }
-
-    #[tokio::test]
-    async fn a_requires_edge_still_orders_the_two_sides() {
-        // A batch is made of what is ready *at the same moment*, so an edge splits it â€”
-        // otherwise a package would go on the same command line as the thing it requires.
-        // Only a written `@requires` produces one (`Y9`); a native dependency the manager
-        // resolves for itself does not, and the two used to be indistinguishable here.
-        let mut graph = StableDiGraph::new();
-        let first = graph.add_node(GraphAction::Install(spec("apt", "libfoo")));
-        let second = graph.add_node(GraphAction::Install(spec("apt", "foo-tool")));
-        graph.add_edge(first, second, ());
-        let mut h = harness(graph, &["apt"]).await;
-        h.tx.execute_with_telemetry().await.unwrap();
-
-        assert_eq!(
-            h.counters[0].calls.load(Ordering::SeqCst),
-            2,
-            "a required package and its dependent cannot go on one command line"
-        );
-        assert_eq!(h.counters[0].widest.load(Ordering::SeqCst), 1);
-    }
-
-    #[tokio::test]
-    async fn a_command_line_is_bounded() {
-        // Windows caps a command line at 8191 characters, and every manager has some limit.
-        let mut graph = StableDiGraph::new();
-        for i in 0..(Transaction::MAX_BATCH + 40) {
-            graph.add_node(GraphAction::Install(spec("apt", &format!("pkg{}", i))));
-        }
-        let mut h = harness(graph, &["apt"]).await;
-        h.tx.execute_with_telemetry().await.unwrap();
-
-        assert_eq!(h.counters[0].calls.load(Ordering::SeqCst), 2);
-        assert_eq!(
-            h.counters[0].widest.load(Ordering::SeqCst),
-            Transaction::MAX_BATCH
-        );
-    }
-
-    /// The engine's own shape, measured on plans whose right answer is arithmetic.
-    ///
-    /// This is the `Mutating` half of the latency gate, and it is here rather than in
-    /// `latency.rs` because the two numbers it compares are the engine's: one is the graph's
-    /// longest chain, the other is how many passes the loop actually had work to hand out.
-    /// `latency.rs` owns the rule; nothing owned the measurement, which is why the class read as
-    /// exempt for as long as it did.
-    ///
-    /// A wide plan must take one wave however many packages are in it â€” that is the assertion a
-    /// change awaiting the batch in flight before dispatching more would break, while leaving
-    /// every package installed and every other test green. Watched failing against exactly that
-    /// change: six packages, depth one, six waves.
-    #[tokio::test]
-    async fn the_engine_reports_the_shape_it_actually_ran_in() {
-        // Wide: nothing depends on anything, so one round is the only correct answer.
-        let mut wide = StableDiGraph::new();
-        for i in 0..6 {
-            wide.add_node(GraphAction::Install(spec("apt", &format!("pkg{}", i))));
-        }
-        let mut h = harness(wide, &["apt"]).await;
-        h.tx.execute_with_telemetry().await.unwrap();
-        assert_eq!(
-            h.tx.last_scheduling,
-            Some(Scheduling {
-                packages: 6,
-                depth: 1,
-                waves: 1
-            }),
-            "six independent packages took more than one wave to hand out"
-        );
-
-        // A chain of three. Serial is the correct schedule here, and the rule must not report
-        // it â€” which is the case a threshold read off a host gets wrong.
-        let mut chain = StableDiGraph::new();
-        let a = chain.add_node(GraphAction::Install(spec("apt", "libfoo")));
-        let b = chain.add_node(GraphAction::Install(spec("apt", "foo-tool")));
-        let c = chain.add_node(GraphAction::Install(spec("apt", "foo-plugin")));
-        chain.add_edge(a, b, ());
-        chain.add_edge(b, c, ());
-        let mut h = harness(chain, &["apt"]).await;
-        h.tx.execute_with_telemetry().await.unwrap();
-        let ran =
-            h.tx.last_scheduling
-                .expect("a completed run records its shape");
-        assert_eq!(ran.depth, 3, "a chain of three has three levels");
-        assert_eq!(ran.waves, 3, "and goes idle once per level");
-        assert!(
-            crate::core::latency::scheduling_violation(ran.packages, ran.depth, ran.waves)
-                .is_none(),
-            "a chain executed one at a time is the plan's shape, not a regression"
-        );
-
-        // A diamond: one, then two together, then one. Four packages, three levels.
-        let mut diamond = StableDiGraph::new();
-        let root = diamond.add_node(GraphAction::Install(spec("apt", "base")));
-        let left = diamond.add_node(GraphAction::Install(spec("apt", "left")));
-        let right = diamond.add_node(GraphAction::Install(spec("apt", "right")));
-        let top = diamond.add_node(GraphAction::Install(spec("apt", "top")));
-        diamond.add_edge(root, left, ());
-        diamond.add_edge(root, right, ());
-        diamond.add_edge(left, top, ());
-        diamond.add_edge(right, top, ());
-        let mut h = harness(diamond, &["apt"]).await;
-        h.tx.execute_with_telemetry().await.unwrap();
-        let ran =
-            h.tx.last_scheduling
-                .expect("a completed run records its shape");
-        assert_eq!(
-            (ran.packages, ran.depth),
-            (4, 3),
-            "four packages across three levels"
-        );
-        assert!(
-            crate::core::latency::scheduling_violation(ran.packages, ran.depth, ran.waves)
-                .is_none(),
-            "a diamond run in {} waves against a depth of 3",
-            ran.waves
-        );
-
-        // Two independent chains. **This is the case that killed the first version of the
-        // rule**, which counted dispatches: `a` and `b` start together, whichever finishes
-        // first hands out its child while the other pair is still running, and the pass count
-        // reaches three against a depth of two â€” a violation reported against a scheduler doing
-        // precisely what it should. Counting idle restarts instead, the engine never runs dry
-        // here at all.
-        let mut chains = StableDiGraph::new();
-        let a = chains.add_node(GraphAction::Install(spec("apt", "a")));
-        let b = chains.add_node(GraphAction::Install(spec("apt", "b")));
-        let a2 = chains.add_node(GraphAction::Install(spec("apt", "a2")));
-        let b2 = chains.add_node(GraphAction::Install(spec("apt", "b2")));
-        chains.add_edge(a, a2, ());
-        chains.add_edge(b, b2, ());
-        let mut h = harness(chains, &["apt"]).await;
-        h.tx.execute_with_telemetry().await.unwrap();
-        let ran =
-            h.tx.last_scheduling
-                .expect("a completed run records its shape");
-        assert_eq!((ran.packages, ran.depth), (4, 2));
-        assert!(
-            ran.waves <= ran.depth,
-            "two independent chains reported {} wave(s) against a depth of {}",
-            ran.waves,
-            ran.depth
-        );
-    }
-
-    /// Where the byte bound puts the split, to the name.
-    ///
-    /// **`batches` had no direct test at all.** Every batching test above drives it through the
-    /// async harness and asks how many *commands* ran; none asks where the split fell, and the
-    /// difference is the whole of the arithmetic. Six mutants lived in five lines of it â€” both
-    /// `name.len() + 1` costs, the `bytes + cost` sum, the `bytes += cost` accumulation, and the
-    /// `>` that compares them â€” and a run that batches 61 packages into 2 commands does that
-    /// under every one of them.
-    ///
-    /// The lengths are picked so each mutation moves the answer, which is the only reason this
-    /// is a table of magic numbers rather than one round case. `MAX_BATCH_BYTES` is 6000 and a
-    /// name of length L costs L + 1:
-    ///
-    ///   - L = 99 (cost 100) makes 60 names come to exactly 6000, which is the one place `>`
-    ///     and `>=` disagree.
-    ///   - L = 100 (cost 101) fits 59 names where cost 100 or 99 would fit 60, which is where
-    ///     dropping the `+ 1` shows up.
-    #[test]
-    fn the_byte_bound_splits_exactly_where_the_cost_says() {
-        /// A name of exactly `len` characters, distinct per index.
-        fn padded(len: usize, i: usize) -> String {
-            format!("{:0width$}", i, width = len)
-        }
-
-        fn sizes(actions: Vec<GraphAction>, max_batch: usize) -> Vec<usize> {
-            let mut graph = StableDiGraph::new();
-            let ready: Vec<_> = actions.into_iter().map(|a| graph.add_node(a)).collect();
-            Transaction::batches(&graph, ready, max_batch)
-                .iter()
-                .map(|b| b.len())
-                .collect()
-        }
-
-        let installs = |len: usize, n: usize| {
-            (0..n)
-                .map(|i| GraphAction::Install(spec("apt", &padded(len, i))))
-                .collect::<Vec<_>>()
-        };
-        let removals = |len: usize, n: usize| {
-            (0..n)
-                .map(|i| GraphAction::Remove {
-                    name: padded(len, i),
-                    backend: "apt".into(),
-                })
-                .collect::<Vec<_>>()
-        };
-
-        // Exactly on the bound: 60 Ã— 100 bytes is 6000, and 6000 is not *over* 6000.
-        assert_eq!(
-            sizes(installs(99, 60), 10_000),
-            vec![60],
-            "sixty names costing 6000 bytes sit exactly on the bound, which is not over it"
-        );
-        // One more, and the bound is genuinely crossed.
-        assert_eq!(
-            sizes(installs(99, 61), 10_000),
-            vec![60, 1],
-            "the sixty-first name is the one that does not fit"
-        );
-
-        // One byte per name wider, and the batch is one name shorter â€” which is what says the
-        // separator is being counted at all.
-        assert_eq!(
-            sizes(installs(100, 60), 10_000),
-            vec![59, 1],
-            "at 101 bytes a name only fifty-nine fit under 6000"
-        );
-        // A removal's name costs the same as an install's; it is the other arm of the same
-        // match, and it was the other surviving mutant.
-        assert_eq!(
-            sizes(removals(100, 60), 10_000),
-            vec![59, 1],
-            "a removal's name is measured the same way an install's is"
-        );
-
-        // And the count cap, which is the caller's and not the byte bound's. Short names, so
-        // nothing here is near 6000 bytes and only `max_batch` can be doing the splitting.
-        assert_eq!(sizes(installs(2, 10), 3), vec![3, 3, 3, 1]);
-        assert_eq!(
-            sizes(installs(2, 10), 0),
-            vec![1; 10],
-            "a cap of nought is read as one, not as no cap at all"
-        );
     }
 }

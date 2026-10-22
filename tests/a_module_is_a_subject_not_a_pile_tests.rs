@@ -35,14 +35,6 @@ const LINES: usize = 3_000;
 /// which is exactly why neither was done in a hurry alongside a security fix.
 const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[
     (
-        "src/core/transaction.rs",
-        3_300,
-        "The transaction: scheduling, retries, rollback, recovery — one engine, grown by the \
-         audit fixes (quiesce, executed_removals, the lock-budget verdict) that belong to it. \
-         The seam is schedule vs compensate; it wants a session with no transaction work in \
-         flight.",
-    ),
-    (
         "src/core/executor.rs",
         3_060,
         "The spawn/read/retry machinery — one subject, grown by the audit fixes (cwd pin, \
@@ -52,22 +44,15 @@ const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[
          state in `src/core/sudo.rs`, which took the file from 3,150 to 3,052 and the ceiling \
          down with it.",
     ),
-    (
-        "src/config/grammar/statement.rs",
-        3_900,
-        "One subject — what a line of a manifest means — and three layers of it: the parser, the \
-         per-kind validators, and the option-key tables. The split is parse/validate/keys, and it \
-         wants doing on a day when the grammar is not also being changed: `B2` moved the option \
-         lexer and `B5` moved the name rule in the same week.",
-    ),
-    (
-        "src/backends/generic.rs",
-        3_950,
-        "`ManagerConfig` and the eight capability impls that read it. The split is one module per \
-         capability (installable / queryable / searchable / upgradable), which is a bigger change \
-         than it looks: the impls share `GenericBackendCore` and the argv-building helpers, and \
-         getting the visibility wrong turns a private helper into public API.",
-    ),
+    // **Three of the five rows on this list are not on it any more**, and the table is audited
+    // in both directions, so a row that stops being needed has to go. `src/core/transaction.rs`
+    // (3,299), `src/backends/generic.rs` (3,940) and `src/config/grammar/statement.rs` (3,881)
+    // were all over the line *because of their own test modules*, and `#120`'s layout gave
+    // those tests a home elsewhere: `tests/core/transaction/`, `tests/backends/generic/` and
+    // `tests/config/grammar/statement/`. The files are 1,999, 2,354 and 2,419 lines — under
+    // the gate — so the rows are **retired rather than raised**, which is the other direction
+    // of this gate and the reason the table is not a graveyard.
+    //
     // **`src/app/sync/guard.rs` was on this list and is not any more.** It was 3,473 lines,
     // 1,944 of them its own test module, and the exemption said so in as many words: *"plus
     // its own test module."* The tests moved to `tests/app/sync/guard/`, one file per

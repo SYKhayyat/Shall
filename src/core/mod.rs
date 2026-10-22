@@ -98,8 +98,9 @@ pub use retention::{RetentionConfig, RetentionItem, RetentionPolicy};
 /// tests holding it at once race — whichever set it second sends the first reading and
 /// writing some other directory, which surfaced as flakes under full-suite load. One mutex,
 /// named for what it protects.
-#[cfg(test)]
-pub(crate) fn shall_data_dir_lock() -> std::sync::MutexGuard<'static, ()> {
+/// **`pub`, and it ships**, because the integration suite and the library's own tests are two
+/// processes that both repoint the variable and both need the same lock.
+pub fn shall_data_dir_lock() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
     LOCK.get_or_init(|| std::sync::Mutex::new(()))
         .lock()

@@ -83,7 +83,7 @@ impl BatchRecovery {
 /// Three states and not `Result`, because cancellation is neither: the WAL entry it leaves needs
 /// a different sentence from the one a failure leaves, and squeezing it into an `Err` was how the
 /// distinction got lost the first time it was tried.
-pub(super) enum CommandOutcome {
+pub enum CommandOutcome {
     /// The manager did the work.
     Done { attempt: u32 },
     /// The run was cancelled before this command ran.
@@ -103,6 +103,8 @@ impl CommandOutcome {
     }
 }
 
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+/// test crate links the library without `cfg(test)`, so a private item is invisible there.
 /// The budget for one node's command: the per-package budget scaled by the batch, **and never
 /// more than the transaction around it**.
 ///
@@ -113,7 +115,7 @@ impl CommandOutcome {
 /// sixty-minute run (`PLAN.md` #82): a bound that could not be observed, from a clamp unrelated to
 /// the budget it was supposed to fit inside. Capping it makes the relationship between the two
 /// bounds a fact about the code instead of an accident of two constants nobody compared.
-fn node_deadline(node_timeout: Duration, packages: usize, total_timeout: Duration) -> Duration {
+pub fn node_deadline(node_timeout: Duration, packages: usize, total_timeout: Duration) -> Duration {
     node_timeout
         .saturating_mul(packages.clamp(1, 16) as u32)
         .min(total_timeout)
@@ -127,7 +129,7 @@ fn node_deadline(node_timeout: Duration, packages: usize, total_timeout: Duratio
 /// would make a narrowing observably different from the retries this loop already does, which it
 /// is not.
 #[allow(clippy::too_many_arguments)]
-pub(super) async fn run_one_command(
+pub async fn run_one_command(
     specs: &[PackageSpec],
     names: &[String],
     backend_cap: &Arc<crate::core::BackendCapabilities>,
@@ -282,7 +284,7 @@ fn specs_for(specs: &[PackageSpec], lo: usize, hi: usize) -> &[PackageSpec] {
 /// The ranges are contiguous because the halves of a contiguous range are, which is why this
 /// needs no index vectors and no recursion: a worklist of `(lo, hi)` says everything.
 #[allow(clippy::too_many_arguments)]
-pub(super) async fn narrow_batch(
+pub async fn narrow_batch(
     specs: &[PackageSpec],
     names: &[String],
     backend_cap: &Arc<crate::core::BackendCapabilities>,
@@ -393,64 +395,4 @@ pub(super) async fn narrow_batch(
         }
     }
     verdict.into_iter().map(|v| v.unwrap_or(Ok(()))).collect()
-}
-
-#[cfg(test)]
-mod deadline_tests {
-    use super::node_deadline;
-    use std::time::Duration;
-
-    /// The defaults, so the numbers below are the ones the code actually runs with rather than
-    /// numbers chosen to make an assertion easy.
-    const NODE: Duration = Duration::from_secs(300);
-    const TOTAL: Duration = Duration::from_secs(3600);
-
-    #[test]
-    fn one_package_gets_the_per_package_budget() {
-        assert_eq!(node_deadline(NODE, 1, TOTAL), NODE);
-    }
-
-    /// **Monotone, because a budget that shrinks as the work grows is not a budget.** The old
-    /// `clamp(1, 16)` was monotone too, so this is not the defect — it is the property the
-    /// narrowing must not break while fixing the cap.
-    #[test]
-    fn a_bigger_batch_never_gets_less_time() {
-        let mut last = Duration::ZERO;
-        for n in 1..=64 {
-            let got = node_deadline(NODE, n, TOTAL);
-            assert!(got >= last, "a batch of {n} got {got:?} after {last:?}");
-            last = got;
-        }
-    }
-
-    /// **The cap, which is the whole of `PLAN.md` #82's buildable half.** `total_timeout` wraps
-    /// the whole transaction, so a node budget above it names a deadline the run cannot reach:
-    /// `300s × 16` is eighty minutes inside a sixty-minute run. Capping changes no outcome — the
-    /// transaction ends first either way — and makes the two constants' relationship a fact.
-    #[test]
-    fn no_batch_is_given_a_budget_the_transaction_would_have_ended_first() {
-        for n in [1usize, 8, 12, 16, 17, 100, 1000] {
-            let got = node_deadline(NODE, n, TOTAL);
-            assert!(
-                got <= TOTAL,
-                "a batch of {n} was given {got:?} inside a {TOTAL:?} transaction"
-            );
-        }
-        // The shape it had before, said out loud so the number cannot quietly come back.
-        assert_eq!(
-            NODE.saturating_mul(16),
-            Duration::from_secs(4800),
-            "sixteen packages at five minutes each is eighty minutes"
-        );
-        assert_eq!(node_deadline(NODE, 16, TOTAL), TOTAL);
-    }
-
-    /// **And the cap did not swallow the shape.** A fix that flattened everything to the total
-    /// timeout would pass the test above and give one package an hour.
-    #[test]
-    fn the_batch_still_scales_with_its_size_below_the_ceiling() {
-        assert_eq!(node_deadline(NODE, 2, TOTAL), Duration::from_secs(600));
-        assert_eq!(node_deadline(NODE, 4, TOTAL), Duration::from_secs(1200));
-        assert_eq!(node_deadline(NODE, 8, TOTAL), Duration::from_secs(2400));
-    }
 }

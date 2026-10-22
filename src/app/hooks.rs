@@ -37,13 +37,15 @@ enum Dialect {
 }
 
 impl Dialect {
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+    /// test crate links the library without `cfg(test)`, so a private item is invisible there.
     /// The dialect, and the script to hand the engine that runs it.
     ///
     /// **`#rhai` is not Rhai.** `#` is a reserved symbol there, so a marker left in place is a
     /// syntax error on line 1 and the script never runs — which is what every `#rhai` hook got.
     /// The marker's line is blanked rather than deleted so that a runtime error still names the
     /// line the author wrote.
-    fn of(code: &str) -> (Dialect, String) {
+    pub fn of(code: &str) -> (Dialect, String) {
         let lead = code.len() - code.trim_start().len();
         let trimmed = &code[lead..];
 

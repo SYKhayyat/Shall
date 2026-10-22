@@ -599,9 +599,42 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     was not invented for it — the repository already called that category *"the review
     apparatus"*, and thirty-odd gates were doing this kind of reading from the top level of
     `tests/`.
-  - **THE ISSUE STAYS OPEN, because the sweep is the other four phases.** What is settled here is
-    the rule and the two cases it needed; what remains is the moving: the four files over the
-    ceiling, the mutation-covered files, and then the rest of the tree. — ISSUE #120)
+  - **THE FIRST SLICE BUILT 2026-10-21 — the six files the mutation gate covers, moved.** One
+    change per file's own subject, and the coverage re-measured rather than assumed:
+    `src/core/exit.rs` (**5 mutants tested, 5 caught** — the same as before the move),
+    `src/core/error.rs`, `src/core/batch.rs`, `src/core/datalock.rs`, `src/core/transaction.rs`
+    and `src/backends/generic.rs`, plus `src/config/grammar/statement.rs`. **The tests now live
+    in the folders that own them** — `tests/core/exit/`, `tests/core/error/`, `tests/core/batch/`,
+    `tests/core/datalock/`, `tests/core/transaction/`, `tests/backends/generic/` and
+    `tests/config/grammar/statement/` — one file per assertion, and **the grouping kept** where
+    a src file carried more than one test module, because two of those modules can hold helpers
+    with the same name and different bodies and merging them is a collision waiting to happen.
+  - **THREE CEILING ROWS RETIRED, NOT RAISED.** `src/core/transaction.rs` (3,299 → **1,999**),
+    `src/backends/generic.rs` (3,940 → **2,354**) and `src/config/grammar/statement.rs`
+    (3,881 → **2,419**) were all over the line *because of their own test modules*, and the
+    layout gave those tests a home elsewhere. **The table is audited in both directions**, so a
+    row that stops being needed is deleted — the same thing `src/app/sync/guard.rs`'s row did.
+  - **What the move cost, stated because it is the price of the next 160 files.** **Twenty-eight
+    items in six src files are `pub` for the tests' sake**, and each says so in its own doc
+    comment: `backoff_for`, `lock_wait_verdict`, `falsify_transience`, `retries_behind`,
+    `wait_for_manager_lock`, `LockWait`, `LockBudget`, `plan_intends_present`, `remaining`,
+    `spend`, `MAX_BATCH`, `Transaction::history`, `Transaction::declared`, `batch_bound`,
+    `find_placeholder`, `is_concrete_version`, `verification_note`, `emits_trailing_option`,
+    `unpinned`, `parse_dependency_output`, `BATCH_MAX_NAMES`, `BATCH_MAX_OPERAND_BYTES`,
+    `node_deadline`, `GENERATION_FILE`, `DataLock::holder`, `Generation::writer_active`,
+    `Keyword`'s fields and `KEYWORDS`. **The rule is the one `#115` set: widen visibility
+    rather than rewrite the test**, because a `pub fn` reached only from tests is what a test
+    double looks like, and policing those "would make this a gate people delete".
+  - **And the three cases where widening was the wrong answer, so they are named.** The
+    `#[cfg(test)]` removal-token constructor **must not ship** (`C3`), so the six backend tests
+    that minted a token now ask the **real** guard through `tests/harness::reaped_for_a_test` —
+    the path the guard's own doc comment names for the integration suite. The two fixture
+    builders and the data-directory lock are **`pub` and ship**, because one implementation in
+    one place beats two in two, and both test binaries need them.
+  - **THE ISSUE STAYS OPEN, because the sweep is the other phases.** What is settled here is the
+    rule, the two cases it needed, and the first slice of the moving; what remains is the
+    remaining 160-odd files with inline test modules and the 159 flat files with no owner. —
+    ISSUE #120)
 - [x] #121 the web backend's credential-probe test fails on a coin flip, and it takes the
   mutation gate's baseline with it. (**Filed 2026-10-20, while `#115` was being built, and it is
   the *third* host-dependent test to reach the mutation gate's baseline the same day.** Two failures

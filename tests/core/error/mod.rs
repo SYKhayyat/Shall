@@ -1,0 +1,5 @@
+pub use shall::core::error::*;
+
+mod a_classified_command_failure_reports_the_class_it_was_given;
+mod a_run_of_passing_failures_stays_passing;
+mod the_least_optimistic_verdict_wins_whichever_order_they_arrive_in;

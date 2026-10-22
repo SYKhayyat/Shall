@@ -77,8 +77,9 @@ impl DryRunOutput {
 
 /// A run that exited non-zero and said nothing at all — what a manager that fell over before it
 /// could speak leaves behind. `winget` under concurrent cold start is the measured case.
-#[cfg(test)]
-pub(crate) fn silent_failure(code: i32) -> StdOutput {
+/// **`pub`, and it ships**, because the integration suite needs it and the library's own tests
+/// need it too, and one fixture in two places is two of everything.
+pub fn silent_failure(code: i32) -> StdOutput {
     StdOutput {
         status: fabricate_status(code),
         stdout: Vec::new(),
@@ -87,8 +88,8 @@ pub(crate) fn silent_failure(code: i32) -> StdOutput {
 }
 
 /// A run that exited non-zero and still produced its answer.
-#[cfg(test)]
-pub(crate) fn spoken_failure(code: i32, stdout: &str, stderr: &str) -> StdOutput {
+/// **`pub`, and it ships**, for the reason [`silent_failure`](Self::silent_failure) gives.
+pub fn spoken_failure(code: i32, stdout: &str, stderr: &str) -> StdOutput {
     StdOutput {
         status: fabricate_status(code),
         stdout: stdout.as_bytes().to_vec(),
