@@ -513,7 +513,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     three), because the first construction is the one that matters. **Not done here**, and it is
     its own piece of work. Rule in II.68, rationale in V.218, ruling in `decisions.md` C5. —
     ISSUE #116)
-- [ ] #117 the sync engine's safety checks are unpinned. (**Filed 2026-10-20 off the nightly's
+- [x] #117 the sync engine's safety checks are unpinned. (**Filed 2026-10-20 off the nightly's
   mutation output, and it is the largest of the family: 34 surviving mutants in
   `src/app/sync/mod.rs`, across eleven subjects.** The `Ok(())` family is the sharpest —
   `require_revert_path`, `require_health_commands_approved` and `rebuild_kernel_modules` are each
@@ -526,7 +526,46 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   — and the two agree perfectly at one and at zero. **Two `GuardScope` arms deleted**
   (`Rebuild`, `PurgeUndeclared`) are a *removal path with no guard scope*, which is the failure
   the enum exists to prevent arriving by a different road. — ISSUE #117)
-- [x] #118 the data lock's contention detection is unpinned. (**Filed 2026-10-20 off the nightly's
+  - **SIX OF ITS ELEVEN SUBJECTS BUILT 2026-10-21 — the precondition family first, and the
+    ISSUE STAYS OPEN** because the rest are named here and in the issue.
+    - **The `Ok(())` family, which is the sharpest.** `require_revert_path` and
+      `require_health_commands_approved` both replaced with `Ok(())` survived the whole suite,
+      and both are *"the engine checks a precondition before it touches your machine, and refuses
+      if the check fails"* — so replacing either is **"the check always passes"**. The first
+      refuses when health checks are declared and nothing could revert them; the second refuses
+      when a health **command** was never approved through the II.12 ledger (port probes run no
+      code and are never gated — and that half is asserted too, so the gate cannot be widened by
+      accident).
+    - **`declared_health_checks` replaced with `vec![]`** — an empty list means *no health checks
+      at all*, so both checks above have nothing to refuse over. The test asserts **both** of the
+      machine-wide checks are collected, because U7 ruled they are not alternatives and the code
+      that decides whether the machine is healthy must never consult one and forget the other.
+    - **`probe_ok` in **both** directions** — the same gate asked twice, with neither noticed: a
+      probe that always answers yes never rolls a broken change back, and one that always answers
+      no rolls back every change. The test asks a command that exits 0 and one that exits
+      non-zero, and a port nobody is listening on.
+    - **`narration_for`'s `Rebuild` arm deleted** — a rebuild narrated as a change reports its
+      removals as removals, and the labels are not decoration ("Installs"/"Removals" against
+      "Reinstalled"/"Removed to reinstall").
+    - **`what_to_do_about` replaced with `"xyzzy"` and with an empty string** — the last sentence
+      a user reads, and the advice that tells them whether to run the command again, to correct a
+      line, or to fix what the error names. The test pins all three answers, and **the advice
+      must not say "re-run `shall sync`" for a name that does not exist** — that is the one thing
+      that cannot help.
+    - **`SyncEngine::events` replaced with `Default::default()`** — the difference between a hook
+      that runs and a hook that does not, and a hook is a script this machine asked to run. The
+      test pins **both** locations: the repo's `hooks/` policy and this machine's own
+      `preferences.toml` entry, because both run and a precedence rule would mean that adding a
+      local notification silently disables the shared policy.
+    - **And the engine's own tests now live in the folder that owns them** (`tests/app/sync/`),
+      because `src/app/sync/mod.rs` owns that folder.
+  - **WHAT IS LEFT, and it is the expensive half.** `prune_snapshots_after_sync` (five mutants —
+      it needs a snapshot provider, which a mock machine does not have), `execute_transaction`'s
+      counters (two — a counter that accumulates becoming one that multiplies, and the two agree
+      at one and at zero), `heal` (eight — the journal state a recovery reads), and
+      `rebuild_kernel_modules` (four — it needs `dkms` and a kernel in the plan). **All four
+      need the machine fixture the convergence test already builds**, which is the next thing to
+      do. — ISSUE #117)- [x] #118 the data lock's contention detection is unpinned. (**Filed 2026-10-20 off the nightly's
   mutation output: eight surviving mutants in `src/core/datalock.rs`, and every one of them is in
   the code that decides whether a second Shall is standing in the way.** `is_lock_contended` →
   `true` makes *every* error read as "someone else holds the lock" — a Shall that fails for any

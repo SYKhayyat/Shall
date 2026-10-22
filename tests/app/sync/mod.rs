@@ -15,6 +15,7 @@ mod a_rebuild_is_narrated_as_a_rebuild;
 mod guard;
 mod the_advice_names_the_thing_to_do_about_it;
 mod the_declared_health_checks_are_the_declared_ones;
+mod the_engine_finds_the_hooks_this_machine_wrote;
 mod the_probe_answers_both_ways;
 
 use dashmap::DashMap;
@@ -47,7 +48,9 @@ pub(crate) async fn engine(tag: &str, config: Config) -> (SyncEngine, Arc<MockEx
     }
     let exec =
         CommandExecutor::with_layer(true, false, mock.clone(), vfs, Arc::new(DashMap::new()));
-    let state = config_dir(tag).join("state.json");
+    // **The state file goes beside the config the test handed over**, and the directory is not
+    // wiped here: a test that wrote a hook or a preferences file into it means it.
+    let state = config.config_root.join("state.json");
     let app = shall::app::App::new_with_executor_and_state_path(config, exec, Some(state))
         .await
         .expect("the app");

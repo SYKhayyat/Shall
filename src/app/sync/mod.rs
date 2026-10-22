@@ -154,7 +154,9 @@ impl SyncEngine {
     /// side effects out in the world — it pages someone, it opens a ticket — and a preview that
     /// sent the notification would be a preview that changed something. `plan` and `check` are
     /// the commands for looking.
-    fn events(&self) -> crate::app::events::EventHooks {
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+    /// test crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub fn events(&self) -> crate::app::events::EventHooks {
         crate::app::events::EventHooks::load(&self.config)
     }
 
