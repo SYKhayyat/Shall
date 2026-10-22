@@ -417,7 +417,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     "would make this a gate people delete". **None of the eight mints authority** — C3 keeps
     `Reaped`'s fields private because a token must not be mintable, and these ask the guard
     rather than standing in for it. — ISSUE #115)
-- [ ] #122 the guard's second capped list — the managers that could not answer — has no boundary
+- [x] #122 the guard's second capped list — the managers that could not answer — has no boundary
   test, and two mutants survive. (**Filed 2026-10-21, and it is the remainder of `#115`'s family
   rather than a new one.** `GuardReport::message` renders **two** capped lists of objections and
   asks the same question twice — *is there a remainder the reader cannot see?* — at
@@ -441,6 +441,14 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   the boundary — *the number announced never exceeds the number of objections* — which is the
   assertion that survives a release build. **Filed separately because `#115` is closed**, and the
   house rule is that a closed issue does not reopen by accretion. — ISSUE #122)
+  - **BUILT 2026-10-21 — one test, and it is a property rather than a pair of boundary
+    checks.** `the_second_capped_list_claims_more_only_when_there_is_more` covers the second
+    capped list (the packages behind a manager that could not answer) at the cap and one over
+    it. **The third comparison at that site, `> → <`, is caught only by an arithmetic
+    underflow** — `unverified.len() - MAX_LISTED` panics in a debug build and **wraps in a
+    release build**, where the mutation gate does not run and the release scripts do. So the
+    test also asserts the property that holds in a release build: **the number announced is
+    never larger than the number of objections.** — ISSUE #122)
 - [x] #116 the mutation gate can report a mutant caught when nothing caught it. (**Filed
   2026-10-20, found while reproducing `#115`'s survivors on this host.** `cargo mutants` reports a
   mutant caught when *any* test fails, and cannot tell "failed because of the mutation" from
@@ -518,7 +526,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   — and the two agree perfectly at one and at zero. **Two `GuardScope` arms deleted**
   (`Rebuild`, `PurgeUndeclared`) are a *removal path with no guard scope*, which is the failure
   the enum exists to prevent arriving by a different road. — ISSUE #117)
-- [ ] #118 the data lock's contention detection is unpinned. (**Filed 2026-10-20 off the nightly's
+- [x] #118 the data lock's contention detection is unpinned. (**Filed 2026-10-20 off the nightly's
   mutation output: eight surviving mutants in `src/core/datalock.rs`, and every one of them is in
   the code that decides whether a second Shall is standing in the way.** `is_lock_contended` →
   `true` makes *every* error read as "someone else holds the lock" — a Shall that fails for any
@@ -527,7 +535,30 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   asks the question in **both polarities** (`is_lock_contended(&e)` at 144 and 214,
   `!is_lock_contended(&e)` at 223), so the gate cannot tell whether either polarity is right.
   **This is one subject with four assertions, not eight bugs.** — ISSUE #118)
-- [ ] #119 the transaction's worker shutdown and lock budget are unpinned. (**Filed 2026-10-20 off
+  - **BUILT 2026-10-21 — and the eight survivors were not eight bugs, and one of them was a
+    branch no error could reach.** The issue's plan was "one subject with four assertions", and
+    the *finding* underneath it was that **the subject could not be asked the question the
+    issue assumed.** The unrelated-error arm at the lock call is **unreachable on Linux**:
+    `flock(LOCK_EX|LOCK_NB)` on a normal file fails with `EWOULDBLOCK` or not at all, and
+    **three of the four call-site mutants could only be seen through an error the OS cannot
+    produce.**
+  - **So the classification became an explicit decision, and the question moved to where it can
+    be asked.** `is_lock_contended(&e) -> bool` is now
+    `classify_lock_failure(e) -> LockFailure::{Contended, Other(e)}`, and the three call sites
+    match on it. **The behaviour is identical**; what changed is that the *contended* case —
+    which a test can reach — now pins the arms, because an arm that answers `true` for
+    everything is now an arm that catches the wrong variant rather than a predicate that lies.
+  - **And the branch `std` already covers is gone.** The old predicate had a unix arm that
+    compared the raw code against `EWOULDBLOCK` and `EAGAIN` — **and on Linux those are the
+    same number, which `std` maps to `ErrorKind::WouldBlock`**, so the `kind()` arm above had
+    already answered every error that arm could have answered. **It was three equivalent
+    mutants and a branch no error could reach.** The Windows arm stays: `LockFileEx` reports
+    `ERROR_SHARING_VIOLATION` (32) and `ERROR_LOCK_VIOLATION` (33), which `std` does not map.
+  - **Two tests, and the family.** `a_contended_lock_is_told_from_a_failure_that_is_not_one`
+    (the classification in **both** directions, from the same fixture, for every kind and every
+    raw code) and `both_doors_read_a_busy_lock_the_same_way` (the two doors asked the same
+    question, and answered it the same way, contended and free). — ISSUE #118)
+- [x] #119 the transaction's worker shutdown and lock budget are unpinned. (**Filed 2026-10-20 off
   the nightly's mutation output: three surviving mutants in `src/core/transaction.rs`, shards 2, 3
   and 4.** `Transaction::quiesce_workers` → `()` is the bad one: quiescing is how the transaction
   stops its background workers before it finishes, so that a half-done run leaves no worker still
@@ -536,6 +567,14 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   crash-window family this file exists to handle. `LockBudget::total` → `Default::default()` is a
   zero wait budget, and the CI calls this file "the transaction that decides whether a failed run
   gives a package back". — ISSUE #119)
+  - **BUILT 2026-10-21 — two tests, and the family.** `the_transaction_leaves_no_worker_running_behind_it`
+    (a worker in the pool is gone after the transaction quiesces: `quiesce_workers` replaced
+    with `()` survived the whole suite, and it is the door between a finished run and a
+    still-running one) and `the_lock_budget_reports_the_bound_it_was_given` (the bound the user
+    set, and the bound that is left, are two different numbers and only one of them is the
+    user's decision: `LockBudget::total` replaced with `Default::default()` survived the whole
+    suite, and a zero total says *"you asked for no waiting"* to someone who asked for five
+    minutes). — ISSUE #119)
 - [x] #120 a test layout where every src file has a home. (**STEP 0 BUILT 2026-10-21 — the rule
   is II.69/V.219/C6 and the `mod.rs` case is answered; the ISSUE STAYS OPEN, because the moving is
   four more phases and they are named in the issue. **Filed 2026-10-20, and it is the

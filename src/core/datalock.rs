@@ -15,29 +15,48 @@ use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-fn is_lock_contended(error: &std::io::Error) -> bool {
+/// What a lock that could not be taken means.
+///
+/// **Two answers, and telling them apart is the whole of this file.** A lock that is
+/// *contended* is the ordinary case: somebody else is using the data directory, and the right
+/// answer is to stand down or to wait. A lock that could not be taken for **any other reason**
+/// is a fault — and reading that as contention turns a broken filesystem into "somebody else is
+/// busy", which is a Shall that waits for a lock nobody holds.
+pub enum LockFailure {
+    /// Somebody else holds it. Not a fault, and not an error.
+    Contended,
+    /// The lock could not be taken for some other reason, and the reason is the answer.
+    Other(std::io::Error),
+}
+
+/// Classify a lock that could not be taken.
+///
+/// **The `kind()` check is the whole of it on unix, and the raw codes are only needed on
+/// Windows.** `EWOULDBLOCK` and `EAGAIN` are the same number on Linux, and `std` maps both
+/// to [`std::io::ErrorKind::WouldBlock`] — so the raw-code check that used to sit below was
+/// **unreachable**: the `kind()` arm above had already answered every error it could have
+/// answered. **It was three surviving mutants and a branch no error could reach** (`#118`).
+///
+/// Windows is different: `LockFileEx` and `LockFile` report these as Win32 errors instead of
+/// mapping them to `WouldBlock` — `ERROR_SHARING_VIOLATION` (32) and `ERROR_LOCK_VIOLATION`
+/// (33) — so the raw codes are needed there and only there.
+///
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn classify_lock_failure(error: std::io::Error) -> LockFailure {
     if matches!(
         error.kind(),
         std::io::ErrorKind::WouldBlock | std::io::ErrorKind::AlreadyExists
     ) {
-        return true;
-    }
-    #[cfg(unix)]
-    {
-        error.raw_os_error() == Some(libc::EWOULDBLOCK)
-            || error.raw_os_error() == Some(libc::EAGAIN)
+        return LockFailure::Contended;
     }
     #[cfg(windows)]
     {
-        // LockFileEx/LockFile on Windows reports these as Win32 errors instead of mapping
-        // them to std::io::ErrorKind::WouldBlock: ERROR_SHARING_VIOLATION (32) and
-        // ERROR_LOCK_VIOLATION (33).
-        matches!(error.raw_os_error(), Some(32 | 33))
+        if matches!(error.raw_os_error(), Some(32 | 33)) {
+            return LockFailure::Contended;
+        }
     }
-    #[cfg(not(any(unix, windows)))]
-    {
-        false
-    }
+    LockFailure::Other(error)
 }
 
 /// How long a waiting run gives the holder before it says so instead.
@@ -147,12 +166,14 @@ impl DataLock {
         let (file, owner_path) = Self::open_lock_file(data_dir)?;
         match file.try_lock_exclusive() {
             Ok(()) => Ok(Some(Self::stamped(file, owner_path, data_dir, command))),
-            Err(e) if is_lock_contended(&e) => Ok(None),
-            Err(e) => Err(Error::Io(format!(
-                "could not lock {}: {}",
-                data_dir.join("shall.lock").display(),
-                e
-            ))),
+            Err(e) => match classify_lock_failure(e) {
+                LockFailure::Contended => Ok(None),
+                LockFailure::Other(e) => Err(Error::Io(format!(
+                    "could not lock {}: {}",
+                    data_dir.join("shall.lock").display(),
+                    e
+                ))),
+            },
         }
     }
 
@@ -217,31 +238,34 @@ impl DataLock {
 
         match file.try_lock_exclusive() {
             Ok(()) => {}
-            Err(e) if is_lock_contended(&e) => {
-                eprintln!(
-                    "shall: waiting for the data directory â€” held by {}",
-                    Self::holder(&owner_path)
-                );
-                let deadline = Instant::now() + timeout;
-                loop {
-                    match file.try_lock_exclusive() {
-                        Ok(()) => break,
-                        Err(e) if !is_lock_contended(&e) => {
-                            return Err(Error::Io(format!(
-                                "could not lock {}: {}",
-                                path.display(),
-                                e
-                            )));
+            Err(e) => match classify_lock_failure(e) {
+                LockFailure::Contended => {
+                    eprintln!(
+                        "shall: waiting for the data directory â€” held by {}",
+                        Self::holder(&owner_path)
+                    );
+                    let deadline = Instant::now() + timeout;
+                    loop {
+                        match file.try_lock_exclusive() {
+                            Ok(()) => break,
+                            Err(e) => match classify_lock_failure(e) {
+                                LockFailure::Other(e) => {
+                                    return Err(Error::Io(format!(
+                                        "could not lock {}: {}",
+                                        path.display(),
+                                        e
+                                    )));
+                                }
+                                LockFailure::Contended => {}
+                            },
                         }
-                        Err(_) => {}
-                    }
-                    if Instant::now() >= deadline {
-                        // S27: the old text ended "remove shall.lock if nothing is running", and
-                        // that advice is never right. The lock is an OS lock on an open handle,
-                        // released when the holding process exits â€” so a lock that is still
-                        // contended after the wait proves a live holder, and deleting the file
-                        // takes the lock away from it rather than from a corpse.
-                        return Err(Error::Other(format!(
+                        if Instant::now() >= deadline {
+                            // S27: the old text ended "remove shall.lock if nothing is running", and
+                            // that advice is never right. The lock is an OS lock on an open handle,
+                            // released when the holding process exits â€” so a lock that is still
+                            // contended after the wait proves a live holder, and deleting the file
+                            // takes the lock away from it rather than from a corpse.
+                            return Err(Error::Other(format!(
                             "the Shall data directory is locked by {}, and still was after {}s.\n  \
                              {} is where state lives, and two writers make a removal out of a race.\n  \
                              The lock is held by a running process, not by the file: {} exists\n  \
@@ -252,17 +276,18 @@ impl DataLock {
                             data_dir.display(),
                             path.display()
                         )));
+                        }
+                        std::thread::sleep(Duration::from_millis(100));
                     }
-                    std::thread::sleep(Duration::from_millis(100));
                 }
-            }
-            Err(e) => {
-                return Err(Error::Io(format!(
-                    "could not lock {}: {}",
-                    path.display(),
-                    e
-                )));
-            }
+                LockFailure::Other(e) => {
+                    return Err(Error::Io(format!(
+                        "could not lock {}: {}",
+                        path.display(),
+                        e
+                    )));
+                }
+            },
         }
 
         Ok(Self::stamped(file, owner_path, data_dir, command))

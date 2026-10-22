@@ -1446,7 +1446,9 @@ impl Transaction {
     /// issue competes for exactly those locks â€” a rollback started here without this wait fails
     /// on wounds this engine itself inflicted. Windows has no graceful stop to wait out, but a
     /// killed process still needs a moment before its locks are gone.
-    async fn quiesce_workers(worker_pool: &mut JoinSet<Vec<TaskResult>>) {
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+    /// test crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub async fn quiesce_workers(worker_pool: &mut JoinSet<Vec<TaskResult>>) {
         if worker_pool.is_empty() {
             return;
         }
@@ -1785,7 +1787,9 @@ impl LockBudget {
     /// Read by the verdict so "the user set 0" and "the user set 300 and Shall spent it" can
     /// be told apart — the old message said `manager_lock_wait_secs` is 0 to both, which to
     /// someone who set 300 is a sentence about a decision they never made.
-    pub(super) fn total(&self) -> Duration {
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+    /// test crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub fn total(&self) -> Duration {
         self.total
     }
 

@@ -37,6 +37,7 @@ impl Drop for DataDir {
         }
     }
 }
+mod a_contended_lock_is_told_from_a_failure_that_is_not_one;
 mod a_contended_lock_is_waited_for_and_then_taken;
 mod a_deferred_step_takes_the_lock_when_it_is_free;
 mod a_free_directory_hands_out_the_lock_rather_than_reporting_contention;
@@ -50,6 +51,7 @@ mod a_wait_that_runs_out_first_spends_the_time_it_was_given;
 mod a_write_from_outside_the_lock_takes_one;
 mod a_writer_that_finishes_moves_the_generation;
 mod an_owner_file_with_no_name_in_it_falls_back_rather_than_naming_nobody;
+mod both_doors_read_a_busy_lock_the_same_way;
 mod held_is_false_outside_the_lock_and_true_inside;
 mod the_lock_file_names_its_holder;
 mod the_off_runtime_wait_returns_holding_the_lock;

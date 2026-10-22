@@ -62,7 +62,7 @@ fn summarise(carried: &[CarriedPast], message: String) -> Error {
 /// K15: a rebuild's two transactions run through this engine like any other sync, so the
 /// summary has to be told which run it is narrating or it reports a rebuild's removals as
 /// removals.
-fn narration_for(scope: guard::GuardScope) -> crate::app::metrics::Narration {
+pub fn narration_for(scope: guard::GuardScope) -> crate::app::metrics::Narration {
     match scope {
         guard::GuardScope::Rebuild => crate::app::metrics::Narration::Rebuild,
         _ => crate::app::metrics::Narration::Change,
@@ -522,7 +522,10 @@ impl SyncEngine {
     /// **Both, from one place.** U7 ruled they are not alternatives, so the code that decides
     /// whether the machine is healthy must never be able to consult one and forget the other —
     /// which is what two collection sites would eventually mean.
-    fn declared_health_checks(&self, changes: &SyncChanges) -> Vec<crate::model::health::Check> {
+    pub fn declared_health_checks(
+        &self,
+        changes: &SyncChanges,
+    ) -> Vec<crate::model::health::Check> {
         use crate::model::health::{Check, Probe};
 
         let mut checks = Vec::new();
@@ -556,7 +559,7 @@ impl SyncEngine {
     /// A health check that cannot revert reports the breakage and leaves it in place — strictly
     /// worse than not checking, because you are told the machine is broken and given no way
     /// back. The only moment that fact is actionable is before the change.
-    fn require_revert_path(&self, changes: &SyncChanges) -> Result<()> {
+    pub fn require_revert_path(&self, changes: &SyncChanges) -> Result<()> {
         match crate::model::health::refusal_if_unrevertable(
             &self.declared_health_checks(changes),
             self.snapshot_manager.has_provider(),
@@ -570,7 +573,7 @@ impl SyncEngine {
     /// Refuse before the change when a declared health *command* has not been approved through
     /// the II.12 ledger (U31). Port probes run no code and are never gated. `shall lock` is the
     /// one place that approves, so the refusal names it.
-    fn require_health_commands_approved(&self, changes: &SyncChanges) -> Result<()> {
+    pub fn require_health_commands_approved(&self, changes: &SyncChanges) -> Result<()> {
         use crate::core::hook_lock::{hash_script, health_id, HookLedger};
         use crate::model::health::Probe;
 
@@ -679,7 +682,7 @@ impl SyncEngine {
 
     /// Evaluate one probe. `Port` succeeds if a TCP connection to localhost opens; `Command`
     /// succeeds if the shell command exits 0.
-    async fn probe_ok(probe: &crate::model::health::Probe) -> bool {
+    pub async fn probe_ok(probe: &crate::model::health::Probe) -> bool {
         use crate::model::health::Probe;
         match probe {
             // Bounded, and the number is the point. A *closed* localhost port refuses at once,
@@ -1700,7 +1703,9 @@ impl SyncEngine {
 /// every case: `heal` used to print `retry: Permanent, absent_name: true` — in Rust's `Debug`
 /// syntax, internal field names and all — and then advise *"re-run `shall sync`"*, which is
 /// the one thing that cannot help when the name does not exist.
-fn what_to_do_about(e: Option<&Error>, key: &str) -> String {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+/// test crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn what_to_do_about(e: Option<&Error>, key: &str) -> String {
     let Some(e) = e else {
         return "Re-run `shall heal`.".to_string();
     };
