@@ -536,7 +536,9 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   crash-window family this file exists to handle. `LockBudget::total` → `Default::default()` is a
   zero wait budget, and the CI calls this file "the transaction that decides whether a failed run
   gives a package back". — ISSUE #119)
-- [ ] #120 a test layout where every src file has a home. (**Filed 2026-10-20, and it is the
+- [x] #120 a test layout where every src file has a home. (**STEP 0 BUILT 2026-10-21 — the rule
+  is II.69/V.219/C6 and the `mod.rs` case is answered; the ISSUE STAYS OPEN, because the moving is
+  four more phases and they are named in the issue. **Filed 2026-10-20, and it is the
   mechanism the other five need rather than a style preference.** `src/a/b/c.rs` owns
   `tests/a/b/c/`; a test that needs `cfg(test)` — because it must see a private item, or must use
   a constructor that must not ship — stays inline, and that is an **exception** with a reason
@@ -575,6 +577,31 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     double looks like, and policing those "would make this a gate people delete". The exception
     table is for the other case: a test that needs `cfg(test)` for a constructor that must not
     ship, which no amount of visibility can reach from a test crate. — ISSUE #120)
+  - **STEP 0 BUILT 2026-10-21 — the rule is now a rule, and the `mod.rs` case is answered.** The
+    layout was an issue's proposal; it is now **II.69** with **V.219** and a ruling in
+    `decisions.md` **C6**. The piece that had to be settled before the sweep could be *executed*
+    rather than merely *stated* is the **`mod.rs` case**: seventeen files in `src/` are `mod.rs`,
+    and "the tree mirrors `src/`" says nothing about them — `src/a/b/mod.rs` is both the parent
+    of `src/a/b/c.rs` and a file in its own right. **The answer: `src/a/b/mod.rs` owns
+    `tests/a/b/`**, with `tests/a/b/mod.rs` as the module file that declares what is in it, which
+    makes the folder mean *the src folder* — what the mirror already meant everywhere else. **And
+    a src file with no tests gets no folder**, because an empty mirror claims something and means
+    nothing, and the gate that will check every folder has an owner would otherwise need an
+    exception for every file that has no tests yet.
+  - **The three kinds are settled by what the test drives**, not by what it is about: a test
+    that spawns the binary or drives the `Fixture` harness is end-to-end (`tests/e2e/`), a test
+    that reads the `src/` tree and asserts a property of the *code* is a review test
+    (`tests/review/`), and a test that drives the library's own API belongs to the src file that
+    owns the behaviour. **The folder says how the test drives it; the filename says what it is
+    about** — the two are orthogonal, and confusing them is how `tests/e2e/` becomes a drawer.
+  - **`tests/review/` exists now**, and holds the first file in it:
+    `tests/review/the_mutation_gate_retries_a_failed_test.rs`, which `#116` needed. The folder
+    was not invented for it — the repository already called that category *"the review
+    apparatus"*, and thirty-odd gates were doing this kind of reading from the top level of
+    `tests/`.
+  - **THE ISSUE STAYS OPEN, because the sweep is the other four phases.** What is settled here is
+    the rule and the two cases it needed; what remains is the moving: the four files over the
+    ceiling, the mutation-covered files, and then the rest of the tree. — ISSUE #120)
 - [x] #121 the web backend's credential-probe test fails on a coin flip, and it takes the
   mutation gate's baseline with it. (**Filed 2026-10-20, while `#115` was being built, and it is
   the *third* host-dependent test to reach the mutation gate's baseline the same day.** Two failures

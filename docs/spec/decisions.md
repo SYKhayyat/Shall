@@ -10140,3 +10140,46 @@ records that scoping that command is what made the *first* mutation report show 
 mutants out of eleven. Best-of-three on the measurement (candidate 1) leaves the class open and,
 as above, would have measured the fix into existence. **The class is closed by the retry; the
 known instance still needs its own answer, and it has not got one.**
+
+## C6
+
+**Status: ANSWERED 2026-10-21, built.** Where a test lives.
+Rule in **II.69**, rationale in **V.219**.
+
+**The rule.** `src/a/b/c.rs` owns `tests/a/b/c/`; the tree mirrors `src/` and the names inside
+stay assertion-shaped. **`src/a/b/mod.rs` owns `tests/a/b/`**, with `tests/a/b/mod.rs` as its
+module file — the answer for the seventeen `mod.rs` files in the tree, which "the tree mirrors
+`src/`" alone does not say. **A src file with no tests gets no folder**, because an empty mirror
+claims something and means nothing.
+
+**The three kinds, and the distinction is what the test drives.** A test that spawns the `shall`
+binary or drives the `Fixture` harness is **end-to-end** (`tests/e2e/`); a test that reads the
+`src/` tree and asserts a property of the *code* is a **review** test (`tests/review/`); a test
+that drives the library's own API belongs to **the src file that owns the behaviour**. The
+folder says how the test drives it, and the filename says what it is about, and the two are
+orthogonal: a test that spawns the binary but is about one src file's behaviour is still
+end-to-end.
+
+**The exception, and it is a table.** A test that needs `cfg(test)` — because it must see a
+private item, or use a constructor that must not ship — **cannot** live in a test crate, because
+a test crate links the library without `cfg(test)`. It stays inline, and it is on a table whose
+rows each carry the reason they are rows, audited in both directions so a row that is earned
+back is deleted. **Twenty-six files qualify today.**
+
+**And the move widens visibility rather than rewriting the test.** A relocated test sees the
+crate's public API, so a test that needed a private item needs that item visible — and
+`a_pub_fn_nobody_calls_is_dead_tests` says a `pub fn` reached only from tests is what a test
+double looks like, and policing those "would make this a gate people delete". So the item is
+made visible and **says so in its own doc comment**, which is how the eight items in
+`src/app/sync/guard.rs` came to carry that sentence.
+
+**The order, and it is not the order the files are in.** The files over the ceiling first
+(`generic.rs`, `statement.rs`, `transaction.rs`, `executor.rs` — each of which retires a row of
+`TOO_BIG_FOR_NOW`), then the rest. The cheapest slice is the first, and it happens to be the one
+that fixes a bug: the missing tests, the test module relocated, and a ceiling row retired in one
+change.
+
+**What is not claimed.** The layout is not a rewrite: the code under test does not change. It is
+not a claim that inline tests are wrong — a `#[cfg(test)]` module that needs private access is
+the right answer for that case; the issue is that there was no *other* answer, so the two cases
+were indistinguishable.

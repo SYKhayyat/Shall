@@ -8024,3 +8024,42 @@ rather than invisible. Only the *failing test* is
 re-run, so a genuine catch pays one test's duration twice. The runner's other cost is its
 isolation: 165 s against 148 s for the same 3,017 tests, about 11%, which buys the property
 that the tests cannot contaminate each other's verdicts inside the mutation job at all.
+
+**V.219 — Why a test's home is decided by the tree, and not by what the test is about.**
+*(Owner ruling 2026-10-21, `PLAN.md` #120.)*
+
+The question "where does the test for this go?" had no answer, and the consequence was not
+tidiness. A safety-critical function with no test — the removal guard's undo door, the door a
+failed sync uses to take back what it just installed — had no test because there was nowhere to
+put one: the tests of this repository live either inline in the file they exercise or loose in
+the top level of `tests/`, and the first kind cannot see a private item from a test crate while
+the second kind belongs to nobody. A function with no home for its test is a function with no
+test, and nothing in the build says so.
+
+The layout that answers it is the one the tree already half has. The repository puts its tests
+with the thing they test — most src files carry a `#[cfg(test)]` module at the bottom — and it
+names test files after the *assertion* rather than after the subject, which is right and worth
+keeping: a subject like "a firewall teardown is a removal" spans several src files, and a
+file-for-file mirror would destroy that. So the rule constrains the **tree** and leaves the
+**naming** alone.
+
+Two cases had to be answered before the rule could be executed rather than merely stated.
+
+**The `mod.rs` case.** Seventeen files in `src/` are `mod.rs`, and "the tree mirrors `src/`" says
+nothing about them: `src/a/b/mod.rs` is both the parent of `src/a/b/c.rs` and a file in its own
+right, so its tests have no obvious home. The answer is that it owns the folder beside it —
+`tests/a/b/` — with `tests/a/b/mod.rs` as the module file that declares what is in it. That
+makes the folder mean *the src folder*, which is what the mirror already meant everywhere else,
+and it gives the seventeen a home that is not a special case.
+
+**The empty-folder case.** A src file with no tests gets no folder, because an empty mirror is a
+directory that claims something and means nothing — and the gate that will check every folder
+has an owner would otherwise have to carry an exception for every file that has no tests yet.
+
+The third decision is about what the folder *means*, and it is the one that keeps the categories
+honest: the distinction between an end-to-end test, a review test and a library test is **what
+the test drives**, not what it is about. A test that spawns the binary but is about one src
+file's behaviour is still end-to-end — the folder says how it drives, the filename says what it
+is about, and the two are orthogonal. Confusing them is how `tests/e2e/` becomes a drawer, and
+how a review test ends up filed as an end-to-end one because the end-to-end folder was where
+somebody put it.

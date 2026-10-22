@@ -4280,3 +4280,38 @@ cannot contaminate each other's verdicts inside the mutation job — which is a 
 hazards closed here rather than one test made robust. **And it is not free**: the same 3,017
 tests took 165 s under the new runner against 148 s under the old one, about 11%, and that is
 the price of the property.
+
+## II.69 A src file owns the folder its tests live in, and the tree mirrors the tree (`#120`, V.219)
+
+**`src/a/b/c.rs` owns `tests/a/b/c/`.** The tree mirrors `src/`; the *names* inside stay
+assertion-shaped, because a test file is named after the claim it makes and not after the file it
+exercises. A subject that spans several src files is still one file, with one owner — the rule
+constrains where a test *lives*, not what it may talk about.
+
+**A `mod.rs` owns the folder beside it.** `src/a/b/mod.rs` owns `tests/a/b/`, and
+`tests/a/b/mod.rs` is the module file that declares the files in it. **Seventeen files in this
+tree are `mod.rs`**, and the rule has to say what happens to them or it is not a rule: a folder
+with no `mod.rs` above it and a file with no owner are both untidy trees waiting to happen.
+
+**A src file with no tests gets no folder.** An empty mirror is a directory that says "there is
+something here" and means nothing, and the gate that checks every folder has an owner would
+have to know the difference.
+
+**Three kinds of test, and the distinction is what the test drives.** A test that spawns the
+`shall` binary or drives the `Fixture` harness is an **end-to-end** test and lives in
+`tests/e2e/`; a test that reads the `src/` tree and asserts a property of the *code* is a
+**review** test and lives in `tests/review/`; a test that drives the library's own API belongs to
+**the src file that owns the behaviour**. The three are different *kinds*, and the folder says
+which kind a test is — a test that spawns the binary but is about one src file's behaviour is
+still end-to-end, because the folder says how it drives and the filename says what it is about.
+
+**A test that needs `cfg(test)` stays inline, and that is an exception with a reason.** A test
+crate links the library *without* `cfg(test)`, so a test that must see a private item, or must
+use a constructor that must not ship, has nowhere else to live. **The exception is a table, and
+each row carries the reason it is a row** — the same shape as every other exemption table in this
+repository, audited in both directions, so a row that is earned back is deleted.
+
+**And the move widens visibility rather than rewriting the test.** A relocated test sees the
+crate's public API, so a test that needed a private item needs that item to be visible — and the
+repository's rule is that a `pub fn` reached only from tests is not a defect to be policed but a
+cost to be paid, with the reason written down where the item is declared.
