@@ -30,7 +30,7 @@ async fn the_engine_finds_the_hooks_this_machine_wrote() {
     config
         .events
         .insert("on_drift".to_string(), "#!/bin/sh\nexit 0\n".to_string());
-    let (engine, _mock) = engine("events", config).await;
+    let (engine, _mock) = engine(config).await;
 
     let hooks = engine.events();
     assert!(

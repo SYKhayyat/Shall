@@ -13,11 +13,7 @@ use super::*;
 /// **The only moment that fact is actionable is before the change.**
 #[tokio::test]
 async fn a_declared_health_check_with_nothing_to_revert_it_stops_the_sync() {
-    let (engine, _mock) = engine(
-        "unrevertable",
-        config_with_health("unrevertable", &["port:8080"]),
-    )
-    .await;
+    let (engine, _mock) = engine(config_with_health("unrevertable", &["port:8080"])).await;
 
     let refused = engine.require_revert_path(&no_changes());
     assert!(

@@ -35,7 +35,7 @@ pub(crate) fn config_dir(tag: &str) -> PathBuf {
 }
 
 /// The engine, wired to a mock layer, with the config the test asked for.
-pub(crate) async fn engine(tag: &str, config: Config) -> (SyncEngine, Arc<MockExecutor>) {
+pub(crate) async fn engine(config: Config) -> (SyncEngine, Arc<MockExecutor>) {
     let vfs: Arc<DashMap<PathBuf, String>> = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
     // **No snapshot provider on this machine.** The built-in providers are *detected* — a row

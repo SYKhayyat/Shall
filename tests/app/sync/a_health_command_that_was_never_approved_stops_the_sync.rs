@@ -12,11 +12,7 @@ use super::*;
 /// ledger entry that would approve it.
 #[tokio::test]
 async fn a_health_command_that_was_never_approved_stops_the_sync() {
-    let (engine, _mock) = engine(
-        "unapproved",
-        config_with_health("unapproved", &["cmd:echo hello"]),
-    )
-    .await;
+    let (engine, _mock) = engine(config_with_health("unapproved", &["cmd:echo hello"])).await;
 
     let refused = engine.require_health_commands_approved(&no_changes());
     assert!(
@@ -37,11 +33,7 @@ async fn a_health_command_that_was_never_approved_stops_the_sync() {
 /// **And a port probe is not a command**, so it is not gated by the ledger.
 #[tokio::test]
 async fn a_port_probe_is_not_gated_by_the_approval_ledger() {
-    let (engine, _mock) = engine(
-        "port-not-gated",
-        config_with_health("port-not-gated", &["port:8080"]),
-    )
-    .await;
+    let (engine, _mock) = engine(config_with_health("port-not-gated", &["port:8080"])).await;
 
     assert!(
         engine

@@ -13,10 +13,10 @@ use super::*;
 /// what two collection sites would eventually mean.
 #[tokio::test]
 async fn the_declared_health_checks_are_the_declared_ones() {
-    let (engine, _mock) = engine(
+    let (engine, _mock) = engine(config_with_health(
         "declared-checks",
-        config_with_health("declared-checks", &["port:8080", "port:9090"]),
-    )
+        &["port:8080", "port:9090"],
+    ))
     .await;
 
     let checks = engine.declared_health_checks(&no_changes());
