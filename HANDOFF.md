@@ -1,97 +1,243 @@
-# HANDOFF — the #120 test-layout sweep, as of 2026-10-23
+# HANDOFF — the #120 test-layout sweep
 
-**Start here.** The next session does the same thing this session did, one file at a
-time, now that both halves of the tool are in the repo. The state is green and pushed.
+**Written 2026-10-23. Read this first; it is the whole operating manual.**
+
+The objective is one thing: **no `src/` file keeps its own tests.** Every
+`#[cfg(test)] mod` moves to a mirror folder in `tests/`, one file per assertion,
+until the library builds without `cfg(test)` and every test the library had still
+runs. Ceilings are retired, not raised. Nothing is ever deleted to make the move
+easier.
 
 ---
 
-## 1. Where the tree stands
+## 1. Where the sweep is, in numbers
 
-`main` is green and pushed. The verify chain passes on the committed tree:
-
-| step | result |
+| | |
 |---|---|
-| `cargo build --all-targets` | clean |
-| `cargo test --no-fail-fast` | 1,932 lib + 1,072 suite, none failed |
-| `cargo clippy --all-targets --all-features --locked -- -D warnings` | clean |
-| `cargo fmt -- --check` (rustfmt **1.97.1**) | clean |
-| `cargo check --target x86_64-pc-windows-gnu --lib --tests` | clean |
+| src files still carrying an inline test module | **183**, split: app 41, core 39, backends 37, model 30, parsers 15, verbs 8, config 7, utils 5 |
+| tests already in mirror folders | executor, guard, transaction, generic, statement, sync |
+| `TOO_BIG_FOR_NOW` rows | **0** — the target state, and `executor.rs` was the last |
+| library test count | 1,932 (fell by exactly 41) |
+| suite test count | 1,072 (rose by exactly 41) |
+| converter scripts in the repo | 2, both with passing self-tests |
 
-**`TOO_BIG_FOR_NOW` is empty, and that is the target state, not a regression.**
-`src/core/executor.rs` was its last row; it is now 1,962 lines with 42 tests in
-`tests/core/executor/`, and the row was retired rather than raised. The next file to
-cross 3,000 lines without a row is a subject the split has not reached yet.
+Everything below line is green: `cargo build`, `cargo test` (1,932 + 1,072, none
+failed), clippy at `-D warnings --all-features`, `cargo fmt` at 1.97.1, and the
+Windows cross-check.
 
-**Closed:** #116/#118/#119/#121/#122. **Open:** #120 (this sweep), #117 (six of
-eleven sync-engine subjects; the rest need the machine fixture), #123.
+**The next moves, in this order.** Priority is inline-test count, not file size —
+a file with 26 tests is 26 hand-edits if the tool does not work, and it will not.
 
-## 2. The acceptance criteria
+1. `src/parsers/language.rs` — 26 tests, 1,155 lines. New folder: `tests/parsers/`.
+   Already has flat files there, so `mod` wiring goes through `tests/parsers/mod.rs`.
+2. `src/parsers/windows.rs` — 23 tests. Same folder.
+3. `src/main.rs` — 14 tests, and it has **two** `#[cfg(test)]` blocks (lines 1318 and
+   1577), which is the multi-module case the mover must keep apart.
+4. `src/verbs/plan.rs` — 13 tests, 1,942 lines, the second-largest file left.
+5. The four 13-test parser files, then the long tail.
 
-A batch is done only when **all ten** hold. They are the mover's own test —
-`python3 scripts/move-inline-tests_test.py` — so a broken tool fails before a broken
-tree does.
+---
 
-1. `cargo build --all-targets` clean.
-2. `cargo test --no-fail-fast` none failed.
-3. **No test lost** — the lib target falls by exactly the tests that moved and the
-   suite rises by the same number. `cargo test --lib` before and after, compared.
-4. Clippy `-D warnings --all-features` clean.
-5. `cargo fmt -- --check` clean (rustfmt 1.97.1, what CI pins).
-6. `every_test_file_is_in_the_suite` passes.
-7. The scanning gates pass (`a_module_is_a_subject_not_a_pile`,
-   `no_comment_cites_a_line_number`, `no_comment_says_the_same_thing_twice`,
-   `a_pub_fn_nobody_calls_is_dead`).
-8. A ceiling row that stops being needed is retired, never raised.
-9. Every widened item carries the "pub for the tests' sake" note.
-10. A file that genuinely cannot move is on the exception table, with a reason.
-
-## 3. The pipeline — four commands per file
+## 2. The pipeline — four commands per file
 
 ```bash
-# environment (the system cargo has no `fmt`; the rustup rustc needs libz)
+# 1. Move
+python3 scripts/move-inline-tests.py src/core/foo.rs tests/core/foo core::foo
+
+# 2. Widen — a small per-file script you write by hand from the compiler's errors.
+#    (no automated widen script; see §6)
+
+# 3. Fix the imports — ask both compilers, gate or drop each name
+python3 scripts/fix-mirror-imports.py --apply
+
+# 4. Verify
+cargo fmt && cargo build --all-targets && cargo test --lib \
+  && cargo clippy --all-targets --all-features --locked -- -D warnings \
+  && cargo test --no-fail-fast
+```
+
+**Read an existing mirror before running anything.** `tests/core/executor/mod.rs` is
+the smallest one and its shape is the one to copy: a `//!` line naming the mirrored
+item, then one `mod` per inline test module, then the shared helpers, then the imports.
+`tests/app/sync/guard/mod.rs` is the largest and shows the module-doc-comment style
+the repo prefers for a mirror that earned its place.
+
+---
+
+## 3. The environment — this host, not a generic one
+
+**Every cargo command needs these exports, in the same shell invocation.** The system
+`cargo` at `/usr/bin/cargo` has no `fmt` subcommand and its `rustc` needs libz, so a
+command without them fails in a way that looks like a code error:
+
+```bash
 export LD_LIBRARY_PATH="/nix/store/lw86vj9kfwgvlivg3p8qg2nibpmhmsl9-zlib-1.3.2/lib"
 export PATH="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:$PATH"
 export RUSTFMT=/nix/store/k2hwcha2p1fy0v0py34vq3jyvwqk339p-rustfmt-1.97.1/bin/rustfmt
-# (the Windows cross-check additionally needs /tmp/mingw-cc/bin and the three CC_ vars)
 ```
 
-1. **Move.** `python3 scripts/move-inline-tests.py SRC DEST core::path`
-2. **Widen.** A small per-file script listing the exact items the mirror reaches.
-   Write it by hand from the compiler's `E0603`/`E0616`/`E0624` errors — the
-   `executor.rs` one is at `/tmp/opencode/widen-executor.py` as a template.
-3. **Fix the imports.** `python3 scripts/fix-mirror-imports.py --apply` — asks both
-   compilers which imports are dead, and gates or drops each *name*.
-4. **Verify.** `cargo fmt` → build → clippy → `cargo test --lib` (count) → Windows
-   `cargo check` → retire any ceiling row → commit.
+**`RUSTFMT` must be 1.97.1, not whatever is default** — that is the version
+`.github/workflows/ci.yml` pins, and a locally-clean run at a different version is
+the trap this repo already documented once.
 
-**Order matters and cost hours to learn:** widen *before* fixing imports, because a
-successful widen changes what the compiler reports (an import that "could not be
-resolved" is not yet "unused"). And never run `cargo fix` over a mirror: it deletes
-imports only the other platform can see.
+**`git commit` needs the same exports in the same command.** The pre-commit hook runs
+`cargo fmt -- --check`, and without `PATH` carrying the toolchain it refuses a commit
+that is correctly formatted. If a commit is refused with *"Run 'cargo fmt'"*, check
+your exports before believing it.
 
-## 4. What is left
+**The Windows cross-check is the fifth step of the chain and it is not optional** —
+CI runs on Windows, and `scripts/unix-check.sh` needs Docker (absent here). From this
+host:
 
-- **179 src files with an inline test module.** In size order:
-  `src/parsers/language.rs` 1,155, `src/parsers/windows.rs` 1,128,
-  `src/verbs/plan.rs` 1,942, `src/core/exit_policy.rs` 1,579,
-  `src/utils/file.rs` 1,227, `src/parsers/ecosystem.rs` 1,188, `src/core/argv.rs`
-  978 — then 29 in the 1,000–1,999 band, 58 at 400–999, 85 under 400.
-- **159 flat files in `tests/` with no owner** — each needs assigning (e6e / review /
-  mirror). Mechanical, so a script plus a table.
+```bash
+export PATH="$(dirname $(command -v x86_64-w64-mingw32-cc 2>/dev/null)):$PATH"
+export CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-cc
+export CXX_x86_64_pc_windows_gnu=x86_64-w64-mingw32-c++
+export AR_x86_64_pc_windows_gnu=x86_64-w64-mingw32-ar
+RUSTFLAGS="-D warnings" cargo check --target x86_64-pc-windows-gnu --lib --tests
+```
+
+`-D warnings` matters here: two of the fourteen historical Windows errors were
+`unused_variables`, fatal only under CI's gate.
+
+**Never run anything over ~30 seconds in the foreground.** The suite is ~2 minutes,
+a first Windows cross-check ~25 (all 448 target crates, then ~40s), a full
+`cargo mutants` longer than everything. Background it and do the next thing.
+
+---
+
+## 4. Rules the repo enforces, that a layout change can break
+
+Each of these is a test that fails loudly. Read the test before fighting it.
+
+- **`a_module_is_a_subject_not_a_pile_tests`** — a file over the ceiling needs a row
+  in `TOO_BIG_FOR_NOW`, **and the table is audited in both directions**: a file that
+  drops back under the line must have its row deleted. `src/core/executor.rs` came off
+  this way at the end of 2026-10-23. Do not add a row to make a gate pass.
+- **`every_test_file_is_in_the_suite`** — `tests/` has `autotests = false`; a file is
+  not a `mod` somewhere, it does not run. Every new mirror file and folder needs
+  wiring.
+- **Comments (P6):** a comment states a constraint the code cannot show. Not what a
+  line does, not `V.n` citations as design documents. Prefer a name or a type.
+- **`no_comment_cites_a_line_number`** — do not write "line 1318"; write the name.
+- **`a_pub_fn_nobody_calls_is_dead`** — widening something only tests call is fine,
+  but it must carry the note in §5 or it reads as dead code.
+- **Widen, don't duplicate.** If a test cannot see an item, widen that item. Never add
+  a second implementation or a `#[cfg(test)]` constructor that ships.
+
+---
+
+## 5. The widening, and the two shapes it has
+
+A test crate links the library *without* `cfg(test)`, so a private item is invisible
+there. When the compiler says `is private` (`E0603`/`E0616`/`E0624`), widen it and
+put a note on it:
+
+```rust
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+/// test crate links the library without `cfg(test)`, so a private item is invisible there.
+pub reader: Arc<dyn ExecutionLayer>,
+```
+
+**There are two shapes, and telling them apart is the C6 decision:**
+
+1. **The tests' sake** — as above. This is most of them.
+2. **It ships.** A `#[cfg(test)]` helper that mints no authority — it only sets fields
+   a constructor already has, or is a plain value holder — should be published and
+   un-gated, *not* stuck behind `pub(crate)` so a test can call it.
+   `RawExecutor::with_idle` was exactly this and is the example to copy (it says so in
+   its doc comment). C3 stays the ruling for anything that *does* mint authority:
+   that one stays inline.
+
+**Write a small script per file listing the edits, and keep it out of the repo.** For
+`executor.rs` the record was `/tmp/opencode/widen-executor.py`. Do not try to
+automate this — see §6.
+
+---
+
+## 6. What not to redo, and why
+
+These cost the most time. All are written down rather than re-derived.
+
+- **Do not automate the widening.** `scripts/widen-for-tests.py` is an abandoned
+  experiment, left untracked and deliberately not deleted only as a warning. It
+  mangled five tuple structs into invalid syntax and wrote `pub` into struct
+  initializers. The compiler's errors are a short, precise list; a hand script that
+  carries them is faster than an automation that has to guess where an item's body
+  ends.
+- **Widen before fixing imports, not after.** A successful widen changes what the
+  compiler reports: an import that *could not be resolved* is not yet *unused*. Run
+  `fix-mirror-imports.py` after the widening and the build is clean, and running it
+  before leaves unusable output. This ordering is not obvious and cost a full cycle.
+- **Never `cargo fix` a mirror.** `--all-targets` is single-platform: it deletes
+  imports that are used only inside `#[cfg(windows)]` blocks, and the Windows cross
+  check then fails with `E0425`/`E0433` for names that are gone on Linux and alive on
+  Windows. That is exactly the bug `fix-mirror-imports.py` exists to avoid, by asking
+  both compilers and classifying each **name** rather than each line.
+- **A name, not a line.** `use shall::core::{Error, ExitPolicy}` where one platform
+  calls both dead and the other needs one of them: the statement is split
+  `#[cfg(unix)]`/`#[cfg(windows)]`, not deleted.
+- **Run the tools' own tests after any change to them.** `scripts/move-inline-tests_test.py`
+  (10/10) and `scripts/fix-mirror-imports_test.py` (12/12). Both run in about a second
+  against fixtures and no compiler. **Ten full cargo builds were spent discovering
+  what a fixture test finds immediately** — this is the one lesson from the retro that
+  is binding on the next file.
+- **Verify the count, not the colour.** For a move to be done, `cargo test --lib` must
+  fall by exactly the number of tests that moved and the suite must rise by the same
+  number. A green suite over a silently dropped test is the failure this catches.
+
+---
+
+## 7. Deliverables and definitions of done
+
+Per file: all ten criteria hold.
+
+1. `cargo build --all-targets` clean.
+2. `cargo test --no-fail-fast` none failed.
+3. **No test lost** — lib fell by N, suite rose by N, measured.
+4. Clippy clean at `-D warnings --all-features`.
+5. `cargo fmt -- --check` clean at 1.97.1.
+6. `every_test_file_is_in_the_suite` passes.
+7. The scanning gates pass (ceiling, comment rules, dead `pub`).
+8. A ceiling row that stopped being needed is retired.
+9. Every widened item carries its note.
+10. A file that genuinely cannot move is on an exception table with a reason — the
+    table does not exist yet, and it is a deliverable (§8).
+
+But **the sweep is not one file at a time for 183 files.** Batch 3–5 small files per
+verify cycle once `parsers/` has proved the path is repeatable: the wall-clock is the
+cargo check, not the edit, and the two smaller parsers are near-certain to need
+identical widening for the same parser-shaped items.
+
+---
+
+## 8. Still to build, outside the move itself
+
+- **`tests/parsers/mod.rs` and the flat-file assignment.** 159 flat files in `tests/`
+  have no owner yet. Each is classified by what it drives — parser fixture, review
+  output, or a mirror of an item that no longer has a src home. Mechanical, so a
+  script plus a table rather than 159 judgement calls.
 - **The exception table** for files that must keep `cfg(test)` inline, and the gate
   that audits it in both directions.
-- **#117's five remaining subjects** and **#123** (below).
+- **Issue #117**, five remaining subjects: `prune_snapshots_after_sync`,
+  `execute_transaction`'s counters, `heal`, `rebuild_kernel_modules`, and `sync`'s
+  `PurgeUndeclared` arm. These need the machine fixture that
+  `tests/a_machine_converges_tests.rs` already builds.
+- **Issue #123**, the registry-budget test's load-sensitivity, whose honest fix is to
+  measure in a fresh process.
 
-## 5. Deliberately not built, and why
+Closed this week and not reopened: #116, #118, #119, #121, #122.
 
-- **`scripts/widen-for-tests.py`** (untracked) is a failed experiment at automating
-  the widening. **Do not use it.** It mangled five tuple structs and wrote `pub`
-  into a struct initializer. The per-file script is the reliable shape.
-- **The mover still carries the src file's imports wholesale**, which is why step 3
-  exists. Folding that into the mover is possible but needs both compilers, which
-  belongs to the fixer, not the mover.
-- **#117** — `prune_snapshots_after_sync`, `execute_transaction`'s counters, `heal`,
-  `rebuild_kernel_modules`, and `sync`'s `PurgeUndeclared` arm. All need the machine
-  fixture `tests/a_machine_converges_tests.rs` already builds.
-- **#123** — the registry-budget test's load-sensitivity; fix by measuring in a fresh
-  process.
+---
+
+## 9. Repo and remote
+
+```bash
+git remote -v          # https://github.com/SYKhayyat/Shall.git
+git log --oneline -6   # six leadership commits, each with the full reasoning inline
+```
+
+Read `docs/SPEC.md` first for the rules of the road, and `docs/spec/decisions.md`
+for every open question — an ID in that register (`D*`, `W*`, `K*`, `N*`, `T*`, `U*`)
+is the owner's ruling, not a coder's. **If Part II of a spec ever looks wrong, stop
+and ask; do not fix it in passing.**
