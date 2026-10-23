@@ -19,7 +19,9 @@ use tokio::process::Command;
 
 /// Lock directories already created, so `create_dir_all` runs once per directory per process
 /// instead of once per exclusive command.
-pub(crate) static LOCK_DIRS: once_cell::sync::Lazy<dashmap::DashSet<PathBuf>> =
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+/// test crate links the library without `cfg(test)`, so a private item is invisible there.
+pub static LOCK_DIRS: once_cell::sync::Lazy<dashmap::DashSet<PathBuf>> =
     once_cell::sync::Lazy::new(dashmap::DashSet::new);
 
 /// A spawned child that is **asked** to stop before it is made to.
@@ -38,7 +40,9 @@ pub(crate) static LOCK_DIRS: once_cell::sync::Lazy<dashmap::DashSet<PathBuf>> =
 ///
 /// Windows has no catchable termination signal for a console process, so there `kill_on_drop`
 /// keeps the job and this type only carries the child.
-pub(crate) struct Stopping {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+/// test crate links the library without `cfg(test)`, so a private item is invisible there.
+pub struct Stopping {
     pub(crate) child: tokio::process::Child,
 }
 

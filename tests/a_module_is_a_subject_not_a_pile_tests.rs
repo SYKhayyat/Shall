@@ -34,16 +34,6 @@ const LINES: usize = 3_000;
 /// single genuine subject that is merely large, and both have a shape for the split already —
 /// which is exactly why neither was done in a hurry alongside a security fix.
 const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[
-    (
-        "src/core/executor.rs",
-        3_060,
-        "The spawn/read/retry machinery — one subject, grown by the audit fixes (cwd pin, \
-         stderr sanitising, backoff cap) that belong to it. The split is spawn vs wait vs \
-         retry, and wants a session with no other executor work in flight. **The credential \
-         state left in `#121`**: the three process-wide sudo `static`s became a run's own \
-         state in `src/core/sudo.rs`, which took the file from 3,150 to 3,052 and the ceiling \
-         down with it.",
-    ),
     // **Three of the five rows on this list are not on it any more**, and the table is audited
     // in both directions, so a row that stops being needed has to go. `src/core/transaction.rs`
     // (3,299), `src/backends/generic.rs` (3,940) and `src/config/grammar/statement.rs` (3,881)
@@ -59,6 +49,13 @@ const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[
     // assertion, and the file is 1,550 lines — under the 3,000 gate, so the row is retired
     // rather than raised. **A row that stops being needed has to go**, which is the other
     // direction of this gate and the reason the table is not a graveyard.
+    //
+    // **And `src/core/executor.rs` was on it too, and is the last row left.** It was 3,052
+    // lines, and its 42 tests in four modules moved to `tests/core/executor/`. The file is
+    // 1,962 lines, so the table is empty — which is the target state, not a regression:
+    // `target-state.md` II.50 says a file this large is a subject that has not been split
+    // yet, and an exemption that nobody can ever retire is an exemption nobody re-reads.
+    // The next file to cross the line without a row is a subject the split has not reached.
 ];
 
 fn rust_files(root: &Path, out: &mut Vec<PathBuf>) {

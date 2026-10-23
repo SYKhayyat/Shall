@@ -90,7 +90,9 @@ fn first_runnable(cmd: &str) -> Option<PathBuf> {
         .or(Some(first))
 }
 
-pub(crate) fn has_bytes(path: &Path) -> bool {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+/// test crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn has_bytes(path: &Path) -> bool {
     std::fs::metadata(path)
         .map(|m| m.len() > 0)
         .unwrap_or(false)
@@ -230,7 +232,9 @@ fn windows_shim_wrap(cmd: &str, resolved: &Path, args: &[String]) -> Option<(Str
 /// Resolve the actual (program, args) to spawn on Windows, wrapping shim scripts. Bare
 /// `.exe`/native commands pass through unchanged.
 #[cfg(windows)]
-pub(crate) fn windows_effective_command(cmd: &str, args: &[String]) -> (String, Vec<String>) {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+/// test crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn windows_effective_command(cmd: &str, args: &[String]) -> (String, Vec<String>) {
     if let Some(resolved) = launch_path(cmd) {
         if let Some(wrapped) = windows_shim_wrap(cmd, &resolved, args) {
             return wrapped;
@@ -297,7 +301,9 @@ pub fn effective_command(cmd: &str, args: &[String]) -> (String, Vec<String>) {
 /// `powershell` alone does not identify a hang on a host running six of them; the argv is what
 /// says which. Truncated from the right because the discriminating part is the front — the
 /// cmdlet, the subcommand, the package name.
-pub(crate) fn describe(cmd: &str, args: &[String]) -> String {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+/// test crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn describe(cmd: &str, args: &[String]) -> String {
     const CAP: usize = 160;
     let mut s = String::from(cmd);
     for a in args {
