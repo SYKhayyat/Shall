@@ -87,76 +87,94 @@ def parse(stmt):
     return is_pub, "", [], False
 
 
-def rewrite(path, lin_dead, win_dead):
-    """One pass over the file, so no line number ever outruns the text it described."""
-    text = path.read_text()
-    matches = list(STMT.finditer(text))
-    if not matches:
-        return 0
+def plan(stmt, own_gate, indent, dl, dw):
+    """The statements one `use` becomes, given the dead names on each platform.
+
+    Pure, and separate from the file walk, because this is where every bug this tool
+    has had lived: dead-on-both decided after dead-on-one emitted a statement twice,
+    and a name compared whole against the compiler's leaf spelling matched nothing.
+    The test drives this directly, without a compiler, so the next bug costs a second
+    rather than a build."""
+    is_pub, prefix, items, braces = parse(stmt)
+    pub = "pub " if is_pub else ""
+
+    def statement(names):
+        inner = ", ".join(names)
+        return f"{pub}use {prefix}{{{inner}}};" if braces else f"{pub}use {prefix}{inner};"
+
+    if own_gate:
+        # Only the platform this gate compiles on can report it dead, so the dead set is
+        # that platform's, and a name the other platform never sees is not assumed live.
+        enabled = "windows" if "windows" in own_gate else "unix"
+        dead_here = {leaf(d) for d in (dw if enabled == "windows" else dl)}
+        kept = [i for i in items if leaf(i) not in dead_here]
+        return [f"{indent}{own_gate}\n{indent}{statement(kept)}\n"] if kept else []
+    # Dead on both is decided first: a name neither platform wants is dropped, and a
+    # stale "dead on one" test would emit it twice, once per gate.
+    d_lin, d_win = {leaf(d) for d in dl}, {leaf(d) for d in dw}
+    dead_both = d_lin & d_win
+    groups = [
+        ([i for i in items if leaf(i) not in d_lin | d_win], None),
+        ([i for i in items if leaf(i) in d_lin - dead_both], "#[cfg(windows)]"),
+        ([i for i in items if leaf(i) in d_win - dead_both], "#[cfg(unix)]"),
+    ]
+    lines = []
+    for names, gate in groups:
+        if not names:
+            continue
+        head = f"{indent}{gate}\n" if gate else ""
+        lines.append(f"{head}{indent}{statement(names)}\n")
+    return lines
+
+
+def rewrite_text(text, lin_dead, win_dead):
+    """Rewrite every `use` in `text` from the dead names reported per line.
+
+    One pass, so no line number ever outruns the text it described."""
     out, last, changed = [], 0, 0
-    for m in matches:
+    for m in STMT.finditer(text):
         first_line = text[: m.start()].count("\n") + 1
         start_line = first_line + m.group(1).count("\n")
-        # `first_line - 1`, not `start_line - 1`: a statement's own cfg attribute is
-        # part of what this function rewrites, so it is emitted here or not at all.
+        # `first_line - 1`, not `start_line - 1`: a statement's own cfg attribute is part
+        # of what this rewrites, so it is emitted here or not at all.
         out.extend(text.splitlines(keepends=True)[last:first_line - 1])
-        stmt = m.group(2)
-        is_pub, prefix, items, braces = parse(stmt)
-        pub = "pub " if is_pub else ""
         indent = re.match(r"\s*", m.group(0)).group(0)
-        dl = set(lin_dead.get(start_line, []))
-        dw = set(win_dead.get(start_line, []))
-        own_gate = m.group(1).strip()          # the gate the src file already put on it
-        if own_gate:
-            # Only the platform this gate compiles on can report it dead, so the dead set
-            # is that platform's, and a name the other platform never sees is not assumed live.
-            enabled = "windows" if "windows" in own_gate else "unix"
-            dead_here = dw if enabled == "windows" else dl
-            kept = [i for i in items if leaf(i) not in {leaf(d) for d in dead_here}]
-            if kept:
-                inner = ", ".join(kept)
-                statement = f"{pub}use {prefix}{{{inner}}};" if braces else f"{pub}use {prefix}{inner};"
-                out.append(f"{indent}{own_gate}\n{indent}{statement}\n")
-        else:
-            # Dead on both is decided first: a name neither platform wants is dropped,
-            # and a stale "dead on one" test would emit it twice, once per gate.
-            dead_both = {leaf(d) for d in dl} & {leaf(d) for d in dw}
-            only_win = [i for i in items if leaf(i) in {leaf(d) for d in dl} - dead_both]
-            only_lin = [i for i in items if leaf(i) in {leaf(d) for d in dw} - dead_both]
-            both = [i for i in items if leaf(i) not in {leaf(d) for d in dl | dw}
-                    and i not in only_win and i not in only_lin]
-            for names, gate in ((both, None), (only_win, "#[cfg(windows)]"), (only_lin, "#[cfg(unix)]")):
-                if not names:
-                    continue
-                inner = ", ".join(names)
-                statement = f"{pub}use {prefix}{{{inner}}};" if braces else f"{pub}use {prefix}{inner};"
-                head = f"{indent}{gate}\n" if gate else ""
-                out.append(f"{head}{indent}{statement}\n")
-        last = start_line + stmt.count("\n")
+        out.extend(plan(m.group(2), m.group(1).strip(), indent,
+                        lin_dead.get(start_line, []), win_dead.get(start_line, [])))
+        last = start_line + m.group(2).count("\n")
         changed += 1
     out.extend(text.splitlines(keepends=True)[last:])
-    path.write_text("".join(out))
+    return "".join(out), changed
+
+
+def rewrite(path, lin_dead, win_dead):
+    text, changed = rewrite_text(path.read_text(), lin_dead, win_dead)
+    path.write_text(text)
     return changed
 
 
-lin = dead(compiler(["clippy", "--all-targets", "--all-features", "--locked", "--", "-D", "warnings"],
-                    {"PATH": LIN_PATH}))
-win = dead(compiler(["check", "--target", "x86_64-pc-windows-gnu", "--lib", "--tests"],
-                    {"PATH": WIN_PATH,
-                     "CC_x86_64_pc_windows_gnu": "x86_64-w64-mingw32-cc",
-                     "CXX_x86_64_pc_windows_gnu": "x86_64-w64-mingw32-c++",
-                     "AR_x86_64_pc_windows_gnu": "x86_64-w64-mingw32-ar"}))
+def main():
+    lin = dead(compiler(["clippy", "--all-targets", "--all-features", "--locked", "--", "-D", "warnings"],
+                        {"PATH": LIN_PATH}))
+    win = dead(compiler(["check", "--target", "x86_64-pc-windows-gnu", "--lib", "--tests"],
+                        {"PATH": WIN_PATH,
+                         "CC_x86_64_pc_windows_gnu": "x86_64-w64-mingw32-cc",
+                         "CXX_x86_64_pc_windows_gnu": "x86_64-w64-mingw32-c++",
+                         "AR_x86_64_pc_windows_gnu": "x86_64-w64-mingw32-ar"}))
+    apply = "--apply" in sys.argv
+    files = sorted(set(lin) | set(win))
+    print(f"linux reports {sum(len(v) for v in lin.values())} dead imports;"
+          f" windows {sum(len(v) for v in win.values())}; across {len(files)} file(s)")
+    for rel in files:
+        p = Path(rel) if Path(rel).exists() else REPO / rel
+        if not p.exists() or "tests/" not in rel:
+            continue
+        print(f"  {rel}: {len(lin.get(rel, {}))} dead on linux, {len(win.get(rel, {}))} on windows")
+        if apply:
+            n = rewrite(p, lin.get(rel, {}), win.get(rel, {}))
+            print(f"    rewrote {n} statement(s)")
+    print("applied" if apply else "dry run")
 
-apply = "--apply" in sys.argv
-files = sorted(set(lin) | set(win))
-print(f"linux reports {sum(len(v) for v in lin.values())} dead imports;"
-      f" windows {sum(len(v) for v in win.values())}; across {len(files)} file(s)")
-for rel in files:
-    p = Path(rel) if Path(rel).exists() else REPO / rel
-    if not p.exists() or "tests/" not in rel:
-        continue
-    print(f"  {rel}: {len(lin.get(rel, {}))} dead on linux, {len(win.get(rel, {}))} on windows")
-    if apply:
-        n = rewrite(p, lin.get(rel, {}), win.get(rel, {}))
-        print(f"    rewrote {n} statement(s)")
-print("applied" if apply else "dry run")
+
+if __name__ == "__main__":
+    main()
