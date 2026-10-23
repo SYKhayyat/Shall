@@ -579,8 +579,25 @@ build and what is deferred to hardware.**
       every directory against the module file that owns its parent. **A directory with no Rust
       anywhere beneath it is data, not a module**: `tests/fixtures/` holds 47 captured command
       outputs and no source, and requiring a `mod` declaration for it would declare nothing.
-    - **What is not claimed.** The code was never wrong. The instrument's own false-catch hazard
-      is `#116`, and it is not fixed by any of this.
+     - **What is not claimed.** The code was never wrong. The instrument's own false-catch hazard
+       is `#116`, and it is not fixed by any of this.
+
+### Tier 34 continuation — the remaining `#120` test-layout sweep: IN PROGRESS
+
+The first mirror move proved the shape; this is the rest of the same rule, not a new behavior
+change. On 2026-10-23, 160 tests moved out of eight source files into `tests/` mirrors:
+`parsers/{language,windows,ecosystem,dnf,common,pacman}`, the entrypoint helpers from `main`,
+and `verbs/plan`. The moved tests remain wired into the single `suite` target, and the library
+builds without those eight inline modules. The source-side frontier is **175 files**, down from
+183; the next files are `model/resolve.rs`, `model/vars.rs`, `app/scheduler/mod.rs`, and
+`backends/service.rs`.
+
+The move widened only helpers that the external test crate must call, with a constraint note on
+each such item; it did not change user-visible behavior. `cargo build --all-targets`,
+`cargo test --lib` (1,800 passed), clippy, and formatting pass. The full suite still reaches an
+existing host-dependent `argv_drift_tests` failure: 1,231 tests pass, while the gate cannot read
+help from installed `apk`, `brew`, `bun`, `composer`, `conda`, `dnf`, `gem`, `go`, `pacman`, or
+`pipx`. That environment/tool-discovery failure is recorded in `HANDOFF.md` rather than hidden.
 
 ### Tier 33 — a ratio that measured the host (`PLAN.md` #107, and `#111` for what is left): BUILT
 
@@ -3081,4 +3098,3 @@ repeatable and nothing would have noticed them going red. That is how a harness 
 `FAST` in three places and read it in none for a whole session.
 
 ---
-

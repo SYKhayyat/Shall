@@ -27,6 +27,23 @@ from pathlib import Path
 DOT_SLASH = "../"  # a directory *up*, which is what a deeper mirror needs
 
 
+def raw_string_start(text: str, i: int):
+    """Return a raw string's closing delimiter and next index, if one starts at ``i``."""
+    if text.startswith("br", i):
+        i += 2
+    elif text.startswith("r", i):
+        i += 1
+    else:
+        return None
+    hashes = 0
+    while i < len(text) and text[i] == "#":
+        hashes += 1
+        i += 1
+    if i >= len(text) or text[i] != '"':
+        return None
+    return '"' + ("#" * hashes), i + 1
+
+
 class Scan:
     """Brace counting that carries string and comment state across lines.
 
@@ -38,6 +55,7 @@ class Scan:
 
     def __init__(self):
         self.in_str = self.in_char = self.in_block = False
+        self.raw_end = None
         self.depth = 0
         self.opened = False
 
@@ -46,6 +64,13 @@ class Scan:
         while i < n:
             ch = line[i]
             nxt = line[i + 1] if i + 1 < n else ""
+            if self.raw_end is not None:
+                if line.startswith(self.raw_end, i):
+                    i += len(self.raw_end)
+                    self.raw_end = None
+                else:
+                    i += 1
+                continue
             if self.in_block:
                 if ch == "*" and nxt == "/":
                     self.in_block = False
@@ -78,6 +103,10 @@ class Scan:
             if ch == '"':
                 self.in_str = True
                 i += 1
+                continue
+            raw = raw_string_start(line, i)
+            if raw is not None:
+                self.raw_end, i = raw
                 continue
             # A char literal is `'x'`; a lifetime is `'a`. The quote two along decides.
             if ch == "'" and i + 2 < n and line[i + 2] == "'":
@@ -190,9 +219,17 @@ def find_test_modules(text: str):
         # them is not a brace, and counting it would swallow the next module.
         depth, j = 1, body_start
         in_str = in_char = in_line = in_block = False
+        raw_end = None
         while j < len(text):
             ch = text[j]
             nxt = text[j + 1] if j + 1 < len(text) else ""
+            if raw_end is not None:
+                if text.startswith(raw_end, j):
+                    j += len(raw_end)
+                    raw_end = None
+                else:
+                    j += 1
+                continue
             if in_line:
                 if ch == "\n":
                     in_line = False
@@ -232,6 +269,10 @@ def find_test_modules(text: str):
             if ch == '"':
                 in_str = True
                 j += 1
+                continue
+            raw = raw_string_start(text, j)
+            if raw is not None:
+                raw_end, j = raw
                 continue
             if ch == "'" and j + 2 < len(text) and text[j + 2] == "'":
                 in_char = True
@@ -499,7 +540,7 @@ def main():
         r"(?m)^((?:#\[[^\]]+\]\n)*)^(?:pub(?:\([^)]*\))?\s+)?use [^;]+;", text, re.M
     ):
         gate = (m.group(1) or "").strip()
-        stmt = m.group(0).split("\n")[-1]
+        stmt = m.group(0)[len(m.group(1) or "") :]
         parent_stmts.append((gate, stmt))
     own_names = set(
         re.findall(

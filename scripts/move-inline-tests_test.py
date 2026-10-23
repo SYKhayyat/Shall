@@ -155,9 +155,12 @@ def main() -> int:
             not dupes and not twice,
             f"same name twice: {dupes}; statement twice in one file: {twice}",
         )
-
         # and the two things a hand-mover got wrong and the tool must not repeat
         bodies = "\n".join(p.read_text() for p in mirror.rglob("*.rs"))
+        check(
+            "a multiline parent import is not truncated to its closing brace",
+            not any(line.strip() == "};" for line in bodies.splitlines()),
+        )
         # **A test's own `use crate::…` is the one that must become `shall::…`;** a
         # path the *product* interprets keeps its shape, and the tool does not go
         # looking for those.

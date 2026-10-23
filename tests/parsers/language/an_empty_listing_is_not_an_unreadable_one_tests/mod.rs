@@ -1,0 +1,16 @@
+use serde_json::Value;
+pub use shall::core::Package;
+pub use shall::parsers::language::*;
+pub use shall::parsers::{or_unrecognised, ParseResult, Unrecognised};
+pub use shall::utils::text::sanitize;
+mod a_populated_pipx_still_parses;
+mod a_populated_yarn_global_still_parses_through_its_own_chrome;
+mod a_renamed_container_is_a_format_change_and_not_an_empty_machine;
+mod an_empty_container_is_empty_for_every_json_backend;
+mod an_empty_npm_global_is_empty_and_not_unreadable;
+mod an_empty_pipx_is_empty_and_not_unreadable;
+mod an_empty_yarn_global_is_empty_and_not_unreadable;
+mod broken_json_is_still_unreadable;
+mod empty_and_renamed_are_told_apart_by_what_else_the_document_carries;
+mod entries_that_yield_no_package_are_a_format_change_too;
+mod npm_garbage_is_still_unreadable;

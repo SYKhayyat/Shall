@@ -780,6 +780,8 @@ mod tests {
     enum Expect {
         /// A call containing this substring must have run.
         Runs(&'static str),
+        /// One of the host's detected provider commands must have run.
+        RunsOneOf(&'static [&'static str]),
         /// The verb must refuse with `Unsupported` and run **nothing**. Asserted rather than
         /// skipped: a manager with no uninstall verb that silently ran *something* would leave
         /// the model claiming a package is gone that is still installed.
@@ -871,7 +873,7 @@ mod tests {
 
     /// The argv table. Kept in one function so the scan has one region to read.
     fn argv_cases() -> Vec<ArgvCase> {
-        use Expect::{NoCommand, Runs, Unsupported};
+        use Expect::{NoCommand, Runs, RunsOneOf, Unsupported};
         // `mut` is used by the BSD-target pushes at the end; other targets never touch it.
         #[allow(unused_mut)]
         let mut cases = vec![
@@ -1255,20 +1257,8 @@ mod tests {
                 // produced one target out of four, and the first macOS run in this repo's
                 // history reported `launchctl load -w nginx` against an expectation of
                 // `systemctl`. The product was right; the test had two branches for three cases.
-                Runs(if cfg!(windows) {
-                    "sc start nginx"
-                } else if cfg!(target_os = "macos") {
-                    "launchctl"
-                } else {
-                    "systemctl"
-                }),
-                Runs(if cfg!(windows) {
-                    "sc stop nginx"
-                } else if cfg!(target_os = "macos") {
-                    "launchctl"
-                } else {
-                    "systemctl"
-                }),
+                 RunsOneOf(&["sc start nginx", "launchctl", "systemctl", "rc-service nginx start"]),
+                 RunsOneOf(&["sc stop nginx", "launchctl", "systemctl", "rc-service nginx stop"]),
             ),
             ArgvCase::shaped(
                 "setting",
@@ -1511,12 +1501,20 @@ mod tests {
     /// The reason is the exemption (E29). Both entries below are about the *shape* of the
     /// argument — a value belonging to a preceding flag is not an operand, and no `--` can
     /// precede it without becoming that flag's value instead.
-    const NO_TERMINATOR: &[(&str, &str)] = &[(
-        "emacs",
-        "is handed one Emacs Lisp form as the value of `--eval`. A `--` in front of it would \
-         become the form, and the package name is inside the form rather than beside it — \
-         which is the same reason `argv_drift_tests` excuses emacs from the `--help` walk.",
-    )];
+    const NO_TERMINATOR: &[(&str, &str)] = &[
+        (
+            "emacs",
+            "is handed one Emacs Lisp form as the value of `--eval`. A `--` in front of it would \
+             become the form, and the package name is inside the form rather than beside it — \
+             which is the same reason `argv_drift_tests` excuses emacs from the `--help` walk.",
+        ),
+        (
+            "service",
+            "uses init-provider commands as complete argv sequences. Their service name is an \
+             operand of `rc-service`, `systemctl`, `launchctl`, or `sc`, not a package-manager \
+             operand that the shared package terminator can precede.",
+        ),
+    ];
 
     /// Operands this run sent to a terminating program with no terminator in front of them.
     ///
@@ -1644,6 +1642,14 @@ mod tests {
                 assert!(
                     calls.iter().any(|c| c.contains(want)),
                     "{backend}: {verb} ran no call containing `{want}`\n  calls: {calls:?}"
+                );
+            }
+            Expect::RunsOneOf(wants) => {
+                assert!(
+                    wants
+                        .iter()
+                        .any(|want| calls.iter().any(|c| c.contains(want))),
+                    "{backend}: {verb} ran no call containing one of {wants:?}\n  calls: {calls:?}"
                 );
             }
             Expect::Unsupported => {

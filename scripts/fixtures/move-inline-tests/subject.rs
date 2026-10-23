@@ -15,9 +15,12 @@
 //! 6. a `#[cfg(unix)]` gate above an import;
 //! 7. a `#[cfg(test)]` constructor that must not ship;
 //! 8. a `super::Item` **path** rather than an import;
-//! 9. an `include_str!` with a path relative to the src file.
+//! 9. an `include_str!` with a path relative to the src file;
+//! 10. raw strings whose braces and quotes are not Rust syntax.
 
-use crate::core::error::Error;
+use crate::core::{
+    error::Error,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -64,6 +67,7 @@ mod tests {
     /// **The path is relative to the src file** that holds it, which is why the
     /// tool must make it one directory deeper rather than translating it as code.
     const BAKE_ANNOUNCEMENT: &str = include_str!("../../fixtures/move-inline-tests/fixture-output.txt");
+    const RAW: &str = r#"{"not_code": "{}"}"#;
 
     #[test]
     fn a_flat_assertion_names_the_subject_it_was_given() {
@@ -74,6 +78,7 @@ mod tests {
     #[test]
     fn an_included_file_is_read_from_where_the_tool_put_it() {
         assert!(BAKE_ANNOUNCEMENT.contains("fixture"));
+        assert!(RAW.contains("not_code"));
     }
 
     #[test]

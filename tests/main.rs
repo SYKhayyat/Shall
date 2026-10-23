@@ -24,6 +24,8 @@
 //! survive becoming a module. On the `mod` line it is strictly better — off-platform the module
 //! is not compiled at all rather than compiled to nothing.
 
+#![allow(unused_imports)]
+
 /// The shared test doubles. Declared once here, which is the whole point: nineteen files said
 /// `mod mock_providers;` and each got its own copy.
 mod a_drifted_ecosystem_does_not_strand_the_config_tests;
@@ -46,6 +48,7 @@ mod ledger;
 /// tests, and over the recorded ceiling because of them; the code is 1,530 lines and the ceiling
 /// row is retired rather than raised.
 mod app;
+mod entrypoint;
 
 /// **The mirror, continued.** `src/core/sudo.rs` owns `tests/core/sudo/`, under the same rule
 /// as `src/app/sync/guard.rs`: a src file's tests live in a folder of their own, so that "where
@@ -53,6 +56,8 @@ mod app;
 mod backends;
 mod config;
 mod core;
+mod parsers;
+mod verbs;
 
 /// **The review apparatus.** The tests that read the tree rather than drive the product — the
 /// gates that assert a property of the *code*, and the policies written in a workflow file

@@ -1,0 +1,13 @@
+use serde_json::Value;
+pub use shall::core::Package;
+pub use shall::parsers::language::*;
+pub use shall::parsers::{or_unrecognised, ParseResult, Unrecognised};
+pub use shall::utils::text::sanitize;
+mod bun_reads_its_own_output_and_no_nested_row;
+mod composer_empty_global_project_reads_as_no_packages;
+mod composer_nonempty_bare_array_is_refused;
+mod test_bun_list_parsing;
+mod test_cargo_list_parsing;
+mod test_composer_json_parsing;
+mod test_npm_object_and_pnpm_array_both_parse;
+mod yarn_reads_the_only_line_that_names_the_package;

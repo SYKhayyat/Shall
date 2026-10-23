@@ -67,33 +67,6 @@ pub fn parse_search_for(output: &str, backend: &str) -> Vec<Package> {
     packages
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_pacman_list_parsing() {
-        let input = "bash 5.1.016-1\nlinux 6.3.5.arch1-1\n";
-        let res = parse_list(input).expect("this fixture parses");
-        assert_eq!(res.len(), 2);
-        assert_eq!(res[0].name, "bash");
-        assert_eq!(res[1].version, Some("6.3.5.arch1-1".into()));
-    }
-
-    #[test]
-    fn test_pacman_search_parsing() {
-        let input = "core/bash 5.1.016-1 (base)\n    The GNU Bourne Again Shell\nextra/vim 9.0.1583-1\n    Vi Improved, a highly configurable, improved version of the Vi real-time editor\n";
-        let res = parse_search(input);
-        assert_eq!(res.len(), 2);
-        assert_eq!(res[0].name, "bash");
-        assert_eq!(
-            res[0].properties.get("description").unwrap(),
-            "The GNU Bourne Again Shell"
-        );
-        assert_eq!(res[1].name, "vim");
-    }
-}
-
 /// The `Depends On` row of a `pacman -Si` report, as package names.
 ///
 /// **Matched by key, not by column.** This stripped the literal `"Depends On     :"` — five
@@ -135,50 +108,6 @@ pub fn parse_depends_on(output: &str) -> Vec<String> {
     deps
 }
 
-#[cfg(test)]
-mod depends_tests {
-    use super::parse_depends_on;
-
-    /// Verbatim from `pacman -Si` in the Arch integration image, 2026-08-06 — the whole point
-    /// being the column width, which the old fixed-width `strip_prefix` was one space short of.
-    const SI_JQ: &str = "\
-Repository      : extra
-Name            : jq
-Version         : 1.8.1-1
-Depends On      : glibc  oniguruma
-Optional Deps   : None
-Conflicts With  : None
-Description     : Command-line JSON processor
-";
-
-    #[test]
-    fn a_depends_row_is_matched_by_its_key_and_not_by_its_column() {
-        assert_eq!(parse_depends_on(SI_JQ), vec!["glibc", "oniguruma"]);
-    }
-
-    #[test]
-    fn a_row_of_the_same_shape_that_is_not_a_dependency_is_left_alone() {
-        // `Optional Deps` and `Conflicts With` sit in the same column and are not dependencies;
-        // matching by prefix on `Depends` would have taken `Optional Deps` too once the width
-        // was right.
-        let deps = parse_depends_on(SI_JQ);
-        assert!(!deps.iter().any(|d| d == "None"), "{:?}", deps);
-        assert!(!deps.iter().any(|d| d == "Command-line"), "{:?}", deps);
-    }
-
-    #[test]
-    fn a_version_constraint_is_not_part_of_the_name() {
-        let out = "Depends On      : glibc>=2.36  sh=5  libc.so\n";
-        assert_eq!(parse_depends_on(out), vec!["glibc", "sh", "libc.so"]);
-    }
-
-    #[test]
-    fn a_package_with_no_dependencies_reports_none_of_them() {
-        assert!(parse_depends_on("Depends On      : None\n").is_empty());
-        assert!(parse_depends_on("Name            : tree\n").is_empty());
-    }
-}
-
 /// `pacman -Qu` (`Q44`): `name installed -> available`, one per line.
 pub fn parse_pacman_outdated(output: &str) -> Vec<Package> {
     crate::utils::text::sanitize(output)
@@ -193,34 +122,4 @@ pub fn parse_pacman_outdated(output: &str) -> Vec<Package> {
             Some(Package::with_version(name, available, "pacman"))
         })
         .collect()
-}
-
-#[cfg(test)]
-mod outdated_tests {
-    use super::*;
-
-    /// Verbatim from `pacman -Qu` in a `shall-it-arch` container.
-    const PACMAN: &str = "\
-archlinux-keyring 20260707.1-1 -> 20260727-1
-audit 4.1.4-2 -> 4.2.1-1
-gcc 16.1.1+r581+gb73ad535acaa-1 -> 16.1.1+r595+g171d15ac6959-1
-";
-
-    #[test]
-    fn pacman_reads_the_right_side_of_the_arrow() {
-        let p = parse_pacman_outdated(PACMAN);
-        assert_eq!(p.len(), 3);
-        assert_eq!(p[0].name, "archlinux-keyring");
-        assert_eq!(p[0].version.as_deref(), Some("20260727-1"));
-        // A version containing `+r581+g...` must survive intact — it is arch's own shape for
-        // a VCS build and splitting it differently loses the identity.
-        assert_eq!(p[2].version.as_deref(), Some("16.1.1+r595+g171d15ac6959-1"));
-    }
-
-    #[test]
-    fn nothing_upgradable_is_nothing() {
-        assert!(parse_pacman_outdated("").is_empty());
-        // `pacman -Qu` prints nothing at all when everything is current.
-        assert!(parse_pacman_outdated("\n\n").is_empty());
-    }
 }

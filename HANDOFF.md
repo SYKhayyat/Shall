@@ -14,27 +14,28 @@ easier.
 
 | | |
 |---|---|
-| src files still carrying an inline test module | **183**, split: app 41, core 39, backends 37, model 30, parsers 15, verbs 8, config 7, utils 5 |
-| tests already in mirror folders | executor, guard, transaction, generic, statement, sync |
+| src files still carrying an inline test module | **175**, split: app 41, core 39, backends 37, model 30, parsers 9, verbs 7, config 7, utils 5 |
+| tests already in mirror folders | executor, guard, transaction, generic, statement, sync, language, windows, ecosystem, dnf, common, pacman, main, plan |
 | `TOO_BIG_FOR_NOW` rows | **0** — the target state, and `executor.rs` was the last |
-| library test count | 1,932 (fell by exactly 41) |
-| suite test count | 1,072 (rose by exactly 41) |
+| moved in this session | **160 tests** from eight files; the library now builds without those inline modules |
 | converter scripts in the repo | 2, both with passing self-tests |
 
-Everything below line is green: `cargo build`, `cargo test` (1,932 + 1,072, none
-failed), clippy at `-D warnings --all-features`, `cargo fmt` at 1.97.1, and the
-Windows cross-check.
+`cargo build --all-targets`, clippy at `-D warnings --all-features`, and `cargo fmt` are
+green. The full test run reached the suite and reported **1,231 passed, 1 failed** on this
+host: the existing `argv_drift_tests` gate verified 45 commands but could not read help from
+installed `apk`, `brew`, `bun`, `composer`, `conda`, `dnf`, `gem`, `go`, `pacman`, or `pipx`.
+That is an environment/tool-discovery failure, not a moved-test failure; the registry argv test
+now correctly exposes the host's OpenRC provider (fixed in this commit).
+The Windows cross-check is still unavailable here because the cross compiler is not installed.
 
 **The next moves, in this order.** Priority is inline-test count, not file size —
 a file with 26 tests is 26 hand-edits if the tool does not work, and it will not.
 
-1. `src/parsers/language.rs` — 26 tests, 1,155 lines. New folder: `tests/parsers/`.
-   Already has flat files there, so `mod` wiring goes through `tests/parsers/mod.rs`.
-2. `src/parsers/windows.rs` — 23 tests. Same folder.
-3. `src/main.rs` — 14 tests, and it has **two** `#[cfg(test)]` blocks (lines 1318 and
-   1577), which is the multi-module case the mover must keep apart.
-4. `src/verbs/plan.rs` — 13 tests, 1,942 lines, the second-largest file left.
-5. The four 13-test parser files, then the long tail.
+1. `src/model/resolve.rs` — 56 tests, 2,506 lines.
+2. `src/model/vars.rs` — 38 tests, 1,038 lines.
+3. `src/app/scheduler/mod.rs` — 33 tests, 2,753 lines.
+4. `src/backends/service.rs` — 30 tests, 1,510 lines.
+5. `src/utils/file.rs`, `src/core/extras_lock.rs`, and `src/config/grammar/mod.rs`, then the long tail.
 
 ---
 
@@ -178,7 +179,7 @@ These cost the most time. All are written down rather than re-derived.
   calls both dead and the other needs one of them: the statement is split
   `#[cfg(unix)]`/`#[cfg(windows)]`, not deleted.
 - **Run the tools' own tests after any change to them.** `scripts/move-inline-tests_test.py`
-  (10/10) and `scripts/fix-mirror-imports_test.py` (12/12). Both run in about a second
+  (11/11) and `scripts/fix-mirror-imports_test.py` (12/12). Both run in about a second
   against fixtures and no compiler. **Ten full cargo builds were spent discovering
   what a fixture test finds immediately** — this is the one lesson from the retro that
   is binding on the next file.
