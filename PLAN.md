@@ -1,4 +1,9 @@
 # PLAN — Shall (work top to bottom, one issue per worker session)
+<!-- The sweep's operational handoff: what is verified, what to do next, and the one
+     thing not to redo. A fresh session starts there. -->
+**Operational handoff for the #120 sweep: `HANDOFF.md`** — it names the next move,
+the acceptance criteria, and the two environment variables every cargo command on
+this host needs.
 
 Worker loop: top unchecked item only, fix + resolving test, commit, check off, stop.
 Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, #52, #56, #57, #58, #69, #70, #71, #34, #37, #75, #76, #77, #78, #35, #99, #97, #102, #98, #91, #86, #85, #81, #83, #84, #79, #82, #87, #95, #103, #88, #36, #55, #101, #105, #106, #107.
