@@ -21,30 +21,30 @@ use tokio::sync::Mutex;
 use tracing::{debug, info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct GithubState {
-    repo: String,
-    version: String,
+pub struct GithubState {
+    pub repo: String,
+    pub version: String,
     /// The declaration's directory. Every artifact it installed unpacks under here, so a
     /// removal has one tree to delete however many files the line resolved to.
-    install_path: String,
+    pub install_path: String,
     /// The resolved artifacts, in selection order. A record of only the version leaves the
     /// file free to change under a pinned declaration, which is what artifact selection exists
     /// to prevent; `@asset=all` is the only way there is more than one.
-    artifacts: Vec<InstalledArtifact>,
+    pub artifacts: Vec<InstalledArtifact>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct InstalledArtifact {
-    asset: String,
-    format: String,
-    bin_path: Option<String>,
+pub struct InstalledArtifact {
+    pub asset: String,
+    pub format: String,
+    pub bin_path: Option<String>,
     /// The system manager that owns this artifact (D5), when the file installed itself into a
     /// package database (`dpkg`/`rpm`) rather than being deployed to PATH by Shall.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    installed_by: Option<String>,
+    pub installed_by: Option<String>,
     /// The name that manager knows it as — what removal and dedup use.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    system_package: Option<String>,
+    pub system_package: Option<String>,
 }
 
 impl GithubState {
@@ -54,17 +54,17 @@ impl GithubState {
 }
 
 #[derive(Debug, Deserialize)]
-struct GithubAsset {
-    name: String,
+pub struct GithubAsset {
+    pub name: String,
     #[serde(rename = "browser_download_url")]
-    url: String,
+    pub url: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct GithubRelease {
+pub struct GithubRelease {
     #[serde(rename = "tag_name")]
-    version: String,
-    assets: Vec<GithubAsset>,
+    pub version: String,
+    pub assets: Vec<GithubAsset>,
 }
 
 pub struct GithubBackendCore {
@@ -115,7 +115,7 @@ pub struct GithubBackendCore {
 
 /// What to do with a response that may be a rate limit (S26).
 #[derive(Debug, PartialEq, Eq)]
-enum RateLimit {
+pub enum RateLimit {
     /// Not a rate limit: a success, or a 403 for a reason waiting cannot change (a bad token,
     /// a private repo, a limit that has already reset).
     NotLimited,
@@ -128,7 +128,7 @@ enum RateLimit {
 /// Decide from a 403's `x-ratelimit-reset` header. Pure — the clock and the ceiling are
 /// arguments — because the decision is the part that has to be right, and an integration test
 /// against api.github.com cannot make a rate limit happen on demand.
-fn rate_limit_action(status: u16, reset_header: Option<&str>, now: u64, cap: u64) -> RateLimit {
+pub fn rate_limit_action(status: u16, reset_header: Option<&str>, now: u64, cap: u64) -> RateLimit {
     if status != 403 {
         return RateLimit::NotLimited;
     }
@@ -251,7 +251,9 @@ impl GithubBackendCore {
     /// **Asset URLs arrive verbatim from release JSON.** Attaching the bearer to whatever
     /// host they name made one hostile repo's release a credential collector: the request was
     /// first-party from Shall's process, so reqwest's cross-host stripping never applied.
-    fn token_belongs_here(url: &str) -> bool {
+    /// **`pub` for the integration tests' sake.** The GitHub mirror asserts token host scoping
+    /// against the same URL predicate used by requests.
+    pub fn token_belongs_here(url: &str) -> bool {
         matches!(
             reqwest::Url::parse(url)
                 .ok()
@@ -428,7 +430,7 @@ pub struct GithubInstallable {
 /// handed to that manager, which then *owns* it (removal, upgrade and dedup route back through
 /// the recorded installer). On a machine without the manager the format is not installable, so a
 /// line that offers only a `.deb` there falls through to download-only rather than failing.
-fn installable_here(format: Format, has_dpkg: bool, has_rpm: bool) -> bool {
+pub fn installable_here(format: Format, has_dpkg: bool, has_rpm: bool) -> bool {
     if format.is_archive() || matches!(format, Format::AppImage | Format::Binary) {
         return true;
     }
@@ -449,12 +451,12 @@ fn tag_url(repo: &str, tag: &str) -> String {
 /// The two tags a pin may name. Roughly half of GitHub tags carry a leading `v`, so `@version=`
 /// is spelled one way and tagged the other often enough that trying only what was written finds
 /// nothing on half the repos.
-fn tag_spellings(pin: &str) -> [String; 2] {
+pub fn tag_spellings(pin: &str) -> [String; 2] {
     let bare = pin.strip_prefix('v').unwrap_or(pin);
     [bare.to_string(), format!("v{}", bare)]
 }
 
-fn same_tag(pin: &str, tag: &str) -> bool {
+pub fn same_tag(pin: &str, tag: &str) -> bool {
     let [bare, _] = tag_spellings(pin);
     let [tag_bare, _] = tag_spellings(tag);
     bare == tag_bare
@@ -462,7 +464,7 @@ fn same_tag(pin: &str, tag: &str) -> bool {
 
 /// A repo carrying both `10.2.0` and `v10.2.0` has two releases answering to one pin, and
 /// choosing between them here would install a version the user never named.
-fn one_release(
+pub fn one_release(
     repo: &str,
     pin: &str,
     bare: Option<GithubRelease>,
@@ -500,7 +502,9 @@ fn same_set(a: &[&str], b: &[&str]) -> bool {
 
 /// The subdirectory one artifact unpacks into, from its filename. Nothing here reaches the
 /// user: it exists so two archives under one declaration cannot overwrite each other.
-fn artifact_dir_name(asset: &str) -> String {
+/// **`pub` for the integration tests' sake.** The GitHub mirror asserts artifact-directory
+/// sanitization without duplicating the path rule.
+pub fn artifact_dir_name(asset: &str) -> String {
     asset
         .chars()
         .map(|c| {
@@ -514,10 +518,10 @@ fn artifact_dir_name(asset: &str) -> String {
 }
 
 /// What local files already know about a declaration, before anything is asked of GitHub.
-struct Known<'a> {
-    pin: Option<&'a str>,
-    locked: &'a [ArtifactLock],
-    installed: Option<&'a GithubState>,
+pub struct Known<'a> {
+    pub pin: Option<&'a str>,
+    pub locked: &'a [ArtifactLock],
+    pub installed: Option<&'a GithubState>,
 }
 
 /// Whether the lock and the install already answer the declaration, so no API call is owed.
@@ -526,7 +530,11 @@ struct Known<'a> {
 /// and only GitHub knows that. The formats and `@asset=` checks are what keep a pinned line
 /// honest — changing either asks for a different artifact of the same release, and only a
 /// re-selection can find it.
-fn answered_locally(known: &Known, formats: &FormatOrder, asset: Option<&AssetPattern>) -> bool {
+pub fn answered_locally(
+    known: &Known,
+    formats: &FormatOrder,
+    asset: Option<&AssetPattern>,
+) -> bool {
     let (Some(pin), Some(installed)) = (known.pin, known.installed) else {
         return false;
     };
@@ -1261,333 +1269,4 @@ pub fn register(
             .with_metadata_provider(core.clone())
             .build(),
     ));
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // H5: the token rides only on hosts GitHub itself serves. Asset URLs come verbatim from
-    // release JSON, so the allowlist is what stands between a hostile release and a machine's
-    // credential — a request Shall itself makes is first-party, and reqwest's cross-host
-    // header stripping never applies to it.
-    #[test]
-    fn the_token_goes_only_to_hosts_github_serves() {
-        for good in [
-            "https://api.github.com/repos/x/y/releases/latest",
-            "https://github.com/owner/repo/releases/download/v1/a.zip",
-            "https://www.github.com/owner/repo/releases/download/v1/a.zip",
-        ] {
-            assert!(
-                GithubBackendCore::token_belongs_here(good),
-                "GitHub's own host must still be tokened: {good}"
-            );
-        }
-        for bad in [
-            "https://objects.githubusercontent.com/secrets",
-            "https://evil.example.com/payload",
-            "https://api.github.com.evil.example.com/repos/x/y",
-            "not a url at all",
-        ] {
-            assert!(
-                !GithubBackendCore::token_belongs_here(bad),
-                "the bearer must not ride to {bad}"
-            );
-        }
-    }
-
-    // S26. The old handler slept until the reset — up to an hour, holding the data lock —
-    // and then returned the same 403 it had slept on, so the wait bought nothing.
-    #[test]
-    fn a_reset_inside_the_ceiling_is_waited_out_and_retried() {
-        assert_eq!(
-            rate_limit_action(403, Some("1000"), 980, 30),
-            RateLimit::WaitThenRetry(21)
-        );
-    }
-
-    #[test]
-    fn a_reset_past_the_ceiling_is_refused_with_the_wait_it_would_have_taken() {
-        assert_eq!(
-            rate_limit_action(403, Some("4600"), 1000, 30),
-            RateLimit::TooLong(3601)
-        );
-    }
-
-    #[test]
-    fn the_ceiling_is_the_only_thing_that_decides_between_them() {
-        // The same response, one machine willing to wait an hour and one not.
-        assert_eq!(
-            rate_limit_action(403, Some("4600"), 1000, 7200),
-            RateLimit::WaitThenRetry(3601)
-        );
-    }
-
-    #[test]
-    fn a_403_that_is_not_a_rate_limit_is_never_waited_on() {
-        // A bad token or a private repo: no header, and no amount of waiting changes it.
-        assert_eq!(
-            rate_limit_action(403, None, 1000, 30),
-            RateLimit::NotLimited
-        );
-        // A header that is not a number is not a reset time either.
-        assert_eq!(
-            rate_limit_action(403, Some("soon"), 1000, 30),
-            RateLimit::NotLimited
-        );
-        // And a limit that has already reset is over, whatever the header says.
-        assert_eq!(
-            rate_limit_action(403, Some("999"), 1000, 30),
-            RateLimit::NotLimited
-        );
-    }
-
-    #[test]
-    fn a_response_that_is_not_a_403_is_left_alone() {
-        for status in [200, 404, 429, 500] {
-            assert_eq!(
-                rate_limit_action(status, Some("99999"), 1000, 30),
-                RateLimit::NotLimited,
-                "status {} was treated as a rate limit",
-                status
-            );
-        }
-    }
-
-    fn release(tag: &str) -> GithubRelease {
-        GithubRelease {
-            version: tag.to_string(),
-            assets: vec![],
-        }
-    }
-
-    fn lock(version: &str, asset: &str, format: &str) -> ArtifactLock {
-        ArtifactLock {
-            version: Some(version.to_string()),
-            asset: asset.to_string(),
-            url: format!("https://example.invalid/{}", asset),
-            format: format.to_string(),
-            selected_by: None,
-            sha256: Some("abc123".into()),
-            ..Default::default()
-        }
-    }
-
-    fn installed(version: &str, assets: &[&str]) -> GithubState {
-        GithubState {
-            repo: "sharkdp/fd".into(),
-            version: version.to_string(),
-            install_path: "/opt/shall/sharkdp_fd".into(),
-            artifacts: assets
-                .iter()
-                .map(|a| InstalledArtifact {
-                    asset: (*a).to_string(),
-                    format: "tarball".into(),
-                    bin_path: Some(format!("/home/u/.local/bin/{}", a)),
-                    installed_by: None,
-                    system_package: None,
-                })
-                .collect(),
-        }
-    }
-
-    fn tarballs() -> FormatOrder {
-        FormatOrder::new(vec![Format::Tarball, Format::Binary])
-    }
-
-    #[test]
-    fn a_deb_is_installable_only_where_dpkg_exists() {
-        // D5: on a machine with the manager the file is a handoff install; without it, the
-        // format is not installable here, so a line offering only a `.deb` becomes download-only
-        // rather than failing.
-        assert!(installable_here(Format::Deb, true, false));
-        assert!(!installable_here(Format::Deb, false, false));
-        assert!(installable_here(Format::Rpm, false, true));
-        assert!(!installable_here(Format::Rpm, false, false));
-        // Archives never depend on a system installer.
-        assert!(installable_here(Format::Tarball, false, false));
-        assert!(installable_here(Format::Binary, false, false));
-        // A macOS/Windows database shape Shall does not hand off is not installable via this path.
-        assert!(!installable_here(Format::Msi, true, true));
-    }
-
-    #[test]
-    fn a_pinned_version_matches_the_tag_with_or_without_a_v() {
-        assert_eq!(tag_spellings("10.2.0"), tag_spellings("v10.2.0"));
-        assert!(same_tag("10.2.0", "v10.2.0"));
-        assert!(same_tag("v10.2.0", "10.2.0"));
-        assert!(!same_tag("10.2.0", "10.2.1"));
-    }
-
-    #[test]
-    fn a_pin_that_answers_to_both_spellings_is_an_error_naming_both() {
-        let err = one_release(
-            "sharkdp/fd",
-            "10.2.0",
-            Some(release("10.2.0")),
-            Some(release("v10.2.0")),
-        )
-        .unwrap_err()
-        .to_string();
-        assert!(err.contains("10.2.0"), "{}", err);
-        assert!(err.contains("v10.2.0"), "{}", err);
-    }
-
-    #[test]
-    fn either_spelling_alone_resolves_to_that_release() {
-        let from_bare = one_release("sharkdp/fd", "10.2.0", Some(release("10.2.0")), None).unwrap();
-        assert_eq!(from_bare.version, "10.2.0");
-        let from_prefixed =
-            one_release("sharkdp/fd", "10.2.0", None, Some(release("v10.2.0"))).unwrap();
-        assert_eq!(from_prefixed.version, "v10.2.0");
-    }
-
-    #[test]
-    fn a_pin_no_tag_answers_names_both_spellings_it_tried() {
-        let err = one_release("sharkdp/fd", "9.9.9", None, None)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("9.9.9"), "{}", err);
-        assert!(err.contains("v9.9.9"), "{}", err);
-    }
-
-    #[test]
-    fn a_pinned_installed_package_is_answered_without_the_network() {
-        let locked = [lock("v10.2.0", "fd.tar.gz", "tarball")];
-        let state = installed("v10.2.0", &["fd.tar.gz"]);
-        let known = Known {
-            pin: Some("10.2.0"),
-            locked: &locked,
-            installed: Some(&state),
-        };
-        assert!(answered_locally(&known, &tarballs(), None));
-    }
-
-    #[test]
-    fn an_unpinned_line_always_asks_github() {
-        let locked = [lock("v10.2.0", "fd.tar.gz", "tarball")];
-        let state = installed("v10.2.0", &["fd.tar.gz"]);
-        let known = Known {
-            pin: None,
-            locked: &locked,
-            installed: Some(&state),
-        };
-        assert!(!answered_locally(&known, &tarballs(), None));
-    }
-
-    #[test]
-    fn a_pin_that_moved_past_the_lock_asks_github() {
-        let locked = [lock("v10.2.0", "fd.tar.gz", "tarball")];
-        let state = installed("v10.2.0", &["fd.tar.gz"]);
-        let known = Known {
-            pin: Some("10.3.0"),
-            locked: &locked,
-            installed: Some(&state),
-        };
-        assert!(!answered_locally(&known, &tarballs(), None));
-    }
-
-    #[test]
-    fn a_lock_without_an_install_asks_github() {
-        let locked = [lock("v10.2.0", "fd.tar.gz", "tarball")];
-        let known = Known {
-            pin: Some("10.2.0"),
-            locked: &locked,
-            installed: None,
-        };
-        assert!(!answered_locally(&known, &tarballs(), None));
-    }
-
-    #[test]
-    fn an_install_that_drifted_from_the_lock_asks_github() {
-        let locked = [lock("v10.2.0", "fd-gnu.tar.gz", "tarball")];
-        let state = installed("v10.2.0", &["fd-musl.tar.gz"]);
-        let known = Known {
-            pin: Some("10.2.0"),
-            locked: &locked,
-            installed: Some(&state),
-        };
-        assert!(!answered_locally(&known, &tarballs(), None));
-    }
-
-    #[test]
-    fn changing_formats_under_a_pin_asks_github_again() {
-        let locked = [lock("v10.2.0", "fd.tar.gz", "tarball")];
-        let state = installed("v10.2.0", &["fd.tar.gz"]);
-        let known = Known {
-            pin: Some("10.2.0"),
-            locked: &locked,
-            installed: Some(&state),
-        };
-        assert!(!answered_locally(
-            &known,
-            &FormatOrder::new(vec![Format::Deb]),
-            None
-        ));
-    }
-
-    #[test]
-    fn a_pinned_set_of_several_is_answered_without_the_network() {
-        // `@asset=all` locks every file it installed; all of them present is the answer.
-        let locked = [
-            lock("v10.2.0", "fd.tar.gz", "tarball"),
-            lock("v10.2.0", "fd-server.tar.gz", "tarball"),
-        ];
-        let state = installed("v10.2.0", &["fd-server.tar.gz", "fd.tar.gz"]);
-        let known = Known {
-            pin: Some("10.2.0"),
-            locked: &locked,
-            installed: Some(&state),
-        };
-        assert!(answered_locally(
-            &known,
-            &tarballs(),
-            Some(&AssetPattern::parse("all").unwrap())
-        ));
-    }
-
-    #[test]
-    fn one_of_a_locked_set_missing_from_disk_asks_github_again() {
-        let locked = [
-            lock("v10.2.0", "fd.tar.gz", "tarball"),
-            lock("v10.2.0", "fd-server.tar.gz", "tarball"),
-        ];
-        let state = installed("v10.2.0", &["fd.tar.gz"]);
-        let known = Known {
-            pin: Some("10.2.0"),
-            locked: &locked,
-            installed: Some(&state),
-        };
-        assert!(!answered_locally(
-            &known,
-            &tarballs(),
-            Some(&AssetPattern::parse("all").unwrap())
-        ));
-    }
-
-    #[test]
-    fn two_assets_unpack_into_two_directories() {
-        // Both archives can contain `bin/`, and one tree would lose one of them.
-        assert_ne!(
-            artifact_dir_name("fd-x86_64-musl.tar.gz"),
-            artifact_dir_name("fd-x86_64-gnu.tar.gz")
-        );
-        assert!(!artifact_dir_name("../escape.tar.gz").contains('/'));
-        assert!(!artifact_dir_name("..\\escape.tar.gz").contains('\\'));
-    }
-
-    #[test]
-    fn changing_the_asset_pattern_under_a_pin_asks_github_again() {
-        let locked = [lock("v10.2.0", "fd-gnu.tar.gz", "tarball")];
-        let state = installed("v10.2.0", &["fd-gnu.tar.gz"]);
-        let known = Known {
-            pin: Some("10.2.0"),
-            locked: &locked,
-            installed: Some(&state),
-        };
-        let musl = AssetPattern::parse("*musl*").unwrap();
-        assert!(!answered_locally(&known, &tarballs(), Some(&musl)));
-        let gnu = AssetPattern::parse("*gnu*").unwrap();
-        assert!(answered_locally(&known, &tarballs(), Some(&gnu)));
-    }
 }

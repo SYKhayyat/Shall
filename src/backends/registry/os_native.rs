@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use super::{with_manager_policy, BackendRegistry};
 
-pub(super) fn register_winget(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_winget(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "winget".into(),
         executor: executor.clone(),
@@ -132,7 +132,7 @@ pub(super) fn register_winget(reg: &mut BackendRegistry, executor: &CommandExecu
     ));
 }
 
-pub(super) fn register_scoop(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_scoop(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "scoop".into(),
         executor: executor.clone(),
@@ -215,7 +215,7 @@ pub(super) fn register_scoop(reg: &mut BackendRegistry, executor: &CommandExecut
     ));
 }
 
-pub(super) fn register_choco(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_choco(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "choco".into(),
         executor: executor.clone(),
@@ -308,7 +308,7 @@ pub(super) fn register_choco(reg: &mut BackendRegistry, executor: &CommandExecut
     ));
 }
 
-pub(super) fn register_mas(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_mas(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "mas".into(),
         executor: executor.clone(),

@@ -188,7 +188,9 @@ pub fn registry_source() -> String {
     // followed by another registrar: the scan that ends one registrar at the next `fn` ran on
     // into the test module, found a `ManagerConfig {` there, and reported a helper as a backend
     // that drops its version pin.
-    without_test_modules(&source_of("src/backends/registry")).replace("pub(super) fn ", "fn ")
+    without_test_modules(&source_of("src/backends/registry"))
+        .replace("pub(super) fn ", "fn ")
+        .replace("pub fn register_", "fn register_")
 }
 
 /// The body of the argv table — the fixture that names every backend's real command line.
@@ -198,8 +200,8 @@ pub fn registry_source() -> String {
 /// the table with it. Two questions, two functions, rather than one function that answers
 /// whichever the caller happened to want.
 pub fn registry_argv_table() -> String {
-    let src = source_of("src/backends/registry");
-    src.split_once("    fn argv_cases() -> Vec<ArgvCase> {")
+    let src = source_of("tests/backends/registry");
+    src.split_once("fn argv_cases() -> Vec<ArgvCase> {")
         .expect("the argv table moved or was renamed")
         .1
         .split_once(

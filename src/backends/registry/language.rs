@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use super::{base_config, register_generic, with_manager_policy, BackendRegistry};
 
-pub(super) fn register_pip(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_pip(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     // Generic for install/list; Searchable is a bespoke PyPI JSON lookup
     // (pip's own `search` was disabled upstream).
     let core = Arc::new(GenericBackendCore {
@@ -97,7 +97,7 @@ pub(super) fn register_pip(reg: &mut BackendRegistry, executor: &CommandExecutor
     ));
 }
 
-pub(super) fn register_gem(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_gem(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "gem".into(),
         executor: executor.clone(),
@@ -166,7 +166,7 @@ pub(super) fn register_gem(reg: &mut BackendRegistry, executor: &CommandExecutor
     ));
 }
 
-pub(super) fn register_bun(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_bun(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "bun".into(),
         executor: executor.clone(),
@@ -234,7 +234,7 @@ pub(super) fn register_bun(reg: &mut BackendRegistry, executor: &CommandExecutor
 /// .NET global tools (`dotnet tool ...`). Cross-platform; gated by the `dotnet` binary.
 /// This is the system-inventory surface of the .NET ecosystem — plain NuGet packages
 /// are project-scoped and deliberately out of scope.
-pub(super) fn register_dotnet(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_dotnet(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "dotnet".into(),
         executor: executor.clone(),
@@ -343,11 +343,7 @@ pub(super) fn register_dotnet(reg: &mut BackendRegistry, executor: &CommandExecu
 /// **`search` deliberately carries no `-n`.** A search spans the configured channels rather than
 /// one environment, and the hand-written backend said so in a comment; here it is said by the row
 /// simply not naming the placeholder.
-pub(super) fn register_conda(
-    reg: &mut BackendRegistry,
-    executor: &CommandExecutor,
-    cfg_src: &Config,
-) {
+pub fn register_conda(reg: &mut BackendRegistry, executor: &CommandExecutor, cfg_src: &Config) {
     const ENV: &str = "{setting.env|base}";
     let mut cfg = base_config("conda");
     // Conda pins with `name=version` (one `=`, unlike pip's two).

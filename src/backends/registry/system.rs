@@ -26,7 +26,7 @@ use super::{base_config, with_manager_policy, BackendRegistry};
 // Generic (CLI-config-driven) backend registrations
 // ============================================================================
 
-pub(super) fn register_apt(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_apt(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "apt".into(),
         executor: executor.clone(),
@@ -155,7 +155,7 @@ pub(super) fn register_apt(reg: &mut BackendRegistry, executor: &CommandExecutor
 /// there was no `essential()` impl to need it. What the hand-written path did have was argv
 /// built by hand, and so no `--` before the package name on either verb — the one thing every
 /// backend on this path gets without remembering.
-pub(super) fn register_pacman(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_pacman(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let mut cfg = base_config("pacman");
     cfg.install_args = vec!["-S".into(), "--noconfirm".into(), "--needed".into()];
     cfg.remove_args = vec!["-Rs".into(), "--noconfirm".into()];
@@ -269,7 +269,7 @@ pub(super) fn register_pacman(reg: &mut BackendRegistry, executor: &CommandExecu
 /// **the same function**, which is `ManualListing::Command { format: SameAsInstalled }` spelled
 /// out in Rust. apt's row does the strictly harder version — a third binary printing a
 /// different shape — as data.
-pub(super) fn register_dnf(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_dnf(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let mut cfg = base_config("dnf");
     // Reproducible installs: dnf pins with `name-version`.
     cfg.version_pin = Some(VersionPin::Inline("{name}-{version}".into()));
@@ -388,7 +388,7 @@ pub(super) fn register_dnf(reg: &mut BackendRegistry, executor: &CommandExecutor
 /// What the module had that the machinery did not was the lock: it made both binaries
 /// exclusive over `"xbps"` while the shared path keyed on the program, so converting it before
 /// `lock_key` existed would have given install and remove two locks over one package database.
-pub(super) fn register_xbps(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_xbps(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let mut cfg = base_config("xbps");
     cfg.binary = Some("xbps-install".into());
     cfg.remove_binary = Some("xbps-remove".into());
@@ -458,7 +458,7 @@ pub(super) fn register_xbps(reg: &mut BackendRegistry, executor: &CommandExecuto
 /// `every_registrar_has_an_argv_row_or_a_written_reason` exists for — and until these
 /// wrappers existed the five-argument `register_aur_helper` could not appear in that table, so
 /// neither could they.
-pub(super) fn register_yay(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_yay(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     register_aur_helper(
         reg,
         executor,
@@ -468,7 +468,7 @@ pub(super) fn register_yay(reg: &mut BackendRegistry, executor: &CommandExecutor
     );
 }
 
-pub(super) fn register_paru(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_paru(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     register_aur_helper(
         reg,
         executor,
@@ -483,7 +483,7 @@ pub(super) fn register_paru(reg: &mut BackendRegistry, executor: &CommandExecuto
 /// helper's own name stamped on results so state tracking stays per-backend correct.
 /// Crucially `needs_root = false`: AUR helpers must run as an unprivileged user and
 /// escalate internally; running them as root is unsupported and unsafe.
-pub(super) fn register_aur_helper(
+pub fn register_aur_helper(
     reg: &mut BackendRegistry,
     executor: &CommandExecutor,
     name: &'static str,
@@ -561,7 +561,7 @@ pub(super) fn register_aur_helper(
     ));
 }
 
-pub(super) fn register_apk(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_apk(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "apk".into(),
         executor: executor.clone(),
@@ -670,7 +670,7 @@ pub(super) fn register_apk(reg: &mut BackendRegistry, executor: &CommandExecutor
     ));
 }
 
-pub(super) fn register_zypper(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_zypper(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "zypper".into(),
         executor: executor.clone(),
@@ -751,7 +751,7 @@ pub(super) fn register_zypper(reg: &mut BackendRegistry, executor: &CommandExecu
     ));
 }
 
-pub(super) fn register_macports(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_macports(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "macports".into(),
         executor: executor.clone(),
@@ -827,7 +827,7 @@ pub(super) fn register_macports(reg: &mut BackendRegistry, executor: &CommandExe
 // Compiled in only where each packaging universe lives (see the registration site): on any
 // other target these would be dead rows whose mere binary-existence probe misfires.
 #[cfg(target_os = "netbsd")]
-pub(super) fn register_pkgin(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_pkgin(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "pkgin".into(),
         executor: executor.clone(),
@@ -900,7 +900,7 @@ pub(super) fn register_pkgin(reg: &mut BackendRegistry, executor: &CommandExecut
 /// available. `when family == freebsd` already answers on a BSD (`d66730e`), so a module can
 /// scope its `pkg:` lines to the platform.
 #[cfg(target_os = "freebsd")]
-pub(super) fn register_pkg_freebsd(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_pkg_freebsd(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "pkg".into(),
         executor: executor.clone(),
@@ -979,7 +979,7 @@ pub(super) fn register_pkg_freebsd(reg: &mut BackendRegistry, executor: &Command
 /// listing and search are `pkg_info`. The `remove_binary` field is what lets one backend drive
 /// three tools. Gated by the presence of `pkg_add`.
 #[cfg(target_os = "openbsd")]
-pub(super) fn register_pkg_add_openbsd(reg: &mut BackendRegistry, executor: &CommandExecutor) {
+pub fn register_pkg_add_openbsd(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     let core = Arc::new(GenericBackendCore {
         name: "pkg_add".into(),
         executor: executor.clone(),
