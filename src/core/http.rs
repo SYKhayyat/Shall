@@ -81,17 +81,28 @@ pub fn api(user_agent: &str, timeout_secs: u64) -> Result<reqwest::Client> {
 /// four other tests happened to be building while this one ran — which is how the first version of
 /// this test failed with the fix already in it. Test-only because a counter in the hot path is a
 /// cost nobody asked for, and the only reader is the test.
-#[cfg(test)]
 static BUILDS: Lazy<DashMap<String, usize>> = Lazy::new(DashMap::new);
 
 /// A no-op in every build that is not a test, so the counter cannot be forgotten on the way out
 /// and `build` reads the same in both.
-#[cfg(not(test))]
-fn count_build_for_tests(_policy: &Policy) {}
-
-#[cfg(test)]
 fn count_build_for_tests(policy: &Policy) {
     *BUILDS.entry(policy.user_agent.clone()).or_insert(0) += 1;
+}
+
+/// **`pub` for the integration tests' sake.** The mirror links the library without `cfg(test)`
+/// and needs to inspect the pool without reimplementing its policy key.
+#[doc(hidden)]
+pub fn pool_size_for_test(user_agent: &str) -> usize {
+    POOL.iter()
+        .filter(|entry| entry.key().user_agent == user_agent)
+        .count()
+}
+
+/// **`pub` for the integration tests' sake.** The concurrent-build assertion needs the same
+/// process-wide counter that the client builder updates; duplicating it would test nothing.
+#[doc(hidden)]
+pub fn builds_for_test(user_agent: &str) -> usize {
+    BUILDS.get(user_agent).map(|count| *count).unwrap_or(0)
 }
 
 fn build(policy: &Policy) -> Result<reqwest::Client> {
@@ -121,108 +132,4 @@ fn build(policy: &Policy) -> Result<reqwest::Client> {
     }
     count_build_for_tests(policy);
     builder.build().map_err(Error::from)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// How many clients this test's own policies hold. The pool is process-wide and the suite
-    /// is concurrent, so a test that read `POOL.len()` as a whole would be measuring whatever
-    /// other tests happened to be doing — which is exactly how these four came out flaky.
-    fn mine(user_agent: &str) -> usize {
-        POOL.iter()
-            .filter(|e| e.key().user_agent == user_agent)
-            .count()
-    }
-
-    #[test]
-    fn asking_twice_for_one_policy_builds_one_client() {
-        for _ in 0..20 {
-            let _ = client("shall-pool-a", false, 15).unwrap();
-        }
-        assert_eq!(
-            mine("shall-pool-a"),
-            1,
-            "twenty asks for one policy built more than one client — the pool is not pooling"
-        );
-    }
-
-    #[test]
-    fn a_client_that_would_follow_a_downgrade_is_never_handed_to_one_that_refuses() {
-        let _strict = client("shall-pool-b", false, 15).unwrap();
-        let _loose = client("shall-pool-b", true, 15).unwrap();
-        assert_eq!(
-            mine("shall-pool-b"),
-            2,
-            "the two redirect policies collapsed into one client — SEC2 would be enforced by \
-             whichever caller happened to ask first"
-        );
-    }
-
-    /// **The check-then-insert window, driven from sixteen threads at once.**
-    ///
-    /// The four tests above ask for one policy in a loop, in one thread, which is why the race
-    /// survived all of them: a sequential caller always finds the client the last iteration left,
-    /// and the pool's *contents* look identical however many clients were built and thrown away.
-    /// So this one counts builds — the only observable that moves — and synchronises the callers
-    /// on a barrier so they arrive together rather than in a queue.
-    ///
-    /// Sixteen is not decoration. Two threads can pass the `get` before either `insert`s often
-    /// enough to matter; the point of a barrier is that none of them has started yet.
-    #[test]
-    fn sixteen_threads_asking_at_once_build_one_client() {
-        use std::sync::{Arc, Barrier};
-        const THREADS: usize = 16;
-        // A fresh user agent per round, so each round is its own key and cannot be answered by
-        // a client an earlier round left behind.
-        let agent = format!("shall-pool-race-{}", std::process::id());
-        let barrier = Arc::new(Barrier::new(THREADS));
-
-        std::thread::scope(|scope| {
-            for _ in 0..THREADS {
-                let barrier = Arc::clone(&barrier);
-                let agent = agent.clone();
-                scope.spawn(move || {
-                    barrier.wait();
-                    let _ = client(&agent, false, 15).unwrap();
-                });
-            }
-        });
-
-        let built = BUILDS.get(&agent).map(|n| *n).unwrap_or(0);
-        assert_eq!(
-            built, 1,
-            "{THREADS} threads asking for one policy at the same instant built {built} clients. \
-             The pool keeps one and discards the rest, and a discarded client is a discarded \
-             connection pool — the cost lands on the first real request, not on the ask that \
-             caused it. `client` must go through `POOL.entry` (`PLAN.md` #85)."
-        );
-        assert_eq!(
-            mine(&agent),
-            1,
-            "and the pool should hold exactly one client for that policy"
-        );
-    }
-
-    #[test]
-    fn the_timeout_is_part_of_the_key() {
-        let _bounded = client("shall-pool-c", false, 15).unwrap();
-        let _unbounded = client("shall-pool-c", false, 0).unwrap();
-        assert_eq!(mine("shall-pool-c"), 2);
-    }
-
-    #[test]
-    fn an_api_client_never_asks_reqwest_for_a_zero_second_timeout() {
-        // reqwest reads a zero-second timeout as "fail instantly", not "no bound", so an API
-        // caller handed a configured 0 must not pass it through.
-        let _ = api("shall-pool-d", 0).unwrap();
-        let _ = api("shall-pool-d", 1).unwrap();
-        assert_eq!(
-            mine("shall-pool-d"),
-            1,
-            "a 0-second API timeout was not raised to 1 — it built a distinct, \
-             instantly-failing client"
-        );
-    }
 }

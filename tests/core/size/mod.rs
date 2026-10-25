@@ -1,0 +1,7 @@
+pub use shall::core::size::*;
+mod a_fractional_size_is_a_size;
+mod a_size_formats_back_into_something_a_person_reads;
+mod comparison_is_by_value_and_an_unreadable_declaration_is_not_drift;
+mod one_size_written_every_way_parses_to_one_number;
+mod the_words_a_tool_uses_for_no_limit_are_not_sizes;
+mod what_is_not_a_size_is_not_guessed_at;

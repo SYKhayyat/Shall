@@ -1,0 +1,12 @@
+pub use shall::core::receipt::*;
+pub use shall::core::{Error, Result};
+use std::collections::BTreeMap;
+pub use std::path::{Path, PathBuf};
+use tempfile::tempdir;
+mod a_receipt_is_still_there_a_year_later;
+mod a_receipt_round_trips_through_the_file;
+mod a_receipts_file_that_cannot_be_read_is_an_error_not_an_absence;
+mod a_truncated_last_line_does_not_lose_the_whole_file;
+mod installing_the_same_package_twice_is_one_receipt;
+mod no_file_is_an_empty_record;
+mod the_receipts_file_is_the_wals_sibling;

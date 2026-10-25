@@ -38,13 +38,19 @@ type HelpSlot = std::sync::Arc<Mutex<Option<Option<String>>>>;
 /// The text and not the answer: two questions are asked of the same help — does it document
 /// this flag, and does it document verification at all — and caching per question would run the
 /// probe twice for one process's output.
-fn cache() -> &'static Mutex<HashMap<String, HelpSlot>> {
+/// **`pub` for the integration tests' sake.** The cache mirror must poison and inspect the same
+/// process-wide cache rather than reproducing its locking policy.
+#[doc(hidden)]
+pub fn cache() -> &'static Mutex<HashMap<String, HelpSlot>> {
     static CACHE: OnceLock<Mutex<HashMap<String, HelpSlot>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 /// What `program <chain…> --help` prints, or `None` when it could not be asked.
-fn help_text(program: &str, chain: &[String]) -> Option<String> {
+/// **`pub` for the integration tests' sake.** The cache mirror must exercise the real probe seam
+/// after poisoning its locks.
+#[doc(hidden)]
+pub fn help_text(program: &str, chain: &[String]) -> Option<String> {
     let key = format!("{} {}", program, chain.join(" "));
     // The outer lock only hands out the slot; it is never held across the spawn, so two
     // different programs still probe concurrently.
@@ -150,7 +156,10 @@ pub fn accepts_flag(program: &str, chain: &[String], flag: &str) -> Option<bool>
 /// carries `--kube-insecure-skip-tls-verify`, which contains `verify` and would answer yes for
 /// a `--verify` this version does not have. So the match ends at a character that cannot
 /// continue a flag name.
-fn mentions_flag(text: &str, name: &str) -> bool {
+/// **`pub` for the integration tests' sake.** The flag-matching mirror must exercise this exact
+/// boundary predicate rather than duplicate it.
+#[doc(hidden)]
+pub fn mentions_flag(text: &str, name: &str) -> bool {
     let mut from = 0;
     while let Some(at) = text[from..].find(name) {
         let start = from + at;
@@ -162,133 +171,4 @@ fn mentions_flag(text: &str, name: &str) -> bool {
         from = end;
     }
     false
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_flag_name_does_not_match_a_longer_one() {
-        // The exact trap in helm 3's own help.
-        assert!(!mentions_flag(
-            "      --kube-insecure-skip-tls-verify   if true, …",
-            "--verify"
-        ));
-        assert!(!mentions_flag("      --ca-file string   …", "--ca"));
-        // And it must still find the real thing, in every shape help text writes it.
-        assert!(mentions_flag("Use --verify=false to skip.", "--verify"));
-        assert!(mentions_flag(
-            "      --verify   verify the package",
-            "--verify"
-        ));
-        assert!(mentions_flag("ends the line with --verify", "--verify"));
-    }
-
-    /// **One panic must not switch the cache off for the rest of the run.**
-    ///
-    /// `help_text` used to answer `probe(…)` on a poisoned lock, which reads as prudence — a cache
-    /// nobody trusts, a fresh answer. But a `Mutex` is poisoned *permanently* by the one panic, so
-    /// that branch turned a single panic anywhere in the process into every later question about
-    /// every program spawning a new process, silently, which is exactly the cost the cache exists
-    /// to remove. `PLAN.md` #81.
-    ///
-    /// The test poisons both locks for real — a panic while each is held, which is the only way a
-    /// `Mutex` gets poisoned — and then asks a question the cache can answer from memory. With the
-    /// old arms it spawns a process for a program that does not exist and answers `None`, so the
-    /// cached text is gone and the test is red.
-    #[test]
-    fn a_poisoned_cache_is_still_a_cache() {
-        const PROGRAM: &str = "shall-help-poison-canary-zzz";
-        let key = format!("{PROGRAM} ");
-        // Seed the cache with an answer that no probe could produce, so "answered from memory" and
-        // "probed and found nothing" cannot be confused.
-        {
-            let mut map = cache().lock().expect("the cache starts unpoisoned");
-            map.entry(key.clone())
-                .or_default()
-                .lock()
-                .expect("the slot starts unpoisoned")
-                .clone_from(&Some(Some("cached, not probed".to_string())));
-        }
-
-        // Poison the per-key slot, then the map, each by panicking while the lock is held.
-        let slot = {
-            let map = cache().lock().expect("unpoisoned to take the slot out");
-            map.get(&key).cloned().expect("the slot exists")
-        };
-        let _ = std::panic::catch_unwind(|| {
-            let _held = slot.lock().expect("unpoisoned to hold it");
-            panic!("poison the slot");
-        });
-        let _ = std::panic::catch_unwind(|| {
-            let _held = cache().lock().expect("unpoisoned to hold the map");
-            panic!("poison the map");
-        });
-
-        let answered = help_text(PROGRAM, &[]);
-        assert_eq!(
-            answered.as_deref(),
-            Some("cached, not probed"),
-            "a poisoned lock deleted the cache: the answer came from a fresh probe of a program \
-             that does not exist, so the run silently lost the cache it had already paid for. \
-             A `Mutex` stays poisoned for good after one panic, so this branch is permanent."
-        );
-
-        // Leave the process as we found it — the cache is process-wide and this suite is not.
-        cache().lock().map(|mut m| m.remove(&key)).ok();
-        let _ = std::panic::catch_unwind(|| {
-            let _held = slot.lock();
-            panic!("clear the poison");
-        });
-    }
-
-    /// The discriminator, against both real versions' help — captured from the tools, and the
-    /// only place the helm 3 arm can be asserted on a machine that has helm 4.
-    ///
-    /// helm 3's help carries `--kube-insecure-skip-tls-verify`, which contains the word and is
-    /// not the flag; helm 4's carries `--verify` and `--keyring`. If this predicate answered
-    /// yes for helm 3 the gate would call a correct no-op drift, and if it answered no for
-    /// helm 4 a renamed flag would pass unnoticed — the two failures are opposite and the
-    /// fixtures pin both.
-    #[test]
-    fn verification_is_documented_by_helm_4_and_not_by_helm_3() {
-        const V3: &str = include_str!("../../tests/fixtures/helm/plugin-install-help-v3.txt");
-        const V4: &str = include_str!("../../tests/fixtures/helm/plugin-install-help-v4.txt");
-        assert!(
-            !help_documents_verification(V3),
-            "helm 3 does not verify plugins; `--kube-insecure-skip-tls-verify` is not a \
-             verification flag for the plugin being installed"
-        );
-        assert!(
-            help_documents_verification(V4),
-            "helm 4 documents `--verify` and `--keyring`"
-        );
-    }
-
-    #[test]
-    fn a_program_that_is_not_here_answers_nothing_rather_than_no() {
-        // `None`, not `Some(false)`. A tool that is absent has said nothing about its flags,
-        // and treating silence as a refusal is what broke two unit tests on every CI runner
-        // while passing on the one machine that happened to have helm.
-        assert_eq!(
-            accepts_flag(
-                "shall-no-such-program-zzz",
-                &["plugin".into(), "install".into()],
-                "--verify=false"
-            ),
-            None
-        );
-    }
-
-    #[test]
-    fn the_value_tail_is_not_part_of_the_name() {
-        // Help text writes `--verify`; the argv writes `--verify=false`. Matching the whole
-        // token would answer "no" for every flag that carries a value, which is most of them.
-        // Asserted through a program whose help certainly mentions the token it is asked about.
-        let prog = if cfg!(windows) { "cmd" } else { "sh" };
-        let _ = accepts_flag(prog, &[], "--nosuchflag=1");
-        // The property under test is the split, which is cheap to state directly.
-        assert_eq!("--verify=false".split('=').next(), Some("--verify"));
-    }
 }

@@ -1,0 +1,10 @@
+pub use serde::{Deserialize, Serialize};
+pub use shall::core::ledger::LockFile;
+pub use shall::core::regex_lock::*;
+use std::collections::BTreeMap;
+pub use std::path::{Path, PathBuf};
+use tempfile::TempDir;
+mod a_pattern_nobody_declares_any_more_is_forgotten;
+mod it_round_trips_through_the_file;
+mod one_pattern_against_two_backends_is_two_answers;
+mod recording_the_same_expansion_is_not_a_change;

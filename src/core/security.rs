@@ -65,7 +65,10 @@ fn verify_checksum_blocking(path: &PathBuf, expected_hex: &str) -> Result<()> {
 /// Compare hexadecimal digests without returning early on the first differing byte.
 /// Invalid or differently-sized input is still a mismatch, but it is processed across the
 /// longer length so the comparison does not expose a useful prefix timing signal.
-fn constant_time_hex_eq(actual: &str, expected: &str) -> bool {
+/// **`pub` for the integration tests' sake.** The checksum mirror links the library without
+/// `cfg(test)` and must exercise this comparison rather than copy it.
+#[doc(hidden)]
+pub fn constant_time_hex_eq(actual: &str, expected: &str) -> bool {
     let actual = actual.as_bytes();
     let expected = expected.as_bytes();
     let mut diff = actual.len() ^ expected.len();
@@ -95,17 +98,4 @@ fn generate_checksum_blocking(path: &PathBuf) -> Result<String> {
         hasher.update(&buf[..n]);
     }
     Ok(hex::encode(hasher.finalize()))
-}
-
-#[cfg(test)]
-mod comparison_tests {
-    use super::constant_time_hex_eq;
-
-    #[test]
-    fn checksum_comparison_accepts_only_equal_digests() {
-        assert!(constant_time_hex_eq("abcdef", "abcdef"));
-        assert!(constant_time_hex_eq("abcdef", "ABCDEF"));
-        assert!(!constant_time_hex_eq("abcdef", "abcdee"));
-        assert!(!constant_time_hex_eq("abcdef", "abcdef0"));
-    }
 }

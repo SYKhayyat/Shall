@@ -38,7 +38,15 @@ pub fn confirm(yes: bool, prompt: &str, unattended: Unattended<'_>) -> Result<bo
 
 /// The seam the tests drive, so third-answer coverage does not depend on how the suite was
 /// launched — a plain `cargo test` on a console *has* a terminal on stdin.
-fn confirm_in(attended: bool, yes: bool, prompt: &str, unattended: Unattended<'_>) -> Result<bool> {
+/// **`pub` for the integration tests' sake.** The mirror must drive the non-terminal seam without
+/// depending on the test process's actual stdin.
+#[doc(hidden)]
+pub fn confirm_in(
+    attended: bool,
+    yes: bool,
+    prompt: &str,
+    unattended: Unattended<'_>,
+) -> Result<bool> {
     if yes {
         return Ok(true);
     }
@@ -60,58 +68,4 @@ fn confirm_in(attended: bool, yes: bool, prompt: &str, unattended: Unattended<'_
             .default(false)
             .interact()
     })?)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// `--yes` answers before anything else is consulted, which is what makes it usable from a
-    /// script: it must not depend on whether a terminal happens to be attached.
-    #[test]
-    fn yes_answers_without_asking_anything() {
-        assert!(confirm(true, "?", Unattended::Refuse("never reached")).expect("--yes"));
-        assert!(confirm(true, "?", Unattended::Decline("never printed")).expect("--yes"));
-    }
-
-    /// The test process has no terminal on stdin, so these exercise the third answer directly.
-    #[test]
-    fn a_refusing_prompt_with_nobody_there_refuses_by_name() {
-        let e = confirm_in(
-            false,
-            false,
-            "Remove these packages?",
-            Unattended::Refuse("Refusing to remove without confirmation. Re-run with --yes."),
-        )
-        .expect_err("no terminal, and this site refuses");
-        assert!(
-            matches!(e, Error::Refused(_)),
-            "a prompt nobody could answer must be a refusal, not an IO error: {e:?}"
-        );
-        assert!(e.to_string().contains("--yes"), "{e}");
-    }
-
-    /// The other right answer: an offer declines and the run continues. Returning an error here
-    /// would turn "no package manager to install with" into a failed sync.
-    #[test]
-    fn a_declining_prompt_with_nobody_there_answers_no() {
-        let answered = confirm_in(
-            false,
-            false,
-            "Run that to install brew?",
-            Unattended::Decline("Not asking in a non-interactive shell."),
-        )
-        .expect("declining is not an error");
-        assert!(!answered);
-    }
-
-    /// `--yes` answers before anything is consulted, terminal or not.
-    #[test]
-    fn an_attended_confirm_still_lets_yes_answer_first() {
-        assert!(confirm_in(true, true, "?", Unattended::Refuse("never reached")).expect("--yes"));
-        assert!(
-            confirm_in(true, true, "?", Unattended::Decline("never printed")).expect("--yes"),
-            "--yes must win on the attended path too"
-        );
-    }
 }

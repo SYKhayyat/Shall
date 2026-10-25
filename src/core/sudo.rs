@@ -72,7 +72,10 @@ pub struct SudoState {
 }
 
 impl SudoState {
-    pub(crate) fn new() -> Self {
+    /// **`pub` for the integration tests' sake.** The mirror links the library without
+    /// `cfg(test)` and must construct the same run-scoped state.
+    #[doc(hidden)]
+    pub fn new() -> Self {
         Self {
             primed: std::sync::atomic::AtomicBool::new(false),
             refused: std::sync::Mutex::new(None),
@@ -90,7 +93,10 @@ impl SudoState {
     }
 
     /// The reason this run cannot escalate, if it has found one.
-    pub(crate) fn refusal(&self) -> Option<String> {
+    /// **`pub` for the integration tests' sake.** The mirror links the library without
+    /// `cfg(test)` and must inspect the remembered refusal.
+    #[doc(hidden)]
+    pub fn refusal(&self) -> Option<String> {
         self.refused.lock().ok().and_then(|s| s.clone())
     }
 
@@ -107,41 +113,15 @@ impl SudoState {
     /// **The first reason is the one kept.** A later caller's guess must not overwrite the reason
     /// the first one established: the *first* refusal is the one that happened, and everything
     /// after it is this memo.
-    pub(crate) fn refuse(&self, why: String) -> Error {
+    /// **`pub` for the integration tests' sake.** The mirror links the library without
+    /// `cfg(test)` and must drive the refusal memo directly.
+    #[doc(hidden)]
+    pub fn refuse(&self, why: String) -> Error {
         if let Ok(mut slot) = self.refused.lock() {
             if slot.is_none() {
                 *slot = Some(why.clone());
             }
         }
         Error::command_failed_permanently(why)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::SudoState;
-
-    /// A refusal is remembered, and the first reason is the one kept.
-    ///
-    /// **The mechanism is what is asserted, not sudo.** A test that needs a real password prompt
-    /// on a real tty is the container harness's job (`[16f]`), and one that shells out to `sudo`
-    /// here would answer differently on every developer's machine.
-    ///
-    /// It lives here rather than in `tests/core/sudo/` because it reads the memo's own cells: a
-    /// test crate links the library without `cfg(test)`, so it cannot.
-    #[test]
-    fn a_sudo_refusal_is_remembered_and_the_first_reason_is_the_one_kept() {
-        let state = SudoState::new();
-        assert!(
-            state.refusal().is_none(),
-            "a fresh run starts with no refusal recorded, so nothing below means anything"
-        );
-
-        let first = state.refuse("no terminal to ask on".to_string());
-        assert!(first.to_string().contains("no terminal"));
-        // A later caller's guess must not overwrite the reason the first one established: the
-        // *first* refusal is the one that happened, and everything after it is this memo.
-        let _ = state.refuse("something else entirely".to_string());
-        assert_eq!(state.refusal().as_deref(), Some("no terminal to ask on"));
     }
 }
