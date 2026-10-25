@@ -44,7 +44,9 @@ pub struct ExecRecord {
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ExecLedger {
     #[serde(default)]
-    runs: BTreeMap<String, ExecRecord>,
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+    /// crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub runs: BTreeMap<String, ExecRecord>,
 }
 
 /// How many times a script content may run. The default is once per distinct content;
@@ -154,116 +156,5 @@ impl ExecLedger {
 
     pub fn is_empty(&self) -> bool {
         self.runs.is_empty()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn an_unknown_content_has_never_run() {
-        assert_eq!(ExecLedger::new().count("deadbeef"), 0);
-    }
-
-    #[test]
-    fn a_run_is_counted_and_stamped() {
-        let mut l = ExecLedger::new();
-        l.record_run("abc", "2026-07-24T00:00:00Z".into(), "./s.sh", None);
-        assert_eq!(l.count("abc"), 1);
-        l.record_run("abc", "2026-07-24T01:00:00Z".into(), "./s.sh", None);
-        assert_eq!(l.count("abc"), 2);
-        // A second content is its own count — the hash is the identity.
-        assert_eq!(l.count("xyz"), 0);
-    }
-
-    #[test]
-    fn the_default_ceiling_is_once_per_content() {
-        let c = Ceiling::read(None);
-        assert!(c.permits(0), "a script that has never run must run");
-        assert!(!c.permits(1), "run-once means not twice");
-    }
-
-    #[test]
-    fn always_never_stops() {
-        let c = Ceiling::read(Some("always"));
-        assert!(c.permits(0));
-        assert!(c.permits(9_999));
-    }
-
-    #[test]
-    fn a_numeric_ceiling_counts() {
-        let c = Ceiling::read(Some("3"));
-        assert!(c.permits(2));
-        assert!(!c.permits(3));
-    }
-
-    /// Editing the script changes its hash, so the new content's count is zero and it runs —
-    /// this is the whole idempotency model in one assertion.
-    #[test]
-    fn an_edited_script_is_a_different_content_and_runs_again() {
-        let mut l = ExecLedger::new();
-        l.record_run("hash-of-v1", "t".into(), "./s.sh", None);
-        assert!(!Ceiling::read(None).permits(l.count("hash-of-v1")));
-        assert!(Ceiling::read(None).permits(l.count("hash-of-v2")));
-    }
-
-    /// The distinction the whole teardown rests on: an edited script is not a departed one.
-    /// Keyed by hash, an edit reads as a removal and runs the undo of a line that is still
-    /// declared — the enrol script un-enrolling itself because a typo was fixed.
-    #[test]
-    fn an_edited_script_has_not_departed_but_a_deleted_one_has() {
-        use std::collections::BTreeSet;
-        let mut l = ExecLedger::new();
-        l.record_run("hash-v1", "t".into(), "./enrol.sh", Some("echo undo"));
-        l.record_run("hash-v2", "t".into(), "./enrol.sh", Some("echo undo"));
-        l.record_run("hash-x", "t".into(), "./gone.sh", None);
-
-        // `./enrol.sh` is still declared (its content changed); `./gone.sh` is not.
-        let declared: BTreeSet<String> = ["./enrol.sh".to_string()].into_iter().collect();
-        let departed = l.departed(&declared);
-        assert_eq!(departed.len(), 1, "{:?}", departed);
-        assert_eq!(departed[0].1.script.as_deref(), Some("./gone.sh"));
-
-        // With nothing declared at all, every row has departed — deleting the last line is
-        // still a removal.
-        assert_eq!(l.departed(&BTreeSet::new()).len(), 3);
-    }
-
-    #[test]
-    fn a_row_with_no_recorded_path_is_never_read_as_departed() {
-        use std::collections::BTreeSet;
-        let mut l = ExecLedger::new();
-        l.record_run("h", "t".into(), "./s.sh", None);
-        // Simulate a row written before paths were kept.
-        l.forget("h");
-        let mut bare = ExecLedger::new();
-        bare.runs.insert(
-            "h".into(),
-            ExecRecord {
-                count: 1,
-                ..Default::default()
-            },
-        );
-        assert!(bare.departed(&BTreeSet::new()).is_empty());
-    }
-
-    #[test]
-    fn a_missing_file_loads_as_an_empty_ledger() {
-        assert!(ExecLedger::load(Path::new("does/not/exist/exec.toml"))
-            .unwrap()
-            .is_empty());
-    }
-
-    #[test]
-    fn the_ledger_round_trips_through_toml() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = ExecLedger::path_in(dir.path());
-        let mut l = ExecLedger::new();
-        l.record_run("abc", "2026-07-24T00:00:00Z".into(), "./s.sh", None);
-        l.save(&path).unwrap();
-        let back = ExecLedger::load(&path).unwrap();
-        assert_eq!(back, l);
-        assert_eq!(back.count("abc"), 1);
     }
 }

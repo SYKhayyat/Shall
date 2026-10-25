@@ -1,0 +1,11 @@
+pub use shall::core::blocking::command_output_within;
+pub use shall::core::blocking::*;
+mod a_blocking_command_still_answers_through_the_door;
+mod a_command_inside_the_bound_returns_its_output;
+mod a_command_that_never_finishes_is_stopped_and_named;
+mod a_current_thread_runtime_does_not_panic;
+mod a_multi_thread_runtime_runs_it_in_place;
+mod a_panic_in_the_work_is_reported_rather_than_resumed;
+mod blocking_work_comes_back_from_the_blocking_pool;
+mod no_bound_still_runs_the_command;
+mod without_a_runtime_it_simply_runs_the_work;

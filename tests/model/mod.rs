@@ -1,4 +1,32 @@
 //! The tests that mirror `src/model/`, module for module.
 
+mod bootstrap;
+mod cache;
+mod conflict;
+mod cycle;
+mod dated;
+mod dotfiles;
+mod edit;
+mod event;
+mod exec;
+mod firewall;
+mod groups;
+mod health;
+mod introduced;
+mod kernel;
+mod layout;
+mod modules;
+mod prereq;
+mod priority;
+mod profiles;
+mod rehearsal;
 mod resolve;
+mod schedule;
+mod scope;
+mod script;
+mod secret;
+mod step;
 mod vars;
+mod vars_embedded;
+mod vars_provider;
+mod vendor;

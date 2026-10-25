@@ -31,7 +31,9 @@ pub struct Selected {
 }
 
 /// The kind a candidate filename names, or `None` if it is not a provider file at all.
-fn kind_of(filename: &str) -> Option<Kind> {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn kind_of(filename: &str) -> Option<Kind> {
     match filename {
         "vars" => Some(Kind::LineFile),
         "vars.shall" => Some(Kind::Embedded),
@@ -202,7 +204,9 @@ fn file_name(path: &Path) -> String {
 /// with only `python` each had a `vars.py` that could not run (Y17). A name that resolves to
 /// nothing is left as written, so the failure is still the provider's own "could not run" with
 /// the interpreter named in it.
-fn interpreter_argv(path: &Path) -> Vec<std::ffi::OsString> {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn interpreter_argv(path: &Path) -> Vec<std::ffi::OsString> {
     let ext = path
         .extension()
         .and_then(|s| s.to_str())
@@ -242,7 +246,9 @@ fn interpreter_argv(path: &Path) -> Vec<std::ffi::OsString> {
 /// Parse a provider's stdout: a JSON object, or `name = value` lines. JSON carries its own types;
 /// a `name = value` line is read with the same literal rules a `vars` line uses. Returns the
 /// origin of each variable alongside it (W11/W12).
-fn parse_output(stdout: &str, origin: &Origin) -> Result<(Vars, VarOrigins)> {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn parse_output(stdout: &str, origin: &Origin) -> Result<(Vars, VarOrigins)> {
     // A byte-order mark is not whitespace, so `trim()` leaves it, and a perfectly good JSON
     // document behind one read as `name = value` lines — which is not a smaller answer, it is a
     // different one: the first `{` of `{"HOME": …}` never splits on `=`, so the provider's own
@@ -415,303 +421,4 @@ fn file_name_of(origin: &Origin) -> String {
         .and_then(|s| s.to_str())
         .unwrap_or("vars")
         .to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A per-test directory that deletes itself.
-    ///
-    /// It used to be `temp_dir()/shall-vars-test-<pid>-<n>`, created and never removed. PIDs
-    /// are recycled, so a later run could land on a previous run's directory and find its
-    /// files — and these tests are about *which provider files are present*, so inheriting two
-    /// of them made "more than one variable provider is present" a failure that appeared and
-    /// vanished depending on what the OS handed out as a process id.
-    ///
-    /// The caller binds the returned `TempDir`: dropping it deletes the directory, which is
-    /// what stops the next run inheriting anything.
-    fn tmp() -> tempfile::TempDir {
-        tempfile::tempdir().expect("a temp dir")
-    }
-
-    /// A `.py` provider finds whatever this machine calls Python.
-    ///
-    /// It used to name literally `python` on Windows and literally `python3` everywhere else, so
-    /// a Windows box with only `python3` and a Linux box with only `python` each had a `vars.py`
-    /// they could not run — the same one-spelling assumption that made `#!` hooks fail (Y17).
-    #[test]
-    fn a_py_provider_finds_this_machines_python_whatever_it_is_called() {
-        let argv = interpreter_argv(Path::new("vars.py"));
-        let first = argv
-            .first()
-            .expect("an interpreter")
-            .to_string_lossy()
-            .into_owned();
-        match crate::model::script::interpreter_named("python3") {
-            Some(_) => assert!(
-                Path::new(&first).is_file(),
-                "python was found but the argv still says `{}`",
-                first
-            ),
-            None => assert_eq!(first, "python3", "an unresolvable name is left as written"),
-        }
-    }
-
-    /// Resolving the interpreter must not eat the flag beside it — `powershell` without `-File`
-    /// reads the provider as an expression rather than running it as a file.
-    #[test]
-    fn resolving_the_interpreter_keeps_the_flags_that_follow_it() {
-        for (file, flag) in [
-            ("vars.ps1", "-File"),
-            ("vars.bat", "/c"),
-            ("vars.cmd", "/c"),
-        ] {
-            let argv = interpreter_argv(Path::new(file));
-            assert_eq!(argv.len(), 2, "{}: {:?}", file, argv);
-            assert_eq!(argv[1].to_string_lossy(), flag, "{}", file);
-        }
-    }
-
-    /// An extension with no convention is run directly, which is what IX.6 says.
-    #[test]
-    fn an_unknown_extension_names_no_interpreter() {
-        assert!(interpreter_argv(Path::new("vars.wat")).is_empty());
-        assert!(interpreter_argv(Path::new("vars")).is_empty());
-    }
-
-    fn facts() -> HostFacts {
-        HostFacts {
-            os: "linux".into(),
-            arch: "x86_64".into(),
-            host: "laptop".into(),
-            family: "debian".into(),
-            home: None,
-            user: None,
-            vars: Default::default(),
-        }
-    }
-
-    #[test]
-    fn no_provider_file_is_no_variables() {
-        let tmp = tmp();
-        let dir = tmp.path();
-        assert!(select(dir, &None).unwrap().is_none());
-    }
-
-    #[test]
-    fn a_sole_provider_is_selected_without_a_source_key() {
-        let tmp = tmp();
-        let dir = tmp.path();
-        std::fs::write(dir.join("vars"), "role = desktop\n").unwrap();
-        let s = select(dir, &None).unwrap().unwrap();
-        assert_eq!(s.kind, Kind::LineFile);
-    }
-
-    #[test]
-    fn two_providers_and_no_choice_is_a_loud_error() {
-        let tmp = tmp();
-        let dir = tmp.path();
-        std::fs::write(dir.join("vars"), "role = desktop\n").unwrap();
-        std::fs::write(dir.join("vars.py"), "print()\n").unwrap();
-        let err = select(dir, &None).unwrap_err();
-        assert!(err.what.contains("more than one"), "{}", err);
-        assert!(err.what.contains("vars.py"), "{}", err);
-    }
-
-    #[test]
-    fn a_named_source_picks_that_one_and_names_its_kind() {
-        let tmp = tmp();
-        let dir = tmp.path();
-        std::fs::write(dir.join("vars"), "role = desktop\n").unwrap();
-        std::fs::write(dir.join("vars.py"), "print()\n").unwrap();
-        let s = select(dir, &Some("vars.py".into())).unwrap().unwrap();
-        assert_eq!(s.kind, Kind::External);
-        assert_eq!(s.path, dir.join("vars.py"));
-    }
-
-    #[test]
-    fn a_named_source_that_is_absent_is_an_error() {
-        let tmp = tmp();
-        let dir = tmp.path();
-        std::fs::write(dir.join("vars"), "role = desktop\n").unwrap();
-        let err = select(dir, &Some("vars.py".into())).unwrap_err();
-        assert!(err.what.contains("not in the repo"), "{}", err);
-    }
-
-    #[test]
-    fn a_named_source_with_a_nonsense_name_is_an_error() {
-        let tmp = tmp();
-        let dir = tmp.path();
-        let err = select(dir, &Some("something".into())).unwrap_err();
-        assert!(err.what.contains("not a variable provider name"), "{}", err);
-    }
-
-    #[test]
-    fn vars_shall_is_the_embedded_kind() {
-        assert_eq!(kind_of("vars.shall"), Some(Kind::Embedded));
-        assert_eq!(kind_of("vars"), Some(Kind::LineFile));
-        assert_eq!(kind_of("vars.py"), Some(Kind::External));
-        assert_eq!(kind_of("modules"), None);
-    }
-
-    #[test]
-    fn json_object_output_carries_its_types() {
-        let origin = Origin::new("vars.js", 0);
-        let (vars, origins) = parse_output(
-            r#"{"role": "travel", "cores": 8, "gpu": true, "tags": ["a", "b"]}"#,
-            &origin,
-        )
-        .unwrap();
-        assert_eq!(vars["role"], Value::Str("travel".into()));
-        assert_eq!(vars["cores"], Value::Num(8.0));
-        assert_eq!(vars["gpu"], Value::Bool(true));
-        assert_eq!(
-            vars["tags"],
-            Value::List(vec![Value::Str("a".into()), Value::Str("b".into())])
-        );
-        // JSON has no lines, so a variable's origin is the provider file itself.
-        assert_eq!(origins["role"].to_string(), "vars.js");
-    }
-
-    #[test]
-    fn name_value_lines_infer_types_like_a_vars_line() {
-        let origin = Origin::new("vars.sh", 0);
-        let (vars, origins) = parse_output(
-            "role = travel\ncores = 8\n# a comment\ngpu = true\n",
-            &origin,
-        )
-        .unwrap();
-        assert_eq!(vars["role"], Value::Str("travel".into()));
-        assert_eq!(vars["cores"], Value::Num(8.0));
-        assert_eq!(vars["gpu"], Value::Bool(true));
-        // A pair line carries its line number, counting the comment line.
-        assert_eq!(origins["gpu"].to_string(), "vars.sh:4");
-    }
-
-    #[test]
-    fn a_json_object_value_is_refused() {
-        let origin = Origin::new("vars.js", 0);
-        let err = parse_output(r#"{"x": {"nested": 1}}"#, &origin).unwrap_err();
-        assert!(err.what.contains("object"), "{}", err);
-    }
-
-    /// **A byte-order mark in front of a valid document is not a `name = value` line.**
-    ///
-    /// `\u{feff}` is not whitespace, so the old `trim()` left it there and the first `{` of the
-    /// document never split on `=`. The provider's own output came back as an error about a line
-    /// nobody wrote — which is a worse answer than a wrong one, because it points at the user.
-    /// Windows shells and editors emit the mark on their own; a provider inheriting one is
-    /// ordinary.
-    #[test]
-    fn a_byte_order_mark_does_not_turn_json_into_pairs() {
-        let origin = Origin::new("vars.js", 0);
-        let (vars, _origins) = parse_output("\u{feff}{\"HOME\": \"/home/x\", \"N\": 3}", &origin)
-            .expect("a JSON document behind a BOM is still a JSON document");
-        assert_eq!(vars["HOME"], Value::Str("/home/x".into()));
-        assert_eq!(vars["N"], Value::Num(3.0));
-    }
-
-    /// **And a line in front of the document does not either.**
-    ///
-    /// A provider that prints a banner before its answer is as ordinary as one that does not, and
-    /// the old rule read the whole stream as `name = value` — so `{"HOME": "/home/x"}` behind a
-    /// `cd` notice produced a parse error naming the notice. This is the same shape
-    /// `parsers::json_document` exists for on the manager side.
-    #[test]
-    fn a_banner_before_the_document_does_not_either() {
-        let origin = Origin::new("vars.js", 0);
-        let stdout = "Changed current directory to /root\n{\"HOME\": \"/home/x\", \"N\": 3}\n";
-        let (vars, _origins) =
-            parse_output(stdout, &origin).expect("a document after a banner is still a document");
-        assert_eq!(vars["HOME"], Value::Str("/home/x".into()));
-    }
-
-    /// **The regression this shape would otherwise cause, pinned.**
-    ///
-    /// `labels = {"a": {"b": 1}}` is a legitimate `name = value` line whose value happens to be
-    /// JSON. `parsers::json_document` tries the first `{` *anywhere* in a stream, which is right
-    /// for a manager printing JSON behind a notice and wrong here: it would answer with the nested
-    /// object and report a variable called `a`. So the scan here is anchored to a line start, and
-    /// this test is what says so.
-    #[test]
-    fn a_pairs_line_whose_value_is_json_is_still_a_pairs_line() {
-        let origin = Origin::new("vars.js", 0);
-        let stdout = "HOME = /home/x\nlabels = {\"a\": {\"b\": 1}}\n";
-        let (vars, _origins) = parse_output(stdout, &origin).expect("a pair line is a pair line");
-        assert_eq!(vars["HOME"], Value::Str("/home/x".into()));
-        assert_eq!(
-            vars["labels"],
-            Value::Str(r#"{"a": {"b": 1}}"#.into()),
-            "the nested-brace line was swallowed and read as JSON instead"
-        );
-        assert!(
-            !vars.contains_key("a"),
-            "a variable called `a` was invented out of a pair line's value: {:?}",
-            vars
-        );
-    }
-
-    /// **And the plain cases are untouched**, because a fix that changes what a provider's output
-    /// means is a different fix.
-    #[test]
-    fn pairs_and_empty_output_are_unchanged() {
-        let origin = Origin::new("vars.js", 0);
-        let (vars, _origins) = parse_output("A = 1\n# a comment\n\nB = two\n", &origin).unwrap();
-        assert_eq!(vars.len(), 2);
-        assert_eq!(vars["B"], Value::Str("two".into()));
-        let (empty, _) = parse_output("   \n\n", &origin).unwrap();
-        assert!(empty.is_empty(), "whitespace is not a variable");
-    }
-
-    #[test]
-    fn a_bad_variable_name_is_refused() {
-        let origin = Origin::new("vars.js", 0);
-        let err = parse_output(r#"{"1bad": "x"}"#, &origin).unwrap_err();
-        assert!(err.what.contains("valid variable name"), "{}", err);
-    }
-
-    #[test]
-    fn an_external_provider_runs_and_its_output_is_parsed() {
-        // A provider written in whatever runs here without extra installs: a `.cmd` on Windows,
-        // a `.sh` everywhere else. Both are guaranteed present (cmd / sh).
-        let tmp = tmp();
-        let dir = tmp.path();
-        let (name, body) = if cfg!(windows) {
-            (
-                "vars.cmd",
-                "@echo off\r\necho role=%SHALL_OS%\r\necho cores=8\r\n",
-            )
-        } else {
-            ("vars.sh", "echo role=$SHALL_OS\necho cores=8\n")
-        };
-        let path = dir.join(name);
-        std::fs::write(&path, body).unwrap();
-        let vars = run_external(&path, &facts()).unwrap();
-        assert_eq!(
-            vars["role"],
-            Value::Str("linux".into()),
-            "the machine's facts reach the provider"
-        );
-        assert_eq!(vars["cores"], Value::Num(8.0));
-    }
-
-    #[test]
-    fn a_provider_that_exits_nonzero_is_an_error_with_its_stderr() {
-        let tmp = tmp();
-        let dir = tmp.path();
-        let (name, body) = if cfg!(windows) {
-            ("vars.cmd", "@echo off\r\necho boom 1>&2\r\nexit /b 3\r\n")
-        } else {
-            ("vars.sh", "echo boom >&2\nexit 3\n")
-        };
-        let path = dir.join(name);
-        std::fs::write(&path, body).unwrap();
-        let err = run_external(&path, &facts()).unwrap_err();
-        assert!(
-            err.what.contains("boom"),
-            "carries the provider's stderr: {}",
-            err
-        );
-    }
 }

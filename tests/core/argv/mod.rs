@@ -1,0 +1,17 @@
+pub use shall::core::argv::*;
+pub use shall::core::argv::{Evidence, TERMINATORS};
+
+const UNASKED_CEILING: usize = 41;
+mod a_binary_this_table_has_never_heard_of_does_not_terminate;
+mod a_divergent_row_takes_the_refusing_answer;
+mod a_gnu_style_manager_terminates_and_a_windows_one_does_not;
+mod a_manager_that_reads_the_terminator_as_a_name_is_not_listed_as_terminating;
+mod a_path_or_an_exe_is_looked_up_as_the_program_it_is;
+mod dnf_does_not_terminate_because_dnf_may_be_dnf5;
+mod every_row_says_something_a_reader_could_check;
+mod gem_does_not_terminate_because_its_dash_dash_means_build_args;
+mod names_go_behind_the_terminator_where_there_is_one;
+mod nimble_does_not_terminate_because_its_dash_dash_reaches_the_compiler;
+mod no_binary_is_listed_twice;
+mod no_names_means_no_terminator;
+mod the_unasked_rows_may_only_become_fewer;

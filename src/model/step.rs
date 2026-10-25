@@ -85,9 +85,9 @@ impl Detected for Step {
 pub const CATALOGUE: &str = include_str!("upgrade_steps.toml");
 
 #[derive(Deserialize)]
-struct Catalogue {
+pub struct Catalogue {
     #[serde(default)]
-    step: Vec<Step>,
+    pub step: Vec<Step>,
 }
 
 /// Every shipped row, in file order, with the unusable ones dropped loudly.
@@ -169,100 +169,4 @@ pub fn refusal(name: &str) -> Option<(String, String)> {
 /// a different step, and `@runs=` counts it separately instead of reading the old row's count.
 pub fn fingerprint(step: &Step) -> String {
     crate::core::hook_lock::hash_script(&step.run.join(" "))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The shipped table parses, and every row can be driven.
-    ///
-    /// This is what makes `rows()`'s `expect` honest: it panics on a malformed file, and this is
-    /// the test that would have caught the malformation before it shipped.
-    #[test]
-    fn the_shipped_catalogue_parses_and_every_row_is_usable() {
-        let parsed: Catalogue = toml::from_str(CATALOGUE).expect("the shipped table parses");
-        assert!(!parsed.step.is_empty(), "the catalogue ships no steps");
-        for step in &parsed.step {
-            assert_eq!(
-                step.unusable(),
-                None,
-                "shipped step `{}` would be dropped at runtime",
-                step.name
-            );
-            assert!(
-                !step.what.trim().is_empty(),
-                "`{}` says nothing about what it does, and a name a user chooses from has to",
-                step.name
-            );
-            assert!(
-                crate::model::exec::Verb::VALUES.contains(&step.on.as_str()),
-                "`{}` has `on = {:?}`, which the grammar would refuse on a line",
-                step.name,
-                step.on
-            );
-        }
-    }
-
-    /// A name is catalogued or it is a path, and nothing is both.
-    #[test]
-    fn only_the_reserved_prefix_names_a_step() {
-        assert_eq!(named("step/rustup"), Some("rustup"));
-        assert_eq!(named("./bin/rustup.sh"), None);
-        assert_eq!(
-            named("rustup"),
-            None,
-            "a bare name is a file, as it always was"
-        );
-        assert_eq!(
-            named("bin/step/rustup"),
-            None,
-            "the prefix is the whole first segment"
-        );
-    }
-
-    /// The OS filter decides what a machine can name, and it is asserted from both sides so the
-    /// Windows arm is exercised on Linux and back.
-    #[test]
-    fn a_step_belongs_to_the_platforms_its_row_names() {
-        let rows = rows();
-        let fwupd = rows
-            .iter()
-            .find(|s| s.name == "fwupd")
-            .expect("fwupd is shipped");
-        assert!(fwupd.applies_to("linux"));
-        assert!(!fwupd.applies_to("windows"));
-        assert!(!fwupd.applies_to("macos"));
-
-        let rustup = rows
-            .iter()
-            .find(|s| s.name == "rustup")
-            .expect("rustup is shipped");
-        for os in ["linux", "windows", "macos"] {
-            assert!(rustup.applies_to(os), "rustup should exist on {os}");
-        }
-    }
-
-    /// The argv reaches the executor as a program and its arguments, never as one string.
-    #[test]
-    fn a_step_runs_as_argv_and_not_through_a_shell() {
-        let rustup = find("rustup").or_else(|| rows().into_iter().find(|s| s.name == "rustup"));
-        let rustup = rustup.expect("rustup ships on every platform");
-        let (program, args) = launch(&rustup).expect("a usable row splits");
-        assert_eq!(program, "rustup");
-        assert_eq!(args, ["update"]);
-    }
-
-    /// Two steps with the same command would share a ledger row and one would report the
-    /// other's run count.
-    #[test]
-    fn every_shipped_step_has_its_own_fingerprint() {
-        let rows = rows();
-        let mut seen = std::collections::HashMap::new();
-        for step in &rows {
-            if let Some(other) = seen.insert(fingerprint(step), step.name.clone()) {
-                panic!("`{}` and `{}` hash to one ledger row", step.name, other);
-            }
-        }
-    }
 }

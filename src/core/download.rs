@@ -144,7 +144,9 @@ pub async fn stage_capped(
 ///
 /// Split out so a test can name its own bound: the process-wide one is a `OnceCell` seeded at
 /// startup, and a test that set it would decide the value for every other test in the binary.
-async fn stage_capped_to(
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub async fn stage_capped_to(
     response: reqwest::Response,
     dest: &std::path::Path,
     what: &str,
@@ -215,7 +217,9 @@ async fn stage_capped_to(
 /// **One function, because the test that watches for a leftover staged file has to watch for the
 /// same name the writer uses** — a test that spelled the name out would pass against a writer that
 /// changed it.
-fn part_path(dest: &std::path::Path) -> std::path::PathBuf {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn part_path(dest: &std::path::Path) -> std::path::PathBuf {
     dest.with_extension(match dest.extension() {
         Some(existing) => format!("{}.shall-part", existing.to_string_lossy()),
         None => "shall-part".to_string(),
@@ -286,7 +290,9 @@ fn refused_size(what: &str, size: u64, cap: u64) -> Error {
 
 /// Bytes as a person reads them. A refusal that says `2147483648` makes the reader do the
 /// arithmetic before they can decide whether the number is wrong.
-fn human_bytes(n: u64) -> String {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn human_bytes(n: u64) -> String {
     const UNITS: [&str; 4] = ["B", "KiB", "MiB", "GiB"];
     let mut value = n as f64;
     let mut unit = 0;
@@ -373,285 +379,4 @@ pub fn check_checksum_declared(spec: &PackageSpec) -> Result<()> {
 /// and a bound sized for an API call turns a slow link into a corrupt install.
 pub fn client(allow_http: bool, user_agent: &str) -> Result<reqwest::Client> {
     crate::core::http::client(user_agent, allow_http, 0)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn spec(opts: &[(&str, &str)]) -> PackageSpec {
-        PackageSpec {
-            name: "http://example.invalid/x".into(),
-            backend: "web".into(),
-            options: opts.iter().map(|(k, v)| (*k, *v)).collect(),
-            requires: vec![],
-            present: true,
-        }
-    }
-
-    #[test]
-    fn plain_http_is_refused_and_the_flag_is_what_allows_it() {
-        assert!(check_scheme("http://x/y", false, "x").is_err());
-        assert!(check_scheme("http://x/y", true, "x").is_ok());
-        assert!(check_scheme("https://x/y", false, "x").is_ok());
-    }
-
-    #[test]
-    fn a_download_with_no_checksum_is_refused() {
-        assert!(check_checksum_declared(&spec(&[])).is_err());
-        assert!(check_checksum_declared(&spec(&[("sha256", "abc")])).is_ok());
-        assert!(check_checksum_declared(&spec(&[("unverified", "true")])).is_ok());
-    }
-
-    #[test]
-    fn allowing_http_does_not_also_drop_the_checksum() {
-        // The whole point of keeping them separate: over HTTP the checksum is the only thing
-        // left, so the flag that permits HTTP must not be the flag that removes it.
-        let s = spec(&[("allow_http", "true")]);
-        assert!(allows_http(&s));
-        assert!(check_checksum_declared(&s).is_err());
-    }
-
-    #[test]
-    fn an_unset_flag_is_not_a_set_one() {
-        assert!(!allows_http(&spec(&[])));
-        assert!(!is_unverified(&spec(&[("unverified", "false")])));
-    }
-
-    /// A body with no `Content-Length`, which is the case the running counter exists for — a
-    /// chunked response declares nothing, so a ceiling that only read the header would bound
-    /// exactly the servers that are honest about their size.
-    fn undeclared(body: &'static str) -> reqwest::Response {
-        let stream = futures::stream::once(async move { Ok::<_, std::io::Error>(body.as_bytes()) });
-        reqwest::Response::from(
-            http::Response::builder()
-                .body(reqwest::Body::wrap_stream(stream))
-                .expect("a response with a streamed body"),
-        )
-    }
-
-    #[tokio::test]
-    async fn a_body_over_the_ceiling_is_refused_and_leaves_nothing_behind() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let dest = dir.path().join("artifact");
-        let err = stage_capped_to(undeclared("0123456789"), &dest, "an artifact", Some(4))
-            .await
-            .expect_err("ten bytes under a four-byte ceiling");
-        let message = err.to_string();
-        assert!(message.contains("ceiling"), "{message}");
-        assert!(
-            !dest.exists(),
-            "the partial file survived, and a later run would read it as a complete download"
-        );
-    }
-
-    #[tokio::test]
-    async fn a_body_under_the_ceiling_is_written_whole() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let dest = dir.path().join("artifact");
-        let staged = stage_capped_to(undeclared("0123456789"), &dest, "an artifact", Some(1024))
-            .await
-            .expect("ten bytes under a kilobyte ceiling");
-        assert_eq!(staged.bytes(), 10);
-        assert_eq!(
-            std::fs::read(staged.path()).expect("the file was staged"),
-            b"0123456789"
-        );
-        staged
-            .commit()
-            .await
-            .expect("the commit renames the staged file");
-        assert_eq!(
-            std::fs::read(&dest).expect("the file was written"),
-            b"0123456789"
-        );
-    }
-
-    /// `0` means no bound, and it has to mean that all the way down — a `Some(0)` would refuse
-    /// every download instead of allowing every one.
-    #[tokio::test]
-    async fn no_ceiling_writes_anything() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let dest = dir.path().join("artifact");
-        let staged = stage_capped_to(undeclared("0123456789"), &dest, "an artifact", None)
-            .await
-            .expect("no ceiling refuses nothing");
-        assert_eq!(staged.bytes(), 10);
-        staged.commit().await.expect("the commit");
-    }
-
-    /// A body that fails partway, with no `Content-Length` — the dropped-connection exit.
-    fn breaks_after(prefix: &'static str) -> reqwest::Response {
-        use futures::StreamExt;
-        let stream = futures::stream::once(
-            async move { Ok::<_, std::io::Error>(prefix.as_bytes()) },
-        )
-        .chain(futures::stream::once(async {
-            Err::<&[u8], _>(std::io::Error::other("the connection went away"))
-        }));
-        reqwest::Response::from(
-            http::Response::builder()
-                .body(reqwest::Body::wrap_stream(stream))
-                .expect("a response with a streamed body"),
-        )
-    }
-
-    /// A body that declares more than it sends — the truncated-but-clean exit.
-    fn declares(len: u64, body: &'static str) -> reqwest::Response {
-        let stream = futures::stream::once(async move { Ok::<_, std::io::Error>(body.as_bytes()) });
-        reqwest::Response::from(
-            http::Response::builder()
-                .header(http::header::CONTENT_LENGTH, len)
-                .body(reqwest::Body::wrap_stream(stream))
-                .expect("a response with a streamed body"),
-        )
-    }
-
-    /// **Every error exit takes the staged file with it, and the destination is never touched.**
-    ///
-    /// The cap refusal cleaned up and said why; the dropped connection, the failed write and the
-    /// failed flush did not. What is different now is *which* file the partial lives in: it is a
-    /// sibling, and the `Drop` on `Staged` removes it on every exit, so there is no arm left that
-    /// can forget. A staged file left behind by a `SIGKILL` is the one case `Drop` cannot cover,
-    /// which is why the next attempt removes it on entry.
-    #[tokio::test]
-    async fn a_failed_transfer_leaves_nothing_behind() {
-        let dir = tempfile::tempdir().expect("tempdir");
-
-        let dropped = dir.path().join("dropped");
-        stage_capped_to(breaks_after("012345"), &dropped, "an artifact", None)
-            .await
-            .expect_err("a connection that goes away is not a download");
-        assert!(
-            !dropped.exists(),
-            "a partial file survived a dropped connection"
-        );
-        assert!(
-            !part_path(&dropped).exists(),
-            "the staged file survived a dropped connection"
-        );
-
-        let short = dir.path().join("short");
-        let err = stage_capped_to(declares(10, "012345"), &short, "an artifact", None)
-            .await
-            .expect_err("six bytes of a declared ten is not the file");
-        assert!(err.to_string().contains("cut short"), "{err}");
-        assert!(!short.exists(), "a truncated file survived a short body");
-        assert!(
-            !part_path(&short).exists(),
-            "the staged file survived a short body"
-        );
-    }
-
-    /// **The artifact that is already there survives a failed download of its replacement.**
-    ///
-    /// This is the defect: the old code opened the destination and streamed into it, then deleted
-    /// it on the way out, so a re-download that died at 60% left a machine with no binary *and* no
-    /// record of why. The error said the transfer failed; the PATH symlink pointed at nothing.
-    #[tokio::test]
-    async fn a_failed_download_leaves_the_working_artifact_untouched() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let dest = dir.path().join("tool");
-
-        stage_capped_to(undeclared("the good version"), &dest, "a tool", None)
-            .await
-            .expect("the first download")
-            .commit()
-            .await
-            .expect("committed");
-        assert_eq!(
-            std::fs::read(&dest).expect("the artifact"),
-            b"the good version"
-        );
-
-        let err = stage_capped_to(breaks_after("half of a new ver"), &dest, "a tool", None)
-            .await
-            .expect_err("a dropped connection is not a download");
-        assert_eq!(
-            std::fs::read(&dest).expect("the artifact is still there"),
-            b"the good version",
-            "a failed re-download destroyed the working artifact"
-        );
-        assert!(
-            err.to_string().contains("still in place"),
-            "a download that failed over a working artifact did not say so: {err}"
-        );
-    }
-
-    /// A body that was staged and dropped without a commit leaves the destination alone, which is
-    /// the other half of the contract: the `Drop` is the cleanup, so a caller that verifies a
-    /// checksum and finds a mismatch has to say so by returning — and cannot leak by forgetting.
-    #[tokio::test]
-    async fn a_staged_body_dropped_without_a_commit_takes_nothing_else_with_it() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let dest = dir.path().join("tool");
-        stage_capped_to(undeclared("the good version"), &dest, "a tool", None)
-            .await
-            .expect("the first download")
-            .commit()
-            .await
-            .expect("committed");
-
-        {
-            let _refused =
-                stage_capped_to(undeclared("bytes that do not match"), &dest, "a tool", None)
-                    .await
-                    .expect("staged");
-            assert!(
-                part_path(&dest).exists(),
-                "a staged file must exist while it is staged, or the checksum has nothing to read"
-            );
-        }
-
-        assert!(
-            !part_path(&dest).exists(),
-            "a staged file that was never committed survived its owner"
-        );
-        assert_eq!(
-            std::fs::read(&dest).expect("the artifact"),
-            b"the good version"
-        );
-    }
-
-    /// A staged file left by a kill is cleaned on the next attempt rather than left to rot beside
-    /// the artifact — the one exit `Drop` cannot cover, handled where the name is known.
-    #[tokio::test]
-    async fn a_staged_file_from_a_killed_run_is_removed_before_the_next_attempt() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let dest = dir.path().join("tool");
-        let leftover = part_path(&dest);
-        std::fs::write(&leftover, b"half a download from a run that was killed").expect("seeded");
-
-        let staged = stage_capped_to(undeclared("the whole thing"), &dest, "a tool", None)
-            .await
-            .expect("the retry");
-        assert_eq!(
-            std::fs::read(staged.path()).expect("the staged bytes"),
-            b"the whole thing",
-            "the retry staged the leftover from the killed run instead of replacing it"
-        );
-        staged.commit().await.expect("committed");
-        assert!(!leftover.exists());
-    }
-
-    /// A declared length that is met is not a failure — the check must not refuse the ordinary
-    /// case it was added to bound.
-    #[tokio::test]
-    async fn a_body_that_matches_its_declared_length_is_accepted() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let dest = dir.path().join("artifact");
-        let staged = stage_capped_to(declares(10, "0123456789"), &dest, "an artifact", Some(1024))
-            .await
-            .expect("a complete body");
-        assert_eq!(staged.bytes(), 10);
-        staged.commit().await.expect("committed");
-        assert_eq!(std::fs::read(&dest).expect("written"), b"0123456789");
-    }
-
-    #[test]
-    fn a_size_is_reported_the_way_a_person_reads_one() {
-        assert_eq!(human_bytes(512), "512 B");
-        assert_eq!(human_bytes(2 * 1024 * 1024 * 1024), "2.0 GiB");
-        assert_eq!(human_bytes(DEFAULT_MAX_DOWNLOAD_BYTES), "2.0 GiB");
-    }
 }

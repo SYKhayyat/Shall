@@ -1,0 +1,11 @@
+pub use shall::core::Package;
+pub use shall::parsers::apt::*;
+pub use shall::parsers::{or_unrecognised, OutputParser, ParseResult};
+pub use shall::utils::text::sanitize;
+mod a_package_apt_remove_left_behind_is_not_installed;
+mod a_package_named_like_a_flag_is_not_confused_for_one;
+mod essential_keeps_only_undeletable_packages;
+mod essential_survives_a_missing_priority_field;
+mod every_row_removed_is_an_empty_machine_and_not_an_unread_one;
+mod test_apt_list_parsing;
+mod test_apt_search_parsing;

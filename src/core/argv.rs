@@ -27,7 +27,7 @@
 /// not a date, the sentence it printed. `Unasked` is an honest confession, and
 /// [`UNASKED_CEILING`] is what stops the confessions accumulating.
 #[derive(Debug, Clone, Copy)]
-enum Evidence {
+pub enum Evidence {
     /// Run, and this is what it answered.
     Measured(&'static str),
     /// Never run. Why it is nonetheless listed this way.
@@ -52,10 +52,10 @@ enum Evidence {
 ///
 /// Keyed on the binary actually invoked, not the Shall backend name, because that is what
 /// parses the arguments (apt's installs run `apt-get`, its queries run `dpkg-query`).
-struct Terminator {
-    binary: &'static str,
-    terminates: bool,
-    evidence: Evidence,
+pub struct Terminator {
+    pub binary: &'static str,
+    pub terminates: bool,
+    pub evidence: Evidence,
 }
 
 /// A parser whose `--` handling comes from the C library rather than from the tool.
@@ -64,7 +64,7 @@ const GETOPT: Evidence = Evidence::Unasked(
      Inferred from the parser it links against, not asked of the tool itself.",
 );
 
-const TERMINATORS: &[Terminator] = &[
+pub const TERMINATORS: &[Terminator] = &[
     // ---- Debian/Ubuntu.
     row(
         "apt",
@@ -701,278 +701,5 @@ pub fn push_names<S: AsRef<str>>(
     }
     for n in names {
         args.push(n.as_ref().to_string());
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// How many rows may still say "nobody asked".
-    ///
-    /// **A ratchet, not a threshold.** It may be lowered when a row is measured; raising it is
-    /// adding a manager on a family resemblance, which is the one move that has broken this
-    /// file four times — `asdf`, `spack`, `gem` and `nimble` were each listed as terminating by
-    /// someone who recognised the shape, and each one broke every install that went through it.
-    /// `tests/terminator_probe_tests.rs` is the thing that asks; run it in an image that has
-    /// the tool, take the names it prints, and lower this.
-    ///
-    /// Lowered 61 → 57 on 2026-08-10: `dnf`, `dnf5`, `yum` and `microdnf` stopped being
-    /// inferences and became measurements, at the cost of every dnf install on Fedora until
-    /// CI could run and say so.
-    ///
-    /// Lowered 57 → 54 on 2026-08-11: `winget`, `choco` and `launchctl`. All three were listed
-    /// on the shape of their parser — *"takes the package id positionally and reads a bare `--`
-    /// as one"* — and all three were wrong, which the probe found the first two nights it ran on
-    /// a hosted macOS and a hosted Windows runner. Three of the remaining 54 are the same
-    /// sentence about a sibling of theirs (`scoop`, `mas`, `sc`); nobody has asked those, and
-    /// the ceiling counts them until somebody does.
-    ///
-    /// Lowered 54 → 48 on 2026-08-13: `apt`, `apt-cache`, `pacman`, `apk`, `zypper` and `cargo`.
-    /// These are what widening the probe from one image to six bought, and they came back on the
-    /// first run that widening survived — CI run 31730161038, six distro legs, five of them
-    /// green. Each row now carries the image that answered instead of the parser it links
-    /// against, which matters most for `pacman` and `apk`: neither delegates to getopt(3), so
-    /// both were inferences from a family they are not in.
-    ///
-    /// **Lowered on the printed sentences, not on a report of them.** The round that widened the
-    /// probe deliberately left this at 54 with the reasoning that `Evidence::Measured` carries
-    /// what the tool said, and a summary of nine confirmations is not nine sentences. The lines
-    /// were read out of the five job logs before this number moved.
-    ///
-    /// Lowered 48 → 47 on 2026-08-14: `slackpkg`, the first row an image disproved before that
-    /// image had ever run in CI. It is a shell script reading `$1` as the pattern, so the GETOPT
-    /// inference — *"from the parser it links against"* — was made about a program that links
-    /// against nothing. `scoop` is the same sentence about a PowerShell script and is already
-    /// listed as refusing; this row was listed as terminating on the strength of the family it
-    /// is not in.
-    ///
-    /// Lowered 47 → 45 the same day: `yay` and `paru`, which no image had ever had installed —
-    /// the arch image acquired them in this round. Both terminate, as GETOPT guessed, and both
-    /// were guesses about a Go program and a Rust one that link getopt(3) no more than slackpkg
-    /// does. Two right answers and one wrong one from the same inference is the argument for
-    /// counting it as unasked rather than as nearly-measured.
-    /// Lowered 45 → 41 on 2026-08-16: the four init-script rows, `rc-service`, `rc-update`,
-    /// `service` and `update-rc.d`. One sentence had decided all four — *a shell script taking
-    /// the service positionally* — and asked, they split two and two: OpenRC's argument walk
-    /// skips a leading `--`, SysVinit's does not, and `service` reads the terminator as the
-    /// service name itself. An inference that gets half of a family right is not weak evidence,
-    /// it is none, which is the argument for this ceiling counting inferences at all.
-    const UNASKED_CEILING: usize = 41;
-
-    /// A row whose hosts disagree takes the answer that sends no terminator.
-    ///
-    /// The exemption `Divergent` buys is *the probe stops calling one host's reading a
-    /// disagreement* — and it is only sound in the safe direction. A divergent row claiming to
-    /// terminate would be Shall emitting a `--` that some platform reads as a package name,
-    /// which is precisely the failure this table exists to prevent, with an exemption on top
-    /// of it. Unrepresentable is better than documented, and this is as close as a const table
-    /// gets.
-    #[test]
-    fn a_divergent_row_takes_the_refusing_answer() {
-        let claiming: Vec<&str> = TERMINATORS
-            .iter()
-            .filter(|t| matches!(t.evidence, Evidence::Divergent(_)) && t.terminates)
-            .map(|t| t.binary)
-            .collect();
-        assert!(
-            claiming.is_empty(),
-            "{claiming:?} say their answer differs by host AND that they terminate. The whole \
-             point of recording divergence is to take the refusing answer; a divergent `true` \
-             is an exemption laid over the defect the table exists to prevent."
-        );
-    }
-
-    #[test]
-    fn a_gnu_style_manager_terminates_and_a_windows_one_does_not() {
-        assert!(terminates_options("apt-get"));
-        assert!(terminates_options("pacman"));
-        assert!(terminates_options("brew"));
-        // `scoop` is still the unasked one of the three Windows managers: a PowerShell script
-        // dispatching on `$args[0]`. `winget` and `choco` were listed beside it on the same
-        // reasoning and the probe disproved both, which is the reason this row is the one left.
-        assert!(!terminates_options("scoop"));
-        assert!(terminates_options("winget"));
-        assert!(terminates_options("choco"));
-    }
-
-    /// Measured in the `tools` container, not inferred from a family resemblance.
-    ///
-    /// Both were listed as terminating and neither had been asked. asdf answered `No such
-    /// plugin: --`; spack answered `No package matches the query: -- <name>` and, on a spec,
-    /// `string index out of range`. The grader saw the second one arrive as `Spec ~~zlib has
-    /// no name` after a real install, which is the same parser and a less legible message.
-    ///
-    /// The header of this file already states the rule this broke: the default is "does not
-    /// terminate", and a manager joins the terminating set **when someone has checked its
-    /// argument parser**. Two joined without that, and a `--` a manager reads as a package
-    /// name turns every install through it into a failure.
-    /// **A name is not an implementation.** Fedora 41 replaced the Python `dnf` with the C++
-    /// `dnf5` and kept the name, so `/usr/bin/dnf` parses arguments with something that has
-    /// never seen getopt — and the row that said otherwise said it on the getopt *inference*,
-    /// which is the move the header of this file warns about and which has now broken five
-    /// managers rather than four.
-    ///
-    /// What it cost: every `dnf` install on Fedora, from `search` outward. The container leg
-    /// that would have caught it in July was in a workflow file that had not parsed since
-    /// 2026-08-09, so the first run that could see it is the first run there was.
-    #[test]
-    fn dnf_does_not_terminate_because_dnf_may_be_dnf5() {
-        assert!(!terminates_options("dnf"));
-        assert!(!terminates_options("dnf5"));
-        // The siblings, because they are the same program under other names: `yum` is a
-        // symlink to dnf and dnf5 provides `microdnf`. Fixing one spelling and leaving these
-        // would have left the identical defect live on the identical machines.
-        assert!(!terminates_options("yum"));
-        assert!(!terminates_options("microdnf"));
-        // `rpm` is not dnf5 under any name, so it keeps its terminator.
-        assert!(terminates_options("rpm"));
-    }
-
-    #[test]
-    fn a_manager_that_reads_the_terminator_as_a_name_is_not_listed_as_terminating() {
-        assert!(!terminates_options("asdf"));
-        assert!(!terminates_options("spack"));
-        // The controls: the ones measured in the same sweep that DO honour it stay listed, so
-        // this is not a test that would pass if the table were simply emptied.
-        assert!(terminates_options("cargo"));
-        assert!(terminates_options("npm"));
-        assert!(terminates_options("pipx"));
-        assert!(terminates_options("luarocks"));
-    }
-
-    /// One binary, one row. The old shape was two tables and a test asserting they did not
-    /// contradict each other; a duplicate row is the same contradiction in one table.
-    #[test]
-    fn no_binary_is_listed_twice() {
-        let mut seen: Vec<&str> = Vec::new();
-        for t in TERMINATORS {
-            assert!(
-                !seen.contains(&t.binary),
-                "`{}` has two rows — one invocation cannot both end its options and not",
-                t.binary
-            );
-            seen.push(t.binary);
-        }
-    }
-
-    /// The ratchet. Rows that nobody has asked may only become fewer.
-    #[test]
-    fn the_unasked_rows_may_only_become_fewer() {
-        let unasked: Vec<&str> = TERMINATORS
-            .iter()
-            .filter(|t| matches!(t.evidence, Evidence::Unasked(_)))
-            .map(|t| t.binary)
-            .collect();
-        eprintln!(
-            "terminator table: {} rows, {} measured, {} never asked",
-            TERMINATORS.len(),
-            TERMINATORS.len() - unasked.len(),
-            unasked.len()
-        );
-        assert!(
-            unasked.len() <= UNASKED_CEILING,
-            "{} rows say nobody asked, and the ceiling is {}: {:?}\n\n\
-             A new row on a family resemblance is how this file broke four times. Measure it \
-             — `tests/terminator_probe_tests.rs` in an image that has the tool — and lower \
-             the ceiling.",
-            unasked.len(),
-            UNASKED_CEILING,
-            unasked
-        );
-    }
-
-    /// An exemption is a claim, and a claim has content. Both kinds of evidence say something
-    /// about the parser; neither may be a shrug or a date.
-    #[test]
-    fn every_row_says_something_a_reader_could_check() {
-        for t in TERMINATORS {
-            let (kind, text) = match t.evidence {
-                Evidence::Measured(w) => ("measured", w),
-                Evidence::Unasked(w) => ("unasked", w),
-                Evidence::Divergent(w) => ("divergent", w),
-            };
-            assert!(
-                text.len() > 40,
-                "`{}`'s {kind} evidence has no substance: {text:?}",
-                t.binary
-            );
-            let lower = text.to_lowercase();
-            assert!(
-                !lower.contains("not yet") && !lower.contains("todo"),
-                "`{}`'s evidence is a schedule, not a claim about its parser: {text:?}",
-                t.binary
-            );
-        }
-    }
-
-    #[test]
-    fn a_path_or_an_exe_is_looked_up_as_the_program_it_is() {
-        assert!(terminates_options("/usr/bin/apt-get"));
-        assert!(terminates_options(r"C:\tools\cargo.exe"));
-        assert!(!terminates_options(r"C:\Users\me\scoop\shims\scoop.exe"));
-    }
-
-    #[test]
-    fn a_binary_this_table_has_never_heard_of_does_not_terminate() {
-        // The default the header states, asserted rather than remembered: an unlisted manager
-        // is one nobody checked, and the safe reading of "nobody checked" is "no terminator".
-        assert!(!terminates_options("some-manager-invented-tomorrow"));
-    }
-
-    #[test]
-    fn names_go_behind_the_terminator_where_there_is_one() {
-        let mut args = vec!["install".to_string(), "-y".to_string()];
-        push_names(&mut args, "apt-get", ["ripgrep"]);
-        assert_eq!(args, ["install", "-y", "--", "ripgrep"]);
-
-        let mut args = vec!["install".to_string()];
-        push_names(&mut args, "scoop", ["ripgrep"]);
-        assert_eq!(args, ["install", "ripgrep"]);
-    }
-
-    /// A `--` that the manager reads as something OTHER than "options end here" is worse
-    /// than one it does not understand: RubyGems takes everything after it as build
-    /// arguments, so the gem name is consumed and nothing is installed.
-    #[test]
-    fn gem_does_not_terminate_because_its_dash_dash_means_build_args() {
-        assert!(!terminates_options("gem"));
-        let mut args = vec!["install".to_string()];
-        push_names(&mut args, "gem", ["colorize"]);
-        assert_eq!(
-            args,
-            ["install", "colorize"],
-            "`gem install -- colorize` names no gem at all"
-        );
-        let mut args = vec!["uninstall".to_string()];
-        push_names(&mut args, "gem", ["colorize"]);
-        assert_eq!(args, ["uninstall", "colorize"]);
-    }
-
-    /// The same class as `gem`, found the same way — by running it. `nimble --help` says of
-    /// `--`: "arg are passed to the binary when it is run … to the Nim compiler". So
-    /// `nimble install -y -- nimjson` hands `--` to the compiler, which answers "arguments
-    /// can only be given if the '--run' option is selected" and the build fails. Every
-    /// nimble install of a package that produces a binary failed this way.
-    #[test]
-    fn nimble_does_not_terminate_because_its_dash_dash_reaches_the_compiler() {
-        assert!(!terminates_options("nimble"));
-        let mut args = vec!["install".to_string(), "-y".to_string()];
-        push_names(&mut args, "nimble", ["nimjson"]);
-        assert_eq!(
-            args,
-            ["install", "-y", "nimjson"],
-            "`--` reaches the Nim compiler and fails the build"
-        );
-        let mut args = vec!["uninstall".to_string(), "-y".to_string()];
-        push_names(&mut args, "nimble", ["nimjson"]);
-        assert_eq!(args, ["uninstall", "-y", "nimjson"]);
-    }
-
-    #[test]
-    fn no_names_means_no_terminator() {
-        let mut args = vec!["autoremove".to_string()];
-        push_names(&mut args, "apt-get", Vec::<String>::new());
-        assert_eq!(args, ["autoremove"]);
     }
 }

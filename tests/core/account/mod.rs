@@ -1,0 +1,10 @@
+pub use shall::core::account::*;
+pub use shall::core::account::{data_dir_under, host_platform, Platform};
+pub use shall::core::{Error, Result};
+pub use std::path::{Path, PathBuf};
+mod a_named_accounts_data_directory_is_the_platforms_own;
+mod the_current_account_has_a_home_and_an_identity;
+mod the_current_accounts_sid_reads_back_as_a_sid;
+mod the_session_bus_names_the_account_asked_for_and_not_the_one_running;
+mod the_win32_utf16_reader_rejects_null_and_keeps_the_full_sid;
+mod unknown_accounts_are_refused;

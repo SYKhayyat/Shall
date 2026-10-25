@@ -52,61 +52,6 @@ pub fn parse_pkg_add(output: &str) -> ParseResult {
     parse_with_backend(output, "pkg_add")
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn freebsd_pkg_info_names_and_versions() {
-        let input = "pkg-1.20.9                     Package manager\n\
-                     py311-requests-2.31.0          HTTP library\n\
-                     vim-9.0.1897                   improved vi\n";
-        let res = parse_pkg(input).expect("real `pkg info` output");
-        assert_eq!(res.len(), 3);
-        assert_eq!(res[0].name, "pkg");
-        assert_eq!(res[0].version.as_deref(), Some("1.20.9"));
-        assert_eq!(res[0].backend, "pkg");
-        assert_eq!(res[1].name, "py311-requests");
-        assert_eq!(res[1].version.as_deref(), Some("2.31.0"));
-    }
-
-    #[test]
-    fn openbsd_pkg_info_names_and_versions_carry_the_pkg_add_label() {
-        let input = "wget-1.21.4        retrieve files over HTTP/FTP\n\
-                     gmake-4.4          GNU make\n";
-        let res = parse_pkg_add(input).expect("real `pkg_info` output");
-        assert_eq!(res.len(), 2);
-        assert_eq!(res[0].name, "wget");
-        assert_eq!(res[0].version.as_deref(), Some("1.21.4"));
-        assert_eq!(
-            res[0].backend, "pkg_add",
-            "an OpenBSD package is a pkg_add package"
-        );
-    }
-
-    #[test]
-    fn a_line_that_parses_as_nothing_is_reported_rather_than_read_as_an_empty_machine() {
-        // No dash-then-digit anywhere, so nothing is misread as a package — and this used to
-        // end there, returning the empty vector that means *this machine has no packages*.
-        // It does not mean that. A `pkg info` that printed one line and yielded no package is
-        // a listing this parser did not understand, and the planner must not answer it by
-        // scheduling every declared package as a fresh install.
-        let err = parse_pkg("Updating FreeBSD repository catalogue...")
-            .expect_err("one unreadable line is not an empty machine");
-        assert_eq!(err.backend, "pkg");
-        assert_eq!(err.data_lines, 1);
-        assert!(err.sample.starts_with("Updating"), "{err:?}");
-    }
-
-    #[test]
-    fn genuinely_empty_output_is_an_empty_machine() {
-        // The control, without which the assertion above holds for a parser that errors on
-        // everything: a manager with nothing installed prints nothing, and that is an answer.
-        assert!(parse_pkg("").expect("no output is no packages").is_empty());
-        assert!(parse_pkg("\n  \n").expect("blank output").is_empty());
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Void Linux (`xbps`). Here rather than in its own module because the split point is the same
 // question `split_name_version` above already answers — a `pkgver` token whose version starts
@@ -174,55 +119,4 @@ pub fn parse_xbps_dependencies(output: &str) -> Vec<String> {
         .filter(|s| !s.is_empty())
         .map(str::to_string)
         .collect()
-}
-
-#[cfg(test)]
-mod xbps_tests {
-    use super::*;
-
-    #[test]
-    fn a_state_flag_is_not_part_of_the_package() {
-        let out = "\
-ii bash-5.2.15_2            The GNU Bourne Again Shell
-ii xbps-triggers-0.128_1    XBPS triggers for Void Linux
-";
-        let pkgs = parse_xbps_list(out).expect("real xbps -l output");
-        assert_eq!(pkgs.len(), 2);
-        assert_eq!(pkgs[0].name, "bash");
-        assert_eq!(pkgs[0].version.as_deref(), Some("5.2.15_2"));
-        assert_eq!(pkgs[0].backend, "xbps");
-        // A name with an internal dash must not be split at the wrong hyphen.
-        assert_eq!(pkgs[1].name, "xbps-triggers");
-        assert_eq!(pkgs[1].version.as_deref(), Some("0.128_1"));
-    }
-
-    #[test]
-    fn a_bare_pkgver_listing_reads_the_same_way() {
-        let pkgs = parse_xbps_list("curl-8.4.0_1\ngit-2.42.0_1\n").expect("bare pkgver listing");
-        assert_eq!(pkgs.len(), 2);
-        assert_eq!(pkgs[0].name, "curl");
-        assert_eq!(pkgs[1].name, "git");
-    }
-
-    #[test]
-    fn a_search_carries_its_install_marker_and_its_description() {
-        let out = "[*] bash-5.2.15_2   The GNU Bourne Again Shell\n[-] zsh-5.9_2   The Z shell\n";
-        let pkgs = parse_xbps_search(out);
-        assert_eq!(pkgs.len(), 2);
-        assert_eq!(pkgs[0].name, "bash");
-        assert_eq!(
-            pkgs[0].properties.get("description").map(String::as_str),
-            Some("The GNU Bourne Again Shell")
-        );
-        assert_eq!(pkgs[1].name, "zsh");
-        assert_eq!(pkgs[1].version.as_deref(), Some("5.9_2"));
-    }
-
-    #[test]
-    fn a_dependency_constraint_is_not_part_of_the_name() {
-        assert_eq!(
-            parse_xbps_dependencies("glibc>=2.36_1\noniguruma>=6.9\n\n"),
-            vec!["glibc", "oniguruma"]
-        );
-    }
 }

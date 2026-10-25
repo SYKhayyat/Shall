@@ -1,0 +1,12 @@
+pub use shall::model::groups::*;
+use std::collections::BTreeMap;
+mod a_bom_and_a_hash_inside_a_name_are_not_the_reader_s_business;
+mod a_group_can_contain_another_group;
+mod a_group_cycle_is_refused;
+mod a_group_defined_twice_is_refused;
+mod a_group_expands_to_its_backends_in_order;
+mod a_line_that_is_not_a_definition_is_an_error;
+mod a_missing_file_is_no_groups;
+mod comments_and_blank_lines_are_skipped;
+mod members_are_recorded_not_validated_here;
+mod nesting_is_transitive_and_dedups;

@@ -189,13 +189,13 @@ fn sid_text(sid: &[u32]) -> Option<String> {
 /// exactly the machine whose bug this was and nowhere else, which is a gate that reports nothing
 /// until the day it is the only gate left.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Platform {
+pub enum Platform {
     Unix,
     MacOs,
     Windows,
 }
 
-fn host_platform() -> Platform {
+pub fn host_platform() -> Platform {
     if cfg!(target_os = "macos") {
         Platform::MacOs
     } else if cfg!(windows) {
@@ -205,7 +205,7 @@ fn host_platform() -> Platform {
     }
 }
 
-fn data_dir_under(home: &Path) -> PathBuf {
+pub fn data_dir_under(home: &Path) -> PathBuf {
     match host_platform() {
         Platform::MacOs => home
             .join("Library")
@@ -770,108 +770,4 @@ fn resolve_named(name: &str) -> Result<Account> {
 #[cfg(not(any(unix, windows)))]
 fn current_account() -> Result<Account> {
     resolve_named("current")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_current_account_has_a_home_and_an_identity() {
-        let account = Account::current().unwrap();
-        assert!(!account.name().is_empty());
-        assert!(!account.home().as_os_str().is_empty());
-    }
-
-    /// The SID reads back as a SID, and not as its first character.
-    ///
-    /// The control for #101 and #106 in one assertion. A null `peUse` out-parameter made this
-    /// lookup kill the process instead of answering, and `CStr::from_ptr` over
-    /// `ConvertSidToStringSidW`'s **wide** buffer stopped at the high half of the first `u16`,
-    /// so the identity of every account on Windows read back as `"S"` — a string that was
-    /// wrong rather than absent, which is why it flowed all the way to `ProfileList` and out the
-    /// other side as "no home directory for this account".
-    #[cfg(windows)]
-    #[test]
-    fn the_current_accounts_sid_reads_back_as_a_sid() {
-        let account = Account::current().unwrap();
-        let sid = account.sid().expect("a Windows account has a SID");
-        assert!(
-            sid.starts_with("S-1-"),
-            "the SID read back as {sid:?}, which is not the identity of {}",
-            account.name()
-        );
-    }
-
-    /// **Every platform's convention, asserted from any host.** The macOS leg of this is the one
-    /// that was wrong, and a `#[cfg(target_os = "macos")]` test would have caught it only on the
-    /// machine that reported it.
-    #[test]
-    fn a_named_accounts_data_directory_is_the_platforms_own() {
-        let home = Path::new("/home/somebody");
-        assert_eq!(
-            data_dir_under(home),
-            match host_platform() {
-                Platform::MacOs => home.join("Library/Application Support/shall"),
-                Platform::Unix => home.join(".local/share/shall"),
-                Platform::Windows => home.join("AppData/Local/shall"),
-            }
-        );
-        // The two conventions that differ, named rather than left to the host's cfg.
-        assert_eq!(
-            data_dir_under(home),
-            if cfg!(target_os = "macos") {
-                home.join("Library/Application Support/shall")
-            } else if cfg!(windows) {
-                home.join("AppData/Local/shall")
-            } else {
-                home.join(".local/share/shall")
-            },
-            "an account's data directory is not the platform's data directory convention"
-        );
-    }
-
-    #[test]
-    fn unknown_accounts_are_refused() {
-        assert!(Account::resolve("shall-no-such-account-71").is_err());
-    }
-
-    /// The UTF-16 reader is the one reader, and it must not read a null buffer.
-    ///
-    /// `ConvertSidToStringSidW` hands back a `LPWSTR` that the caller owns, and the API is
-    /// checked for failure before the buffer is read — but "checked for failure" is a claim about
-    /// the call, not a proof about the pointer. A null that reaches the reader would be walked
-    /// until it faulted, so the reader refuses it rather than trusting the caller.
-    #[cfg(windows)]
-    #[test]
-    fn the_win32_utf16_reader_rejects_null_and_keeps_the_full_sid() {
-        let sid: Vec<u16> = "S-1-5-21-123456789-987654321-42"
-            .encode_utf16()
-            .chain(std::iter::once(0))
-            .collect();
-        assert_eq!(
-            wide_to_string(sid.as_ptr()).as_deref(),
-            Some("S-1-5-21-123456789-987654321-42")
-        );
-        assert!(wide_to_string(std::ptr::null()).is_none());
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn the_session_bus_names_the_account_asked_for_and_not_the_one_running() {
-        for name in ["nobody", "daemon", "bin", "root"] {
-            let Ok(account) = Account::resolve(name) else {
-                continue;
-            };
-            let env: std::collections::HashMap<String, String> =
-                account.session_env().into_iter().collect();
-            let runtime = env
-                .get("XDG_RUNTIME_DIR")
-                .unwrap_or_else(|| panic!("{name} has no runtime directory"));
-            let bus = env.get("DBUS_SESSION_BUS_ADDRESS").unwrap_or_else(|| {
-                panic!("{name} inherited a session bus or was left without one")
-            });
-            assert_eq!(bus, &format!("unix:path={runtime}/bus"), "for {name}");
-        }
-    }
 }

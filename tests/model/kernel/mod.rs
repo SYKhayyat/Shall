@@ -1,0 +1,13 @@
+pub use shall::model::kernel::*;
+mod a_module_installed_for_any_kernel_is_not_stuck;
+mod a_module_that_never_reached_installed_is_reported;
+mod both_dkms_status_formats_parse;
+mod everything_installed_is_nothing_to_report;
+mod kernels_are_picked_out_of_a_change_set_sorted;
+mod no_modules_is_not_a_failure;
+mod noise_does_not_become_a_module;
+mod nothing_kernel_shaped_is_no_kernel_change;
+mod ordinary_packages_are_not_kernels;
+mod several_modules_and_kernels_parse;
+mod the_failure_says_why_before_the_reboot_matters;
+mod the_kernels_of_every_distribution_are_recognised;

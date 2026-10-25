@@ -50,39 +50,6 @@ pub fn parse_dotnet_search(output: &str) -> ParseResult {
     parse_tool_table(output)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_dotnet_tool_list() {
-        let input = "Package Id      Version      Commands\n\
-                     --------------------------------------\n\
-                     dotnetsay       2.1.4        dotnetsay\n\
-                     powershell      7.4.0        pwsh\n";
-        let res = parse_dotnet_list(input).expect("this fixture parses");
-        assert_eq!(res.len(), 2);
-        assert_eq!(res[0].name, "dotnetsay");
-        assert_eq!(res[0].version.as_deref(), Some("2.1.4"));
-        assert_eq!(res[1].name, "powershell");
-        // header/separator rows must not leak through
-        assert!(res
-            .iter()
-            .all(|p| p.name != "Package" && !p.name.starts_with('-')));
-    }
-
-    #[test]
-    fn parses_dotnet_tool_search() {
-        let input = "Package ID        Latest Version      Authors      Downloads\n\
-                     ----------------  ------------------  -----------  ---------\n\
-                     dotnet-ef         8.0.0               Microsoft    123456\n";
-        let res = parse_dotnet_search(input).expect("this fixture parses");
-        assert_eq!(res.len(), 1);
-        assert_eq!(res[0].name, "dotnet-ef");
-        assert_eq!(res[0].version.as_deref(), Some("8.0.0"));
-    }
-}
-
 /// `dotnet tool list --global --format json` (SDK 10+, `Q43`).
 ///
 /// ```json
@@ -138,60 +105,4 @@ pub fn parse_dotnet_list_json(output: &str) -> ParseResult {
         "JSON with no `data` array, or a `data` array none of whose entries carry a `packageId`",
         output,
     )
-}
-
-#[cfg(test)]
-mod json_tests {
-    use super::*;
-
-    /// Verbatim from `dotnet tool list --global --format json` on SDK 10.0.301.
-    const REAL: &str = r#"{"version":1,"data":[{"packageId":"dotnetsay","version":"3.0.3","commands":["dotnetsay"]}]}"#;
-
-    #[test]
-    fn a_tool_is_its_package_id_and_version() {
-        let pkgs = parse_dotnet_list_json(REAL).expect("this fixture parses");
-        assert_eq!(pkgs.len(), 1);
-        assert_eq!(pkgs[0].name, "dotnetsay");
-        assert_eq!(pkgs[0].version.as_deref(), Some("3.0.3"));
-        assert_eq!(pkgs[0].backend, "dotnet");
-    }
-
-    /// The two forms describe the same machine, so they must report the same thing. A
-    /// difference here is a listing that changes shape with the installed SDK.
-    #[test]
-    fn the_json_and_the_table_agree_about_the_same_machine() {
-        let table = "Package Id      Version      Commands \n\
-                     --------------------------------------\n\
-                     dotnetsay       3.0.3        dotnetsay\n";
-        let a = parse_dotnet_list(table).expect("this fixture parses");
-        let b = parse_dotnet_list_json(REAL).expect("this fixture parses");
-        assert_eq!(
-            a.iter().map(|p| (&p.name, &p.version)).collect::<Vec<_>>(),
-            b.iter().map(|p| (&p.name, &p.version)).collect::<Vec<_>>(),
-        );
-    }
-
-    /// An SDK too old for `--format json` fails rather than printing the table, so this never
-    /// sees one — but if the negotiation ever regressed, reading a table as JSON must report
-    /// nothing rather than inventing a package from a header row.
-    #[test]
-    fn an_empty_data_array_is_an_empty_machine_and_everything_else_is_unread() {
-        assert!(parse_dotnet_list_json(r#"{"version":1,"data":[]}"#)
-            .expect("dotnet with no global tools returns an empty `data` array")
-            .is_empty());
-        // The table form is what an SDK *without* `--format json` prints, and the empty string
-        // is what it prints when the command fails outright. Both used to arrive as "no global
-        // tools are installed" — for exactly the users on older tooling, who are the least
-        // likely to notice. `{"version":1}` with no `data` is the third: a schema this does not
-        // read.
-        for broken in [
-            "Package Id  Version\n----\nx  1.0\n",
-            "",
-            r#"{"version":1}"#,
-        ] {
-            let err = parse_dotnet_list_json(broken)
-                .expect_err("output this reader could not read is not an empty machine");
-            assert_eq!(err.backend, "dotnet", "{broken}");
-        }
-    }
 }

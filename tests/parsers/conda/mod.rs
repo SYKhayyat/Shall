@@ -1,0 +1,10 @@
+pub use shall::core::Package;
+pub use shall::parsers::conda::*;
+pub use shall::parsers::{or_unrecognised_json, ParseResult};
+pub use shall::utils::text::sanitize;
+mod conda_search_error_payload_is_empty;
+mod history_of_an_untouched_env_is_empty_not_everything;
+mod history_reports_only_what_was_asked_for;
+mod output_that_is_not_json_is_not_an_untouched_environment;
+mod parses_conda_list_json;
+mod parses_conda_search_json_newest_build;

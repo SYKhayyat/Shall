@@ -1,0 +1,12 @@
+pub use shall::model::vendor::*;
+pub use std::path::{Path, PathBuf};
+mod a_bare_path_is_local;
+mod a_malformed_github_ref_is_not_classified;
+mod a_path_that_escapes_the_repo_is_refused;
+mod a_traversal_path_is_dropped_from_the_plan;
+mod adapters_and_scripts_are_code_modules_are_not;
+mod an_existing_destination_is_flagged_as_a_collision;
+mod git_urls_clone_and_file_urls_do_not;
+mod github_shorthand_classifies_and_expands;
+mod only_shareable_files_are_vendored;
+mod the_plan_places_shareable_files_and_skips_the_rest;

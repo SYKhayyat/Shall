@@ -1,0 +1,10 @@
+pub use shall::model::rehearsal::*;
+mod docker_is_preferred_and_podman_is_the_fallback;
+mod only_a_clean_resolution_passes;
+mod the_config_is_mounted_read_only;
+mod the_container_removes_itself;
+mod the_missing_image_refusal_says_how_to_build_one;
+mod the_refusal_names_both_runtimes;
+mod the_rehearsal_asks_whether_the_config_resolves;
+mod the_rehearsals_data_stays_in_the_container;
+mod the_runtime_and_image_land_in_the_command;

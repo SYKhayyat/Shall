@@ -1,0 +1,15 @@
+pub use serde::{Deserialize, Serialize};
+pub use shall::core::exec_lock::*;
+pub use shall::core::ledger::LockFile;
+use std::collections::BTreeMap;
+pub use std::path::{Path, PathBuf};
+mod a_missing_file_loads_as_an_empty_ledger;
+mod a_numeric_ceiling_counts;
+mod a_row_with_no_recorded_path_is_never_read_as_departed;
+mod a_run_is_counted_and_stamped;
+mod always_never_stops;
+mod an_edited_script_has_not_departed_but_a_deleted_one_has;
+mod an_edited_script_is_a_different_content_and_runs_again;
+mod an_unknown_content_has_never_run;
+mod the_default_ceiling_is_once_per_content;
+mod the_ledger_round_trips_through_toml;

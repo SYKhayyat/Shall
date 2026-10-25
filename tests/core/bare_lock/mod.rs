@@ -1,0 +1,14 @@
+pub use serde::{Deserialize, Serialize};
+pub use shall::core::bare_lock::*;
+pub use shall::core::ledger::LockFile;
+use std::collections::BTreeMap;
+pub use std::path::{Path, PathBuf};
+use tempfile::TempDir;
+mod a_hostname_cannot_write_outside_the_locks_directory;
+mod a_missing_file_is_an_empty_lock_and_not_an_error;
+mod a_name_nobody_declares_any_more_is_forgotten;
+mod a_recorded_name_keeps_its_backend;
+mod deleting_the_entry_is_how_you_unfreeze;
+mod each_host_keeps_its_own_answers;
+mod it_round_trips_through_the_file;
+mod unlocking_forgets_and_says_whether_there_was_anything_to_forget;
