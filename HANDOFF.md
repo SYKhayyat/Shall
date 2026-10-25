@@ -14,24 +14,23 @@ easier.
 
 | | |
 |---|---|
-| src files still carrying an inline test module | **82**, split: app 37, core 1, backends 29, model 0, parsers 0, verbs 7, config 4, utils 4 |
+| src files still carrying an inline test module | **79**, split: app 37, core 1, backends 27, model 0, parsers 0, verbs 6, config 4, utils 4 |
 | tests already in mirror folders | executor, guard, transaction, generic, statement, sync, scheduler, language, windows, ecosystem, dnf, common, pacman, main, plan, resolve, vars, service, file, extras_lock, grammar, model, parsers, core |
 | `TOO_BIG_FOR_NOW` rows | **0** — the target state, and `executor.rs` was the last |
-| moved in this session | **1,580 tests** from 85 files; model and parsers now have no inline test modules, and core is down to 1 file |
+| moved in this session | **1,630 tests** from 88 files; model and parsers now have no inline test modules, and core is down to 1 file |
 | converter scripts in the repo | 2, both with passing self-tests |
 
 `cargo build --all-targets`, clippy at `-D warnings --all-features`, and `cargo fmt -- --check` are
-green after the current batch. The focused core mirror reports **440 passed, 0 failed**. The latest
-focused app, backend, and config mirrors each report **26 passed, 0 failed**. The newest focused
-mirrors report **26 link, 25 planner, and 18 config tests**, all passing. The library target
-reports **693 passed, 0 failed**. The latest setting and NixOS mirrors each report **24 passed,
-0 failed**; registry, GitHub, and btrfs report **23, 21, and 21 passed**. The latest full test run
-reached the suite and reported **2,403 passed, 1 failed**
+green after the current batch. The library target reports **628 passed, 0 failed**. The latest
+focused mirrors report **17 artifact-selection, 17 flatpak, and 16 packages tests**, all passing.
+The latest setting and NixOS mirrors each report **24 passed, 0 failed**; registry, GitHub, and
+btrfs report **23, 21, and 21 passed**. The latest full test run
+reached the suite and reported **2,453 passed, 1 failed**
 on this host: the existing `argv_drift_tests::every_subcommand_shall_invokes_still_exists_upstream`
 gate cannot read help from sandbox PATH wrappers for installed `apk`, `brew`, `bun`, `composer`,
 `conda`, `dnf`, `gem`, `go`, `pacman`, and `pipx`. That is an environment/tool-discovery
-failure, not a moved-test failure. The integration suite now runs **2,404 tests** including the
-newly moved app/backend/config tests.
+failure, not a moved-test failure. The integration suite now runs **2,454 tests** including the
+newly moved backend and verb tests.
 The suite wiring audit and both converter self-tests pass. The Windows cross-check is still unavailable
 here because the cross compiler is not installed.
 

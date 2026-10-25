@@ -172,7 +172,7 @@ async fn say_if_the_failure_was_not_yours(
 /// all, so a mistyped `npm:` package wedged the config while the same typo behind `scoop:`
 /// did not. The backends decide this now — from their own declared phrasings, or by saying so
 /// directly — and this reads their answer.
-fn says_a_name_is_absent(e: &anyhow::Error) -> bool {
+pub fn says_a_name_is_absent(e: &anyhow::Error) -> bool {
     e.downcast_ref::<crate::core::Error>()
         .is_some_and(|err| err.says_a_name_is_absent())
 }
@@ -182,7 +182,7 @@ fn says_a_name_is_absent(e: &anyhow::Error) -> bool {
 /// The message is *not* what establishes the fact — `says_a_name_is_absent` did that. It is
 /// read only to pick which of the lines this command wrote the manager was talking about,
 /// which is a question the fact cannot answer and the edits can.
-fn absent_command_message(e: &anyhow::Error) -> Option<&str> {
+pub fn absent_command_message(e: &anyhow::Error) -> Option<&str> {
     match e.downcast_ref::<crate::core::Error>() {
         Some(crate::core::Error::CommandFailed {
             message,
@@ -195,7 +195,7 @@ fn absent_command_message(e: &anyhow::Error) -> Option<&str> {
 
 /// The name a name-resolving backend says is not there — a git host, an index, an API. Those
 /// backends looked one name up and know which, so nothing has to be inferred from their text.
-fn backend_absent_name(e: &anyhow::Error) -> Option<&str> {
+pub fn backend_absent_name(e: &anyhow::Error) -> Option<&str> {
     match e.downcast_ref::<crate::core::Error>() {
         Some(err @ crate::core::Error::NoSuchPackage { .. }) => err.absent_name(),
         _ => None,
@@ -209,7 +209,7 @@ fn backend_absent_name(e: &anyhow::Error) -> Option<&str> {
 /// plainly there reads as a name nobody mentioned. Comparing with the whitespace taken out
 /// recovers it. This decides *which* line, never *whether* — a wrong answer here keeps a
 /// declaration that could have been withdrawn, which is the safe direction.
-fn mentions_package(message: &str, name: &str) -> bool {
+pub fn mentions_package(message: &str, name: &str) -> bool {
     if message.contains(name) {
         return true;
     }
@@ -218,7 +218,7 @@ fn mentions_package(message: &str, name: &str) -> bool {
 }
 
 /// The name a failed sync says can never be installed, if it says one.
-fn unresolvable_name(e: &anyhow::Error) -> Option<&str> {
+pub fn unresolvable_name(e: &anyhow::Error) -> Option<&str> {
     match e.downcast_ref::<crate::core::Error>() {
         Some(crate::core::Error::Unresolvable { name, .. }) => Some(name.as_str()),
         _ => None,
@@ -312,7 +312,7 @@ async fn withdraw_what_can_never_succeed(
 /// program has already disproved is the sentence this whole finding is about, so which
 /// situations exist has to be something a test can enumerate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum WhyKept {
+pub enum WhyKept {
     /// Shall said no to *this line as written* — plain HTTP, no `@sha256=`, a `@target=`
     /// inside the repo. The refusal already says what to change, and the line is the thing
     /// the user edits, so deleting it would throw away the fix.
@@ -346,7 +346,7 @@ enum WhyKept {
     Unclassified,
 }
 
-fn why_kept(e: &anyhow::Error) -> WhyKept {
+pub fn why_kept(e: &anyhow::Error) -> WhyKept {
     let Some(err) = e.downcast_ref::<crate::core::Error>() else {
         return WhyKept::Unclassified;
     };
@@ -380,7 +380,7 @@ fn why_kept(e: &anyhow::Error) -> WhyKept {
 /// an exit is not a wedge — and only [`WhyKept::Unclassified`] may suggest that `sync` trying
 /// again could work, because it is the only one where Shall has not already been shown
 /// otherwise.
-fn kept_line_advice(why: WhyKept, line: &str, file: &std::path::Path) -> String {
+pub fn kept_line_advice(why: WhyKept, line: &str, file: &std::path::Path) -> String {
     let where_it_is = format!("`{}` is still declared in {}", line, file.display());
     match why {
         WhyKept::Exhausted => format!(
@@ -1488,442 +1488,4 @@ pub async fn handle_info(
         }
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::core::exit_policy;
-    use crate::core::{Error, Retryability};
-
-    fn boxed(e: Error) -> anyhow::Error {
-        anyhow::Error::new(e)
-    }
-
-    /// The reported bug: a typo behind a real backend prefix. `scoop` resolves, so this is
-    /// never `Unresolvable`; scoop's own policy says its output means the name is not there,
-    /// and until that was read the line stayed in `modules/imperative.txt` and wedged every
-    /// later command.
-    #[test]
-    fn a_failure_that_says_the_name_is_absent_is_withdrawn() {
-        let e = boxed(Error::command_failed_absent(
-            "`scoop` failed: Couldn't find manifest for 'definitely-not-real'.",
-        ));
-        assert!(says_a_name_is_absent(&e));
-        assert_eq!(
-            absent_command_message(&e),
-            Some("`scoop` failed: Couldn't find manifest for 'definitely-not-real'.")
-        );
-    }
-
-    /// The half that must not regress. A dropped network or a held lock means you did mean
-    /// it, and the line stays so a retry works.
-    #[test]
-    fn a_transient_or_unclassified_failure_keeps_the_line() {
-        for retry in [Retryability::Transient, Retryability::Unknown] {
-            let e = boxed(Error::CommandFailed {
-                message: "`apt` failed: Could not get lock /var/lib/dpkg/lock".to_string(),
-                retry,
-                absent_name: false,
-            });
-            assert!(!says_a_name_is_absent(&e), "withdrew on {retry:?}");
-            assert_eq!(absent_command_message(&e), None, "withdrew on {retry:?}");
-        }
-    }
-
-    /// GRADER round 5, 2026-07-30 — RED.
-    ///
-    /// `error.rs` classifies a rate limit `Transient`, and says why in as many words:
-    /// *"The whole point of a rate limit is that the window moves."* `why_kept` branches on
-    /// `Refused`, `Exhausted` and name-absence and then falls through to `Unclassified`, so the
-    /// user is told **"Nothing classified the failure above"** about a failure this program
-    /// classified three lines away — and then told *"if it repeats unchanged the cause is not a
-    /// passing one"*, which is exactly backwards: a rate limit repeats unchanged *because* it is
-    /// passing.
-    ///
-    /// Observed live on the macOS runner, with the window in the line above the advice:
-    ///
-    ///     Error: API rate limit: api.github.com is rate limiting this machine and does not
-    ///     reset for 1236s, past the 30s ceiling. …
-    ///      WARN `github:sharkdp/fd` is still declared in …, so `sync` will try it again.
-    ///           Nothing classified the failure above, …
-    ///
-    /// It costs two red CI jobs: the sweep harness tests transience by retrying immediately,
-    /// which cannot succeed inside a 1236-second window, so it scores `defect`, the macOS leg
-    /// goes red, and the real-lifecycle ratchet falls 8 -> 7 and goes red behind it.
-    #[test]
-    fn a_transient_failure_is_not_reported_as_unclassified() {
-        let e = boxed(Error::RateLimit(
-            "api.github.com is rate limiting this machine and does not reset for 1236s".to_string(),
-        ));
-        assert_eq!(
-            e.downcast_ref::<Error>().map(|x| x.retryability()),
-            Some(Retryability::Transient),
-            "this fixture is not transient, so it does not test the distinction"
-        );
-
-        let why = why_kept(&e);
-        assert_ne!(
-            why,
-            WhyKept::Unclassified,
-            "a failure `Error::retryability()` calls Transient is routed to the one branch whose \
-             text says nothing classified it"
-        );
-    }
-
-    /// The sentence itself, because the branch is only half the harm: the advice a user reads
-    /// must not tell them a moving window will not move.
-    #[test]
-    fn a_transient_failure_is_not_advised_as_if_it_were_permanent() {
-        let e = boxed(Error::RateLimit(
-            "api.github.com is rate limiting this machine and does not reset for 1236s".to_string(),
-        ));
-        let advice = kept_line_advice(
-            why_kept(&e),
-            "github:sharkdp/fd",
-            std::path::Path::new("modules/imperative.txt"),
-        );
-        assert!(
-            !advice.contains("Nothing classified the failure above"),
-            "the advice for a Transient failure is the Unclassified sentence:\n{advice}"
-        );
-        assert!(
-            !advice.contains("the cause is not a passing one"),
-            "a rate limit repeats unchanged precisely because it is passing:\n{advice}"
-        );
-    }
-
-    /// The same finding as the two tests above, arriving a third time and on real hardware.
-    ///
-    /// On a NixOS-WSL box `nixos-rebuild switch` builds the system perfectly and then cannot
-    /// activate it - `Unable to autolaunch a dbus-daemon without a $DISPLAY` - and there is no
-    /// session bus on any NixOS-WSL install or in any container, so it is the one failure that
-    /// machine reliably produces. Shall classes it `Permanent` and used to tell the user
-    /// "Nothing classified the failure above" about it.
-    const NEWLINE: &str = "
-";
-
-    #[test]
-    fn a_permanent_failure_is_not_reported_as_unclassified() {
-        let e = boxed(Error::CommandFailed {
-            message: "`nixos-rebuild` failed (exit 4): Unable to autolaunch a dbus-daemon without \
-                      a $DISPLAY for X11"
-                .to_string(),
-            retry: Retryability::Permanent,
-            absent_name: false,
-        });
-        assert_eq!(
-            e.downcast_ref::<Error>().map(|x| x.retryability()),
-            Some(Retryability::Permanent),
-            "this fixture is not permanent, so it does not test the distinction"
-        );
-        assert_eq!(
-            why_kept(&e),
-            WhyKept::Permanent,
-            "a failure `Error::retryability()` calls Permanent is routed to the one branch whose \
-             text says nothing classified it"
-        );
-    }
-
-    /// The sentence, because the branch is only half the harm.
-    #[test]
-    fn a_permanent_failure_is_not_advised_as_if_nobody_had_looked() {
-        let e = boxed(Error::CommandFailed {
-            message: "`nixos-rebuild` failed (exit 4): Unable to autolaunch a dbus-daemon"
-                .to_string(),
-            retry: Retryability::Permanent,
-            absent_name: false,
-        });
-        let advice = kept_line_advice(
-            why_kept(&e),
-            "nixos:hello",
-            std::path::Path::new("modules/imperative.txt"),
-        );
-        assert!(
-            !advice.contains("Nothing classified the failure above"),
-            "the advice for a Permanent failure is the Unclassified sentence:{}{advice}",
-            NEWLINE
-        );
-        assert!(
-            advice.contains("permanent"),
-            "the advice never says what Shall decided about it:{}{advice}",
-            NEWLINE
-        );
-    }
-
-    /// **The distinction N-1 was about.** A command failure can be permanent and be about a
-    /// name that plainly exists. Reading permanence as absence withdrew declarations for
-    /// packages that were installed; reading it as the *only* road to absence left every
-    /// manager with no policy wedging the config.
-    #[test]
-    fn a_permanent_failure_about_a_name_that_exists_never_withdraws() {
-        let cases = [
-            // helm refusing an unsignable plugin source, and refusing one already installed.
-            ("plugin already exists", exit_policy::helm()),
-            (
-                "plugin source does not support verification",
-                exit_policy::helm(),
-            ),
-            // A crate that is real and simply ships no program.
-            ("error: there are no binaries", exit_policy::cargo()),
-            // nimble: the package exists, the `@version=` on the line does not.
-            ("Error: Version not found", exit_policy::nimble()),
-            // scoop declining to remove what is not on the machine says nothing about the
-            // bucket, and a failed uninstall must never delete the declaration.
-            ("ERROR 'jq' isn't installed.", exit_policy::scoop()),
-        ];
-        for (output, policy) in cases {
-            assert_eq!(
-                policy.retryability(&crate::core::ExitPolicy::haystack(output.as_bytes(), b"")),
-                Retryability::Permanent,
-                "not permanent, so this case does not test the distinction: {output}"
-            );
-            assert!(
-                !policy.names_an_absent_package(&crate::core::ExitPolicy::haystack(
-                    output.as_bytes(),
-                    b""
-                )),
-                "read as a missing name, so a declaration would be withdrawn over: {output}"
-            );
-        }
-    }
-
-    /// Every other variant that `Error::retryability()` also calls `Permanent`. None of them
-    /// says the name was wrong, and withdrawing on any of them would delete a declaration the
-    /// user still means — the reason this reads a property and not `retryability()`.
-    #[test]
-    fn no_other_permanent_error_withdraws_a_line() {
-        let others = [
-            Error::Refused("the guard said no".into()),
-            Error::Cancelled,
-            Error::Config("modules/web.txt:3: bad line".into()),
-            Error::Validation("nope".into()),
-            Error::Permission("need root".into()),
-            Error::BackendNotFound("nosuch".into()),
-            Error::Unsupported("purge".into()),
-            Error::UnsupportedPlatform("aix".into()),
-            Error::Differences("2 changes".into()),
-            Error::LuaScript("boom".into()),
-            Error::Toml("bad".into()),
-            Error::Json("bad".into()),
-        ];
-        for e in others {
-            let label = format!("{e:?}");
-            assert_eq!(
-                Retryability::Permanent,
-                e.retryability(),
-                "{label} is not the case this test guards"
-            );
-            assert!(
-                !says_a_name_is_absent(&boxed(e)),
-                "{label} would have withdrawn a line the user still means"
-            );
-        }
-    }
-
-    /// The two variants that *do* withdraw, and the reason each is safe to: both carry the
-    /// name they looked up, so nothing is inferred from a sentence.
-    #[test]
-    fn the_variants_that_withdraw_carry_the_name_they_looked_up() {
-        let no_such = Error::NoSuchPackage {
-            name: "shall-zzz-nope/nope".into(),
-            message: "the repo has no published release".into(),
-        };
-        assert!(says_a_name_is_absent(&boxed(no_such.clone())));
-        assert_eq!(no_such.absent_name(), Some("shall-zzz-nope/nope"));
-        assert_eq!(
-            backend_absent_name(&boxed(no_such)),
-            Some("shall-zzz-nope/nope")
-        );
-
-        let unresolvable = Error::Unresolvable {
-            name: "shall-no-such-pkg-zzz".into(),
-            message: "no backend claims it".into(),
-        };
-        assert!(says_a_name_is_absent(&boxed(unresolvable.clone())));
-        assert_eq!(unresolvable.absent_name(), Some("shall-no-such-pkg-zzz"));
-        // A spawned manager's failure is the one that does *not* know which name, which is
-        // why the edits are consulted for that case and only that case.
-        assert_eq!(
-            backend_absent_name(&boxed(Error::command_failed_absent("`npm` failed: 404"))),
-            None
-        );
-    }
-
-    /// The existing path, kept working: a bare name nothing claims carries its own name.
-    #[test]
-    fn an_unresolvable_name_is_still_recognised_and_carries_itself() {
-        let e = boxed(Error::Unresolvable {
-            name: "shall-no-such-pkg-zzz".into(),
-            message: "no backend claims it".into(),
-        });
-        assert_eq!(unresolvable_name(&e), Some("shall-no-such-pkg-zzz"));
-        assert_eq!(absent_command_message(&e), None);
-    }
-
-    /// Every reader must survive the `.context()` wrapping every caller adds, or the fix
-    /// works in a unit test and never once in the program.
-    #[test]
-    fn every_reader_sees_through_a_context_chain() {
-        let e = boxed(Error::command_failed_absent(
-            "`scoop` failed: Couldn't find manifest for 'nope'.",
-        ))
-        .context("while syncing")
-        .context("while installing");
-        assert!(says_a_name_is_absent(&e));
-        assert!(absent_command_message(&e).is_some());
-
-        let u = boxed(Error::Unresolvable {
-            name: "zzz".into(),
-            message: "m".into(),
-        })
-        .context("while syncing");
-        assert_eq!(unresolvable_name(&u), Some("zzz"));
-        assert!(says_a_name_is_absent(&u));
-
-        let n = boxed(Error::NoSuchPackage {
-            name: "owner/repo".into(),
-            message: "no release".into(),
-        })
-        .context("while syncing");
-        assert_eq!(backend_absent_name(&n), Some("owner/repo"));
-    }
-
-    /// The retry loop must not launder the fact. A failure that travels through
-    /// `falsify_transience` and back is still about a name that is not there.
-    #[test]
-    fn the_absent_fact_survives_the_retry_classifier() {
-        let e = boxed(Error::command_failed_absent("`npm` failed: 404 Not Found"));
-        assert!(says_a_name_is_absent(&e));
-        assert_eq!(
-            e.downcast_ref::<Error>().map(|x| x.retryability()),
-            Some(Retryability::Permanent),
-            "an absent name is not worth retrying, so it never enters the loop"
-        );
-    }
-
-    /// pixi wraps its output inside the package name. Attribution has to survive that, or a
-    /// line whose name is plainly in the output reads as one nobody mentioned. Captured from
-    /// pixi on this host, 2026-07-29.
-    #[test]
-    fn a_name_wrapped_across_lines_is_still_recognised_as_mentioned() {
-        let wrapped = "  × failed to solve the environment\n  ╰─▶ Cannot solve the request \
-                       because of: No candidates were found for shall-\n      \
-                       no-such-pkg-zzz *.\n";
-        assert!(
-            !wrapped.contains("shall-no-such-pkg-zzz"),
-            "the fixture no longer wraps, so it cannot test the wrap"
-        );
-        assert!(mentions_package(wrapped, "shall-no-such-pkg-zzz"));
-        assert!(!mentions_package(wrapped, "some-other-package"));
-    }
-
-    /// Every reason a line can stay, and the sentence each one earns. Enumerated from the
-    /// enum rather than sampled on a host, because the wording half of E1 came back by
-    /// growing a fourth situation that the single `else` covering the other three still
-    /// answered with "`sync` will try it again".
-    #[test]
-    fn only_an_unclassified_failure_may_suggest_that_a_retry_could_work() {
-        let file = std::path::Path::new("modules/imperative.txt");
-        for why in [
-            WhyKept::Refused,
-            WhyKept::Exhausted,
-            WhyKept::NameAbsentElsewhere,
-            WhyKept::Unclassified,
-        ] {
-            let advice = kept_line_advice(why, "npm:cowsay", file);
-            // Every branch, without exception: where the line is, and the way out of it.
-            assert!(
-                advice.contains("modules/imperative.txt"),
-                "{why:?} does not name the file the line is in: {advice}"
-            );
-            assert!(
-                advice.contains("shall unmanage npm:cowsay"),
-                "{why:?} does not name the command that removes it: {advice}"
-            );
-            let promises_a_retry = advice.contains("`sync` will try it again");
-            assert_eq!(
-                promises_a_retry,
-                why == WhyKept::Unclassified,
-                "{why:?} earns the wrong sentence — only an unclassified failure may suggest \
-                 that trying again could work, because every other case has already been \
-                 shown otherwise: {advice}"
-            );
-        }
-    }
-
-    /// And the classifier that feeds it. A failure whose name is absent must not be read as
-    /// unclassified, which is what left `github:` printing the forbidden sentence.
-    #[test]
-    fn each_failure_is_classified_as_the_reason_its_line_stayed() {
-        let cases = [
-            (boxed(Error::Refused("plain HTTP".into())), WhyKept::Refused),
-            (
-                boxed(Error::CommandFailed {
-                    message: "`luarocks` failed: failed downloading (tried 4 times)".into(),
-                    retry: Retryability::Exhausted,
-                    absent_name: false,
-                }),
-                WhyKept::Exhausted,
-            ),
-            (
-                boxed(Error::command_failed_absent("`npm` failed: 404 Not Found")),
-                WhyKept::NameAbsentElsewhere,
-            ),
-            (
-                boxed(Error::NoSuchPackage {
-                    name: "owner/repo".into(),
-                    message: "no published release".into(),
-                }),
-                WhyKept::NameAbsentElsewhere,
-            ),
-            (
-                boxed(Error::command_failed("`mix` failed: something")),
-                WhyKept::Unclassified,
-            ),
-            // B35/R-3: this case used to expect `Unclassified`, and that expectation WAS the
-            // defect — a dpkg lock someone else holds is the textbook passing failure, and
-            // telling the user "nothing classified the failure above, so if it repeats
-            // unchanged the cause is not a passing one" is the exact inversion R-3 measured on
-            // a rate limit. The two expectations could not both stand; the register ruled with
-            // the grader, so `Transient` now has a branch and this is it.
-            (
-                boxed(Error::CommandFailed {
-                    message: "`apt` failed: Could not get lock".into(),
-                    retry: Retryability::Transient,
-                    absent_name: false,
-                }),
-                WhyKept::Transient,
-            ),
-            // The one that keeps both new branches honest: `Permanent` is neither `Transient`
-            // nor `Unclassified`, so neither widening can have swallowed the other. This case
-            // expected `Unclassified` until 2026-08-21, and that expectation was the same defect
-            // one variant along - helm classified this three lines away and the user was told
-            // nobody had looked. A name that IS absent still reaches `NameAbsentElsewhere`
-            // first, which is why the helm fixture is a source that cannot be signed rather
-            // than a plugin that does not exist.
-            (
-                boxed(Error::CommandFailed {
-                    message: "`helm` failed: plugin source does not support verification".into(),
-                    retry: Retryability::Permanent,
-                    absent_name: false,
-                }),
-                WhyKept::Permanent,
-            ),
-        ];
-        for (e, expected) in cases {
-            assert_eq!(why_kept(&e), expected, "misclassified: {e}");
-        }
-    }
-
-    /// And the half that keeps attribution honest: a manager talking about one package is not
-    /// talking about another. This is what stops a `sync` that failed on a pre-existing wedge
-    /// from withdrawing the good line the command just wrote.
-    #[test]
-    fn attribution_does_not_spread_to_a_line_the_manager_never_named() {
-        let message = "`npm` failed (exit 1): 404 Not Found - GET \
-                       https://registry.npmjs.org/shall-no-such-pkg-zzz-9";
-        assert!(mentions_package(message, "shall-no-such-pkg-zzz-9"));
-        assert!(!mentions_package(message, "cowsay"));
-    }
 }
