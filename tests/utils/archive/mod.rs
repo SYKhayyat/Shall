@@ -1,0 +1,15 @@
+pub use shall::backends::artifact::format::{Codec, Format, Opener};
+pub use shall::core::{Error, Result};
+pub use shall::utils::archive::*;
+use std::fs;
+pub use std::path::{Path, PathBuf};
+use tracing::debug;
+mod a_hard_link_that_leaves_the_destination_is_refused;
+mod a_symlink_inside_the_destination_still_extracts;
+mod a_symlink_that_leaves_the_destination_is_refused;
+mod a_windows_reserved_archive_name_is_refused_before_extraction;
+mod an_archive_that_expands_past_the_bound_is_refused_up_front;
+mod every_archive_the_selector_offers_has_an_opener;
+mod every_offered_archive_actually_round_trips;
+mod something_that_is_not_an_archive_is_placed_whole;
+mod the_unpacked_total_saturates_rather_than_wrapping;

@@ -51,21 +51,3 @@ pub fn paint(enabled: bool, code: &str, text: &str) -> String {
         text.to_string()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn paint_wraps_only_when_enabled() {
-        assert_eq!(paint(false, GREEN, "OK"), "OK");
-        assert_eq!(paint(true, GREEN, "OK"), "\u{1b}[32mOK\u{1b}[0m");
-    }
-
-    #[test]
-    fn paint_is_idempotent_when_disabled() {
-        // Disabled painting never alters the string, so it's safe to always route through it.
-        let s = "hello world";
-        assert_eq!(paint(false, RED, s), s);
-    }
-}

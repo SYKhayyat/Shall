@@ -4,3 +4,4 @@
 mod config;
 mod grammar;
 mod parser;
+mod settings;

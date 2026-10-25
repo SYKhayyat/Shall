@@ -14,7 +14,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use std::sync::Arc;
 
-static CACHE: Lazy<dashmap::DashMap<String, std::result::Result<Arc<Regex>, String>>> =
+pub static CACHE: Lazy<dashmap::DashMap<String, std::result::Result<Arc<Regex>, String>>> =
     Lazy::new(dashmap::DashMap::new);
 
 /// How many distinct patterns this cache will hold before it stops growing.
@@ -33,7 +33,7 @@ static CACHE: Lazy<dashmap::DashMap<String, std::result::Result<Arc<Regex>, Stri
 /// patterns; a machine that has legitimately seen a thousand distinct ones is a machine whose
 /// config is being rewritten by something, and the cache going cold is the right outcome there
 /// rather than unbounded memory.
-const CAPACITY: usize = 1024;
+pub const CAPACITY: usize = 1024;
 
 /// This pattern, compiled once per process.
 ///
@@ -54,66 +54,4 @@ pub fn compiled(pattern: &str) -> std::result::Result<Arc<Regex>, String> {
     }
     CACHE.insert(pattern.to_string(), built.clone());
     built
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_same_pattern_is_compiled_once() {
-        let a = compiled(r"^shall-cache-test-(\d+)$").unwrap();
-        let b = compiled(r"^shall-cache-test-(\d+)$").unwrap();
-        assert!(
-            Arc::ptr_eq(&a, &b),
-            "the second ask built a second automaton"
-        );
-    }
-
-    #[test]
-    fn a_pattern_that_will_not_compile_says_so_every_time() {
-        let first = compiled(r"([unclosed");
-        let second = compiled(r"([unclosed");
-        assert!(first.is_err());
-        assert_eq!(first.err(), second.err(), "the message must not drift");
-    }
-
-    #[test]
-    fn a_cached_regex_still_matches() {
-        let re = compiled(r"^v(\d+)\.(\d+)$").unwrap();
-        assert!(re.is_match("v1.2"));
-        assert!(!re.is_match("1.2"));
-    }
-}
-
-#[cfg(test)]
-mod bound_tests {
-    use super::*;
-
-    /// The cache is bounded, and the bound is reachable.
-    ///
-    /// `watch` is the only caller that makes this process long-lived — a `sync` exits and takes
-    /// its cache with it — so the leak this bound prevents is invisible to every other command
-    /// and to every test that does not look for it.
-    #[test]
-    fn the_cache_stops_growing() {
-        for i in 0..(CAPACITY + 50) {
-            let _ = compiled(&format!(r"^shall-bound-test-{i}-(\d+)$"));
-        }
-        assert!(
-            CACHE.len() <= CAPACITY,
-            "the cache holds {} patterns against a ceiling of {}; a `watch` that runs for a \
-             week accumulates one automaton per pattern its config has ever held",
-            CACHE.len(),
-            CAPACITY
-        );
-        // And it is still a cache afterwards: the ceiling must not turn it into a no-op, which
-        // would trade a slow leak for recompiling on every line of every listing.
-        let a = compiled(r"^shall-bound-still-caching-(\d+)$").unwrap();
-        let b = compiled(r"^shall-bound-still-caching-(\d+)$").unwrap();
-        assert!(
-            Arc::ptr_eq(&a, &b),
-            "past the ceiling the cache stopped caching"
-        );
-    }
 }
