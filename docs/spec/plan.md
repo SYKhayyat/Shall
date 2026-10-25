@@ -3065,19 +3065,19 @@ than decorative.
 ### #120 test-layout sweep — progress recorded 2026-10-24
 
 The migration now has **no inline test modules in `src/model/` or `src/parsers/`**.
-The current remaining frontier is **90 source files / 801 inline tests**: app 38, core 1,
-backends 35, verbs 7, config 5, utils 4. The current batch moved **994 tests from 63
+The current remaining frontier is **87 source files / 732 inline tests**: app 37, core 1,
+backends 34, verbs 7, config 4, utils 4. The current batch moved **1,063 tests from 66
 model/parser/core files** into the single `tests/main.rs` integration suite; the aggregate
-move count recorded by the handoff is 1,398 tests from 77 files. Focused verification passed
-for the moved model (409), parser (169), core (440), stale-lock (26), onboarder (26), and
-config-parser (26) mirrors, plus suite wiring.
+move count recorded by the handoff is 1,467 tests from 80 files. Focused verification passed
+for the moved model (409), parser (169), core (440), stale-lock (26), onboarder (26),
+config-parser (26), link (26), planner (25), and config (18) mirrors, plus suite wiring.
 
-The library now reports 810 tests because the moved tests are no longer compiled under
-`cfg(test)`; the integration suite reports 2,144 total tests, with 2,143 passing and one
+The library now reports 741 tests because the moved tests are no longer compiled under
+`cfg(test)`; the integration suite reports 2,291 total tests, with 2,290 passing and one
 host-only `argv_drift_tests` failure caused by sandbox PATH wrappers that cannot answer help.
-This layout work does not change the user-visible behavior; the only production edits are
-visibility widening for integration tests and the `Capped: Default` implementation required
-by the repository's clippy gate.
+This layout work does not change the user-visible behavior; production edits are limited to
+visibility/test seams required by the external mirror, plus the `Capped: Default` implementation
+required by the repository's clippy gate.
 
 ## IV.1 What a check has to be (V.57)
 
