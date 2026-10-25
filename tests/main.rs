@@ -56,6 +56,7 @@ mod entrypoint;
 mod backends;
 mod config;
 mod core;
+mod model;
 mod parsers;
 mod verbs;
 

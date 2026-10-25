@@ -7,7 +7,9 @@ use tracing::debug;
 
 /// Delete a unit file Shall generated. A file that is already gone is the wanted end state;
 /// any other failure leaves a schedule armed that Shall is about to report as removed.
-fn remove_generated(path: &Path) -> Result<()> {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn remove_generated(path: &Path) -> Result<()> {
     crate::utils::file::force_remove(path).map_err(|e| {
         Error::Io(format!(
             "{e}. The schedule may still be armed; remove the file by hand and re-run \
@@ -77,7 +79,9 @@ impl Standing {
 
 /// The separator between the two systemd units in one `spec`. A `#` line is a comment in unit
 /// syntax, so a spec that ever did reach a file would still parse.
-const UNIT_SEPARATOR: &str = "\n#--- shall: timer ---\n";
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub const UNIT_SEPARATOR: &str = "\n#--- shall: timer ---\n";
 
 /// Cap on the scheduled-run log, and one generation of history.
 ///
@@ -354,14 +358,18 @@ fn armed(config: &ScheduleConfig) -> bool {
     config.enabled.unwrap_or(true)
 }
 
-struct LinuxSystemdProvisioner;
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub struct LinuxSystemdProvisioner;
 
 impl LinuxSystemdProvisioner {
     fn unit_stem(name: &str) -> String {
         format!("shall-{}", name)
     }
 
-    fn unit_dir(target: &TaskTarget) -> Option<PathBuf> {
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+    /// crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub fn unit_dir(target: &TaskTarget) -> Option<PathBuf> {
         match &target.account {
             Some(account) => account.systemd_user_dir().ok(),
             None => Some(dirs::config_dir()?.join("systemd").join("user")),
@@ -374,7 +382,9 @@ impl LinuxSystemdProvisioner {
     /// overwriting the file the ordinary shape had just written, and the replacement dropped
     /// `StandardOutput=`/`StandardError=` — so an `@reboot` job's output went nowhere while
     /// every other job's was appended to `schedule.log`.
-    fn service_unit(config: &ScheduleConfig, shall_bin: &Path, target: &TaskTarget) -> String {
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+    /// crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub fn service_unit(config: &ScheduleConfig, shall_bin: &Path, target: &TaskTarget) -> String {
         let log = target.log_path();
         let mut unit = format!(
             "[Unit]\nDescription=Shall {kind}: {name}\n\n\
@@ -397,7 +407,9 @@ impl LinuxSystemdProvisioner {
     }
 
     /// The `.timer` unit. `@reboot` has none — it is an `[Install]` on the service.
-    fn timer_unit(&self, config: &ScheduleConfig) -> String {
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+    /// crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub fn timer_unit(&self, config: &ScheduleConfig) -> String {
         let mut unit = format!(
             "[Unit]\nDescription=Shall Schedule Timer for {name}\n\n\
              [Timer]\nOnCalendar={calendar}\nPersistent={persistent}\n",
@@ -471,7 +483,9 @@ impl LinuxSystemdProvisioner {
             })
     }
 
-    fn map_cron_to_systemd(&self, cron: &str) -> String {
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+    /// crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub fn map_cron_to_systemd(&self, cron: &str) -> String {
         match cron {
             "@hourly" => "hourly".into(),
             "@daily" => "daily".into(),
@@ -798,7 +812,9 @@ impl TaskProvisioner for LinuxSystemdProvisioner {
     }
 }
 
-struct MacLaunchdProvisioner;
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub struct MacLaunchdProvisioner;
 
 /// Vixie day-of-week (`1-5`, `0,6`, `*`) to OnCalendar day names (`Mon..Fri`, `Sun,Sat`).
 ///
@@ -839,7 +855,9 @@ impl MacLaunchdProvisioner {
         format!("com.shall.{}", name)
     }
 
-    fn plist_path(name: &str, target: &TaskTarget) -> Option<PathBuf> {
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+    /// crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub fn plist_path(name: &str, target: &TaskTarget) -> Option<PathBuf> {
         let dir = match &target.account {
             Some(account) => account.launch_agents_dir().ok()?,
             None => dirs::home_dir()?.join("Library").join("LaunchAgents"),
@@ -859,7 +877,9 @@ impl MacLaunchdProvisioner {
         }
     }
 
-    fn plist(&self, config: &ScheduleConfig, shall_bin: &Path, target: &TaskTarget) -> String {
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+    /// crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub fn plist(&self, config: &ScheduleConfig, shall_bin: &Path, target: &TaskTarget) -> String {
         let label = Self::label(&config.name);
         let schedule_xml = if config.cron == "@reboot" {
             "<key>RunAtLoad</key><true/>".to_string()
@@ -1221,7 +1241,9 @@ fn schtasks_days(dow: &str) -> Option<String> {
 /// Task Scheduler can do: the defect this replaces silently turned `0 3 * * 1` into a DAILY
 /// task, which ran seven times as often as it was declared to and reported success each time.
 /// A schedule that fires when it should not is worse than one that refuses to be created.
-fn map_cron_to_schtasks(cron: &str) -> std::result::Result<Vec<String>, String> {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn map_cron_to_schtasks(cron: &str) -> std::result::Result<Vec<String>, String> {
     let s = |v: &str| v.to_string();
     let cannot = || {
         format!(
@@ -1337,7 +1359,9 @@ fn sorted_days(list: &str) -> String {
 /// reader returns `None` and the reading is *unreadable*, which is the V.188 answer: a shape
 /// Shall does not understand must never be reported as drift, or it re-writes the task on every
 /// sync for ever.
-fn schtasks_when(args: &[String]) -> Option<String> {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn schtasks_when(args: &[String]) -> Option<String> {
     let sc = arg_after(args, "/SC")?;
     let every = arg_after(args, "/MO").unwrap_or("1");
     let at = arg_after(args, "/ST").unwrap_or("00:00");
@@ -1365,7 +1389,9 @@ fn schtasks_when(args: &[String]) -> Option<String> {
 /// The text between `<tag>` and `</tag>`, first occurrence, un-escaped for the five XML
 /// entities Task Scheduler emits. Deliberately not a parser: the document is machine-written,
 /// the elements wanted are leaves, and a dependency for four `find` calls is a dependency.
-fn xml_text<'a>(doc: &'a str, tag: &str) -> Option<&'a str> {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn xml_text<'a>(doc: &'a str, tag: &str) -> Option<&'a str> {
     let open = format!("<{}>", tag);
     let close = format!("</{}>", tag);
     let start = doc.find(&open)? + open.len();
@@ -1376,7 +1402,9 @@ fn xml_text<'a>(doc: &'a str, tag: &str) -> Option<&'a str> {
 /// The whole `<tag> … </tag>` element, angle brackets included, so a nested lookup can be
 /// scoped to it. `<Settings><Enabled>` and a trigger's own `<Enabled>` are different questions,
 /// and a document-wide search for the first `<Enabled>` answers whichever comes first.
-fn xml_element<'a>(doc: &'a str, tag: &str) -> Option<&'a str> {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn xml_element<'a>(doc: &'a str, tag: &str) -> Option<&'a str> {
     let close = format!("</{}>", tag);
     // The opening tag may carry attributes (`<BootTrigger id="Resume">`), so it is matched on
     // its prefix and the `>` is found after it.
@@ -1394,7 +1422,9 @@ fn xml_element<'a>(doc: &'a str, tag: &str) -> Option<&'a str> {
 ///
 /// Any element whose name ends in `Trigger` counts — `<Triggers>` itself does not, and neither
 /// does a closing tag. Shall writes exactly one.
-fn trigger_count(triggers: &str) -> usize {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn trigger_count(triggers: &str) -> usize {
     triggers
         .match_indices('<')
         .filter(|(at, _)| {
@@ -1443,7 +1473,9 @@ fn boundary_time(boundary: &str) -> Option<String> {
 
 /// The canonical `when` for the single trigger in a task's XML, or `None` for any shape Shall
 /// does not write and therefore cannot compare.
-fn when_from_xml(doc: &str) -> Option<String> {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn when_from_xml(doc: &str) -> Option<String> {
     let triggers = xml_element(doc, "Triggers")?;
     // Shall writes exactly one trigger. More than one means somebody else has been here, and
     // describing what they did is not something this reader can do honestly.
@@ -1528,7 +1560,9 @@ fn when_from_xml(doc: &str) -> Option<String> {
 ///
 /// Pure, and separate from the query, so it can be asked about a **verbatim** document captured
 /// from a real Task Scheduler rather than only about documents this file made up.
-fn provisioned_from_xml(doc: &str, expected: Option<&str>) -> Option<Provisioned> {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn provisioned_from_xml(doc: &str, expected: Option<&str>) -> Option<Provisioned> {
     let exec = xml_element(doc, "Exec")?;
     let program = unescape_xml(xml_text(exec, "Command")?);
     let arguments = xml_text(exec, "Arguments")
@@ -1562,7 +1596,9 @@ fn provisioned_from_xml(doc: &str, expected: Option<&str>) -> Option<Provisioned
     })
 }
 
-fn schtasks_spec(command: &str, when: &str, elevated: bool, account: Option<&str>) -> String {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn schtasks_spec(command: &str, when: &str, elevated: bool, account: Option<&str>) -> String {
     let mut out = format!(
         "run: {}\nwhen: {}\nlevel: {}\n",
         command.trim(),
@@ -1584,7 +1620,9 @@ fn schtasks_spec(command: &str, when: &str, elevated: bool, account: Option<&str
 /// The document declares `encoding="UTF-16"` and arrives here as bytes; on this machine a piped
 /// read gives one byte per character, and a redirect to a file gives two. Deciding from the
 /// bytes rather than from the header covers both without a table of which Windows does which.
-fn decode_xml(bytes: &[u8]) -> String {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn decode_xml(bytes: &[u8]) -> String {
     let utf16 =
         bytes.starts_with(&[0xFF, 0xFE]) || (bytes.len() >= 4 && bytes[1] == 0 && bytes[3] == 0);
     if !utf16 {
@@ -1599,7 +1637,9 @@ fn decode_xml(bytes: &[u8]) -> String {
     String::from_utf16_lossy(&units)
 }
 
-struct WindowsTaskProvisioner;
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub struct WindowsTaskProvisioner;
 
 impl WindowsTaskProvisioner {
     fn task_name(name: &str) -> String {
@@ -1798,956 +1838,5 @@ impl TaskProvisioner for WindowsTaskProvisioner {
             Ok(o) => o.status.success(),
             Err(_) => false,
         }
-    }
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::config::ScheduleConfig;
-
-    fn cfg(cron: &str) -> ScheduleConfig {
-        ScheduleConfig {
-            name: "nightly".into(),
-            cron: cron.into(),
-            command: "sync".into(),
-            notification: None,
-            enabled: None,
-            persistent: None,
-            jitter: None,
-            elevated: None,
-            user: None,
-        }
-    }
-
-    fn here() -> TaskTarget {
-        TaskTarget { account: None }
-    }
-
-    fn me() -> TaskTarget {
-        TaskTarget::resolve(Some(
-            crate::core::account::Account::current().unwrap().name(),
-        ))
-        .unwrap()
-    }
-
-    #[test]
-    fn a_generated_file_that_is_already_gone_is_the_wanted_end_state() {
-        let dir = tempfile::tempdir().unwrap();
-        assert!(remove_generated(&dir.path().join("shall-nightly.timer")).is_ok());
-    }
-
-    #[test]
-    fn a_generated_file_that_exists_is_removed() {
-        let dir = tempfile::tempdir().unwrap();
-        let unit = dir.path().join("shall-nightly.timer");
-        std::fs::write(&unit, "[Timer]\n").unwrap();
-        remove_generated(&unit).unwrap();
-        assert!(!unit.exists());
-    }
-
-    #[test]
-    fn a_removal_that_cannot_happen_is_an_error_naming_the_file() {
-        // The point is that the failure is reported at all: swallowing it left a timer armed
-        // under a schedule Shall had just reported as removed. Making a path undeletable is
-        // the platform-specific part; the assertion is not.
-        //
-        // It used to be a directory, back when the removal was `remove_file` and a directory
-        // was therefore undeletable by it. `force_remove` deletes directories on purpose, so
-        // that stand-in silently became a success — a test asserting an error over a call that
-        // could no longer produce one.
-        let dir = tempfile::tempdir().unwrap();
-        let unit = dir.path().join("shall-nightly.timer");
-        std::fs::write(&unit, b"[Timer]\n").unwrap();
-
-        // Windows: an open handle with no sharing at all. `File::open` will not do — Rust's
-        // default share mode includes `FILE_SHARE_DELETE`, so a plain open leaves the file
-        // perfectly deletable, which is how the first attempt at this test passed nothing.
-        #[cfg(windows)]
-        let _held = {
-            use std::os::windows::fs::OpenOptionsExt;
-            std::fs::OpenOptions::new()
-                .read(true)
-                .share_mode(0)
-                .open(&unit)
-                .unwrap()
-        };
-        // Unix: a parent nobody may write. Root ignores the mode, so the check below can be
-        // vacuous in a container running as root — Windows carries this one in CI.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o500)).unwrap();
-        }
-
-        let outcome = remove_generated(&unit);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-            if outcome.is_ok() {
-                return; // running as root; the path was deletable after all
-            }
-        }
-        let err = outcome.unwrap_err().to_string();
-        assert!(
-            err.contains("shall-nightly.timer"),
-            "the error does not name the file: {}",
-            err
-        );
-        assert!(
-            err.contains("still be armed"),
-            "the error does not say what is left behind: {}",
-            err
-        );
-    }
-
-    #[test]
-    fn systemd_oncalendar_mapping() {
-        let p = LinuxSystemdProvisioner;
-        // every Monday 04:30 -> zero-padded time, full date wildcards, weekday name
-        assert_eq!(p.map_cron_to_systemd("30 4 * * 1"), "Mon *-*-* 04:30:00");
-        // daily midnight: no weekday constraint
-        assert_eq!(p.map_cron_to_systemd("0 0 * * *"), "*-*-* 00:00:00");
-        // @-macros pass through
-        assert_eq!(p.map_cron_to_systemd("@daily"), "daily");
-    }
-
-    /// The reported defect: `0 3 * * *` produced `/ST 3:0`, and Task Scheduler answers
-    /// `ERROR: Invalid starttime value.` It wants `HH:mm`, zero-padded. Measured against real
-    /// `schtasks` on 2026-07-28: `/ST 3:0` is rejected at parse time, `/ST 03:00` is accepted
-    /// and reaches the privilege check.
-    #[test]
-    fn schtasks_start_time_is_zero_padded() {
-        assert_eq!(
-            map_cron_to_schtasks("0 3 * * *").unwrap(),
-            vec!["/SC", "DAILY", "/ST", "03:00"]
-        );
-    }
-
-    /// The siblings. Every one of these went through the same two lines that dropped the
-    /// padding, and each produced either a hard error or — worse — a schedule that fires more
-    /// often than it was told to.
-    #[test]
-    fn schtasks_maps_every_shape_a_cron_can_take() {
-        let cases: &[(&str, &[&str])] = &[
-            // `@daily` split on whitespace to ONE field, so the minute came out as the literal
-            // string "@daily" and the time was `02:@daily`.
-            ("@daily", &["/SC", "DAILY", "/ST", "00:00"]),
-            ("@midnight", &["/SC", "DAILY", "/ST", "00:00"]),
-            ("@hourly", &["/SC", "HOURLY", "/ST", "00:00"]),
-            ("@reboot", &["/SC", "ONSTART"]),
-            ("@weekly", &["/SC", "WEEKLY", "/D", "MON", "/ST", "00:00"]),
-            ("@monthly", &["/SC", "MONTHLY", "/D", "1", "/ST", "00:00"]),
-            (
-                "@yearly",
-                &["/SC", "MONTHLY", "/M", "JAN", "/D", "1", "/ST", "00:00"],
-            ),
-            (
-                "@annually",
-                &["/SC", "MONTHLY", "/M", "JAN", "/D", "1", "/ST", "00:00"],
-            ),
-            // A step in the minute field became the time `*:*/15`.
-            (
-                "*/15 * * * *",
-                &["/SC", "MINUTE", "/MO", "15", "/ST", "00:00"],
-            ),
-            ("* * * * *", &["/SC", "MINUTE", "/ST", "00:00"]),
-            // A step in the hour field became `*/6:0`.
-            (
-                "0 */6 * * *",
-                &["/SC", "HOURLY", "/MO", "6", "/ST", "00:00"],
-            ),
-            ("0 * * * *", &["/SC", "HOURLY", "/ST", "00:00"]),
-            // Day-of-week was ignored entirely: this ran EVERY day, seven times as often as
-            // it was declared to, and reported success while doing it.
-            ("0 3 * * 1", &["/SC", "WEEKLY", "/D", "MON", "/ST", "03:00"]),
-            (
-                "30 4 * * 0",
-                &["/SC", "WEEKLY", "/D", "SUN", "/ST", "04:30"],
-            ),
-            (
-                "0 9 * * 1-5",
-                &["/SC", "WEEKLY", "/D", "MON,TUE,WED,THU,FRI", "/ST", "09:00"],
-            ),
-            (
-                "0 9 * * 1,3",
-                &["/SC", "WEEKLY", "/D", "MON,WED", "/ST", "09:00"],
-            ),
-            // Day-of-month was ignored too: monthly became daily.
-            ("30 4 1 * *", &["/SC", "MONTHLY", "/D", "1", "/ST", "04:30"]),
-        ];
-        for (cron, want) in cases {
-            assert_eq!(
-                map_cron_to_schtasks(cron).unwrap_or_else(|e| panic!("{cron}: {e}")),
-                *want,
-                "wrong schtasks args for `{cron}`"
-            );
-        }
-    }
-
-    /// The property, not the cases: whatever a cron says, the time handed to Task Scheduler is
-    /// always `HH:mm`. This is the assertion that would have caught the reported defect without
-    /// anyone thinking of `0 3 * * *` in particular.
-    #[test]
-    fn schtasks_never_emits_a_time_task_scheduler_cannot_read() {
-        for cron in [
-            "0 3 * * *",
-            "@daily",
-            "@weekly",
-            "@monthly",
-            "@yearly",
-            "@hourly",
-            "5 9 * * *",
-            "0 0 * * *",
-            "59 23 * * *",
-            "30 4 1 * *",
-            "0 3 * * 1",
-            "0 */6 * * *",
-            "7 7 7 7 *",
-        ] {
-            let args = map_cron_to_schtasks(cron).unwrap_or_else(|e| panic!("{cron}: {e}"));
-            if let Some(i) = args.iter().position(|a| a == "/ST") {
-                let st = &args[i + 1];
-                let (h, m) = st.split_once(':').unwrap_or_else(|| panic!("{cron}: {st}"));
-                assert!(
-                    h.len() == 2 && m.len() == 2,
-                    "`{cron}` produced /ST {st}, which Task Scheduler rejects"
-                );
-                assert!(
-                    h.chars().chain(m.chars()).all(|c| c.is_ascii_digit()),
-                    "`{cron}` produced /ST {st}, which is not a time"
-                );
-                assert!(
-                    h.parse::<u8>().unwrap() < 24 && m.parse::<u8>().unwrap() < 60,
-                    "`{cron}` produced /ST {st}, which is not a real time"
-                );
-            }
-        }
-    }
-
-    /// A cron Task Scheduler genuinely cannot express is refused by name — it does not quietly
-    /// become DAILY. Running more often than declared is the failure mode this whole fix is
-    /// about, and it must not survive as the error path.
-    #[test]
-    fn a_cron_windows_cannot_express_is_refused_rather_than_widened() {
-        // Every 15 minutes, but only during hour 9. `/SC MINUTE /MO 15` runs all day.
-        let err = map_cron_to_schtasks("*/15 9 * * *").unwrap_err();
-        assert!(
-            err.contains("*/15 9 * * *"),
-            "does not quote the cron: {err}"
-        );
-        assert!(
-            err.to_lowercase().contains("task scheduler"),
-            "does not say which scheduler cannot do it: {err}"
-        );
-    }
-
-    // ---- the read-back --------------------------------------------------------------------
-
-    /// The whole point of the durable fix: what Shall would write and what it reads back are
-    /// the same string, so an unedited schedule compares equal and an edited one does not.
-    #[test]
-    fn a_systemd_unit_written_and_read_back_is_the_same_spec() {
-        let _guard = crate::core::shall_data_dir_lock();
-        let p = LinuxSystemdProvisioner;
-        let bin = Path::new("/usr/local/bin/shall");
-        let a = p.rendered(&cfg("0 2 * * *"), bin, &here()).unwrap();
-
-        // Assembled the way `read_task` assembles it from the two files on disk.
-        let mut from_disk = LinuxSystemdProvisioner::service_unit(&cfg("0 2 * * *"), bin, &here());
-        from_disk.push_str(UNIT_SEPARATOR);
-        from_disk.push_str(&p.timer_unit(&cfg("0 2 * * *")));
-        assert_eq!(a.spec, from_disk);
-
-        // And an edit to either half moves it.
-        let mut edited = cfg("0 3 * * *");
-        edited.command = "sync".into();
-        assert_ne!(p.rendered(&edited, bin, &here()).unwrap().spec, a.spec);
-        let mut other_command = cfg("0 2 * * *");
-        other_command.command = "clean".into();
-        assert_ne!(
-            p.rendered(&other_command, bin, &here()).unwrap().spec,
-            a.spec
-        );
-    }
-
-    /// A `@reboot` job keeps its log redirection. It did not: the boot shape was written by
-    /// overwriting the file the ordinary shape had just written, and the replacement had no
-    /// `StandardOutput=` at all — so the one kind of job nobody watches run wrote its output
-    /// nowhere.
-    #[test]
-    fn a_boot_job_still_says_where_its_output_goes() {
-        let unit = LinuxSystemdProvisioner::service_unit(
-            &cfg("@reboot"),
-            Path::new("/bin/shall"),
-            &here(),
-        );
-        assert!(unit.contains("StandardOutput=append:"), "{}", unit);
-        assert!(unit.contains("StandardError=append:"), "{}", unit);
-        assert!(unit.contains("WantedBy=default.target"), "{}", unit);
-        // And it has no timer to be installed into.
-        let p = LinuxSystemdProvisioner;
-        assert!(!p
-            .rendered(&cfg("@reboot"), Path::new("/bin/shall"), &here())
-            .unwrap()
-            .spec
-            .contains("OnCalendar="));
-    }
-
-    /// Every new option reaches the unit systemd reads, and an option nobody wrote leaves the
-    /// timer exactly as it was before the option existed.
-    #[test]
-    fn the_timer_carries_the_options_that_are_declared_and_nothing_else() {
-        let p = LinuxSystemdProvisioner;
-        let plain = p.timer_unit(&cfg("0 2 * * *"));
-        assert!(plain.contains("Persistent=true"), "{}", plain);
-        assert!(!plain.contains("RandomizedDelaySec"), "{}", plain);
-
-        let mut rich = cfg("0 2 * * *");
-        rich.persistent = Some(false);
-        rich.jitter = Some(1800);
-        let unit = p.timer_unit(&rich);
-        assert!(unit.contains("Persistent=false"), "{}", unit);
-        assert!(unit.contains("RandomizedDelaySec=1800"), "{}", unit);
-    }
-
-    /// `enabled = false` is a declaration about the machine, not a comment: it changes what
-    /// `rendered` claims, so a task somebody armed by hand reports as drift.
-    #[test]
-    fn a_schedule_declared_silent_is_rendered_disarmed_everywhere() {
-        let mut silent = cfg("0 2 * * *");
-        silent.enabled = Some(false);
-        let bin = Path::new("/bin/shall");
-        assert!(
-            !LinuxSystemdProvisioner
-                .rendered(&silent, bin, &here())
-                .unwrap()
-                .armed
-        );
-        assert!(
-            !MacLaunchdProvisioner
-                .rendered(&silent, bin, &here())
-                .unwrap()
-                .armed
-        );
-        assert!(
-            !WindowsTaskProvisioner
-                .rendered(&silent, bin, &here())
-                .unwrap()
-                .armed
-        );
-        // launchd carries it in the file as well, so a reboot does not arm it behind us.
-        assert!(MacLaunchdProvisioner
-            .plist(&silent, bin, &here())
-            .contains("<key>Disabled</key><true/>"));
-        assert!(!MacLaunchdProvisioner
-            .plist(&cfg("0 2 * * *"), bin, &here())
-            .contains("Disabled"));
-    }
-
-    /// Every option, against every scheduler, stated as a table — because a matrix checked one
-    /// cell at a time is a matrix with a hole in it. `Ok` means the scheduler expresses it;
-    /// `Err` means it says so by name rather than accepting the option and dropping it.
-    #[test]
-    fn every_option_is_either_expressed_or_refused_by_name() {
-        let with = |f: fn(&mut ScheduleConfig)| {
-            let mut c = cfg("0 2 * * *");
-            f(&mut c);
-            c
-        };
-        let boot = |f: fn(&mut ScheduleConfig)| {
-            let mut c = cfg("@reboot");
-            f(&mut c);
-            c
-        };
-        let cases: &[(&str, ScheduleConfig, bool, bool, bool)] = &[
-            // option            declaration                                 systemd  launchd  windows
-            (
-                "enabled=false",
-                with(|c| c.enabled = Some(false)),
-                true,
-                true,
-                true,
-            ),
-            (
-                "enabled=true",
-                with(|c| c.enabled = Some(true)),
-                true,
-                true,
-                true,
-            ),
-            (
-                "persistent=true",
-                with(|c| c.persistent = Some(true)),
-                true,
-                true,
-                false,
-            ),
-            (
-                "persistent=false",
-                with(|c| c.persistent = Some(false)),
-                true,
-                false,
-                false,
-            ),
-            ("jitter", with(|c| c.jitter = Some(900)), true, false, false),
-            (
-                "elevated=true",
-                with(|c| c.elevated = Some(true)),
-                false,
-                false,
-                true,
-            ),
-            (
-                "elevated=false",
-                with(|c| c.elevated = Some(false)),
-                true,
-                true,
-                true,
-            ),
-            // A timer option on a job that has no timer.
-            (
-                "jitter@reboot",
-                boot(|c| c.jitter = Some(900)),
-                false,
-                false,
-                false,
-            ),
-            (
-                "persistent@reboot",
-                boot(|c| c.persistent = Some(true)),
-                false,
-                false,
-                false,
-            ),
-        ];
-        for (what, config, systemd, launchd, windows) in cases {
-            let got = (
-                LinuxSystemdProvisioner.refuse_unsupported(config).is_ok(),
-                MacLaunchdProvisioner.refuse_unsupported(config).is_ok(),
-                WindowsTaskProvisioner.refuse_unsupported(config).is_ok(),
-            );
-            assert_eq!(
-                got,
-                (*systemd, *launchd, *windows),
-                "{} is expressed/refused differently than the table says",
-                what
-            );
-        }
-    }
-
-    /// A refusal names the option, so the reader knows which line to change.
-    #[test]
-    fn a_refusal_names_the_option_it_is_about() {
-        let mut c = cfg("0 2 * * *");
-        c.jitter = Some(900);
-        let err = MacLaunchdProvisioner.refuse_unsupported(&c).unwrap_err();
-        assert!(err.contains("`jitter`"), "{}", err);
-        let err = WindowsTaskProvisioner.refuse_unsupported(&c).unwrap_err();
-        assert!(err.contains("`jitter`"), "{}", err);
-
-        let mut c = cfg("0 2 * * *");
-        c.elevated = Some(true);
-        let err = LinuxSystemdProvisioner.refuse_unsupported(&c).unwrap_err();
-        assert!(err.contains("`elevated = true`"), "{}", err);
-    }
-
-    // ---- the Windows canonical form -------------------------------------------------------
-
-    /// Real Task Scheduler XML, captured from tasks on a Windows 11 machine on 2026-08-16 —
-    /// the trigger shapes are quoted rather than imagined, which is the only reason this
-    /// comparison can be trusted.
-    fn task_xml(triggers: &str, settings_enabled: &str, run_level: &str) -> String {
-        format!(
-            "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\n\
-             <Task version=\"1.2\">\n\
-             <Triggers>{triggers}</Triggers>\n\
-             <Principals><Principal id=\"Author\"><UserId>S-1-5-18</UserId>{run_level}\
-             </Principal></Principals>\n\
-             <Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>\
-             <Enabled>{settings_enabled}</Enabled></Settings>\n\
-             <Actions Context=\"Author\"><Exec>\
-             <Command>C:\\Program Files\\shall\\shall.exe</Command><Arguments>sync</Arguments>\
-             </Exec></Actions>\n</Task>"
-        )
-    }
-
-    #[test]
-    fn a_trigger_shall_wrote_reads_back_as_the_when_shall_rendered() {
-        let cases: &[(&str, &str)] = &[
-            (
-                "<CalendarTrigger id=\"Trigger1\"><StartBoundary>2026-07-06T03:00:00\
-                 </StartBoundary><ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay>\
-                 </CalendarTrigger>",
-                "daily at 03:00",
-            ),
-            (
-                "<CalendarTrigger><StartBoundary>2010-12-16T09:00:00</StartBoundary>\
-                 <ScheduleByWeek><WeeksInterval>1</WeeksInterval><DaysOfWeek><Monday />\
-                 <Wednesday /></DaysOfWeek></ScheduleByWeek></CalendarTrigger>",
-                "weekly on MON,WED at 09:00",
-            ),
-            (
-                "<CalendarTrigger><StartBoundary>2010-12-16T04:30:00</StartBoundary>\
-                 <ScheduleByMonth><DaysOfMonth><Day>1</Day></DaysOfMonth><Months><January />\
-                 </Months></ScheduleByMonth></CalendarTrigger>",
-                "monthly in JAN on 1 at 04:30",
-            ),
-            ("<BootTrigger><Delay>PT30S</Delay></BootTrigger>", "boot"),
-            (
-                "<TimeTrigger><StartBoundary>1992-05-01T00:00:00</StartBoundary>\
-                 <Repetition><Interval>PT15M</Interval></Repetition></TimeTrigger>",
-                "every 15m",
-            ),
-            (
-                "<TimeTrigger><StartBoundary>1992-05-01T00:00:00</StartBoundary>\
-                 <Repetition><Interval>PT6H</Interval></Repetition></TimeTrigger>",
-                "every 6h from 00:00",
-            ),
-        ];
-        for (triggers, want) in cases {
-            let doc = task_xml(triggers, "true", "");
-            assert_eq!(
-                when_from_xml(&doc).as_deref(),
-                Some(*want),
-                "trigger read wrong: {}",
-                triggers
-            );
-        }
-    }
-
-    /// The two halves meet: for every cron Task Scheduler can express, the `when` derived from
-    /// the `/SC` arguments is one of the strings the XML reader produces. A canonical form only
-    /// one side can write is not a comparison, it is a permanent mismatch.
-    #[test]
-    fn the_rendered_when_and_the_read_when_use_one_vocabulary() {
-        let pairs: &[(&str, &str)] = &[
-            ("0 3 * * *", "daily at 03:00"),
-            ("@reboot", "boot"),
-            ("0 9 * * 1,3", "weekly on MON,WED at 09:00"),
-            ("30 4 1 * *", "monthly on 1 at 04:30"),
-            ("@yearly", "monthly in JAN on 1 at 00:00"),
-            ("*/15 * * * *", "every 15m"),
-            ("0 */6 * * *", "every 6h from 00:00"),
-        ];
-        for (cron, want) in pairs {
-            let args = map_cron_to_schtasks(cron).unwrap();
-            assert_eq!(
-                schtasks_when(&args).as_deref(),
-                Some(*want),
-                "`{}` canonicalises wrong",
-                cron
-            );
-        }
-    }
-
-    /// A cron that names its weekdays out of order is the same schedule as one that names them
-    /// in order — `<DaysOfWeek>` is a set and comes back Sunday-first, so the declaration is
-    /// sorted the same way or every such schedule reports drift for ever.
-    #[test]
-    fn weekdays_compare_as_a_set_not_as_a_list() {
-        let a = map_cron_to_schtasks("0 9 * * 5,1").unwrap();
-        let b = map_cron_to_schtasks("0 9 * * 1,5").unwrap();
-        assert_ne!(a, b, "the /D lists genuinely differ in order");
-        assert_eq!(schtasks_when(&a), schtasks_when(&b));
-    }
-
-    /// A shape Shall does not write is **unreadable**, never drift. Reported as a mismatch it
-    /// would rewrite the task on every sync for ever and keep `check` red on something the
-    /// reader simply did not understand — V.188's rule, on a different store.
-    #[test]
-    fn a_trigger_shall_does_not_write_is_unreadable_rather_than_wrong() {
-        for triggers in [
-            // Somebody added a second trigger by hand.
-            "<CalendarTrigger><StartBoundary>2026-07-06T03:00:00</StartBoundary><ScheduleByDay>\
-             <DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger>\
-             <LogonTrigger><Delay>PT5M</Delay></LogonTrigger>",
-            // Every third day is not a schedule Shall can write.
-            "<CalendarTrigger><StartBoundary>2026-07-06T03:00:00</StartBoundary><ScheduleByDay>\
-             <DaysInterval>3</DaysInterval></ScheduleByDay></CalendarTrigger>",
-            // An event trigger, which has no cron at all.
-            "<EventTrigger><Subscription>x</Subscription></EventTrigger>",
-            // A shape this reader understands, with a shape it does not standing beside it.
-            // Counting only the kinds it knows would read the calendar trigger and report the
-            // task as matching a declaration that says nothing about the event.
-            "<CalendarTrigger><StartBoundary>2026-07-06T03:00:00</StartBoundary><ScheduleByDay>\
-             <DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger>\
-             <EventTrigger><Subscription>x</Subscription></EventTrigger>",
-            // A day-scale repetition. Shall writes daily as a calendar trigger, never as a
-            // repetition, so this is somebody else's task under Shall's name.
-            "<TimeTrigger><StartBoundary>1992-05-01T01:00:00</StartBoundary>\
-             <Repetition><Interval>P1D</Interval></Repetition></TimeTrigger>",
-            // No triggers whatsoever.
-            "",
-        ] {
-            let doc = task_xml(triggers, "true", "");
-            assert_eq!(when_from_xml(&doc), None, "read as drift: {}", triggers);
-        }
-    }
-
-    /// The element that opens the block is not one of the things inside it, and a closing tag is
-    /// not an opening one. Both would make "exactly one trigger" mean nothing.
-    #[test]
-    fn the_trigger_count_counts_triggers_and_not_the_block_around_them() {
-        assert_eq!(trigger_count("<Triggers></Triggers>"), 0);
-        assert_eq!(trigger_count("<Triggers><BootTrigger /></Triggers>"), 1);
-        assert_eq!(
-            trigger_count("<Triggers><BootTrigger><Delay>PT1M</Delay></BootTrigger></Triggers>"),
-            1
-        );
-        assert_eq!(
-            trigger_count("<Triggers><CalendarTrigger id=\"a\" /><EventTrigger /></Triggers>"),
-            2
-        );
-    }
-
-    /// `<Enabled>` appears in two places and they mean different things. A reader that takes
-    /// the first one in the document answers about a trigger and calls it the task.
-    #[test]
-    fn the_task_switch_is_read_from_settings_and_not_from_a_trigger() {
-        let doc = task_xml(
-            "<BootTrigger id=\"Resume\"><Enabled>false</Enabled></BootTrigger>",
-            "true",
-            "",
-        );
-        let settings = xml_element(&doc, "Settings").unwrap();
-        assert_eq!(xml_text(settings, "Enabled"), Some("true"));
-    }
-
-    #[test]
-    fn the_run_level_is_read_where_task_scheduler_writes_it() {
-        let elevated = task_xml(
-            "<BootTrigger />",
-            "true",
-            "<RunLevel>HighestAvailable</RunLevel>",
-        );
-        assert_eq!(
-            xml_element(&elevated, "Principals").and_then(|p| xml_text(p, "RunLevel")),
-            Some("HighestAvailable")
-        );
-        let plain = task_xml("<BootTrigger />", "true", "");
-        assert_eq!(
-            xml_element(&plain, "Principals").and_then(|p| xml_text(p, "RunLevel")),
-            None
-        );
-    }
-
-    /// The document declares UTF-16 and can arrive either width. Decoding by the header rather
-    /// than by the bytes would make the reading depend on how the process was spawned.
-    #[test]
-    fn the_query_is_decoded_whichever_width_it_arrives_in() {
-        let text = "<Task><Enabled>true</Enabled></Task>";
-        assert_eq!(decode_xml(text.as_bytes()), text);
-
-        let mut utf16 = vec![0xFF, 0xFE];
-        for unit in text.encode_utf16() {
-            utf16.extend_from_slice(&unit.to_le_bytes());
-        }
-        assert_eq!(decode_xml(&utf16), text);
-
-        // And without the byte-order mark, which is how it arrives through a pipe.
-        assert_eq!(decode_xml(&utf16[2..]), text);
-    }
-
-    #[test]
-    fn the_windows_spec_names_what_runs_when_and_at_which_privilege() {
-        let mut elevated = cfg("0 3 * * *");
-        elevated.elevated = Some(true);
-        let bin = Path::new("C:\\Program Files\\shall\\shall.exe");
-        let plain = WindowsTaskProvisioner
-            .rendered(&cfg("0 3 * * *"), bin, &here())
-            .unwrap();
-        let raised = WindowsTaskProvisioner
-            .rendered(&elevated, bin, &here())
-            .unwrap();
-        assert!(plain.spec.contains("LeastPrivilege"), "{}", plain.spec);
-        assert!(raised.spec.contains("HighestAvailable"), "{}", raised.spec);
-        assert!(plain.spec.contains("daily at 03:00"), "{}", plain.spec);
-        assert!(
-            plain
-                .spec
-                .contains("C:\\Program Files\\shall\\shall.exe sync"),
-            "{}",
-            plain.spec
-        );
-        assert_ne!(plain.spec, raised.spec);
-    }
-
-    /// The read side of the same task produces the same spec — which is the whole comparison,
-    /// and the thing that was missing.
-    #[test]
-    fn a_task_shall_created_reads_back_equal_to_what_shall_rendered() {
-        let doc = task_xml(
-            "<CalendarTrigger><StartBoundary>2026-07-06T03:00:00</StartBoundary>\
-             <ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay></CalendarTrigger>",
-            "true",
-            "",
-        );
-        let exec = xml_element(&doc, "Exec").unwrap();
-        let command = format!(
-            "{} {}",
-            xml_text(exec, "Command").unwrap().trim_matches('"'),
-            xml_text(exec, "Arguments").unwrap()
-        );
-        let read = schtasks_spec(&command, &when_from_xml(&doc).unwrap(), false, None);
-
-        let bin = Path::new("C:\\Program Files\\shall\\shall.exe");
-        let rendered = WindowsTaskProvisioner
-            .rendered(&cfg("0 3 * * *"), bin, &here())
-            .unwrap();
-        assert_eq!(read, rendered.spec);
-    }
-
-    /// A **verbatim** `schtasks /Query /XML` document, captured from this machine on
-    /// 2026-08-16 and not edited. Every fixture above is one this file wrote, so every fixture
-    /// above shares this file's assumptions; this one does not. It carries three things nothing
-    /// hand-written would have thought to include — an `xmlns` on `<Task>`, an `id` attribute on
-    /// the trigger, and **no `<Enabled>` in `<Settings>` at all**, which is what Task Scheduler
-    /// emits for a task nobody has disabled.
-    const REAL_TASK_XML: &str = r#"<?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <RegistrationInfo>
-    <URI>\CorelUpdateHelperTaskCore</URI>
-  </RegistrationInfo>
-  <Principals>
-    <Principal id="Author">
-      <GroupId>S-1-5-32-545</GroupId>
-    </Principal>
-  </Principals>
-  <Settings>
-    <DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>true</StopIfGoingOnBatteries>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <StartWhenAvailable>true</StartWhenAvailable>
-    <IdleSettings>
-      <Duration>PT10M</Duration>
-      <WaitTimeout>PT1H</WaitTimeout>
-      <StopOnIdleEnd>true</StopOnIdleEnd>
-      <RestartOnIdle>false</RestartOnIdle>
-    </IdleSettings>
-  </Settings>
-  <Triggers>
-    <CalendarTrigger id="Trigger1">
-      <StartBoundary>2026-07-06T13:56:53</StartBoundary>
-      <ScheduleByDay>
-        <DaysInterval>1</DaysInterval>
-      </ScheduleByDay>
-    </CalendarTrigger>
-  </Triggers>
-  <Actions Context="Author">
-    <Exec>
-      <Command>c:\Program Files (x86)\Corel\CUH\v2\CUH.exe</Command>
-      <Arguments>/t</Arguments>
-    </Exec>
-  </Actions>
-</Task>"#;
-
-    #[test]
-    fn a_real_task_scheduler_document_reads_the_way_the_fixtures_say_it_does() {
-        let held =
-            provisioned_from_xml(REAL_TASK_XML, None).expect("a real document must be readable");
-        assert_eq!(
-            held.spec,
-            schtasks_spec(
-                "c:\\Program Files (x86)\\Corel\\CUH\\v2\\CUH.exe /t",
-                "daily at 13:56",
-                false,
-                None
-            )
-        );
-        // No `<Enabled>` anywhere in `<Settings>`, and the task is not disabled — so absent has
-        // to mean armed. Reading it as "not armed" would report drift on every ordinary task.
-        assert!(held.armed);
-        // And the nested `<IdleSettings>` did not swallow the `<Settings>` lookup.
-        assert!(xml_element(REAL_TASK_XML, "Settings")
-            .expect("settings")
-            .contains("IdleSettings"));
-    }
-
-    #[test]
-    fn a_named_accounts_schedule_lives_in_that_accounts_own_directory() {
-        let account = crate::core::account::Account::current().unwrap();
-        let target = me();
-        assert!(target.is_scoped());
-        assert_eq!(target.account().unwrap(), account);
-
-        let dir = LinuxSystemdProvisioner::unit_dir(&target).unwrap();
-        assert_eq!(dir, account.systemd_user_dir().unwrap());
-        assert!(
-            dir.starts_with(account.home()),
-            "{dir:?} is not in the account's home"
-        );
-
-        let log = target.log_path();
-        assert!(
-            log.starts_with(account.home()),
-            "{log:?} is not in the account's home"
-        );
-        assert!(LinuxSystemdProvisioner::service_unit(
-            &cfg("0 2 * * *"),
-            Path::new("/bin/shall"),
-            &target
-        )
-        .contains(&log.display().to_string()));
-    }
-
-    #[test]
-    fn an_unscoped_schedule_uses_what_it_always_used() {
-        let _env = crate::core::shall_data_dir_lock();
-        let here = TaskTarget::resolve(None).unwrap();
-        assert!(!here.is_scoped());
-        assert_eq!(
-            LinuxSystemdProvisioner::unit_dir(&here).unwrap(),
-            dirs::config_dir().unwrap().join("systemd").join("user")
-        );
-        assert_eq!(
-            here.log_path(),
-            crate::utils::safe_data_dir().join("schedule.log"),
-            "an unscoped schedule writes where it has always written, whatever the platform's \
-             data directory is"
-        );
-        assert!(here.account().is_ok());
-    }
-
-    #[test]
-    fn the_same_target_drives_the_render_the_read_and_the_removal() {
-        let account = crate::core::account::Account::current().unwrap();
-        let target = me();
-        let bin = Path::new("/usr/local/bin/shall");
-
-        let p = LinuxSystemdProvisioner;
-        let spec = p.rendered(&cfg("0 2 * * *"), bin, &target).unwrap();
-        let mut from_disk = LinuxSystemdProvisioner::service_unit(&cfg("0 2 * * *"), bin, &target);
-        from_disk.push_str(UNIT_SEPARATOR);
-        from_disk.push_str(&p.timer_unit(&cfg("0 2 * * *")));
-        assert_eq!(
-            spec.spec, from_disk,
-            "the rendered spec and the spec read back from the account's own directory disagree"
-        );
-
-        let plist = MacLaunchdProvisioner
-            .rendered(&cfg("0 2 * * *"), bin, &target)
-            .unwrap();
-        let path = MacLaunchdProvisioner::plist_path("nightly", &target).unwrap();
-        assert_eq!(
-            path,
-            account
-                .launch_agents_dir()
-                .unwrap()
-                .join("com.shall.nightly.plist"),
-            "the plist is not in the account's own LaunchAgents"
-        );
-        assert!(plist.spec.contains("com.shall.nightly"));
-    }
-
-    #[test]
-    fn a_schedule_for_an_account_that_does_not_exist_is_refused() {
-        let err = TaskTarget::resolve(Some("shall-no-such-account-71"))
-            .expect_err("an unresolvable account must be refused")
-            .to_string();
-        assert!(err.contains("shall-no-such-account-71"), "{err}");
-    }
-
-    #[tokio::test]
-    async fn an_account_with_no_user_manager_is_refused_before_anything_is_written() {
-        use crate::core::executor::MockExecutor;
-        use dashmap::DashMap;
-        use std::sync::Arc;
-
-        let vfs = Arc::new(DashMap::new());
-        let mock = Arc::new(MockExecutor::new(vfs.clone()));
-        mock.set_response(
-            "systemctl --no-pager --user daemon-reload",
-            Err(Error::CommandFailed {
-                message: "Failed to connect to bus: No medium found".into(),
-                retry: crate::core::Retryability::Permanent,
-                absent_name: false,
-            }),
-        );
-        let exec =
-            CommandExecutor::with_layer(false, false, mock.clone(), vfs, Arc::new(DashMap::new()));
-        let account = crate::core::account::Account::current().unwrap();
-        let target = me();
-        let err = LinuxSystemdProvisioner
-            .add_task(
-                &exec,
-                &cfg("0 2 * * *"),
-                Path::new("/usr/local/bin/shall"),
-                &target,
-            )
-            .await
-            .expect_err("no user manager must be refused");
-        let err = err.to_string();
-        assert!(
-            err.contains(account.name()),
-            "the refusal names no account: {err}"
-        );
-        assert!(
-            err.contains("user manager"),
-            "the refusal does not say what is missing: {err}"
-        );
-        assert!(err.contains("Nothing was written"), "{err}");
-
-        let calls = mock.get_calls().await;
-        assert_eq!(calls.len(), 1, "a refused schedule ran {calls:?}");
-        assert!(calls[0].contains("daemon-reload"), "{calls:?}");
-    }
-
-    #[test]
-    fn two_accounts_get_two_distinct_unit_paths() {
-        let account = crate::core::account::Account::current().unwrap();
-        let theirs = me();
-        let mine = TaskTarget::resolve(None).unwrap();
-        assert_eq!(
-            LinuxSystemdProvisioner::unit_dir(&mine).unwrap(),
-            dirs::config_dir().unwrap().join("systemd").join("user")
-        );
-        assert_eq!(
-            LinuxSystemdProvisioner::unit_dir(&theirs).unwrap(),
-            account.systemd_user_dir().unwrap()
-        );
-    }
-
-    #[test]
-    fn standing_speaks_the_three_valued_answer_in_effect_wants() {
-        assert_eq!(Standing::Matches.in_effect(), Some(true));
-        assert_eq!(Standing::Missing.in_effect(), Some(false));
-        assert_eq!(Standing::Differs("x").in_effect(), Some(false));
-        assert_eq!(Standing::Unknown.in_effect(), None);
-    }
-
-    /// The rotation is a size floor, not a policy debate: under it nothing happens (and a
-    /// missing log is not an error), over it the file becomes `.log.1` and any previous `.1`
-    /// is gone. Runs under the suite-wide data-dir lock because it writes beside the real
-    /// data directory.
-    #[test]
-    fn the_schedule_log_rotates_only_once_it_is_large() {
-        let _env = crate::core::shall_data_dir_lock();
-        let dir = std::env::temp_dir().join(format!("shall-rot-test-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let previous = std::env::var_os("SHALL_DATA_DIR");
-        std::env::set_var("SHALL_DATA_DIR", &dir);
-
-        // Small file: left alone.
-        let log = dir.join("schedule.log");
-        std::fs::write(&log, vec![b'x'; 1024]).unwrap();
-        rotate_log_if_large();
-        assert!(log.exists());
-        assert!(!dir.join("schedule.log.1").exists());
-
-        // Over the cap: becomes .1, and a pre-existing .1 is replaced.
-        std::fs::write(dir.join("schedule.log.1"), b"old generation").unwrap();
-        std::fs::write(&log, vec![b'x'; 11 * 1024 * 1024]).unwrap();
-        rotate_log_if_large();
-        assert!(!log.exists(), "the large log should have been renamed away");
-        let rotated = std::fs::read(dir.join("schedule.log.1")).unwrap();
-        assert_eq!(rotated.len(), 11 * 1024 * 1024, "the new generation wins");
-
-        match previous {
-            Some(v) => std::env::set_var("SHALL_DATA_DIR", v),
-            None => std::env::remove_var("SHALL_DATA_DIR"),
-        }
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

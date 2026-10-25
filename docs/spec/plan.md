@@ -588,16 +588,39 @@ The first mirror move proved the shape; this is the rest of the same rule, not a
 change. On 2026-10-23, 160 tests moved out of eight source files into `tests/` mirrors:
 `parsers/{language,windows,ecosystem,dnf,common,pacman}`, the entrypoint helpers from `main`,
 and `verbs/plan`. The moved tests remain wired into the single `suite` target, and the library
-builds without those eight inline modules. The source-side frontier is **175 files**, down from
-183; the next files are `model/resolve.rs`, `model/vars.rs`, `app/scheduler/mod.rs`, and
-`backends/service.rs`.
+builds without those eight inline modules. The source-side frontier was **175 files** at that
+point, down from 183; the next files were `model/resolve.rs`, `model/vars.rs`,
+`app/scheduler/mod.rs`, and `backends/service.rs`.
 
 The move widened only helpers that the external test crate must call, with a constraint note on
-each such item; it did not change user-visible behavior. `cargo build --all-targets`,
-`cargo test --lib` (1,800 passed), clippy, and formatting pass. The full suite still reaches an
-existing host-dependent `argv_drift_tests` failure: 1,231 tests pass, while the gate cannot read
+each such item; it did not change user-visible behavior. Before the resolve move,
+`cargo build --all-targets`, clippy, and formatting passed, and `cargo test --lib` had 1,800
+passing tests. The full suite reached an existing host-dependent `argv_drift_tests` failure:
+1,231 tests passed, while the gate could not read
 help from installed `apk`, `brew`, `bun`, `composer`, `conda`, `dnf`, `gem`, `go`, `pacman`, or
 `pipx`. That environment/tool-discovery failure is recorded in `HANDOFF.md` rather than hidden.
+
+On 2026-10-24, the same move took `src/model/resolve.rs`'s 56 tests into
+`tests/model/resolve/`. `tests/main.rs` now owns the mirror through `tests/model/mod.rs`, and the
+integration target ran all 56 moved tests successfully. The library count fell from 1,800 to
+1,744, with the one unrelated host collision still present in `app::shim_manager`; the moved
+tests did not introduce a failure.
+
+The same day moved `src/model/vars.rs`'s 38 tests into `tests/model/vars/`. Its integration
+target ran all 38 tests successfully; `parse_number` is public only so the external test crate
+can exercise the parser directly. The source frontier is now 173 files and 254 tests have moved
+in this session.
+
+The sweep then moved 33 scheduler tests from `src/app/scheduler/mod.rs` into
+`tests/app/scheduler/`, followed by 30 service-backend tests from `src/backends/service.rs` into
+`tests/backends/service/`. The service tests use the existing harness guard fixture rather than
+shipping the inline-only unit-test token constructor. Both mirrors build successfully; the
+frontier is now 171 source files and 317 tests have moved in this session.
+
+The cumulative verification is exact: `cargo test --lib` reports 1,643 passing tests, while the
+single integration target reports 1,388 passing and the one known host-dependent argv-drift
+failure. The 157 tests moved in this batch account for the corresponding library decrease and
+suite increase.
 
 ### Tier 33 — a ratio that measured the host (`PLAN.md` #107, and `#111` for what is left): BUILT
 
