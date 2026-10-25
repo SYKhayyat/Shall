@@ -1,0 +1,11 @@
+use regex::Regex;
+pub use shall::backends::artifact::pattern::*;
+use std::fmt;
+mod a_bare_name_matches_only_itself;
+mod a_dot_is_a_dot_and_not_any_character;
+mod a_glob_survives_a_version_bump;
+mod a_question_mark_matches_exactly_one_character;
+mod a_regex_metacharacter_is_literal_text;
+mod all_is_a_mode_and_not_a_filename;
+mod an_empty_pattern_is_rejected_by_name;
+mod matching_is_case_insensitive;

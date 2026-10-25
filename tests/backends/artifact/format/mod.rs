@@ -1,0 +1,15 @@
+pub use shall::backends::artifact::format::*;
+use std::fmt;
+mod a_detected_order_is_not_user_specified_but_a_marked_one_is;
+mod a_repeated_format_keeps_its_first_position;
+mod an_extensionless_asset_has_no_format;
+mod an_unknown_family_still_has_a_working_default;
+mod an_unknown_format_names_the_legal_set;
+mod detection_is_case_insensitive;
+mod rank_rejects_a_format_nobody_asked_for;
+mod signatures_and_checksums_are_not_installable_assets;
+mod tar_gz_is_a_tarball_not_an_unknown_gz;
+mod the_debian_default_prefers_deb_then_falls_back;
+mod the_default_order_is_pinned_to_its_version;
+mod the_macos_default_includes_zip;
+mod windows_never_falls_back_to_a_linux_artifact;
