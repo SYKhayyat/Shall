@@ -3065,19 +3065,20 @@ than decorative.
 ### #120 test-layout sweep — progress recorded 2026-10-25
 
 The migration now has **no inline test modules in `src/model/` or `src/parsers/`**.
-The current remaining frontier is **54 source files / 401 inline tests**: app 37, core 1,
-backends 2, verbs 6, config 4, utils 4. The current batch moved **1,176 tests from 71
+The current remaining frontier is **48 source files / 315 inline tests**: app 37, core 1,
+backends 2, verbs 0, config 4, utils 4. The current batch moved **1,176 tests from 71
 model/parser/core files** into the single `tests/main.rs` integration suite; the aggregate
-move count recorded by the handoff is 1,816 tests from 113 files. Focused verification passed
+move count recorded by the handoff is 1,859 tests from 119 files. Focused verification passed
 for the moved model (409), parser (169), core (440), stale-lock (26), onboarder (26),
 config-parser (26), link (26), planner (25), config (18), setting (24), and NixOS (24) mirrors,
 setting (24), NixOS (24), registry (23), GitHub (21), btrfs (21), artifact (81), capability (7),
 proving (6), AppImage (5), dir (9), web (7), storage (14), snap (11), Go (10), firewall (10),
 and shared database (9) mirrors, plus psresource (4), mise (7), VS Code (3), pip-search (4),
-node-registry (2), Emacs (3), Nix (5), and Homebrew (5) mirrors, plus suite wiring.
+node-registry (2), Emacs (3), Nix (5), Homebrew (5), cleanup (9), sync (5), upgrade (5),
+watch-signature (14), check (4), and setup (6) mirrors, plus suite wiring.
 
-The library now reports 393 tests because the moved tests are no longer compiled under
-`cfg(test)`; the integration suite reports 2,639 total tests, with 2,638 passing and one
+The library now reports 350 tests because the moved tests are no longer compiled under
+`cfg(test)`; the integration suite reports 2,682 total tests, with 2,681 passing and one
 host-only `argv_drift_tests` failure caused by sandbox PATH wrappers that cannot answer help.
 This layout work does not change the user-visible behavior; production edits are limited to
 visibility/test seams required by the external mirror, plus the `Capped: Default` implementation

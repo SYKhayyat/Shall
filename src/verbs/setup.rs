@@ -983,8 +983,8 @@ pub async fn scaffold_dirs(cfg: &crate::config::Config) -> Result<()> {
 /// homework (V.41).
 #[derive(Debug, Clone, Default)]
 pub struct InitAnswers {
-    snapshot_count: Option<u32>,
-    starter_packages: Vec<String>,
+    pub snapshot_count: Option<u32>,
+    pub starter_packages: Vec<String>,
 }
 
 /// Pure: layer the interactive answers onto a base config. No I/O, so it can be tested.
@@ -1199,94 +1199,4 @@ pub async fn scaffold_repo(config: &Config, backends: &Backends, force: bool) ->
 
     println!("\nReady. `shall install jq` writes a line you own; `shall sync` makes it so.");
     Ok(())
-}
-
-#[cfg(test)]
-mod init_tests {
-    use super::*;
-
-    #[test]
-    fn answers_layer_onto_config() {
-        let base = crate::config::Config::default();
-        let answers = InitAnswers {
-            snapshot_count: Some(42),
-            starter_packages: vec![],
-        };
-        let cfg = apply_init_answers(base, &answers);
-        assert_eq!(cfg.retention.snapshots.keep_last, 42);
-    }
-
-    #[test]
-    fn omitted_snapshot_count_keeps_base_default() {
-        let base = crate::config::Config::default();
-        let base_count = base.retention.snapshots.keep_last;
-        let answers = InitAnswers {
-            snapshot_count: None,
-            ..Default::default()
-        };
-        let cfg = apply_init_answers(base, &answers);
-        assert_eq!(cfg.retention.snapshots.keep_last, base_count);
-    }
-
-    #[test]
-    fn config_from_answers_round_trips_through_toml() {
-        // The interactive config must serialize to valid TOML and load back identically —
-        // otherwise `init -i` writes a file `shall` cannot read.
-        let answers = InitAnswers {
-            snapshot_count: Some(7),
-            starter_packages: vec![],
-        };
-        let cfg = apply_init_answers(crate::config::Config::default(), &answers);
-        let toml_str = toml::to_string_pretty(&cfg).expect("serializes");
-        let back: crate::config::Config = toml::from_str(&toml_str).expect("parses back");
-        assert_eq!(back.retention.snapshots.keep_last, 7);
-    }
-
-    #[test]
-    fn config_template_actually_parses_and_matches_the_defaults() {
-        // `shall config init` writes this file verbatim. A template that does not parse
-        // hands every new user a broken config, and a template whose keys don't match the
-        // struct silently documents settings that do nothing (as `cache_ttl` did).
-        let cfg: crate::config::Config = toml::from_str(CONFIG_TEMPLATE)
-            .expect("CONFIG_TEMPLATE must be valid preferences.toml");
-        assert_eq!(cfg.guard.max_removals, 20);
-    }
-
-    #[test]
-    fn the_shipped_example_parses_too() {
-        // `examples/preferences.toml` is the long-form copy of the template, and it is the
-        // one a reader is most likely to paste from. Nothing checked it: it carried
-        // `[retention.generations]` and `[retention.manifests]` for a whole phase after the
-        // generation format was deleted, and both were silently ignored — a documented
-        // setting that does nothing is worse than an undocumented one.
-        let text = include_str!("../../examples/preferences.toml");
-        let cfg: crate::config::Config =
-            toml::from_str(text).expect("examples/preferences.toml must parse");
-        assert_eq!(
-            cfg.rate_limit_max_wait_secs, 30,
-            "the example and the built-in default disagree"
-        );
-    }
-
-    #[test]
-    fn the_template_documents_no_setting_that_would_disarm_the_guard() {
-        // Three of these used to be real, and each was a way to make a routine sync delete
-        // something: `[guard.enforce_on]` switched the guard off per command,
-        // `prune_scope = "system"` made sync remove software it never installed, and
-        // `prune_on_sync` decided whether sync was sync at all. A config file is copied
-        // between machines and pasted from the internet — it must not be able to say any
-        // of this (V.21, V.34, II.17).
-        for gone in [
-            "enforce_on",
-            "prune_on_sync",
-            "prune_scope",
-            "protect_imperative",
-        ] {
-            assert!(
-                !CONFIG_TEMPLATE.contains(gone),
-                "`{}` is deleted, but the template still offers it",
-                gone
-            );
-        }
-    }
 }

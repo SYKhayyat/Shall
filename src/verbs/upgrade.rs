@@ -10,7 +10,7 @@ use crate::verbs::sync::{enforce_policy, print_flight_plan};
 /// lockfile records — observations this very verb is allowed to move, and re-records after —
 /// never reach here. What survives can only be a version a person typed. Sorted, so two runs
 /// over one config name the same pins in the same order.
-pub(crate) fn typed_version_pins(
+pub fn typed_version_pins(
     registry: &BackendRegistry,
     desired: &std::collections::HashMap<String, Vec<crate::core::PackageSpec>>,
 ) -> Vec<String> {
@@ -62,7 +62,7 @@ impl UpgradeRequest<'_> {
     /// **Not the same question as `scope()`**, which answers only about a profile or a module.
     /// Naming a package, a manager, or `--security` narrows the run just as surely, and it was
     /// the package case that made `shall upgrade curl` fire every firmware step in the config.
-    fn narrowed(&self) -> bool {
+    pub fn narrowed(&self) -> bool {
         !self.packages.is_empty()
             || self.backend.is_some()
             || self.security
@@ -703,179 +703,4 @@ async fn upgrade_modes(app: &App, req: UpgradeRequest<'_>) -> Result<Option<usiz
 
 pub async fn handle_update(managers: &crate::app::Managers<'_>) -> Result<()> {
     managers.update().await.map_err(|e| e.into())
-}
-
-#[cfg(test)]
-mod steps_scope_tests {
-    use super::*;
-
-    fn req<'a>(
-        packages: &'a [String],
-        backend: Option<&'a str>,
-        security: bool,
-        steps: Option<bool>,
-    ) -> UpgradeRequest<'a> {
-        const NONE: &Option<String> = &None;
-        UpgradeRequest {
-            packages,
-            backend,
-            all: false,
-            security,
-            except: &[],
-            ignore_holds: false,
-            ignore_pins: false,
-            profile: NONE,
-            module: NONE,
-            out: Output::Human,
-            canary: false,
-            test: NONE,
-            steps,
-        }
-    }
-
-    fn named(list: &[&str]) -> Vec<String> {
-        list.iter().map(|s| s.to_string()).collect()
-    }
-
-    /// **`shall upgrade curl` is not a whole-machine upgrade**, so it does not run the
-    /// `@on=upgrade` steps. Every way of narrowing a run, because the one that caused this —
-    /// naming a package — was not what `scope()` was asking about, and a check written against
-    /// `scope()` alone would still fire firmware for `upgrade curl`.
-    #[test]
-    fn every_way_of_narrowing_a_run_stops_the_steps() {
-        let curl = named(&["curl"]);
-        assert!(req(&curl, None, false, None).narrowed(), "a named package");
-        assert!(
-            req(&[], Some("apt"), false, None).narrowed(),
-            "a named manager"
-        );
-        assert!(req(&[], None, true, None).narrowed(), "--security");
-    }
-
-    /// And a bare `shall upgrade` is the whole machine, which is what the steps belong to.
-    /// The control: without it, `narrowed()` returning true unconditionally passes the test
-    /// above and silently removes the feature.
-    #[test]
-    fn an_unscoped_upgrade_is_not_narrowed() {
-        assert!(!req(&[], None, false, None).narrowed());
-    }
-
-    /// Neither direction is unreachable: `--steps` asks for them on a narrowed run, `--no-steps`
-    /// declines them on a whole-machine one. A default that cannot be overridden is a rule.
-    #[test]
-    fn the_flags_reach_both_answers_the_default_does_not_give() {
-        let curl = named(&["curl"]);
-
-        let default_narrow = req(&curl, None, false, None);
-        assert!(!default_narrow.steps.unwrap_or(!default_narrow.narrowed()));
-
-        let asked = req(&curl, None, false, Some(true));
-        assert!(
-            asked.steps.unwrap_or(!asked.narrowed()),
-            "`--steps` must run them on a run that named a package"
-        );
-
-        let declined = req(&[], None, false, Some(false));
-        assert!(
-            !declined.steps.unwrap_or(!declined.narrowed()),
-            "`--no-steps` must decline them on a whole-machine run"
-        );
-    }
-}
-
-#[cfg(test)]
-mod typed_pin_tests {
-    use super::*;
-    use crate::core::PackageSpec;
-    use std::collections::HashMap;
-
-    fn spec(name: &str, version: Option<&str>, present: bool) -> PackageSpec {
-        let mut options = crate::config::grammar::Options::default();
-        if let Some(v) = version {
-            options.set("version", v.to_string());
-        }
-        PackageSpec {
-            name: name.into(),
-            backend: "apt".into(),
-            options,
-            requires: vec![],
-            present,
-        }
-    }
-
-    fn desired(specs: Vec<PackageSpec>) -> HashMap<String, Vec<PackageSpec>> {
-        HashMap::from([("apt".to_string(), specs)])
-    }
-
-    fn registry(runs_here: bool) -> BackendRegistry {
-        use crate::core::manager::{BackendCapabilities, BackendCore};
-        use std::sync::Arc;
-        struct Fake {
-            here: bool,
-        }
-        #[async_trait::async_trait]
-        impl BackendCore for Fake {
-            fn name(&self) -> &str {
-                "apt"
-            }
-            fn is_available(&self) -> bool {
-                self.here
-            }
-            fn probes(&self) -> Vec<String> {
-                Vec::new()
-            }
-            fn needs_root(&self) -> bool {
-                false
-            }
-        }
-        let mut reg = BackendRegistry::new();
-        reg.register(Arc::new(
-            BackendCapabilities::builder(Arc::new(Fake { here: runs_here })).build(),
-        ));
-        reg
-    }
-
-    /// The whole point: a typed pin on a manager that is here is named; the same line on an
-    /// absent manager is not this machine's business, and a versionless line pins nothing.
-    #[test]
-    fn only_typed_concrete_versions_on_present_managers_are_pins() {
-        let here = registry(true);
-        let found = typed_version_pins(
-            &here,
-            &desired(vec![
-                spec("jq", Some("1.7"), true),
-                spec("curl", None, true),
-                spec("gone", Some("2.0"), false),
-                spec("float", Some("latest"), true),
-                spec("star", Some("*"), true),
-            ]),
-        );
-        assert_eq!(found, vec!["apt:jq@version=1.7".to_string()]);
-
-        let absent = registry(false);
-        assert!(
-            typed_version_pins(&absent, &desired(vec![spec("jq", Some("1.7"), true)])).is_empty()
-        );
-    }
-
-    /// Sorted output: two runs over one config must name the pins in the same order, or a diff
-    /// of two refusals is noise.
-    #[test]
-    fn the_names_come_out_in_one_order() {
-        let here = registry(true);
-        let found = typed_version_pins(
-            &here,
-            &desired(vec![
-                spec("zlib", Some("1.3"), true),
-                spec("jq", Some("1.7"), true),
-            ]),
-        );
-        assert_eq!(
-            found,
-            vec![
-                "apt:jq@version=1.7".to_string(),
-                "apt:zlib@version=1.3".to_string()
-            ]
-        );
-    }
 }
