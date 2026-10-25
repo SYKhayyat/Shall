@@ -3065,13 +3065,14 @@ than decorative.
 ### #120 test-layout sweep — progress recorded 2026-10-24
 
 The migration now has **no inline test modules in `src/model/` or `src/parsers/`**.
-The current remaining frontier is **93 source files / 879 inline tests**: app 39, core 1,
-backends 36, verbs 7, config 6, utils 4. The current batch moved **916 tests from 60
+The current remaining frontier is **90 source files / 801 inline tests**: app 38, core 1,
+backends 35, verbs 7, config 5, utils 4. The current batch moved **994 tests from 63
 model/parser/core files** into the single `tests/main.rs` integration suite; the aggregate
-move count recorded by the handoff is 1,320 tests from 74 files. Focused verification passed
-for the moved model (409), parser (169), and core (440) mirrors, plus suite wiring.
+move count recorded by the handoff is 1,398 tests from 77 files. Focused verification passed
+for the moved model (409), parser (169), core (440), stale-lock (26), onboarder (26), and
+config-parser (26) mirrors, plus suite wiring.
 
-The library now reports 888 tests because the moved tests are no longer compiled under
+The library now reports 810 tests because the moved tests are no longer compiled under
 `cfg(test)`; the integration suite reports 2,144 total tests, with 2,143 passing and one
 host-only `argv_drift_tests` failure caused by sandbox PATH wrappers that cannot answer help.
 This layout work does not change the user-visible behavior; the only production edits are
