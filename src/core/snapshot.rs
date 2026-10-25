@@ -258,7 +258,9 @@ impl SnapshotProviderDef {
     /// Whether a declared row can actually put a running system back. `restores_running_system`
     /// alone is not enough — a row that claims it but gives no `restore` command still cannot,
     /// and claiming `Live` there is exactly the V.60 lie.
-    fn is_live(&self) -> bool {
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+    /// crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub fn is_live(&self) -> bool {
         self.restores_running_system && !self.restore.is_empty()
     }
 }
@@ -344,7 +346,9 @@ impl ConfigSnapshotProvider {
     /// Fill one PowerShell line, substituting `{id}` as a validated `u32` (V.82) — the typed slot
     /// that makes a Windows snapshot row safe by construction. A non-numeric id is refused before
     /// it can reach the elevated shell.
-    fn fill_ps(&self, template: &str, id: Option<&str>, label: &str) -> Result<String> {
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+    /// crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub fn fill_ps(&self, template: &str, id: Option<&str>, label: &str) -> Result<String> {
         let mut s = template.to_string();
         if s.contains("{id}") {
             let id = id.ok_or_else(|| Error::Snapshot("a snapshot id is required".into()))?;
@@ -597,7 +601,9 @@ fn config_snapshot_defs(config: &Config) -> Vec<SnapshotProviderDef> {
 /// user's `adapters/snapshot.toml` — they are not read through the hook ledger: a first-party
 /// asset cannot be tampered with by a pulled config, and gating it would leave a fresh machine
 /// with no safety net until `shall lock` ran.
-const BUILTIN_SNAPSHOT_DEFS: &str = include_str!("snapshot_builtins.toml");
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub const BUILTIN_SNAPSHOT_DEFS: &str = include_str!("snapshot_builtins.toml");
 
 /// The auto-detected zfs root dataset, when `zfs_dataset` is not configured. Empty when zfs is
 /// absent or the query fails — which drops the row rather than shipping a source-less one.
@@ -710,7 +716,9 @@ impl SnapshotManager {
     /// machine is skipped; a name in the list that matches no provider is ignored. With no list,
     /// the first available in registration order wins (built-ins first), which is the historical
     /// behaviour untouched.
-    async fn choose(
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+    /// crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub async fn choose(
         providers: Vec<Box<dyn SnapshotProvider>>,
         priority: &[String],
     ) -> Option<Box<dyn SnapshotProvider>> {
@@ -862,396 +870,6 @@ impl SnapshotManager {
             p.restore(id).await
         } else {
             Err(Error::Snapshot("No active provider".into()))
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_restore_point_id_that_is_not_a_number_never_reaches_powershell() {
-        // SEC5. Both PowerShell strings interpolate the id unquoted and run elevated.
-        assert_eq!(windows_sequence_number("42").unwrap(), 42);
-        assert_eq!(windows_sequence_number("  7 ").unwrap(), 7);
-        for bad in [
-            "1); Start-Process calc; #",
-            "-1",
-            "1 2",
-            "",
-            "$(whoami)",
-            "0x10",
-        ] {
-            assert!(
-                windows_sequence_number(bad).is_err(),
-                "`{}` must be refused",
-                bad
-            );
-        }
-    }
-
-    #[test]
-    fn every_snapshot_label_is_a_fixed_string() {
-        // SEC5: the enum is the guard, so the set is closed and quote-free by construction.
-        for l in [
-            SnapshotLabel::PreSync,
-            SnapshotLabel::PreUpgrade,
-            SnapshotLabel::PurgeUndeclared,
-            SnapshotLabel::PreCanary,
-        ] {
-            assert!(
-                !l.as_str().contains('\'') && !l.as_str().is_empty(),
-                "{} must be safe inside a single-quoted PowerShell string",
-                l
-            );
-        }
-    }
-
-    // Build ids the way `create()` does, from a known local time, so a round-trip proves the
-    // parse regardless of the test machine's timezone.
-    fn btrfs_id(local: DateTime<Local>) -> String {
-        format!("shall_pre_pre_sync_{}", local.format("%Y%m%d%H%M%S"))
-    }
-    fn zfs_id(local: DateTime<Local>) -> String {
-        format!("tank/root@shall_{}", local.format("%Y%m%d_%H%M%S"))
-    }
-
-    #[test]
-    fn btrfs_id_round_trips_to_its_creation_time() {
-        let t = Local.with_ymd_and_hms(2026, 7, 17, 14, 30, 22).unwrap();
-        let parsed = Snapshot::time_from_id(&btrfs_id(t)).expect("btrfs id carries a time");
-        assert_eq!(parsed, t.with_timezone(&Utc));
-    }
-
-    #[test]
-    fn zfs_id_round_trips_to_its_creation_time() {
-        let t = Local.with_ymd_and_hms(2026, 7, 17, 14, 30, 22).unwrap();
-        let parsed = Snapshot::time_from_id(&zfs_id(t)).expect("zfs id carries a time");
-        assert_eq!(parsed, t.with_timezone(&Utc));
-    }
-
-    #[test]
-    fn an_older_id_parses_to_an_earlier_time_than_a_newer_one() {
-        // The property retention actually depends on: order is preserved.
-        let older = Local.with_ymd_and_hms(2026, 7, 10, 9, 0, 0).unwrap();
-        let newer = Local.with_ymd_and_hms(2026, 7, 17, 9, 0, 0).unwrap();
-        assert!(
-            Snapshot::time_from_id(&btrfs_id(older)).unwrap()
-                < Snapshot::time_from_id(&btrfs_id(newer)).unwrap()
-        );
-    }
-
-    #[test]
-    fn an_id_with_no_embedded_time_returns_none() {
-        // A snapshot Shall did not create, or a malformed id: no guess, so the caller falls
-        // back rather than trusting a wrong time.
-        assert!(Snapshot::time_from_id("some_manual_snapshot").is_none());
-        assert!(Snapshot::time_from_id("tank/root@weekly-2026").is_none());
-        // Right shape, non-numeric tail.
-        assert!(Snapshot::time_from_id("shall_pre_sync_notadate12").is_none());
-    }
-
-    fn snap(id: &str, description: &str, backend: &str) -> Snapshot {
-        Snapshot {
-            id: id.into(),
-            timestamp: Utc::now().to_rfc3339(),
-            description: description.into(),
-            backend: backend.into(),
-        }
-    }
-
-    #[test]
-    fn ownership_is_recognized_across_every_provider() {
-        // S3: the marker lands in different fields per provider. All of these are Shall's.
-        assert!(snap(
-            "shall_pre_pre_sync_20260717143022",
-            "BTRFS System State",
-            "btrfs"
-        )
-        .is_shall_owned());
-        assert!(snap("tank/root@shall_20260717_143022", "ZFS Snapshot", "zfs").is_shall_owned());
-        // Windows: id is a bare sequence number, marker is in the description — the case the
-        // old id-only filter missed entirely.
-        assert!(snap("12", "Shall: pre_sync", "windows_restore").is_shall_owned());
-    }
-
-    #[test]
-    fn a_user_made_snapshot_is_not_owned_and_is_left_alone() {
-        assert!(!snap("12", "Windows Update", "windows_restore").is_shall_owned());
-        assert!(!snap("tank/root@weekly", "manual weekly", "zfs").is_shall_owned());
-        // The word appears inside the user's own naming: a substring test claims these and
-        // `prune_with_policy` deletes them.
-        assert!(!snap("tank/home@marshall_weekly", "Marshall weekly", "zfs").is_shall_owned());
-        assert!(!snap("13", "Shallots: planting notes", "windows_restore").is_shall_owned());
-    }
-
-    #[test]
-    fn a_parsed_snapshot_reads_its_real_age_not_zero() {
-        // The bug in one assertion: a snapshot created a week ago must NOT read as ~now.
-        let a_week_ago = Local::now() - chrono::Duration::days(7);
-        let snap = Snapshot {
-            id: btrfs_id(a_week_ago),
-            timestamp: Snapshot::timestamp_from_id(&btrfs_id(a_week_ago)).unwrap(),
-            description: "test".into(),
-            backend: "btrfs".into(),
-        };
-        let age = Utc::now() - snap.parse_time().unwrap();
-        assert!(age.num_days() >= 6, "age should be ~7 days, was {:?}", age);
-    }
-
-    fn def(name: &str) -> SnapshotProviderDef {
-        SnapshotProviderDef {
-            name: name.into(),
-            os: None,
-            detect: "true".into(),
-            source: "tank/root".into(),
-            create: vec!["mk".into(), "{id}".into(), "{source}".into()],
-            list: vec!["ls".into()],
-            delete: vec!["rm".into(), "{id}".into()],
-            restore: vec![],
-            restores_running_system: false,
-            list_pattern: r"(\S+)".into(),
-            restore_how: None,
-            detect_path: None,
-            id_template: None,
-            create_id_pattern: None,
-            list_needs_root: false,
-            powershell: false,
-        }
-    }
-
-    /// U27/V.60: a config provider is create-only unless the file *names* the live-restore
-    /// capability. The default — omit the field — is the safe one, and even declaring the flag is
-    /// not enough without a `restore` command to run.
-    #[test]
-    fn a_config_provider_is_create_only_unless_it_declares_both() {
-        let mut d = def("lvm");
-        assert!(!d.is_live(), "the default must be create-only");
-
-        d.restores_running_system = true;
-        assert!(
-            !d.is_live(),
-            "the flag alone, with no restore command, is not live"
-        );
-
-        d.restore = vec!["merge".into(), "{id}".into()];
-        assert!(d.is_live(), "flag AND a restore command is live");
-    }
-
-    #[test]
-    fn a_create_only_config_provider_reports_not_from_running_system() {
-        let d = def("lvm");
-        let cap = ConfigSnapshotProvider {
-            executor: CommandExecutor::new(true, false),
-            def: d,
-        }
-        .restore_capability();
-        assert!(!cap.is_live());
-        match cap {
-            RestoreCapability::NotFromRunningSystem { how } => assert!(!how.is_empty()),
-            _ => panic!("a create-only provider must not report Live"),
-        }
-    }
-
-    #[tokio::test]
-    async fn a_create_only_config_provider_refuses_restore_and_names_the_snapshot() {
-        let p = ConfigSnapshotProvider {
-            executor: CommandExecutor::new(true, false),
-            def: def("lvm"),
-        };
-        let err = p
-            .restore("shall_pre_sync_20260726_120000")
-            .await
-            .unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("shall_pre_sync_20260726_120000"), "{}", msg);
-        assert!(msg.contains("cannot roll"), "{}", msg);
-    }
-
-    #[test]
-    fn a_config_provider_missing_a_required_command_is_refused() {
-        let mut d = def("lvm");
-        d.create = vec![];
-        assert!(d.unusable().is_some());
-        let mut d = def("lvm");
-        d.list = vec![];
-        assert!(d.unusable().is_some());
-        let mut d = def("lvm");
-        d.list_pattern = String::new();
-        assert!(d.unusable().is_some());
-        assert!(def("lvm").unusable().is_none(), "a complete row is usable");
-    }
-
-    #[test]
-    fn the_snapshot_provider_schema_parses() {
-        let toml = r#"
-[[snapshot]]
-name = "lvm"
-detect = "lvcreate"
-source = "vg0/root"
-create = ["lvcreate", "--snapshot", "--name", "{id}", "{source}"]
-list = ["lvs", "--noheadings", "-o", "lv_name"]
-delete = ["lvremove", "-y", "{id}"]
-restore = ["lvconvert", "--merge", "{id}"]
-restores_running_system = true
-list_pattern = '(shall_\S+)'
-"#;
-        let file: SnapshotProviderFile = toml::from_str(toml).unwrap();
-        assert_eq!(file.snapshot.len(), 1);
-        assert!(file.snapshot[0].is_live());
-        assert!(file.snapshot[0].unusable().is_none());
-    }
-
-    // A trivial provider for the priority test: available iff `here`, named `name`.
-    struct Fake {
-        name: String,
-        here: bool,
-    }
-    #[async_trait]
-    impl SnapshotProvider for Fake {
-        fn name(&self) -> &str {
-            &self.name
-        }
-        async fn is_available(&self) -> bool {
-            self.here
-        }
-        async fn create(&self, _l: SnapshotLabel) -> Result<Snapshot> {
-            unreachable!()
-        }
-        async fn list(&self) -> Result<Vec<Snapshot>> {
-            Ok(vec![])
-        }
-        async fn delete(&self, _id: &str) -> Result<()> {
-            Ok(())
-        }
-        async fn restore(&self, _id: &str) -> Result<()> {
-            Ok(())
-        }
-        fn restore_capability(&self) -> RestoreCapability {
-            RestoreCapability::Live
-        }
-    }
-
-    fn fake(name: &str, here: bool) -> Box<dyn SnapshotProvider> {
-        Box::new(Fake {
-            name: name.into(),
-            here,
-        })
-    }
-
-    #[tokio::test]
-    async fn priority_picks_the_first_available_in_the_declared_order() {
-        // btrfs and zfs both present; the list prefers zfs, so zfs wins over registration order.
-        let providers = vec![fake("btrfs", true), fake("zfs", true)];
-        let chosen = SnapshotManager::choose(providers, &["zfs".into(), "btrfs".into()])
-            .await
-            .unwrap();
-        assert_eq!(chosen.name(), "zfs");
-    }
-
-    #[tokio::test]
-    async fn priority_skips_a_named_provider_that_is_absent() {
-        // The list names zfs first, but zfs is not on this machine — so the next available named
-        // one wins, not "nothing".
-        let providers = vec![fake("btrfs", true), fake("zfs", false)];
-        let chosen = SnapshotManager::choose(providers, &["zfs".into(), "btrfs".into()])
-            .await
-            .unwrap();
-        assert_eq!(chosen.name(), "btrfs");
-    }
-
-    #[tokio::test]
-    async fn no_priority_keeps_registration_order() {
-        let providers = vec![fake("btrfs", true), fake("zfs", true)];
-        let chosen = SnapshotManager::choose(providers, &[]).await.unwrap();
-        assert_eq!(
-            chosen.name(),
-            "btrfs",
-            "built-ins first when no list is declared"
-        );
-    }
-
-    #[tokio::test]
-    async fn a_priority_that_names_nothing_present_still_falls_back() {
-        let providers = vec![fake("btrfs", true)];
-        let chosen = SnapshotManager::choose(providers, &["apfs".into()])
-            .await
-            .unwrap();
-        assert_eq!(chosen.name(), "btrfs");
-    }
-
-    /// The built-in defs parse, and the invariants the shipped rows must hold (U27, V.82): every
-    /// row is usable, apfs/btrfs are create-only (V.60), windows is a typed-PowerShell row, and
-    /// zfs registers last so btrfs wins on a machine with both (U28).
-    #[test]
-    fn the_builtin_snapshot_defs_hold_their_invariants() {
-        let file: SnapshotProviderFile = toml::from_str(BUILTIN_SNAPSHOT_DEFS).unwrap();
-        let by = |name: &str| {
-            file.snapshot
-                .iter()
-                .find(|d| d.name == name)
-                .unwrap()
-                .clone()
-        };
-
-        for d in &file.snapshot {
-            // detect_path/source placeholders are filled at load, so is_usable (which does not
-            // check them) must pass for every shipped row as written.
-            assert!(d.unusable().is_none(), "{} must be a usable row", d.name);
-        }
-
-        // Create-only, on purpose — claiming Live would be the V.60 lie.
-        assert!(!by("apfs").is_live(), "apfs is create-only");
-        assert!(
-            !by("btrfs").is_live(),
-            "btrfs cannot restore a running root"
-        );
-        // Live restore.
-        assert!(by("zfs").is_live());
-        assert!(by("timeshift").is_live());
-        assert!(by("windows_restore").is_live());
-
-        // Windows is the one typed-PowerShell row (V.82); nothing else is a shell line.
-        assert!(by("windows_restore").powershell);
-        for name in ["btrfs", "zfs", "timeshift", "apfs"] {
-            assert!(!by(name).powershell, "{} must be plain argv", name);
-        }
-
-        // zfs ships last so btrfs wins on a machine with both (U28 registration order).
-        let names: Vec<&str> = file.snapshot.iter().map(|d| d.name.as_str()).collect();
-        let btrfs_at = names.iter().position(|n| *n == "btrfs").unwrap();
-        let zfs_at = names.iter().position(|n| *n == "zfs").unwrap();
-        assert!(btrfs_at < zfs_at, "btrfs must register before zfs");
-    }
-
-    /// V.82: the Windows row's `{id}` is a typed slot. A crafted list id — the injection SEC5
-    /// exists for — never reaches the elevated PowerShell, because the fill parses it as a `u32`
-    /// first and refuses anything else.
-    #[test]
-    fn the_windows_row_substitutes_the_id_only_as_a_number() {
-        let file: SnapshotProviderFile = toml::from_str(BUILTIN_SNAPSHOT_DEFS).unwrap();
-        let def = file
-            .snapshot
-            .iter()
-            .find(|d| d.name == "windows_restore")
-            .unwrap()
-            .clone();
-        let p = ConfigSnapshotProvider {
-            executor: CommandExecutor::new(true, false),
-            def,
-        };
-        // A good id fills to exactly the number.
-        let line = p.fill_ps(&p.def.restore[0], Some(" 42 "), "").unwrap();
-        assert!(line.contains("42"), "{}", line);
-        assert!(!line.contains("{id}"));
-        // An injection attempt is refused before it can reach the shell.
-        for bad in ["1); Start-Process calc; #", "$(whoami)", "-1", "0x10", ""] {
-            assert!(
-                p.fill_ps(&p.def.delete[0], Some(bad), "").is_err(),
-                "`{}` must be refused",
-                bad
-            );
         }
     }
 }

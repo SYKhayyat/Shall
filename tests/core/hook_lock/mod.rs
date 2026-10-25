@@ -1,0 +1,18 @@
+pub use serde::{Deserialize, Serialize};
+pub use sha2::{Digest, Sha256};
+pub use shall::core::hook_lock::*;
+pub use shall::core::ledger::LockFile;
+use std::collections::BTreeMap;
+use std::path::Path;
+mod a_drifted_script_is_changed_and_carries_both_hashes;
+mod a_generate_command_is_approved_by_its_hash;
+mod a_health_command_is_approved_by_its_hash_and_a_changed_one_is_not;
+mod a_matching_hash_is_approved;
+mod a_missing_file_loads_as_an_empty_ledger;
+mod an_unrecorded_hook_is_new_not_trusted;
+mod approving_one_hook_does_not_approve_another;
+mod hashing_is_stable_and_sensitive;
+mod re_approving_updates_to_the_new_hash;
+mod the_changed_refusal_shows_both_short_hashes;
+mod the_ledger_round_trips_through_toml;
+mod the_new_refusal_names_the_hook_and_the_fix;
