@@ -42,7 +42,7 @@ pub async fn registry_search(query: &str, backend: &str) -> Result<Vec<Package>>
 }
 
 /// Percent-encode one URL path segment: unreserved bytes pass, everything else becomes `%XX`.
-fn percent_encode_segment(s: &str) -> String {
+pub fn percent_encode_segment(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
         if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
@@ -56,7 +56,7 @@ fn percent_encode_segment(s: &str) -> String {
 
 /// Parse a PyPI JSON document (`https://pypi.org/pypi/<name>/json`) into a `Package`.
 /// `fallback_name` is used if the document omits `info.name`.
-fn parse_pypi(json: &serde_json::Value, fallback_name: &str, backend: &str) -> Package {
+pub fn parse_pypi(json: &serde_json::Value, fallback_name: &str, backend: &str) -> Package {
     let info = &json["info"];
     let pkg_name = info["name"].as_str().unwrap_or(fallback_name);
     let mut p = Package::new(pkg_name, backend);
@@ -70,52 +70,4 @@ fn parse_pypi(json: &serde_json::Value, fallback_name: &str, backend: &str) -> P
         }
     }
     p
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_pypi_info() {
-        let json: serde_json::Value = serde_json::from_str(
-            r#"{
-            "info": {"name": "requests", "version": "2.31.0", "summary": "Python HTTP for Humans."}
-        }"#,
-        )
-        .unwrap();
-        let p = parse_pypi(&json, "requests", "pip");
-        assert_eq!(p.name, "requests");
-        assert_eq!(p.backend, "pip");
-        assert_eq!(p.version.as_deref(), Some("2.31.0"));
-        assert_eq!(
-            p.properties.get("description").map(String::as_str),
-            Some("Python HTTP for Humans.")
-        );
-    }
-
-    #[test]
-    fn pypi_falls_back_to_query_name() {
-        let json: serde_json::Value = serde_json::from_str(r#"{"info": {}}"#).unwrap();
-        let p = parse_pypi(&json, "somepkg", "pip");
-        assert_eq!(p.name, "somepkg");
-        assert!(p.version.is_none());
-    }
-
-    /// The backend tag comes from the row asking, not from the word `pip` — the same reason
-    /// `node_registry` takes one and three Node managers share it.
-    #[test]
-    fn the_result_is_tagged_with_the_backend_that_asked() {
-        let json: serde_json::Value =
-            serde_json::from_str(r#"{"info": {"name": "ruff", "version": "0.16.2"}}"#).unwrap();
-        assert_eq!(parse_pypi(&json, "ruff", "uv").backend, "uv");
-    }
-
-    /// Path syntax in user text must not become a path: a `/` or space is escaped, ordinary
-    /// names pass through untouched.
-    #[test]
-    fn the_query_is_path_encoded_not_pasted_into_the_url() {
-        assert_eq!(percent_encode_segment("scikit-learn"), "scikit-learn");
-        assert_eq!(percent_encode_segment("a/b c?d"), "a%2Fb%20c%3Fd");
-    }
 }

@@ -219,7 +219,7 @@ impl Searchable for NixSearchable {
 }
 
 /// Parse `nix search nixpkgs <q> --json` => `{ "<attrpath>": { pname, version, description } }`.
-fn parse_nix_search(output: &str) -> Result<Vec<Package>> {
+pub fn parse_nix_search(output: &str) -> Result<Vec<Package>> {
     if output.trim().is_empty() || output.trim() == "{}" {
         return Ok(vec![]);
     }
@@ -326,7 +326,7 @@ impl NixBackendCore {
 ///
 /// Both are read here because they are one tool's output across versions, not two mechanisms of
 /// Shall's own — the NO-LEGACY rule is about this codebase's formats, not upstream's.
-fn parse_profile_list(json: &Value) -> Vec<Package> {
+pub fn parse_profile_list(json: &Value) -> Vec<Package> {
     let fields = |el: &Value, key: Option<&str>| {
         let attr_path = el.get("attrPath").and_then(|v| v.as_str());
         let name = key
@@ -393,157 +393,4 @@ pub fn register(
             .with_metadata_provider(core.clone())
             .build(),
     ));
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// `nix profile list --json`, captured from Determinate Nix 3.21.9 in the tools image the
-    /// hour this was written. The schema is v3: `elements` is an OBJECT KEYED BY NAME, and
-    /// Shall asked it for an array — so `nix` listed nothing it had just installed, which is
-    /// E6's class (a blind `list` is permanent phantom drift) on a backend that until tonight
-    /// had never been installed in any image to notice.
-    #[test]
-    fn nix_profile_list_reads_the_v3_map_keyed_by_name() {
-        const REAL: &str = include_str!("../../tests/fixtures/nix/profile-list-json.txt");
-        let json: Value = serde_json::from_str(REAL).unwrap();
-        let pkgs = parse_profile_list(&json);
-        let mut names: Vec<&str> = pkgs.iter().map(|p| p.name.as_str()).collect();
-        names.sort();
-        assert_eq!(names, vec!["determinate-nix", "hello", "nss-cacert"]);
-
-        let hello = pkgs.iter().find(|p| p.name == "hello").expect("hello");
-        assert_eq!(
-            hello.properties.get("full_attr").map(String::as_str),
-            Some("legacyPackages.x86_64-linux.hello")
-        );
-        assert!(hello
-            .properties
-            .get("store_path")
-            .is_some_and(|s| s.contains("hello-2.12.3")));
-        // No `index` on the map form: position is not identity there, and the removal path
-        // branches on exactly this.
-        assert!(!hello.properties.contains_key("index"));
-
-        // And the array form still reads, because an older nix is still a nix.
-        let old: Value = serde_json::from_str(
-            r#"{"elements":[{"attrPath":"legacyPackages.x86_64-linux.jq","storePaths":["/nix/store/x-jq"]}]}"#,
-        )
-        .unwrap();
-        let old_pkgs = parse_profile_list(&old);
-        assert_eq!(old_pkgs.len(), 1);
-        assert_eq!(old_pkgs[0].name, "jq");
-        assert_eq!(
-            old_pkgs[0].properties.get("index").map(String::as_str),
-            Some("0")
-        );
-    }
-
-    #[test]
-    fn nix_search_parses_json_map() {
-        let out = r#"{
-            "legacyPackages.x86_64-linux.ripgrep": {"pname":"ripgrep","version":"14.1.0","description":"fast grep"},
-            "legacyPackages.x86_64-linux.bat": {"pname":"bat","version":"0.24.0","description":"cat clone"}
-        }"#;
-        let pkgs = parse_nix_search(out).unwrap();
-        assert_eq!(pkgs.len(), 2);
-        // HashMap order is nondeterministic; assert by membership.
-        let rg = pkgs
-            .iter()
-            .find(|p| p.name == "ripgrep")
-            .expect("ripgrep present");
-        assert_eq!(rg.version.as_deref(), Some("14.1.0"));
-        assert!(rg.properties.get("attr_path").unwrap().ends_with("ripgrep"));
-        assert!(pkgs.iter().any(|p| p.name == "bat"));
-    }
-
-    #[tokio::test]
-    async fn nix_flake_refs_and_queries_come_after_the_terminator() {
-        let vfs = Arc::new(dashmap::DashMap::new());
-        let mock = Arc::new(crate::core::executor::MockExecutor::new(vfs.clone()));
-        let exec = CommandExecutor::with_layer(
-            false,
-            false,
-            mock.clone(),
-            vfs,
-            Arc::new(dashmap::DashMap::new()),
-        );
-        let core = Arc::new(NixBackendCore::new(exec, "30d".into()));
-
-        NixInstallable { core: core.clone() }
-            .install(
-                &[PackageSpec {
-                    name: "ripgrep".into(),
-                    backend: "nix".into(),
-                    ..Default::default()
-                }],
-                false,
-            )
-            .await
-            .unwrap();
-        NixSearchable { core: core.clone() }
-            .search("ripgrep")
-            .await
-            .unwrap();
-
-        assert_eq!(
-            mock.get_calls().await,
-            vec![
-                "nix profile install -- nixpkgs#ripgrep",
-                "nix search --json -- nixpkgs ripgrep",
-            ]
-        );
-    }
-
-    #[test]
-    fn nix_search_empty_is_ok() {
-        assert!(parse_nix_search("{}").unwrap().is_empty());
-        assert!(parse_nix_search("").unwrap().is_empty());
-    }
-
-    /// Q45. **One `nix profile install` for the batch, and one `remove` for the by-name path.**
-    ///
-    /// Each invocation evaluates nixpkgs and cuts a new profile generation, so N one at a time
-    /// is N evaluations and N generations for one change the user made.
-    ///
-    /// The by-name removal was verified against real nix 2.x in a container before it was
-    /// batched — `nix profile remove hello ripgrep` reported `removed 2 packages, kept 17` and
-    /// left the one it was not given. The *indexed* path stays one at a time on purpose: its
-    /// highest-index-first ordering exists because positional indices renumber, and no nix that
-    /// still reports them was available to prove a batched form safe.
-    #[tokio::test]
-    async fn a_batch_of_installables_is_one_nix_call() {
-        let vfs = Arc::new(dashmap::DashMap::new());
-        let mock = Arc::new(crate::core::executor::MockExecutor::new(vfs.clone()));
-        let exec = CommandExecutor::with_layer(
-            false,
-            false,
-            mock.clone(),
-            vfs,
-            Arc::new(dashmap::DashMap::new()),
-        );
-        let core = Arc::new(NixBackendCore::new(exec, "30d".to_string()));
-        let specs = vec![
-            crate::core::PackageSpec {
-                name: "hello".into(),
-                backend: "nix".into(),
-                ..Default::default()
-            },
-            crate::core::PackageSpec {
-                name: "ripgrep".into(),
-                backend: "nix".into(),
-                ..Default::default()
-            },
-        ];
-        NixInstallable { core: core.clone() }
-            .install(&specs, false)
-            .await
-            .unwrap();
-
-        let calls = mock.get_calls().await;
-        assert_eq!(calls.len(), 1, "one install for the batch, got {:?}", calls);
-        assert!(calls[0].contains("nixpkgs#hello"), "{:?}", calls);
-        assert!(calls[0].contains("nixpkgs#ripgrep"), "{:?}", calls);
-    }
 }

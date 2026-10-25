@@ -116,7 +116,7 @@ impl PsResourceCore {
 /// Accepts PowerShell module names: letters, digits, `.`, `_`, `-`. Everything else
 /// (quotes, `;`, `$`, whitespace, backtick, ...) is rejected so an interpolated name
 /// cannot break out of the `-Command` script.
-fn validate_name(name: &str) -> Result<()> {
+pub fn validate_name(name: &str) -> Result<()> {
     if !name.is_empty()
         && name
             .chars()
@@ -132,7 +132,7 @@ fn validate_name(name: &str) -> Result<()> {
 }
 
 /// Like [`validate_name`] but also permits the `*`/`?` wildcards a search query may use.
-fn validate_query(query: &str) -> Result<()> {
+pub fn validate_query(query: &str) -> Result<()> {
     if !query.is_empty()
         && query
             .chars()
@@ -145,7 +145,7 @@ fn validate_query(query: &str) -> Result<()> {
 }
 
 /// Accepts version specifiers (digits, dots, and pre-release markers).
-fn validate_version(version: &str) -> Result<()> {
+pub fn validate_version(version: &str) -> Result<()> {
     if !version.is_empty()
         && version
             .chars()
@@ -330,38 +330,4 @@ pub fn register(reg: &mut crate::backends::BackendRegistry, exec: &CommandExecut
             .with_metadata_provider(core.clone())
             .build(),
     ));
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn validate_name_accepts_module_names() {
-        assert!(validate_name("Pester").is_ok());
-        assert!(validate_name("PSReadLine").is_ok());
-        assert!(validate_name("Az.Accounts").is_ok());
-    }
-
-    #[test]
-    fn validate_name_rejects_injection() {
-        assert!(validate_name("Pester'; rm -rf /; '").is_err());
-        assert!(validate_name("foo bar").is_err());
-        assert!(validate_name("$(evil)").is_err());
-        assert!(validate_name("").is_err());
-    }
-
-    #[test]
-    fn validate_query_allows_wildcards() {
-        assert!(validate_query("Az*").is_ok());
-        assert!(validate_query("PS?eadLine").is_ok());
-        assert!(validate_query("bad;name").is_err());
-    }
-
-    #[test]
-    fn validate_version_accepts_semver_like() {
-        assert!(validate_version("2.10.3").is_ok());
-        assert!(validate_version("1.0.0-beta1").is_ok());
-        assert!(validate_version("1.0'; evil").is_err());
-    }
 }
