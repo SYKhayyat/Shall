@@ -1,0 +1,15 @@
+use once_cell::sync::Lazy;
+use regex::Regex;
+pub use shall::core::validator::*;
+pub use shall::core::{Error, Result};
+pub use std::path::{Path, PathBuf};
+use tracing::warn;
+mod a_backend_whose_name_is_a_path_may_say_so_and_the_others_may_not;
+mod a_name_that_opens_with_a_hyphen_is_an_option_and_is_refused_everywhere;
+mod a_string_that_becomes_argv_may_not_carry_a_command_separator;
+mod a_verbatim_canonical_windows_path_is_refused;
+mod path_oriented_backends_allow_absolute_paths_but_never_traversal;
+mod strict_validation_blocks_absolute_paths_for_normal_backends;
+mod unix_entries_are_still_enforced_and_innocent_paths_still_pass;
+mod windows_forbidden_paths_match_case_insensitively_and_whole_components_only;
+mod winget_identifiers_are_names_and_the_widening_stops_there;

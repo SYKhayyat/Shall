@@ -37,7 +37,9 @@ pub enum Signature {
 impl Signature {
     /// `%G?` is git's own verdict; `%GS` is the signer it read. Any code git adds later lands
     /// in `Unverified` rather than being read as good.
-    fn from_git(code: &str, signer: &str) -> Self {
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+    /// crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub fn from_git(code: &str, signer: &str) -> Self {
         match code.chars().next().unwrap_or('N') {
             'N' => Self::Unsigned,
             'G' => Self::Good(signer.to_string()),
@@ -134,7 +136,9 @@ impl GitManager {
     /// `core.sshCommand` — so silencing a prompt on a misconfigured remote would break every
     /// working custom transport. A passphrase with no agent is the user's setup to fix; an
     /// unprompted credential is ours.
-    fn ask_nothing(cmd: &mut std::process::Command) {
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+    /// crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub fn ask_nothing(cmd: &mut std::process::Command) {
         // git's own prompt.
         cmd.env("GIT_TERMINAL_PROMPT", "0");
         // Git Credential Manager, the default on Windows, which does not print a prompt — it
@@ -426,7 +430,9 @@ impl GitManager {
 /// What to do about a commit git refused. The two reachable causes are configuration, and both
 /// became reachable when Shall stopped injecting an identity and stopped forcing signing off —
 /// git's own message names the problem, this names the fix in Shall's terms.
-fn commit_refusal_hint(stderr: &str) -> &'static str {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn commit_refusal_hint(stderr: &str) -> &'static str {
     let lower = stderr.to_lowercase();
     if lower.contains("tell me who you are") || lower.contains("empty ident") {
         return "Shall commits as you, not as itself, so git needs an identity:\n  \
@@ -443,7 +449,9 @@ fn commit_refusal_hint(stderr: &str) -> &'static str {
 
 /// Extract the `+`/`-` content lines from a `git show` diff — the added and removed manifest
 /// lines — skipping the `+++`/`---` file headers and blank/comment lines.
-fn parse_manifest_changes(diff: &str) -> Vec<String> {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn parse_manifest_changes(diff: &str) -> Vec<String> {
     let mut out = Vec::new();
     for line in diff.lines() {
         let keep_plus = line.starts_with('+') && !line.starts_with("+++");
@@ -459,7 +467,9 @@ fn parse_manifest_changes(diff: &str) -> Vec<String> {
     out
 }
 
-fn parse_log(raw: &str) -> Vec<GitCommit> {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn parse_log(raw: &str) -> Vec<GitCommit> {
     raw.lines()
         .filter(|l| !l.trim().is_empty())
         .filter_map(|line| {
@@ -479,286 +489,4 @@ fn parse_log(raw: &str) -> Vec<GitCommit> {
             })
         })
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::tempdir;
-
-    /// **`init` writes the backup glob exactly once, and re-writes it when the user has commented
-    /// it out.** The behaviour was already there and is what this pins: a commented line is not a
-    /// pattern they have, so a second `init` puts it back — and a second `init` with it present
-    /// must not append a duplicate, because a `.gitignore` that grows on every run is a file the
-    /// user stops trusting.
-    ///
-    /// **Written because the code above it changed for a reason that had nothing to do with
-    /// behaviour**: a lint that only the advisory job runs flagged the one-element loop, and the
-    /// rewrite it forced is exactly the kind of change that should arrive with a test rather than
-    /// on its own.
-    #[test]
-    fn init_writes_the_backup_glob_once_and_restores_a_commented_one() {
-        // `init` refuses on a machine without git (X.5 keeps git optional rather than making its
-        // absence an empty answer), so this is the module's usual skip rather than a special case.
-        if !git_or_skip() {
-            return;
-        }
-        let dir = tempdir().expect("a temp config root");
-        let manager = GitManager::new(dir.path());
-        let ignore = dir.path().join(".gitignore");
-
-        manager.init().expect("first init writes the glob");
-        let after_first = std::fs::read_to_string(&ignore).expect("a .gitignore");
-        assert_eq!(
-            after_first
-                .lines()
-                .filter(|l| l.trim() == "*.shall-backup")
-                .count(),
-            1,
-            "the first init wrote the glob {after_first:?}"
-        );
-
-        manager.init().expect("second init is a no-op");
-        assert_eq!(
-            std::fs::read_to_string(&ignore).expect("a .gitignore"),
-            after_first,
-            "a second init appended to a .gitignore that already had the pattern"
-        );
-
-        std::fs::write(&ignore, "# *.shall-backup\n").expect("the user comments it out");
-        manager.init().expect("third init restores it");
-        let after_third = std::fs::read_to_string(&ignore).expect("a .gitignore");
-        assert!(
-            after_third.lines().any(|l| l.trim() == "*.shall-backup"),
-            "a commented-out pattern is not a pattern the user has, so init must put it back: \
-             {after_third:?}"
-        );
-        assert_eq!(
-            after_third
-                .lines()
-                .filter(|l| l.trim() == "*.shall-backup")
-                .count(),
-            1,
-            "the restored glob was written twice: {after_third:?}"
-        );
-    }
-
-    /// **A closed stdin does not stop a credential prompt** — git reads it from `/dev/tty`, the
-    /// same way sudo does, which is what made `S88` a fifteen-minute silence rather than an
-    /// error. Asserted on the command Shall builds, because the failure it guards against has
-    /// no output to match on: the run simply never returns.
-    #[test]
-    fn git_is_told_not_to_ask_for_anything() {
-        let mut cmd = std::process::Command::new("git");
-        GitManager::ask_nothing(&mut cmd);
-        let env: Vec<(String, Option<String>)> = cmd
-            .get_envs()
-            .map(|(k, v)| {
-                (
-                    k.to_string_lossy().into_owned(),
-                    v.map(|v| v.to_string_lossy().into_owned()),
-                )
-            })
-            .collect();
-        assert!(
-            env.contains(&("GIT_TERMINAL_PROMPT".to_string(), Some("0".to_string()))),
-            "git will still prompt for a credential: {env:?}"
-        );
-        assert!(
-            env.contains(&("GCM_INTERACTIVE".to_string(), Some("never".to_string()))),
-            "Git Credential Manager will still open a window nobody sees: {env:?}"
-        );
-    }
-
-    #[test]
-    fn parse_manifest_changes_keeps_content_lines_drops_headers() {
-        // A realistic `git show` diff body: file headers, hunk header, context, +/- lines.
-        let diff = "diff --git a/modules/dev.txt b/modules/dev.txt\n\
-                    index 111..222 100644\n\
-                    --- a/modules/dev.txt\n\
-                    +++ b/modules/dev.txt\n\
-                    @@ -1,3 +1,3 @@\n\
-                    \x20apt:curl\n\
-                    -apt:nano\n\
-                    +cargo:ripgrep\n\
-                    +# a comment line, not a package\n";
-        let changes = parse_manifest_changes(diff);
-        // Kept: the real +/- package lines. Dropped: ---/+++ headers, context, and the comment.
-        assert_eq!(
-            changes,
-            vec!["- apt:nano".to_string(), "+ cargo:ripgrep".to_string()]
-        );
-    }
-
-    #[test]
-    fn parse_log_handles_subjects_with_spaces_and_separators() {
-        let raw = "abc123\u{1f}abc\u{1f}2026-07-15\u{1f}N\u{1f}\u{1f}feat: add ripgrep, remove nano\n\
-                   def456\u{1f}def\u{1f}2026-07-14\u{1f}G\u{1f}Shaul <s@example.com>\u{1f}initial commit";
-        let commits = parse_log(raw);
-        assert_eq!(commits.len(), 2);
-        assert_eq!(commits[0].hash, "abc123");
-        assert_eq!(commits[0].short, "abc");
-        assert_eq!(commits[0].date, "2026-07-15");
-        assert_eq!(commits[0].subject, "feat: add ripgrep, remove nano");
-        assert_eq!(commits[0].signature, Signature::Unsigned);
-        assert_eq!(commits[1].subject, "initial commit");
-        assert_eq!(
-            commits[1].signature,
-            Signature::Good("Shaul <s@example.com>".to_string())
-        );
-    }
-
-    #[test]
-    fn a_signature_git_will_not_vouch_for_is_not_a_good_one() {
-        // 'U' is a good signature by an untrusted key, 'X' an expired one. Both are signed,
-        // neither is verified — collapsing them into `Good` is how a signature becomes
-        // decoration (V.32).
-        for code in ["U", "X", "Y", "R"] {
-            let sig = Signature::from_git(code, "someone");
-            assert!(!sig.is_verified(), "{} must not verify", code);
-            assert!(matches!(sig, Signature::Unverified { .. }));
-        }
-        assert_eq!(Signature::from_git("B", "someone"), Signature::Bad);
-        assert_eq!(Signature::from_git("E", ""), Signature::Bad);
-        assert!(Signature::from_git("G", "someone").is_verified());
-    }
-
-    #[test]
-    fn a_missing_identity_is_named_as_the_reason_the_commit_failed() {
-        // Reachable only since Shall stopped injecting `shall@localhost`: git's own message is
-        // about `user.email`, and the hint has to be about how Shall uses it.
-        let hint = commit_refusal_hint(
-            "*** Please tell me who you are.
-
-fatal: unable to auto-detect email address",
-        );
-        assert!(hint.contains("git config --global user.email"), "{}", hint);
-        let signing = commit_refusal_hint("error: gpg failed to sign the data");
-        assert!(signing.contains("commit.gpgsign"), "{}", signing);
-    }
-
-    #[test]
-    fn parse_log_skips_blank_lines() {
-        assert!(parse_log("\n\n").is_empty());
-    }
-
-    /// Gate for the tests below, which drive real git. Returns false when git is absent so the
-    /// suite still passes in a minimal environment.
-    ///
-    /// The identity and the neutered config paths must be set before any of them runs: Shall no
-    /// longer injects an identity (a signed commit must not be authored by a name nobody owns),
-    /// so without this the suite passes or fails according to the host's `~/.gitconfig` rather
-    /// than according to the code (S33). Setting it here rather than per-test is deliberate —
-    /// a step each test has to remember is a step a new test will forget.
-    fn git_or_skip() -> bool {
-        static HERMETIC: std::sync::Once = std::sync::Once::new();
-        // Twinned in `tests/mock_providers.rs`, which is a separate binary and cannot link to
-        // this module. Change one, change the other.
-        HERMETIC.call_once(|| {
-            for (k, v) in [
-                ("GIT_AUTHOR_NAME", "shall-tests"),
-                ("GIT_AUTHOR_EMAIL", "test@example.invalid"),
-                ("GIT_COMMITTER_NAME", "shall-tests"),
-                ("GIT_COMMITTER_EMAIL", "test@example.invalid"),
-                // Absent paths, so no `~/.gitconfig` or system config reaches these repos:
-                // a host that signs every commit would otherwise fail them at `git commit`.
-                ("GIT_CONFIG_GLOBAL", "shall-tests-absent-gitconfig"),
-                ("GIT_CONFIG_SYSTEM", "shall-tests-absent-gitconfig"),
-            ] {
-                std::env::set_var(k, v);
-            }
-        });
-        if !GitManager::git_available() {
-            eprintln!("skipping: git not installed");
-            return false;
-        }
-        true
-    }
-
-    #[test]
-    fn diff_manifest_changes_reports_package_level_delta() {
-        if !git_or_skip() {
-            return;
-        }
-        let tmp = tempdir().unwrap();
-        let git = GitManager::new(tmp.path());
-        git.init().unwrap();
-        std::fs::create_dir_all(tmp.path().join("modules")).unwrap();
-
-        std::fs::write(tmp.path().join("modules/dev.txt"), "apt:curl\napt:nano\n").unwrap();
-        git.commit_all("base").unwrap();
-        std::fs::write(
-            tmp.path().join("modules/dev.txt"),
-            "apt:curl\ncargo:ripgrep\n",
-        )
-        .unwrap();
-        git.commit_all("swap nano for ripgrep").unwrap();
-
-        let changes = git.diff_manifest_changes("HEAD~1", Some("HEAD")).unwrap();
-        // Package-level delta: nano removed, ripgrep added, curl untouched (in neither).
-        assert!(changes.contains(&"- apt:nano".to_string()), "{:?}", changes);
-        assert!(
-            changes.contains(&"+ cargo:ripgrep".to_string()),
-            "{:?}",
-            changes
-        );
-        assert!(
-            !changes.iter().any(|c| c.contains("apt:curl")),
-            "unchanged lines must not appear: {:?}",
-            changes
-        );
-    }
-
-    #[test]
-    fn init_commit_head_and_log_round_trip() {
-        if !git_or_skip() {
-            return;
-        }
-        let tmp = tempdir().unwrap();
-        let git = GitManager::new(tmp.path());
-        assert!(!git.is_repo());
-        git.init().unwrap();
-        assert!(git.is_repo());
-        assert!(git.head().unwrap().is_none(), "no commits yet");
-
-        std::fs::write(tmp.path().join("local.txt"), "apt:curl\n").unwrap();
-        let first = git.commit_all("add curl").unwrap();
-        assert!(first.is_some());
-        let head = git.head().unwrap().unwrap();
-        assert_eq!(head, first.unwrap());
-
-        assert!(git.commit_all("noop").unwrap().is_none());
-
-        let log = git.log(10).unwrap();
-        assert_eq!(log.len(), 1);
-        assert_eq!(log[0].subject, "add curl");
-    }
-
-    #[test]
-    fn checkout_files_restores_manifest_without_new_commit() {
-        if !git_or_skip() {
-            return;
-        }
-        let tmp = tempdir().unwrap();
-        let git = GitManager::new(tmp.path());
-        git.init().unwrap();
-        let manifest = tmp.path().join("local.txt");
-
-        std::fs::write(&manifest, "apt:curl\n").unwrap();
-        let c1 = git.commit_all("v1").unwrap().unwrap();
-        std::fs::write(&manifest, "apt:curl\napt:htop\n").unwrap();
-        git.commit_all("v2").unwrap();
-
-        // Roll the manifest back to v1's content; installed packages are irrelevant here.
-        git.checkout_files(&c1).unwrap();
-        // Normalize line endings: git on Windows may apply autocrlf on checkout. Shall reads
-        // manifests via `.lines()`, which tolerates CRLF, so this is cosmetic.
-        let restored = std::fs::read_to_string(&manifest)
-            .unwrap()
-            .replace("\r\n", "\n");
-        assert_eq!(
-            restored, "apt:curl\n",
-            "working tree restored to the v1 manifest"
-        );
-    }
 }

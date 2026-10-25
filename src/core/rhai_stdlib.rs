@@ -177,7 +177,9 @@ fn shell_command(cmd: &str) -> std::process::Command {
 ///
 /// Blocking this thread is safe because both callers run behind `spawn_blocking`: this is never
 /// a runtime worker, so nothing is starved while the request is in flight.
-fn http_get(url: &str) -> std::result::Result<String, String> {
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn http_get(url: &str) -> std::result::Result<String, String> {
     // **The seed URL is checked, not only the redirects.** The pooled client refuses a hop that
     // leaves HTTPS, so the one URL its policy never sees is the one it was handed. What comes
     // back here becomes a resolved variable, and a resolved variable decides which packages get
@@ -239,138 +241,5 @@ fn json_to_dynamic(v: &serde_json::Value) -> Dynamic {
             }
             map.into()
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// **The URL a script hands in is checked, not only the ones it is redirected to.**
-    ///
-    /// The pooled client refuses a hop that leaves HTTPS, so the seed URL was the one place its
-    /// policy never looked. What `http_get` returns becomes a resolved variable, and a resolved
-    /// variable decides which packages get declared — the value crossing the network decides
-    /// what runs on the machine, which is `check_scheme`'s whole argument.
-    #[test]
-    fn a_plain_http_seed_url_is_refused_before_the_request() {
-        let err = http_get("http://internal/config").expect_err("plain http is not a seed URL");
-        assert!(err.contains("plain HTTP"), "{err}");
-    }
-
-    /// **`parse_json` is the only way a script sees a network answer, and its converter had no
-    /// test.** `json_to_dynamic` is a six-arm recursion — null, bool, number, string, array,
-    /// object — and every arm decides what a resolved variable becomes, which decides which
-    /// packages get declared. Driven through a real `Engine` rather than by calling the
-    /// converter directly, because registration is half of what could be wrong.
-    #[test]
-    fn parse_json_carries_every_shape_a_body_can_hold() {
-        let engine = engine("test");
-        let out: rhai::Map = engine
-            .eval(r#"parse_json("{\"name\":\"rg\",\"vers\":[1,2],\"meta\":{\"ok\":true},\"none\":null,\"f\":1.5}")"#)
-            .expect("the body did not parse");
-
-        assert_eq!(out["name"].clone().into_string().unwrap(), "rg");
-        assert!(out["meta"].is_map(), "a nested object did not become a map");
-        assert!(out["none"].is_unit(), "JSON null did not become ()");
-
-        let vers = out["vers"].clone().into_array().expect("array");
-        assert_eq!(vers.len(), 2);
-        assert_eq!(
-            vers[0].as_int().unwrap(),
-            1,
-            "an integer inside an array became something else"
-        );
-        assert!(
-            (out["f"].as_float().unwrap() - 1.5).abs() < f64::EPSILON,
-            "a fractional number did not survive as a float"
-        );
-    }
-
-    /// **An integer must not arrive as a float.** `json_to_dynamic` tries `as_i64` first and
-    /// falls back to `as_f64`; if that order ever inverts, `1` becomes `1.0` and every script
-    /// comparing a count or an index against an integer silently stops matching.
-    #[test]
-    fn a_whole_number_stays_an_integer() {
-        let engine = engine("test");
-        let same: bool = engine
-            .eval(r#"parse_json("{\"n\":3}")["n"] == 3"#)
-            .expect("the body did not parse");
-        assert!(same, "a whole number did not compare equal to an integer");
-    }
-
-    /// A body that is not JSON is an error the script can see, not a silent empty map.
-    #[test]
-    fn a_body_that_is_not_json_is_an_error() {
-        let engine = engine("test");
-        let err = engine
-            .eval::<rhai::Dynamic>(r#"parse_json("not json at all")"#)
-            .expect_err("nonsense parsed as JSON");
-        assert!(
-            err.to_string().contains("parse_json"),
-            "the failure does not say which builtin produced it: {err}"
-        );
-    }
-
-    /// **The two arities of `env` differ only for a name that is not set.** `W7` makes this the
-    /// escape hatch for `SHALL_ROLE` when the hostname cannot say which machine this is, so what
-    /// a missing variable yields decides which profile a machine gets.
-    #[test]
-    fn env_without_a_fallback_is_empty_and_with_one_is_the_fallback() {
-        let engine = engine("test");
-        let missing = "SHALL_TEST_DEFINITELY_NOT_SET_9E1F";
-
-        let bare: String = engine
-            .eval(&format!(r#"env("{missing}")"#))
-            .expect("env/1 failed");
-        assert_eq!(bare, "", "a name that is not set did not read as empty");
-
-        let fallback: String = engine
-            .eval(&format!(r#"env("{missing}", "work")"#))
-            .expect("env/2 failed");
-        assert_eq!(
-            fallback, "work",
-            "the fallback was not used for a name that is not set"
-        );
-
-        let present: bool = engine
-            .eval(&format!(r#"has_env("{missing}")"#))
-            .expect("has_env failed");
-        assert!(!present, "has_env claimed an unset name is set");
-    }
-
-    /// `path_exists` answers about the filesystem rather than about the string, which is the only
-    /// reason a script would call it.
-    #[test]
-    fn path_exists_answers_about_the_filesystem() {
-        let engine = engine("test");
-        let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("present.txt");
-        std::fs::write(&file, "x").unwrap();
-
-        // The path is bound as a variable rather than interpolated into the script, because a
-        // Windows path is mostly backslashes and every one of them would need escaping twice -
-        // once for Rust and once for Rhai. A value handed to the scope needs neither.
-        let ask = |path: &std::path::Path| -> bool {
-            let mut scope = rhai::Scope::new();
-            scope.push("p", path.to_string_lossy().to_string());
-            engine
-                .eval_with_scope(&mut scope, "path_exists(p)")
-                .expect("path_exists failed")
-        };
-
-        assert!(ask(&file), "a file that exists was reported absent");
-        assert!(
-            !ask(&dir.path().join("no-such-file")),
-            "a file that does not exist was reported present"
-        );
-    }
-
-    /// The refusal is about the scheme and nothing else — an https URL gets past it and fails,
-    /// if it fails, on the network rather than on the check.
-    #[test]
-    fn an_https_url_is_not_refused_by_the_scheme_check() {
-        let err = http_get("https://host.invalid./nothing-here").unwrap_err();
-        assert!(!err.contains("plain HTTP"), "{err}");
     }
 }

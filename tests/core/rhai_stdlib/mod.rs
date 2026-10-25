@@ -1,0 +1,10 @@
+pub use chrono::{Datelike, Timelike};
+pub use rhai::{Dynamic, Engine, EvalAltResult};
+pub use shall::core::rhai_stdlib::*;
+mod a_body_that_is_not_json_is_an_error;
+mod a_plain_http_seed_url_is_refused_before_the_request;
+mod a_whole_number_stays_an_integer;
+mod an_https_url_is_not_refused_by_the_scheme_check;
+mod env_without_a_fallback_is_empty_and_with_one_is_the_fallback;
+mod parse_json_carries_every_shape_a_body_can_hold;
+mod path_exists_answers_about_the_filesystem;
