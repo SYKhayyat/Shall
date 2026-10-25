@@ -64,10 +64,18 @@ competing cargo build running, and both failures pass unloaded — the known loa
 The former host-dependent `argv_drift_tests` failure did **not** appear this run. The suite runs
 **3,032 tests**. The suite wiring audit and both converter self-tests pass.
 
-**Next handoff:** the objective is met; what remains of the sweep is §8's list — the exception
-table (vacuously empty today) with its two-way gate, the `tests/parsers/mod.rs` flat-file
-assignment, issue #117 (five subjects needing the machine fixture), and #123 (measure the
-registry budget in a fresh process).
+**Next session, in this order:**
+
+1. **#123** — `startup_budget_tests` measures the registry in a *fresh process*: it is the
+   known flake and the only failure reason left in the suite. The mutation gate's retry
+   (#116) papers over it on the board; the honest fix is the fresh process.
+2. **#117** — the five sync-engine subjects (`prune_snapshots_after_sync`,
+   `execute_transaction`'s counters, `heal`, `rebuild_kernel_modules`, `sync`'s
+   `PurgeUndeclared` arm). The fixture exists: `tests/a_machine_converges_tests.rs`.
+3. The exception table + its two-way gate (small; starts empty).
+4. The flat-file assignment (mechanical; will not fight anything else).
+
+The tree is committed and pushed (`fe3f2ab8`).
 
 ---
 
@@ -246,12 +254,16 @@ identical widening for the same parser-shaped items.
 
 ## 8. Still to build, outside the move itself
 
-- **`tests/parsers/mod.rs` and the flat-file assignment.** 159 flat files in `tests/`
-  have no owner yet. Each is classified by what it drives — parser fixture, review
-  output, or a mirror of an item that no longer has a src home. Mechanical, so a
-  script plus a table rather than 159 judgement calls.
-- **The exception table** for files that must keep `cfg(test)` inline, and the gate
-  that audits it in both directions.
+- **`tests/parsers/mod.rs` already exists and owns 16 subfolders; the flat top level is
+  ~159 `.rs` files declared as 75 straight `mod` lines of `tests/main.rs`.** Each is
+  classified by what it drives — parser fixture, review output, or a mirror of an item
+  that no longer has a src home. Mechanical, so a script plus a table rather than 159
+  judgement calls. Nothing here blocks anything else.
+- **The exception table** for src files that must keep `cfg(test)` inline, and the gate
+  that audits it in both directions. **Vacuously empty today** — `src/` carries no
+  `#[cfg(test)]` at all — so the table starts empty and the gate's job is to make the
+  next re-introduction name its reason instead of landing silently. The shared oracle
+  (`tests/ledger/`) it would audit with already exists.
 - **Issue #117**, five remaining subjects: `prune_snapshots_after_sync`,
   `execute_transaction`'s counters, `heal`, `rebuild_kernel_modules`, and `sync`'s
   `PurgeUndeclared` arm. These need the machine fixture that
