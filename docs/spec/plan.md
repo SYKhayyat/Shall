@@ -617,10 +617,15 @@ The sweep then moved 33 scheduler tests from `src/app/scheduler/mod.rs` into
 shipping the inline-only unit-test token constructor. Both mirrors build successfully; the
 frontier is now 171 source files and 317 tests have moved in this session.
 
-The cumulative verification is exact: `cargo test --lib` reports 1,643 passing tests, while the
-single integration target reports 1,388 passing and the one known host-dependent argv-drift
-failure. The 157 tests moved in this batch account for the corresponding library decrease and
-suite increase.
+The cumulative verification is exact: `cargo test --lib` reports 1,558 passing tests, while the
+single integration target reports 1,473 passing and the one known host-dependent argv-drift
+failure. The 244 tests moved in the two latest batches account for the corresponding library
+decrease and suite increase.
+
+The next batch moved 29 tests each from `src/utils/file.rs`, `src/core/extras_lock.rs`, and
+`src/config/grammar/mod.rs` into their mirrors. The three focused integration runs passed all 87
+tests; `ends_mid_line` is public only so its external mirror can exercise the one-byte file-tail
+boundary. The frontier is now 168 source files and 404 tests have moved in this session.
 
 ### Tier 33 — a ratio that measured the host (`PLAN.md` #107, and `#111` for what is left): BUILT
 

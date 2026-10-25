@@ -1,0 +1,10 @@
+pub use shall::core::{Error, Result};
+pub use shall::utils::file::strip_archive_suffixes;
+pub use shall::utils::file::*;
+use std::fs;
+use std::io::Write;
+pub use std::path::{Component, Path, PathBuf};
+use tempfile::NamedTempFile;
+mod a_bare_name_is_left_alone;
+mod a_dotted_version_is_not_mistaken_for_an_extension;
+mod the_suffix_match_is_case_insensitive_and_repeats;

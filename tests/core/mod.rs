@@ -5,5 +5,6 @@ mod datalock;
 mod error;
 mod executor;
 mod exit;
+mod extras_lock;
 mod sudo;
 mod transaction;

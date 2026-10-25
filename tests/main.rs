@@ -58,6 +58,7 @@ mod config;
 mod core;
 mod model;
 mod parsers;
+mod utils;
 mod verbs;
 
 /// **The review apparatus.** The tests that read the tree rather than drive the product — the
