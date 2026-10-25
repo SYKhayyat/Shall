@@ -35,7 +35,7 @@ pub enum Narration {
 }
 
 /// The two counter labels, so `remove` is reserved for removals that stay removed.
-fn summary_labels(narration: Narration) -> (&'static str, &'static str) {
+pub fn summary_labels(narration: Narration) -> (&'static str, &'static str) {
     match narration {
         Narration::Change => ("Installs", "Removals"),
         Narration::Rebuild => ("Reinstalled", "Removed to reinstall"),
@@ -317,103 +317,4 @@ pub fn backend_rollup(ops: &[OperationMetrics]) -> Vec<(String, usize, u64, u64)
         e.2 = e.2.max(op.duration_ms);
     }
     map.into_iter().map(|(b, (c, s, m))| (b, c, s, m)).collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn op(backend: &str, ms: u64) -> OperationMetrics {
-        OperationMetrics {
-            name: "x".into(),
-            backend: backend.into(),
-            started_at_unix: 0,
-            duration_ms: ms,
-            success: true,
-            error: None,
-            retry_count: 0,
-            bytes_downloaded: 0,
-            batch_size: 1,
-        }
-    }
-
-    #[test]
-    fn rollup_sums_and_tracks_slowest_per_backend() {
-        let ops = vec![op("apt", 100), op("apt", 300), op("cargo", 50)];
-        let r = backend_rollup(&ops);
-        assert_eq!(r.len(), 2);
-        // BTreeMap → sorted: apt then cargo.
-        assert_eq!(r[0], ("apt".to_string(), 2, 400, 300));
-        assert_eq!(r[1], ("cargo".to_string(), 1, 50, 50));
-    }
-
-    #[test]
-    fn a_rebuild_never_calls_its_removals_removals() {
-        // K15. All of them come straight back, and a bare "Removals: 214" is the sentence
-        // that reads as a machine being dismantled.
-        let (_, removals) = summary_labels(Narration::Rebuild);
-        assert!(!removals.eq_ignore_ascii_case("removals"));
-        assert!(removals.contains("reinstall"));
-        assert_eq!(summary_labels(Narration::Change).1, "Removals");
-    }
-
-    #[test]
-    fn rollup_of_nothing_is_empty() {
-        assert!(backend_rollup(&[]).is_empty());
-    }
-
-    /// **The assertion nothing in the tree could make, because the only writer had no callers.**
-    ///
-    /// `Status:` read a field nobody wrote, so it was the constant `SUCCESS` and `DEGRADED` was
-    /// unreachable code. A run where every package failed printed `Status: SUCCESS` with a
-    /// failure mark under each task line, and the same run under `--quiet` printed nothing at
-    /// all (B1). The state is now derived from the operations that were actually recorded, so a
-    /// recorded failure is a degraded run by construction.
-    #[test]
-    fn a_recorded_failure_is_a_failed_run_and_nothing_has_to_be_told_twice() {
-        let m = MetricsCollector::new();
-        assert!(!m.had_failures(), "a run with no operations has not failed");
-
-        m.record_operation(Recorded {
-            name: "cowsay",
-            backend: "apt",
-            started: Utc::now(),
-            success: true,
-            error: None,
-            retries: 0,
-            bytes_downloaded: 0,
-            batch_size: 1,
-        });
-        assert!(
-            !m.had_failures(),
-            "an operation that succeeded is not a failure"
-        );
-
-        m.record_operation(Recorded {
-            name: "shall-no-such-package-zzz",
-            backend: "apt",
-            started: Utc::now(),
-            success: false,
-            error: Some("E: Unable to locate package".into()),
-            retries: 0,
-            bytes_downloaded: 0,
-            batch_size: 1,
-        });
-        assert!(
-            m.had_failures(),
-            "a package that failed to install must make the run a failed one — this is the \
-             fact `Status: DEGRADED` and the exit code both read"
-        );
-    }
-
-    /// The other half of B1: the counters are the *outcome*, so a caller cannot report the size
-    /// of its plan. They are only ever handed achieved work now, and nothing here invents any.
-    #[test]
-    fn the_counters_hold_only_what_they_were_given() {
-        let m = MetricsCollector::new();
-        assert_eq!(m.totals(), (0, 0, 0));
-        m.record_install(2);
-        m.record_remove(1);
-        assert_eq!(m.totals(), (2, 1, 0));
-    }
 }

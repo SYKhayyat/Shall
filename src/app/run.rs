@@ -224,7 +224,7 @@ async fn real_program(command: &str) -> String {
 
 /// [`real_program`] against a given `PATH`, so the search can be tested without a test having to
 /// edit the process environment every other test is reading.
-async fn real_program_on(command: &str, path: Option<std::ffi::OsString>) -> String {
+pub async fn real_program_on(command: &str, path: Option<std::ffi::OsString>) -> String {
     if command.contains('/') || command.contains('\\') {
         return command.to_string();
     }
@@ -263,89 +263,4 @@ fn program_candidates(dir: &std::path::Path, command: &str) -> Vec<std::path::Pa
     }
     #[cfg(not(windows))]
     vec![plain]
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app::ShimManager;
-    use tempfile::tempdir;
-
-    /// What `create_shim` writes this name as, which is what the search has to skip.
-    fn deployed_name(name: &str) -> String {
-        if cfg!(windows) {
-            format!("{name}.exe")
-        } else {
-            name.to_string()
-        }
-    }
-
-    /// The shim spawning itself, closed.
-    ///
-    /// `bin_dir` sits on `PATH` ahead of the real binary — that is what makes a shim a shim — so
-    /// resolving the shimmed name by bare name found the shim, which re-entered Shall, which
-    /// resolved the name again. Nothing in the tree stopped it: no depth counter, no marker,
-    /// no exclusion.
-    #[tokio::test]
-    async fn a_shim_on_path_is_never_what_the_runner_spawns() {
-        let tmp = tempdir().unwrap();
-        let bin_dir = tmp.path().join("bin");
-        let real_dir = tmp.path().join("usr-bin");
-        tokio::fs::create_dir_all(&real_dir).await.unwrap();
-        let real = real_dir.join(deployed_name("jq"));
-        tokio::fs::write(&real, b"the real jq").await.unwrap();
-
-        // The control: nothing is a shim yet, so the first PATH entry wins as it always has.
-        let decoy = bin_dir.join(deployed_name("jq"));
-        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
-        tokio::fs::write(&decoy, b"someone else's jq")
-            .await
-            .unwrap();
-        let path = std::env::join_paths([&bin_dir, &real_dir]).unwrap();
-        assert_eq!(
-            real_program_on("jq", Some(path.clone())).await,
-            decoy.to_string_lossy(),
-            "a file Shall did not deploy is a normal binary and must still be found first"
-        );
-
-        // And now the same PATH with a real shim in front of the real binary.
-        tokio::fs::remove_file(&decoy).await.unwrap();
-        ShimManager::with_bin_dir(bin_dir.clone())
-            .await
-            .unwrap()
-            .create_shim("jq")
-            .await
-            .unwrap();
-        assert!(decoy.exists(), "the fixture needs a deployed shim to skip");
-        assert_eq!(
-            real_program_on("jq", Some(path)).await,
-            real.to_string_lossy(),
-            "the runner resolved the shimmed name back to the shim — that is the recursion"
-        );
-    }
-
-    /// A `PATH` holding nothing but the shim hands the bare name to the OS, so the user gets the
-    /// error they would have got by typing it rather than a silent re-entry.
-    #[tokio::test]
-    async fn a_path_with_only_the_shim_on_it_falls_back_to_the_bare_name() {
-        let tmp = tempdir().unwrap();
-        let bin_dir = tmp.path().join("bin");
-        ShimManager::with_bin_dir(bin_dir.clone())
-            .await
-            .unwrap()
-            .create_shim("jq")
-            .await
-            .unwrap();
-        let path = std::env::join_paths([&bin_dir]).unwrap();
-        assert_eq!(real_program_on("jq", Some(path)).await, "jq");
-    }
-
-    /// A command that is already a path is not a `PATH` question. `shall run ./build.sh` names
-    /// one file, and re-resolving it through directories would run a different one.
-    #[tokio::test]
-    async fn a_command_that_names_a_path_is_left_exactly_as_written() {
-        for written in ["./build.sh", "/usr/bin/jq", r"C:\tools\jq.exe"] {
-            assert_eq!(real_program_on(written, None).await, written);
-        }
-    }
 }

@@ -3064,11 +3064,10 @@ than decorative.
 
 ### #120 test-layout sweep — progress recorded 2026-10-25
 
-The migration now has **no inline test modules in `src/model/` or `src/parsers/`**.
-The current remaining frontier is **31 source files / 195 inline tests**: app 28, core 1,
-backends 2, verbs 0, config 0, utils 0. The current batch moved **1,176 tests from 71
-model/parser/core files** into the single `tests/main.rs` integration suite; the aggregate
-move count recorded by the handoff is 1,979 tests from 136 files. Focused verification passed
+The migration now has **no inline test modules anywhere under `src/`**. Two standalone source-side
+test modules remain: `backends/link_teardown_test.rs` and `backends/artifact/real_releases_test.rs`.
+The current batch moved **2,110 tests from 162 files** into the single `tests/main.rs`
+integration suite. Focused verification passed
 for the moved model (409), parser (169), core (440), stale-lock (26), onboarder (26),
 config-parser (26), link (26), planner (25), config (18), setting (24), and NixOS (24) mirrors,
 setting (24), NixOS (24), registry (23), GitHub (21), btrfs (21), artifact (81), capability (7),
@@ -3080,8 +3079,8 @@ watch-signature (14), check (4), setup (6), settings (10), grammar options (16),
 suite wiring, plus eval (12), adopt (12), profile-expression (12), saved-plan (12), reachable
 (11), and export (9) mirrors.
 
-The library now reports 142 tests because the moved tests are no longer compiled under
-`cfg(test)`; the integration suite reports 2,890 total tests, with 2,889 passing and one
+The library now reports 13 tests because the moved tests are no longer compiled under
+`cfg(test)`; the integration suite reports 3,019 total tests, with 3,018 passing and one
 host-only `argv_drift_tests` failure caused by sandbox PATH wrappers that cannot answer help.
 This layout work does not change the user-visible behavior; production edits are limited to
 visibility/test seams required by the external mirror, plus the `Capped: Default` implementation

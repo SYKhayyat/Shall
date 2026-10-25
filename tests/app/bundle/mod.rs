@@ -1,0 +1,15 @@
+use serde_json::json;
+pub use shall::app::bundle::*;
+pub use shall::config::Config;
+pub use shall::core::{Error, Result};
+pub use shall::model::Writes;
+pub use shall::utils::file::copy_over;
+pub use std::path::{Path, PathBuf};
+mod a_copy_that_fails_names_the_file;
+mod backends_without_offline_fetch_return_none;
+mod copy_dir_recursive_handles_missing_source;
+mod copy_dir_recursive_skips_nested_output_dir;
+mod force_restores_over_files_the_first_restore_left_read_only;
+mod offline_fetch_covers_common_backends;
+mod restore_refuses_a_nonempty_config_unless_forced;
+mod tar_gz_round_trips_through_extract;

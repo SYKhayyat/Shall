@@ -1,0 +1,15 @@
+pub use shall::app::locate::*;
+pub use shall::config::settings::{resolve_root, ResolvedRoot, RootSource, Settings};
+pub use shall::core::{Error, Result};
+pub use shall::model::Layout;
+pub use std::path::{Path, PathBuf};
+use tempfile::TempDir;
+mod a_file_in_the_repo_resolves_under_it;
+mod a_missing_file_lists_what_the_repo_actually_holds;
+mod a_nested_file_resolves;
+mod a_path_that_climbs_out_is_refused;
+mod a_relative_root_cannot_be_stored;
+mod an_absolute_path_is_refused;
+mod explain_names_the_source_that_won;
+mod no_file_named_opens_the_directory_itself;
+mod plain_output_is_one_line_so_it_can_be_used_in_a_shell;

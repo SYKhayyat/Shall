@@ -411,7 +411,7 @@ impl ProfileManager {
     }
 }
 
-fn capitalize(name: &str) -> String {
+pub fn capitalize(name: &str) -> String {
     let mut c = name.chars();
     match c.next() {
         Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
@@ -446,16 +446,5 @@ fn active_body(active: &[String]) -> String {
         String::new()
     } else {
         format!("{}\n", active.join("\n"))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::capitalize;
-
-    #[test]
-    fn the_suggestion_capitalizes_the_name_you_typed() {
-        assert_eq!(capitalize("work"), "Work");
-        assert_eq!(capitalize(""), "");
     }
 }

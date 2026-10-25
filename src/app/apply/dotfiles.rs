@@ -204,7 +204,7 @@ impl Dotfiles<'_> {
         Ok(Self::links_of(&self.plan(state)?))
     }
 
-    fn links_of(trees: &[Tree]) -> Vec<(Statement, Origin)> {
+    pub fn links_of(trees: &[Tree]) -> Vec<(Statement, Origin)> {
         trees
             .iter()
             .flat_map(|tree| {
@@ -325,121 +325,5 @@ impl Dotfiles<'_> {
             );
         }
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn link(name: &str, target: &str) -> (Statement, Origin) {
-        let mut opts = Options::default();
-        opts.insert("target".to_string(), target);
-        (
-            Statement::Link(name.to_string(), opts),
-            Origin::new("modules/files.txt", 1),
-        )
-    }
-
-    fn state_with(extras: Vec<(Statement, Origin)>) -> crate::model::DesiredState {
-        crate::model::DesiredState {
-            extras,
-            ..Default::default()
-        }
-    }
-
-    #[test]
-    fn outside_home_uses_the_selected_user_home() {
-        let account = crate::core::account::Account::current().unwrap();
-        let mut options = Options::default();
-        options.set("target", "~/.config/selected");
-        options.set("user", account.name());
-        let statement = (
-            Statement::Link("dotfiles/selected".into(), options),
-            Origin::new("modules/files.txt", 1),
-        );
-        assert!(
-            Dotfiles::outside_home_links(std::iter::once(&statement), &|_| false)
-                .unwrap()
-                .is_empty()
-        );
-
-        let mut options = Options::default();
-        options.set("target", "/etc/shall-selected");
-        options.set("user", account.name());
-        let statement = (
-            Statement::Link("dotfiles/system".into(), options),
-            Origin::new("modules/files.txt", 1),
-        );
-        assert_eq!(
-            Dotfiles::outside_home_links(std::iter::once(&statement), &|_| false)
-                .unwrap()
-                .len(),
-            1
-        );
-    }
-    #[test]
-    fn only_a_new_link_outside_home_is_asked_about() {
-        #[cfg(windows)]
-        let system = r"C:\ProgramData\shall\hosts";
-        #[cfg(not(windows))]
-        let system = "/etc/cron.d/backup";
-
-        let state = state_with(vec![
-            link("dotfiles/gitconfig", "~/.gitconfig"),
-            link("cron/backup", system),
-        ]);
-
-        let asked = Dotfiles::outside_home_links(state.extras.iter(), &|_| false).unwrap();
-        assert_eq!(asked.len(), 1);
-        assert_eq!(asked[0].0, "link:cron/backup");
-        assert_eq!(asked[0].1, std::path::PathBuf::from(system));
-
-        // The destination is already there: it was agreed to on the run that placed it, and a
-        // re-converge that asks again is a prompt on every sync.
-        assert!(Dotfiles::outside_home_links(state.extras.iter(), &|_| true)
-            .unwrap()
-            .is_empty());
-    }
-
-    /// SEC3 asks about a tree's files too, because a tree is the `link:` lines it stands for.
-    ///
-    /// It could not before: the question was asked of `state.extras`, and a `dotfiles:` tree is
-    /// one statement there whose files are not. So `link:` into `/etc` asked and
-    /// `dotfiles:./etc @target=/etc` — the same destinations, forty at a time — did not.
-    #[test]
-    fn a_trees_files_outside_home_are_asked_about_too() {
-        #[cfg(windows)]
-        let root = std::path::PathBuf::from(r"C:\ProgramData\shall");
-        #[cfg(not(windows))]
-        let root = std::path::PathBuf::from("/etc/shall");
-
-        // What `links_of` produces for a tree: one synthesised `link:` per placed file.
-        let expanded = Dotfiles::links_of(&[Tree {
-            name: "./etc".to_string(),
-            origin: Origin::new("modules/files.txt", 1),
-            plan: crate::model::dotfiles::TreePlan {
-                placements: vec![crate::model::dotfiles::Placement {
-                    source: std::path::PathBuf::from("./etc/hosts"),
-                    destination: root.join("hosts"),
-                    relative: std::path::PathBuf::from("hosts"),
-                }],
-                collisions: Vec::new(),
-            },
-        }]);
-
-        let asked = Dotfiles::outside_home_links(expanded.iter(), &|_| false).unwrap();
-        assert_eq!(
-            asked.len(),
-            1,
-            "a tree file landing outside home was not asked about"
-        );
-        assert_eq!(asked[0].1, root.join("hosts"));
-
-        // And the same rule as a hand-written line: an existing destination was agreed to on
-        // the run that placed it, so it is not asked about again.
-        assert!(Dotfiles::outside_home_links(expanded.iter(), &|_| true)
-            .unwrap()
-            .is_empty());
     }
 }

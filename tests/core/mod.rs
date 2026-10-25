@@ -37,6 +37,7 @@ mod rhai_stdlib;
 mod security;
 mod size;
 mod snapshot;
+mod stable;
 mod state;
 mod sudo;
 mod timing;

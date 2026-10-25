@@ -594,12 +594,13 @@ so a reader that sees only the ledger upgrades a package the user froze. Ask \
     let callers = rust_files(&repo().join("src"))
         .iter()
         .filter_map(|p| std::fs::read_to_string(p).ok())
-        .filter(|src| src.contains("holds().await") || src.contains("Holds::new("))
+        .flat_map(|src| src.lines().map(str::to_string).collect::<Vec<_>>())
+        .filter(|line| line.contains("holds().await") || line.contains("Holds::new("))
         .count();
     assert!(
-        callers >= 3,
-        "only {callers} module(s) reach `App::holds()`; the readers this finding was about are \
-         `upgrade` (three of them) and `hold`, so this scan is looking at the wrong thing"
+        callers >= 4,
+        "only {callers} call site(s) reach the hold union; the readers this finding was about are \
+         `upgrade` (three calls) and `hold`, so this scan is looking at the wrong thing"
     );
 }
 

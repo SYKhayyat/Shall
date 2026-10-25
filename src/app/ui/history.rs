@@ -116,11 +116,11 @@ impl HistoryBrowser {
         }
     }
 
-    fn selected(&self) -> Option<&CommitView> {
+    pub fn selected(&self) -> Option<&CommitView> {
         self.list_state.selected().and_then(|i| self.commits.get(i))
     }
 
-    fn next(&mut self) {
+    pub fn next(&mut self) {
         if self.commits.is_empty() {
             return;
         }
@@ -132,7 +132,7 @@ impl HistoryBrowser {
         self.list_state.select(Some(i));
     }
 
-    fn previous(&mut self) {
+    pub fn previous(&mut self) {
         if self.commits.is_empty() {
             return;
         }
@@ -309,81 +309,5 @@ impl HistoryBrowser {
         let shell =
             Paragraph::new(bottom).block(Block::default().borders(Borders::ALL).title(title));
         f.render_widget(shell, rows[1]);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn cv(short: &str, subject: &str, changes: &[&str]) -> CommitView {
-        CommitView {
-            short: short.into(),
-            date: "2026-07-15".into(),
-            subject: subject.into(),
-            full_hash: format!("{}0000000000000000000000000000000000000", short),
-            changes: changes.iter().map(|s| s.to_string()).collect(),
-            signature: "unsigned".to_string(),
-        }
-    }
-
-    #[test]
-    fn commit_row_shows_hash_and_subject() {
-        let row = commit_row(&cv("a1b2c3d", "add ripgrep", &["+ cargo:rg"]));
-        assert!(row.contains("a1b2c3d"));
-        assert!(row.contains("add ripgrep"));
-    }
-
-    #[test]
-    fn detail_lines_show_metadata_and_changes() {
-        let c = cv(
-            "a1b2c3d",
-            "swap nano for ripgrep",
-            &["+ cargo:rg", "- apt:nano"],
-        );
-        let joined = detail_lines(&c).join("\n");
-        assert!(joined.contains("Commit  : a1b2c3d"));
-        assert!(joined.contains("Message : swap nano for ripgrep"));
-        assert!(joined.contains("Manifest changes in this commit:"));
-        assert!(joined.contains("+ cargo:rg"));
-        assert!(joined.contains("- apt:nano"));
-    }
-
-    #[test]
-    fn detail_lines_note_a_commit_with_no_manifest_changes() {
-        let c = cv("a1b2c3d", "docs only", &[]);
-        assert!(detail_lines(&c)
-            .iter()
-            .any(|l| l.contains("No manifest changes")));
-    }
-
-    #[test]
-    fn a_rollback_targets_the_full_hash() {
-        // The row shows the short hash, but a rollback must check out the full commit.
-        let mut c = HistoryBrowser::new(vec![cv("a1b2c3d", "x", &[])]);
-        c.next(); // stays on 0
-        let sel = c.selected().unwrap();
-        assert!(sel.full_hash.starts_with("a1b2c3d"));
-        assert!(sel.full_hash.len() > 7);
-    }
-
-    #[test]
-    fn navigation_wraps() {
-        let mut c = HistoryBrowser::new(vec![
-            cv("c3", "", &[]),
-            cv("c2", "", &[]),
-            cv("c1", "", &[]),
-        ]);
-        assert_eq!(c.selected().unwrap().short, "c3");
-        c.previous(); // from 0 wraps to last
-        assert_eq!(c.selected().unwrap().short, "c1");
-        c.next(); // wraps back to 0
-        assert_eq!(c.selected().unwrap().short, "c3");
-    }
-
-    #[test]
-    fn empty_history_has_no_selection() {
-        let c = HistoryBrowser::new(vec![]);
-        assert!(c.selected().is_none());
     }
 }

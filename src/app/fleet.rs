@@ -16,7 +16,7 @@ use tracing::{info, warn};
 
 /// Reject a host `ssh` would read as an option. A value like `-oProxyCommand=…` runs a command
 /// on THIS machine, not the remote one.
-fn check_host(host: &str) -> Result<()> {
+pub fn check_host(host: &str) -> Result<()> {
     if host.starts_with('-') {
         return Err(Error::Config(format!(
             "`{}` is not a host name — a host cannot begin with `-`, because ssh would read it \
@@ -68,10 +68,10 @@ async fn ssh_capture(host: &str, remote_cmd: &str) -> Result<String> {
 /// could not report a correctly installed machine as in sync. Nothing caught it, because the
 /// gate that compares invocations to the clap surface was drawn around `args.rs`;
 /// `tests/named_commands_exist_tests.rs` is drawn around the property instead.
-const REMOTE_CHECK: &str = "shall check --json";
+pub const REMOTE_CHECK: &str = "shall check --json";
 
 /// What the remote runs to converge. Named beside its twin so the two cannot drift apart.
-const REMOTE_SYNC: &str = "shall sync -y";
+pub const REMOTE_SYNC: &str = "shall sync -y";
 
 /// Per-host drift summary, read from a remote `shall check --json`.
 #[derive(Debug)]
@@ -94,11 +94,11 @@ impl HostDrift {
 }
 
 /// What one host said about itself.
-struct Reading {
-    to_install: usize,
-    to_remove: usize,
-    unmanaged: usize,
-    drifted: bool,
+pub struct Reading {
+    pub to_install: usize,
+    pub to_remove: usize,
+    pub unmanaged: usize,
+    pub drifted: bool,
 }
 
 /// Read a remote `shall check --json` document. Pure — unit tested.
@@ -106,7 +106,7 @@ struct Reading {
 /// The counts come from each section's `counts` object, never from its `summary` sentence.
 /// Those numbers are in the document precisely so that a fleet does not have to make an API
 /// out of somebody's phrasing.
-fn parse_check(json: &str) -> Result<Reading> {
+pub fn parse_check(json: &str) -> Result<Reading> {
     let v: Value = serde_json::from_str(json).map_err(|e| Error::Json(e.to_string()))?;
     let Some(sections) = v.as_array() else {
         return Err(Error::Json(
@@ -288,149 +288,4 @@ pub async fn fleet(config: &Config, hosts: &[String], do_sync: bool, do_apply: b
         }
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use clap::CommandFactory;
-
-    /// A drifted machine, in the exact shape `shall check --json` prints.
-    const DRIFTED: &str = r#"[
-        {"section":"config","ok":true,"summary":"9 package(s) declared","next":null,
-         "counts":{"declared":9,"resources":0}},
-        {"section":"drift","ok":false,"summary":"2 to install, 1 to remove, nothing else",
-         "next":"shall sync","counts":{"install":2,"remove":1,"skipped":0,"unverifiable":0}},
-        {"section":"unmanaged","ok":false,"summary":"3 package(s) `shall adopt` would take",
-         "next":"shall adopt","counts":{"unmanaged":3}}
-    ]"#;
-
-    /// The same machine, converged. This is the document `fleet` could never obtain: it asked
-    /// every host for `shall status --json`, a command that has not existed since the ten
-    /// looking-commands became `check`, so no host ever reported itself in sync.
-    const CONVERGED: &str = r#"[
-        {"section":"drift","ok":true,"summary":"the machine matches your files","next":null,
-         "counts":{"install":0,"remove":0,"skipped":0,"unverifiable":0}},
-        {"section":"unmanaged","ok":true,"summary":"everything you chose is managed",
-         "next":null,"counts":{"unmanaged":0}}
-    ]"#;
-
-    #[test]
-    fn a_drifted_host_reports_its_counts() {
-        let r = parse_check(DRIFTED).unwrap();
-        assert_eq!((r.to_install, r.to_remove, r.unmanaged), (2, 1, 3));
-        assert!(r.drifted);
-    }
-
-    #[test]
-    fn a_converged_host_reports_in_sync() {
-        let r = parse_check(CONVERGED).unwrap();
-        assert_eq!((r.to_install, r.to_remove, r.unmanaged), (0, 0, 0));
-        assert!(!r.drifted);
-    }
-
-    /// Drift is the section's own verdict, not the two counts beside it. A machine whose
-    /// packages match and whose `link:` tree does not has drifted, and a fleet that called it
-    /// in sync would be agreeing with the one machine that disagrees with its files.
-    #[test]
-    fn resource_drift_alone_is_still_drift() {
-        let json = r#"[{"section":"drift","ok":false,
-            "summary":"0 to install, 0 to remove, 1 resource to place","next":"shall sync",
-            "counts":{"install":0,"remove":0,"skipped":0,"unverifiable":0}}]"#;
-        let r = parse_check(json).unwrap();
-        assert_eq!((r.to_install, r.to_remove), (0, 0));
-        assert!(r.drifted, "the section said it needs attention");
-    }
-
-    /// The three ways a host can answer with something that is not a check report. Each has to
-    /// be an error and none may read as "in sync" — the answer a fleet must never invent.
-    #[test]
-    fn an_answer_that_is_not_a_check_report_is_an_error() {
-        for (what, json) in [
-            ("not JSON at all", "shall: unrecognized subcommand 'status'"),
-            ("JSON, but not an array of sections", r#"{"to_install":[]}"#),
-            (
-                "an array with no drift section",
-                r#"[{"section":"health","ok":true}]"#,
-            ),
-        ] {
-            assert!(
-                parse_check(json).is_err(),
-                "{} was accepted as a drift report",
-                what
-            );
-        }
-    }
-
-    /// A section present but silent about a number is nought, not a parse failure: `check` may
-    /// grow sections, and a fleet that refuses a document it does not fully recognise is a
-    /// fleet that stops working the next time `check` gains a line.
-    #[test]
-    fn a_missing_count_is_nought() {
-        let r = parse_check(r#"[{"section":"drift","ok":true,"counts":{}}]"#).unwrap();
-        assert_eq!((r.to_install, r.to_remove, r.unmanaged), (0, 0, 0));
-        assert!(!r.drifted);
-    }
-
-    #[test]
-    fn a_host_that_looks_like_an_ssh_option_is_refused() {
-        let err = check_host("-oProxyCommand=touch /tmp/pwned").unwrap_err();
-        assert!(
-            err.to_string().contains("cannot begin with `-`"),
-            "the error must say why: {}",
-            err
-        );
-        assert!(check_host("-").is_err());
-        check_host("build-01.example.com").unwrap();
-        check_host("user@10.0.0.4").unwrap();
-    }
-
-    #[test]
-    fn in_sync_logic() {
-        let clean = HostDrift {
-            host: "h".into(),
-            to_install: 0,
-            to_remove: 0,
-            unmanaged: 3,
-            drifted: false,
-            error: None,
-        };
-        assert!(clean.in_sync(), "unmanaged packages alone are not drift");
-        let drift = HostDrift {
-            host: "h".into(),
-            to_install: 1,
-            to_remove: 0,
-            unmanaged: 0,
-            drifted: true,
-            error: None,
-        };
-        assert!(!drift.in_sync());
-        let errored = HostDrift {
-            host: "h".into(),
-            to_install: 0,
-            to_remove: 0,
-            unmanaged: 0,
-            drifted: true,
-            error: Some("x".into()),
-        };
-        assert!(!errored.in_sync());
-    }
-
-    /// The commands sent over the wire are commands. `shall status --json` sat here for as long
-    /// as `fleet` existed; `tests/named_commands_exist_tests.rs` now reads these two constants
-    /// out of the source and checks them against clap, and this says the same thing from
-    /// inside, where a reader of this module can see it.
-    #[test]
-    fn what_the_remote_is_asked_to_run() {
-        for cmd in [REMOTE_CHECK, REMOTE_SYNC] {
-            let verb = cmd.split_whitespace().nth(1).expect("a verb");
-            assert!(
-                crate::cli::args::Cli::command()
-                    .get_subcommands()
-                    .any(|s| s.get_name() == verb),
-                "`{}` is not a command Shall has, so no host can answer it",
-                cmd
-            );
-        }
-    }
 }

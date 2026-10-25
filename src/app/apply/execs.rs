@@ -5,11 +5,11 @@ use tracing::{debug, info, warn};
 /// Execs holds only what it uses. It is built from an [`App`](crate::app::App) by
 /// `App::execs()` and can be built without one.
 pub struct Execs<'a> {
-    pub(crate) config: &'a std::sync::Arc<crate::config::Config>,
-    pub(crate) executor: &'a crate::core::CommandExecutor,
-    pub(crate) registry: &'a std::sync::Arc<crate::backends::BackendRegistry>,
-    pub(crate) journal: &'a std::sync::Arc<tokio::sync::Mutex<crate::core::Journal>>,
-    pub(crate) reaping: &'a std::sync::Arc<crate::app::sync::guard::Reaping>,
+    pub config: &'a std::sync::Arc<crate::config::Config>,
+    pub executor: &'a crate::core::CommandExecutor,
+    pub registry: &'a std::sync::Arc<crate::backends::BackendRegistry>,
+    pub journal: &'a std::sync::Arc<tokio::sync::Mutex<crate::core::Journal>>,
+    pub reaping: &'a std::sync::Arc<crate::app::sync::guard::Reaping>,
 }
 
 /// What one `exec:` line resolves to: a script the config carries, or a step Shall ships.
@@ -520,7 +520,7 @@ impl Execs<'_> {
         }
     }
 
-    async fn run_exec_script(&self, path: &std::path::Path) -> Result<()> {
+    pub async fn run_exec_script(&self, path: &std::path::Path) -> Result<()> {
         // A script that cannot be read is a refusal, not an empty body: `sh -c ""` exits 0,
         // and a script deleted between the plan and this line would otherwise be recorded as
         // a success against its old hash. The plan promised this file exists; if it does not,
@@ -548,7 +548,7 @@ impl Execs<'_> {
 
 /// What the mode word of an `exec:` script means under the configured trust level.
 #[derive(Debug)]
-pub(crate) enum PermVerdict {
+pub enum PermVerdict {
     Accept,
     /// Reported and survived, under `trust = "warn"`.
     Warn(String),
@@ -558,7 +558,7 @@ pub(crate) enum PermVerdict {
 
 /// Pure over the POSIX mode bits so every platform's suite tests it; only reading the bits
 /// out of a file is unix-only.
-pub(crate) fn judge_script_perms(mode: u32, trust: crate::config::ExecTrust) -> PermVerdict {
+pub fn judge_script_perms(mode: u32, trust: crate::config::ExecTrust) -> PermVerdict {
     use crate::config::ExecTrust;
     let group_w = mode & 0o020 != 0;
     let world_w = mode & 0o002 != 0;
@@ -620,7 +620,7 @@ pub(crate) fn judge_script_perms(mode: u32, trust: crate::config::ExecTrust) -> 
 /// Read the mode word and judge it. `None` from [`script_mode`] means "no answer here" —
 /// no mode word on this platform, or the file is absent and the reader that follows owns
 /// that error — and accepts.
-fn permission_verdict(
+pub fn permission_verdict(
     path: &std::path::Path,
     trust: crate::config::ExecTrust,
 ) -> Result<PermVerdict> {
@@ -649,153 +649,4 @@ fn script_mode(path: &std::path::Path) -> Result<Option<u32>> {
 #[cfg(not(unix))]
 fn script_mode(_path: &std::path::Path) -> Result<Option<u32>> {
     Ok(None)
-}
-
-#[cfg(test)]
-mod exec_guard_tests {
-    use super::*;
-
-    struct Fx {
-        _tmp: tempfile::TempDir,
-        execs: Execs<'static>,
-        _config: std::sync::Arc<crate::config::Config>,
-        _registry: std::sync::Arc<crate::backends::BackendRegistry>,
-        _journal: std::sync::Arc<tokio::sync::Mutex<crate::core::Journal>>,
-        _reaping: std::sync::Arc<crate::app::sync::guard::Reaping>,
-    }
-
-    fn fx() -> Fx {
-        let tmp = tempfile::tempdir().unwrap();
-        let config = std::sync::Arc::new(crate::config::Config::default());
-        let executor = crate::core::CommandExecutor::new(true, false);
-        let registry = std::sync::Arc::new(crate::backends::BackendRegistry::new());
-        let journal = std::sync::Arc::new(tokio::sync::Mutex::new(
-            crate::core::Journal::at(tmp.path().join("journal.jsonl")).unwrap(),
-        ));
-        let reaping = std::sync::Arc::new(crate::app::sync::guard::Reaping::new());
-        // Leaked so the borrows outlive the struct; a test process does not care.
-        let execs: Execs<'static> = Execs {
-            config: Box::leak(Box::new(config.clone())),
-            executor: Box::leak(Box::new(executor)),
-            registry: Box::leak(Box::new(registry.clone())),
-            journal: Box::leak(Box::new(journal.clone())),
-            reaping: Box::leak(Box::new(reaping.clone())),
-        };
-        Fx {
-            _tmp: tmp,
-            execs,
-            _config: config,
-            _registry: registry,
-            _journal: journal,
-            _reaping: reaping,
-        }
-    }
-
-    /// A script the plan promised but the machine no longer has is a refusal, not an empty
-    /// body: `sh -c ""` exits 0, and the run would be recorded as a success against the old
-    /// hash with nothing having happened.
-    #[tokio::test]
-    async fn a_script_that_vanished_between_plan_and_apply_is_an_error_not_a_success() {
-        let f = fx();
-        let gone = f._tmp.path().join("departed.sh");
-        let err = f
-            .execs
-            .run_exec_script(&gone)
-            .await
-            .expect_err("a missing script must refuse");
-        let msg = err.to_string();
-        assert!(msg.contains("cannot read"), "{msg}");
-        assert!(
-            msg.contains("departed.sh"),
-            "the error names the file: {msg}"
-        );
-    }
-
-    use crate::app::apply::execs::judge_script_perms;
-    use crate::config::ExecTrust;
-
-    /// The table of mode bits × trust levels. Every platform runs this, because the judge is
-    /// pure; only the file-reading half is unix-gated.
-    #[test]
-    fn the_trust_levels_judge_the_same_bits_differently() {
-        use PermVerdict::*;
-        let plain = 0o100_600;
-        for mode in [plain, 0o100_400, 0o100_700] {
-            for trust in [
-                ExecTrust::OwnerOnly,
-                ExecTrust::NotWorldWritable,
-                ExecTrust::Warn,
-            ] {
-                assert!(
-                    matches!(judge_script_perms(mode, trust), Accept),
-                    "{trust:?} must accept {mode:o}"
-                );
-            }
-        }
-        // Group write: tolerated at the default level, refused by `owner-only`, warned under
-        // `warn`.
-        assert!(matches!(
-            judge_script_perms(0o100_660, ExecTrust::OwnerOnly),
-            Refuse(_)
-        ));
-        assert!(matches!(
-            judge_script_perms(0o100_660, ExecTrust::NotWorldWritable),
-            Accept
-        ));
-        assert!(matches!(
-            judge_script_perms(0o100_660, ExecTrust::Warn),
-            Warn(_)
-        ));
-        // World write: refused everywhere but `warn`.
-        for trust in [ExecTrust::OwnerOnly, ExecTrust::NotWorldWritable] {
-            assert!(
-                matches!(judge_script_perms(0o100_666, trust), Refuse(_)),
-                "{trust:?} must refuse a world-writable script"
-            );
-        }
-        assert!(matches!(
-            judge_script_perms(0o100_666, ExecTrust::Warn),
-            Warn(_)
-        ));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn the_gate_reads_real_files() {
-        use std::os::unix::fs::PermissionsExt;
-        let tmp = tempfile::tempdir().unwrap();
-        let script = tmp.path().join("drop.sh");
-        std::fs::write(&script, "#!/bin/sh\ntrue\n").unwrap();
-        // The default level accepts an ordinary private checkout and refuses the dropped-in
-        // world-writable one.
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o644)).unwrap();
-        assert!(matches!(
-            permission_verdict(&script, ExecTrust::default()).unwrap(),
-            PermVerdict::Accept
-        ));
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o666)).unwrap();
-        match permission_verdict(&script, ExecTrust::default()).unwrap() {
-            PermVerdict::Refuse(msg) => {
-                assert!(msg.contains("not-world-writable"), "{msg}");
-            }
-            other => panic!("world-write must refuse under the default, got {other:?}"),
-        }
-        // A missing file is the reader's error to give, not this gate's.
-        assert!(matches!(
-            permission_verdict(&tmp.path().join("nope.sh"), ExecTrust::default()).unwrap(),
-            PermVerdict::Accept
-        ));
-    }
-
-    #[test]
-    fn the_exec_table_parses_and_defaults_to_not_world_writable() {
-        let c: crate::config::Config = toml::from_str("[exec]\ntrust = \"owner-only\"\n").unwrap();
-        assert_eq!(c.exec.trust, ExecTrust::OwnerOnly);
-        let c: crate::config::Config = toml::from_str("").unwrap();
-        assert_eq!(c.exec.trust, ExecTrust::NotWorldWritable);
-        let err = toml::from_str::<crate::config::Config>("[exec]\ntrust = \"yolo\"\n")
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("yolo"), "{err}");
-    }
 }

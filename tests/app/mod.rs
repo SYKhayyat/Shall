@@ -1,15 +1,34 @@
 //! The tests that mirror `src/app/`, module for module.
 
+mod adapters;
 mod adopt;
+mod apply;
+mod backends;
+mod bisect;
+mod bundle;
+mod check;
+mod conflicts;
 mod eval;
 mod events;
 mod export;
+mod fleet;
+mod holds;
 mod hooks;
 mod insight;
+mod locate;
+mod metrics;
+mod module_registry;
 mod pm_hooks;
+mod profile;
 mod profile_expr;
 mod reachable;
 mod rebuild;
+mod run;
+mod sandbox;
 mod scheduler;
+mod shim_manager;
+mod snapshot_restore;
 mod stale_lock;
 mod sync;
+mod ui;
+mod vocab;

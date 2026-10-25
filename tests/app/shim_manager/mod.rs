@@ -1,0 +1,16 @@
+pub use shall::app::shim_manager::*;
+pub use shall::core::account::Account;
+pub use shall::core::{Error, Result};
+pub use std::path::{Path, PathBuf};
+use tempfile::tempdir;
+use tokio::fs;
+pub use tracing::{debug, info};
+mod a_named_accounts_shim_lands_in_that_accounts_own_bin_directory;
+mod a_shim_deployed_for_an_account_is_owned_by_that_account;
+mod a_shim_for_an_account_that_does_not_exist_is_refused_by_name;
+mod create_shim_refuses_to_clobber_a_file_shall_did_not_deploy;
+mod deploy_and_remove_agree_on_where_a_shim_lives;
+mod deploy_read_and_remove_agree_for_a_named_account;
+mod list_shims_reports_only_deployed_shims;
+mod remove_shim_deletes_a_real_deployed_shim;
+mod remove_shim_never_deletes_a_file_shall_did_not_deploy;

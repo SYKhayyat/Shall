@@ -13,6 +13,8 @@ mod a_declared_health_check_with_nothing_to_revert_it_stops_the_sync;
 mod a_health_command_that_was_never_approved_stops_the_sync;
 mod a_rebuild_is_narrated_as_a_rebuild;
 mod guard;
+mod pin_advice;
+mod pins;
 mod planner;
 mod resolver;
 mod saved_plan;
