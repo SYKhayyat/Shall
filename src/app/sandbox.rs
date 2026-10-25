@@ -158,7 +158,9 @@ impl Sandbox {
 
     /// Generates a Windows Sandbox (.wsb) configuration file content.
     #[cfg(target_os = "windows")]
-    fn generate_wsb_config(cmd: &str, args: &[String], config: &SandboxConfig) -> String {
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+    /// test crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub fn generate_wsb_config(cmd: &str, args: &[String], config: &SandboxConfig) -> String {
         // Windows Sandbox maps each host folder to the guest user's Desktop under the host
         // folder's basename; the schema has no arbitrary guest-target field. Keep that rule in
         // one helper so the caller can construct a PATH that names the same guest locations.
@@ -566,7 +568,9 @@ impl Wrapped {
     }
 
     #[cfg(target_os = "windows")]
-    fn with_config_file(command: Command, keepalive: NamedTempFile) -> Self {
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+    /// test crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub fn with_config_file(command: Command, keepalive: NamedTempFile) -> Self {
         Self {
             command,
             _keepalive: Some(keepalive),

@@ -158,8 +158,15 @@ fn launch_path(cmd: &str) -> Option<PathBuf> {
 /// characters, and returns an error rather than mis-escaping an argument it cannot express.
 /// Handing it the resolved path is therefore both the fix and the deletion of a second
 /// implementation: the escaping lives in one place and it is not this one.
+///
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+/// test crate links the library without `cfg(test)`, so a private item is invisible there.
 #[cfg(windows)]
-fn windows_shim_wrap(cmd: &str, resolved: &Path, args: &[String]) -> Option<(String, Vec<String>)> {
+pub fn windows_shim_wrap(
+    cmd: &str,
+    resolved: &Path,
+    args: &[String],
+) -> Option<(String, Vec<String>)> {
     let ext = resolved.extension()?.to_str()?.to_ascii_lowercase();
     match ext.as_str() {
         "ps1" => {
@@ -317,120 +324,4 @@ pub fn describe(cmd: &str, args: &[String]) -> String {
         s = s.chars().take(CAP).collect::<String>() + "…";
     }
     s
-}
-
-#[cfg(all(test, windows))]
-mod windows_shim_tests {
-    use super::windows_shim_wrap;
-    use std::path::Path;
-
-    #[test]
-    fn wraps_ps1_via_command_with_out_string() {
-        let (prog, args) = windows_shim_wrap(
-            "scoop",
-            Path::new(r"C:\tools\scoop\shims\scoop.ps1"),
-            &["search".to_string(), "ripgrep".to_string()],
-        )
-        .expect("ps1 should be wrapped");
-        assert_eq!(prog, "powershell");
-        assert!(args.contains(&"-Command".to_string()));
-        let command = args.last().unwrap();
-        assert!(command.contains("& 'scoop' 'search' 'ripgrep' | Out-String"));
-        assert!(command.contains("$native = $LASTEXITCODE"));
-    }
-
-    /// **A PowerShell-level failure must not exit 0.**
-    ///
-    /// `exit $LASTEXITCODE` propagates a *native* process's code and nothing else; the command
-    /// not being found, the `.ps1` being gone, an exception thrown all leave it `$null`, and
-    /// `exit $null` exits 0 — which `ensure_status` reads as a successful install. The catch is
-    /// what covers those, and `$LASTEXITCODE` still decides whenever the tool actually ran.
-    #[test]
-    fn a_powershell_level_failure_is_not_reported_as_success() {
-        let (_prog, args) =
-            windows_shim_wrap("scoop", Path::new(r"C:\s.ps1"), &["install".to_string()]).unwrap();
-        let command = args.last().unwrap();
-        assert!(command.contains("catch"), "no catch: {command}");
-        assert!(
-            command.contains("exit 1"),
-            "the catch must exit non-zero: {command}"
-        );
-        assert!(
-            !command.contains("exit $LASTEXITCODE"),
-            "the bare form is the defect: {command}"
-        );
-        // Not `Stop`: the tool's own non-terminating errors are the tool's business, and scoop
-        // emits them on installs that succeed.
-        assert!(!command.contains("ErrorActionPreference"), "{command}");
-    }
-
-    /// **The program name is escaped like every argument.** Nothing user-authored reaches
-    /// `cmd` today; what kept that true was that no config key names a manager's binary, which
-    /// is not an enforcement.
-    #[test]
-    fn the_program_name_is_quoted_and_invoked_through_the_call_operator() {
-        let hostile = "evil'; rm x; '";
-        let (_prog, args) =
-            windows_shim_wrap(hostile, Path::new(r"C:\s.ps1"), &["list".to_string()]).unwrap();
-        let command = args.last().unwrap();
-        assert!(
-            command.contains(&format!("& '{}'", hostile.replace('\'', "''"))),
-            "the program name must stay one literal: {command}"
-        );
-    }
-
-    #[test]
-    fn ps1_args_are_single_quote_escaped_no_injection() {
-        let (_prog, args) = windows_shim_wrap(
-            "scoop",
-            Path::new(r"C:\s.ps1"),
-            &["install".to_string(), "evil'; rm x; '".to_string()],
-        )
-        .unwrap();
-        // The embedded quote is doubled so the whole thing stays one literal string.
-        assert!(args.last().unwrap().contains("'evil''; rm x; '''"));
-    }
-
-    /// A `.cmd`/`.bat` shim is spawned as itself. `std` recognises the extension and runs it
-    /// through `cmd.exe` with per-argument escaping; building `cmd /C …` here instead is what
-    /// let a package name of `q&calc.exe&rem` launch `calc.exe` (B-1).
-    #[test]
-    fn a_cmd_shim_is_spawned_as_itself_never_through_a_hand_built_cmd_c() {
-        for ext in ["cmd", "bat"] {
-            let path = format!(r"C:\x\foo.{ext}");
-            let (prog, args) =
-                windows_shim_wrap("foo", Path::new(&path), &["list".to_string()]).unwrap();
-            assert_eq!(prog, path, "the resolved shim is the program to spawn");
-            assert_eq!(
-                args,
-                vec!["list".to_string()],
-                "argv passes through unchanged"
-            );
-        }
-    }
-
-    /// The regression proper: a crafted name stays **one argument**. Whatever escaping the
-    /// spawn needs is `std`'s to apply, and it cannot apply any if we have already flattened
-    /// the name into a command line.
-    #[test]
-    fn a_crafted_package_name_stays_one_argument_through_a_cmd_shim() {
-        let hostile = "q&calc.exe&rem";
-        let (prog, args) = windows_shim_wrap(
-            "gem",
-            Path::new(r"C:\Ruby\bin\gem.cmd"),
-            &["search".to_string(), hostile.to_string()],
-        )
-        .unwrap();
-        assert!(prog.ends_with("gem.cmd"));
-        assert_eq!(args, vec!["search".to_string(), hostile.to_string()]);
-        // No argument is `/C`, and none is a command line with the name spliced into it —
-        // the two shapes that let `cmd` reparse it.
-        assert!(!args.iter().any(|a| a == "/C"));
-        assert!(!args.iter().any(|a| a.contains("gem.cmd")));
-    }
-
-    #[test]
-    fn leaves_exe_alone() {
-        assert!(windows_shim_wrap("winget", Path::new(r"C:\x\winget.exe"), &[]).is_none());
-    }
 }

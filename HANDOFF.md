@@ -1,12 +1,46 @@
 # HANDOFF — the #120 test-layout sweep
 
-**Written 2026-10-24. Read this first; it is the whole operating manual.**
+**Written 2026-10-24, updated 2026-10-25. Read this first; it is the whole operating manual.**
 
 The objective is one thing: **no `src/` file keeps its own tests.** Every
-`#[cfg(test)] mod` moves to a mirror folder in `tests/`, one file per assertion,
+`#[cfg(test)]` mod moves to a mirror folder in `tests/`, one file per assertion,
 until the library builds without `cfg(test)` and every test the library had still
 runs. Ceilings are retired, not raised. Nothing is ever deleted to make the move
 easier.
+
+**Done 2026-10-25 — the objective is reached.** The last two standalone source test
+modules moved (`src/backends/link_teardown_test.rs` → nine files in `tests/backends/link/`,
+`src/backends/artifact/real_releases_test.rs` → `tests/backends/artifact/real_releases/`,
+with the `real_releases.txt` fixture travelling with it), and the
+`#[cfg(all(test, windows))]` module in `src/core/launch.rs` went to `tests/core/launch/`.
+`cargo test --lib` now reports **0** tests: the library builds without `cfg(test)`.
+All 19 moved tests are in the suite (3,032 total; +13 runnable ones on this host — 6 of the
+launch mirror are `cfg(windows)`, counted exactly: lib fell 13, suite rose 13).
+
+Deleted with the move, in the same change:
+
+- the guard's `#[cfg(test)]` token constructor `reaped_for_a_unit_test` — its last callers
+  were the moved link tests; nothing mints a token outside `guard.rs` at all now;
+- the `link_teardown_test.rs` special cases in `a_spawned_child_has_an_owner_tests` (exemption
+  row) and `a_removal_token_cannot_be_minted_tests` (path carve-out, now also carrying one
+  less `path` parameter);
+- `classify_format`, `windows_shim_wrap`, `Wrapped::with_config_file`,
+  `Sandbox::generate_wsb_config`, `core::account::wide_to_string` widened from private to
+  `pub`, each with the **`pub` for the tests' sake** note.
+
+**The Windows cross-check runs on this host after all** — the "cross compiler is not
+installed" note was stale: `/tmp/mingw-cc` (built 3 weeks ago, still in `/tmp`) plus the
+`x86_64-pc-windows-gnu` rust-std already in the toolchain. The check found and I fixed four
+pre-existing errors in earlier mirror batches (`sandbox`'s two private constructors,
+`account`'s `wide_to_string`, and — the same defect's twin — the `#[cfg(unix)]`-consumed-only
+helpers in `tests/core/account_exec/mod.rs` that became dead code on Windows). `cargo check
+--target x86_64-pc-windows-gnu --lib --tests` with `RUSTFLAGS="-D warnings"` is **green**.
+
+Windows-gated mirrors need one care the other mirrors do not: a test that is `#[cfg(windows)]`
+cannot reach an item through a file-level `use super::*` that resolves only on Windows, so
+those test files call `shall::core::launch::windows_shim_wrap` by full path inside the gated
+function. The seam that stays private is C3's: nothing in `src/` mints authority for tests,
+and the guard no longer ships even a `cfg(test)` mint.
 
 ---
 
@@ -14,39 +48,26 @@ easier.
 
 | | |
 |---|---|
-| src files still carrying an inline test module | **0** — two standalone source test modules remain (`link_teardown_test` and `real_releases_test`), plus the guard's test-only token constructor |
-| tests already in mirror folders | executor, guard, transaction, generic, statement, sync, scheduler, language, windows, ecosystem, dnf, common, pacman, main, plan, resolve, vars, service, file, extras_lock, grammar, model, parsers, core |
+| src files still carrying an inline test module | **0** — and the library carries **0** tests at all: `cargo test --lib` reports 0 |
+| tests already in mirror folders | executor, guard, transaction, generic, statement, sync, scheduler, language, windows, ecosystem, dnf, common, pacman, main, plan, resolve, vars, service, file, extras_lock, grammar, model, parsers, core, backends, launch, artifact/real_releases, link (teardown) |
 | `TOO_BIG_FOR_NOW` rows | **0** — the target state, and `executor.rs` was the last |
-| moved in this session | **2,110 tests** from 162 files; every inline test module is now mirrored under `tests/` |
+| moved in this session | **2,129 tests** from 164 files; every inline test module is now mirrored under `tests/` |
 | converter scripts in the repo | 2, both with passing self-tests |
+| Windows cross-check | **green**, run for real from this host |
 
-`cargo build --all-targets`, clippy at `-D warnings --all-features`, and `cargo fmt -- --check` are
-green after the current batch. The library target reports **13 passed, 0 failed**; those are the
-remaining standalone source-side tests. The latest
-focused mirrors report **81 artifact tests**, including the seven newly mirrored artifact modules,
-all passing; the capability, proving, AppImage, dir, web, storage, snap, Go, firewall, and shared
-database mirrors report **7, 6, 5, 9, 7, 14, 11, 10, 10, and 9** tests respectively, all passing;
-the latest psresource, mise, VS Code, pip-search, node-registry, Emacs, Nix, Homebrew, cleanup,
-sync, upgrade, watch-signature, check, and setup mirrors report **4, 7, 3, 4, 2, 3, 5, 5, 9,
-5, 5, 14, 4, and 6** tests respectively, all passing; the latest settings, grammar options, grammar
-exec, grammar errors, archive, text, regex-cache, and style mirrors report **10, 16, 13, 1, 9, 4,
-4, and 2** tests respectively, all passing; the latest eval, adopt, profile-expression, saved-plan,
-reachable, and export mirrors report **12, 12, 12, 12, 11, and 9** tests respectively, all passing.
-The latest setting and NixOS mirrors each report **24 passed, 0 failed**; registry, GitHub, and
-btrfs report **23, 21, and 21 passed**. The latest full test run
-reached the suite and reported **3,018 passed, 1 failed**
-on this host: the existing `argv_drift_tests::every_subcommand_shall_invokes_still_exists_upstream`
-gate cannot read help from sandbox PATH wrappers for installed `apk`, `brew`, `bun`, `composer`,
-`conda`, `dnf`, `gem`, `go`, `pacman`, and `pipx`. That is an environment/tool-discovery
-failure, not a moved-test failure. The integration suite now runs **3,019 tests** including the
-newly moved final app tests.
-The suite wiring audit and both converter self-tests pass. The Windows cross-check is still unavailable
-here because the cross compiler is not installed.
+`cargo build --all-targets`, clippy at `-D warnings --all-features`, `cargo fmt -- --check`,
+and the Windows cross-check are green after the current batch. The library target reports
+**0 tests**; the latest full suite run reported **3,030 passed, 2 failed** on this host with a
+competing cargo build running, and both failures pass unloaded — the known load-sensitive pair:
+`startup_budget_tests` (issue #123, the registry budget) and
+`core::timing::a_run_is_gathered_per_label_slowest_first_and_off_by_default` (a wall-clock race).
+The former host-dependent `argv_drift_tests` failure did **not** appear this run. The suite runs
+**3,032 tests**. The suite wiring audit and both converter self-tests pass.
 
-**Next handoff:** move the two standalone source test modules into the integration-test tree,
-then rerun the full verification chain. The current tree is otherwise ready to commit.
-
-1. Continue through the remaining app/backend files, then verbs/config/utils and the core long tail.
+**Next handoff:** the objective is met; what remains of the sweep is §8's list — the exception
+table (vacuously empty today) with its two-way gate, the `tests/parsers/mod.rs` flat-file
+assignment, issue #117 (five subjects needing the machine fixture), and #123 (measure the
+registry budget in a fresh process).
 
 ---
 

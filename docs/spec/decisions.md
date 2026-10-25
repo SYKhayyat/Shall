@@ -2611,7 +2611,8 @@ in the plan.
 
 **CHECKED 2026-07-23, and the check found two live defects.** The asset lists of six real
 releases (fd, jq, gh, neovim, rclone, helm) were fetched and every answer verified by hand, on
-three platforms. The fixture is `src/backends/artifact/real_releases.txt` and the answers are
+three platforms. The fixture is `tests/backends/artifact/real_releases/real_releases.txt` and the
+answers are
 asserted, so this is a check that can fail rather than an inspection that happened once.
 
 - **`accepts` is not "matched".** The code read the rule as *does not contradict this machine*,

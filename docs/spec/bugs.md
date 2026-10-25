@@ -238,9 +238,10 @@ Three suspicions did not survive scrutiny:
   its comment is the best in the repo.
 - `.unwrap()` density: 192 total looks alarming, but outside tests the max is **5 in one
   file** and ≤2 elsewhere. **Re-measured 2026-07-26 against a tree three times the size: 882
-  in `src/`, of which 39 sit outside a `#[cfg(test)]` block** — and 24 of those 39 are in two
+  in `src/`, of which 39 sit outside a `#[cfg(test)]` block** — and 24 of those 39 were in two
   files that are tests by content and not by attribute (`backends/link_teardown_test.rs` 22,
-  `backends/artifact/real_releases_test.rs` 2). The genuine production maximum is still
+  `backends/artifact/real_releases_test.rs` 2, **both moved under `tests/` on 2026-10-25**). The
+  genuine production maximum is still
   **5 in one file** (`core/executor.rs`) and ≤2 everywhere else, so the finding holds and the
   count that alarmed people never did. Do not re-open it; re-measure it if the ratio moves.
 - `bisect`, `fleet`, `conflicts`, `generation` are real, unit-tested implementations, not

@@ -2886,7 +2886,7 @@ declaration restores its backup, T1's fix is smaller than it looks.
   this machine" as "did not contradict it"; `jq-linux64` (in jq's release) named no OS because
   the token matcher would not end a word on digits, so on Windows it too was an executable
   candidate. Both are fixed and both are pinned by name in the fixture. Six real releases, three
-  platforms, every answer verified by hand and then **asserted** — `src/backends/artifact/real_releases.txt`
+  platforms, every answer verified by hand and then **asserted** — `tests/backends/artifact/real_releases/real_releases.txt`
   is a check that can fail, not an inspection that happened once.
 
   **The finding it surfaced was ruled and fixed 2026-07-24.** The selector chose jq's and
@@ -3064,9 +3064,11 @@ than decorative.
 
 ### #120 test-layout sweep — progress recorded 2026-10-25
 
-The migration now has **no inline test modules anywhere under `src/`**. Two standalone source-side
-test modules remain: `backends/link_teardown_test.rs` and `backends/artifact/real_releases_test.rs`.
-The current batch moved **2,110 tests from 162 files** into the single `tests/main.rs`
+The migration now has **no inline test modules anywhere under `src/`**. The last two standalone
+source-side test modules moved too (2026-10-25): `backends/link_teardown_test.rs` into
+`tests/backends/link/` and `backends/artifact/real_releases_test.rs` into
+`tests/backends/artifact/real_releases/` (fixture travelling with it), and the library now carries
+**zero** tests — `cargo test --lib` reports 0. The current batch moved **2,110 tests from 162 files** into the single `tests/main.rs`
 integration suite. Focused verification passed
 for the moved model (409), parser (169), core (440), stale-lock (26), onboarder (26),
 config-parser (26), link (26), planner (25), config (18), setting (24), and NixOS (24) mirrors,

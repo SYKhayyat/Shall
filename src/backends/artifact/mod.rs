@@ -13,9 +13,6 @@ pub mod select;
 pub mod system_pkg;
 pub mod teardown;
 
-#[cfg(test)]
-mod real_releases_test;
-
 pub use discover::{find_executable, DiscoveryError, Entry};
 pub use format::{Format, FormatOrder, UnknownFormat};
 pub use options::{default_formats, ArtifactOptions};

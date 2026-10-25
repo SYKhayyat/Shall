@@ -13,6 +13,7 @@ fn wired() -> (CommandExecutor, Arc<MockExecutor>) {
     let e = CommandExecutor::with_layer(false, false, mock.clone(), vfs, Arc::new(DashMap::new()));
     (e, mock)
 }
+#[cfg(unix)]
 fn another_account() -> Account {
     for name in ["nobody", "daemon", "bin", "root"] {
         if let Ok(account) = Account::resolve(name) {
@@ -23,6 +24,7 @@ fn another_account() -> Account {
     }
     panic!("this host names no account other than the invoking one");
 }
+#[cfg(unix)]
 fn account_env(account: &Account) -> HashMap<String, String> {
     account.session_env().into_iter().collect()
 }

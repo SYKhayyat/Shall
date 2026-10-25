@@ -43,12 +43,6 @@ const UNOWNED_BY_DESIGN: &[(&str, &str)] = &[
          program its line named and wait for it, so there is no worker to park and no future to \
          drop. It links the library for the launcher, not for the executor.",
     ),
-    (
-        "src/backends/link_teardown_test.rs",
-        "a test file that happens to live under `src/`, exercising `icacls` against a real \
-         temporary directory. A fixture's child lasts as long as one test process, which is a \
-         different problem from a package manager left running on somebody's laptop.",
-    ),
 ];
 
 fn repo_root() -> PathBuf {

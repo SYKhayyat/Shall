@@ -287,7 +287,11 @@ fn sort_by_preference(candidates: &mut [Candidate], user_specified: bool) {
 ///
 /// **`@asset=` overrides it**, because naming the file *is* the claim: a project shipping one
 /// bare `mytool` for one platform is installed by naming it, not by Shall guessing.
-pub(super) fn classify_format(
+///
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+/// test crate links the library without `cfg(test)`, so the wider `pub(super)` left them with
+/// nothing to call.
+pub fn classify_format(
     name: &str,
     platform: &Platform,
     pattern: Option<&AssetPattern>,

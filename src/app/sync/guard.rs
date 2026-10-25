@@ -1370,25 +1370,6 @@ pub fn enforce_total(
 /// nine it asked to undo — a state neither the user nor the manifest describes, and one nobody
 /// would believe a rollback had produced. The refusal names the package, so "we could not fully
 /// unwind" is answerable.
-/// A token for a unit test of an effector, and only for a unit test.
-///
-/// **`#[cfg(test)]`, so it does not exist in a build that ships.** This is the whole of what
-/// replaced `Reaped::for_reason`: a public constructor any code could call, with a reason string
-/// the type threw away, so "the token cannot be minted" was a convention 44 places opted out of. A
-/// unit test for "does removing work" should not have to build a `Config` and a `BackendRegistry`
-/// to get permission to ask a question that is not what the test is about — but the *integration*
-/// suite links the library without `cfg(test)` and so cannot see this, which is why those tests
-/// ask the real guard instead (`tests/harness::reaped_for_a_test`).
-///
-/// The count is 1, so `authorises(1)` holds and an effector that checks it behaves as though the
-/// guard had really cleared its ask. A test that wants a *refusal* asks about a pair the guard
-/// protects, which is a different test and says so.
-#[cfg(test)]
-pub(crate) fn reaped_for_a_unit_test(scope: GuardScope, why: &'static str) -> Reaped {
-    let _ = why;
-    Reaped { scope, allowed: 1 }
-}
-
 pub async fn enforce_own_work(
     config: &Config,
     registry: &Arc<BackendRegistry>,

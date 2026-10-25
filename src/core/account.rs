@@ -725,8 +725,11 @@ fn open_windows_path(path: &Path, write: bool) -> Result<winapi::um::winnt::HAND
 ///
 /// One reader for both SID strings, because the bug was one reader written twice: `sid_text`
 /// and `resolve_named` each decoded a wide buffer with `CStr::from_ptr` and each produced `"S"`.
+///
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+/// test crate links the library without `cfg(test)`, so a private item is invisible there.
 #[cfg(windows)]
-fn wide_to_string(wide: *const u16) -> Option<String> {
+pub fn wide_to_string(wide: *const u16) -> Option<String> {
     if wide.is_null() {
         return None;
     }

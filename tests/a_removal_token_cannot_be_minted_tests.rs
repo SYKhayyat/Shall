@@ -86,7 +86,7 @@ fn the_guard_is_recognised_by_a_path_however_the_platform_spells_it() {
 /// has just been the subject of one such accident.
 #[test]
 fn the_scan_can_see_a_constructor_it_would_miss() {
-    let prod = |body: &str| constructs_a_token(&production_code_of("src/app/backends/x.rs", body));
+    let prod = |body: &str| constructs_a_token(&production_code_of(body));
     assert!(prod("let t = Reaped { scope, allowed: 1 };"), "a literal");
     assert!(
         prod("Reaped::for_reason(GuardScope::Sync, \"a reason\")"),
@@ -108,7 +108,6 @@ fn the_scan_can_see_a_constructor_it_would_miss() {
     // constructor is not compiled into a build that ships, so its call sites are not a hole.
     assert!(
         !constructs_a_token(&production_code_of(
-            "src/app/shim_manager.rs",
             "fn f() {}\n#[cfg(test)]\nmod tests {\n    use super::*;\n    let r = reaped_for_a_unit_test(GuardScope::Sync);\n}\n"
         )),
         "a test module's call to the test-only constructor is not a production mint"
@@ -117,22 +116,17 @@ fn the_scan_can_see_a_constructor_it_would_miss() {
 
 /// Whether this text builds a `Reaped` outside `guard.rs`, **in code that ships**.
 ///
-/// Three things are excluded, each for a reason that is the test's own subject rather than a
+/// Two things are excluded, each for a reason that is the test's own subject rather than a
 /// convenience: comments and doc comments, because a comment that *names* a constructor is
-/// exactly what this repository's `S24` finding was; everything after a file's first
+/// exactly what this repository's `S24` finding was; and everything after a file's first
 /// `#[cfg(test)] mod`, because the library's unit tests may call the `#[cfg(test)]` constructor
-/// and that constructor is not compiled into a build anyone receives; and
-/// `link_teardown_test.rs`, which is a test module `link.rs` includes rather than a test binary
-/// module of its own.
-fn production_code_of(path: &str, body: &str) -> String {
+/// and that constructor is not compiled into a build anyone receives.
+fn production_code_of(body: &str) -> String {
     let stripped: String = body
         .lines()
         .map(|l| l.split("//").next().unwrap_or(l))
         .collect::<Vec<_>>()
         .join("\n");
-    if path.ends_with("link_teardown_test.rs") {
-        return String::new();
-    }
     // The production half ends where the first test module starts, which is a `#[cfg(test)]`
     // that opens a `mod` — not any `#[cfg(test)]`, which also appears on individual test
     // functions *inside* a module this scanner is not reading.
@@ -164,7 +158,7 @@ fn only_the_guard_builds_a_removal_token() {
     let elsewhere: Vec<String> = sources
         .iter()
         .filter(|(path, _)| !path.ends_with("src/app/sync/guard.rs"))
-        .filter(|(path, body)| constructs_a_token(&production_code_of(path, body)))
+        .filter(|(_, body)| constructs_a_token(&production_code_of(body)))
         .map(|(path, _)| path.clone())
         .collect();
 

@@ -24,6 +24,7 @@ mod http;
 mod installed;
 mod journal;
 mod latency;
+mod launch;
 mod ledger;
 mod lock_kind;
 mod manager;
