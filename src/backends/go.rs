@@ -52,7 +52,7 @@ impl GoBackendCore {
 
     /// The on-disk binary name for a module/spec: the last path segment, minus any
     /// `@version`, plus the platform executable extension.
-    fn binary_name(spec: &str) -> String {
+    pub fn binary_name(spec: &str) -> String {
         let base = spec.split('@').next().unwrap_or(spec);
         let base = base.rsplit('/').next().unwrap_or(base);
         if cfg!(windows) {
@@ -88,7 +88,7 @@ pub(crate) async fn install_bin_dir(executor: &CommandExecutor) -> Option<PathBu
 ///
 /// GOPATH is a list in the platform's own separator, so it is split by the platform's own
 /// rule: on Windows the separator is `;` and a colon is part of every drive letter.
-fn gopath_bin(raw: &str) -> Option<PathBuf> {
+pub fn gopath_bin(raw: &str) -> Option<PathBuf> {
     let line = raw.lines().next().unwrap_or("").trim();
     if line.is_empty() {
         return None;
@@ -109,7 +109,7 @@ fn gopath_bin(raw: &str) -> Option<PathBuf> {
 /// `path` is the identity and `mod` only carries the version: a program in a subdirectory of
 /// its module has two different names here, and the one `sync` compares against a declaration
 /// — the one `go install` accepts — is `path`.
-fn parse_go_version_m(output: &str) -> Option<(String, Option<String>)> {
+pub fn parse_go_version_m(output: &str) -> Option<(String, Option<String>)> {
     let mut package_path: Option<String> = None;
     let mut module: Option<(String, Option<String>)> = None;
     for line in output.lines() {
@@ -161,7 +161,7 @@ pub struct GoInstallable {
     pub core: Arc<GoBackendCore>,
 }
 
-fn install_argv(target: &str) -> Vec<String> {
+pub fn install_argv(target: &str) -> Vec<String> {
     let mut args = vec!["install".to_string()];
     crate::core::argv::push_names(&mut args, "go", [target]);
     args
@@ -408,139 +408,4 @@ pub fn register(
             .with_metadata_provider(core.clone())
             .build(),
     ));
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_module_and_version_from_mod_line() {
-        let out = "/root/go/bin/fzf: go1.21.0\n\tpath\tgithub.com/junegunn/fzf\n\tmod\tgithub.com/junegunn/fzf\tv0.42.0\th1:abcd\n";
-        let (module, version) = parse_go_version_m(out).unwrap();
-        assert_eq!(module, "github.com/junegunn/fzf");
-        assert_eq!(version.as_deref(), Some("v0.42.0"));
-    }
-
-    #[test]
-    fn falls_back_to_path_when_no_mod() {
-        let out = "/root/go/bin/tool: go1.21.0\n\tpath\texample.com/tool\n";
-        let (module, version) = parse_go_version_m(out).unwrap();
-        assert_eq!(module, "example.com/tool");
-        assert_eq!(version, None);
-    }
-
-    #[test]
-    fn binary_name_strips_path_and_version() {
-        let expected = if cfg!(windows) { "fzf.exe" } else { "fzf" };
-        assert_eq!(
-            GoBackendCore::binary_name("github.com/junegunn/fzf@latest"),
-            expected
-        );
-        assert_eq!(GoBackendCore::binary_name("fzf"), expected);
-    }
-
-    #[test]
-    fn the_module_path_goes_behind_the_terminator() {
-        assert_eq!(
-            install_argv("github.com/junegunn/fzf@latest"),
-            ["install", "--", "github.com/junegunn/fzf@latest"]
-        );
-    }
-
-    #[tokio::test]
-    async fn install_and_upgrade_end_their_options_before_the_module() {
-        let vfs = Arc::new(dashmap::DashMap::new());
-        let mock = Arc::new(crate::core::executor::MockExecutor::new(vfs.clone()));
-        let exec = CommandExecutor::with_layer(
-            false,
-            false,
-            mock.clone(),
-            vfs,
-            Arc::new(dashmap::DashMap::new()),
-        );
-        let core = Arc::new(GoBackendCore::new(exec));
-
-        let spec = PackageSpec {
-            name: "github.com/junegunn/fzf".into(),
-            backend: "go".into(),
-            ..Default::default()
-        };
-        GoInstallable { core: core.clone() }
-            .install(&[spec], false)
-            .await
-            .unwrap();
-
-        assert_eq!(
-            mock.get_calls().await,
-            vec!["go install -- github.com/junegunn/fzf@latest"]
-        );
-    }
-
-    #[test]
-    fn non_go_binary_yields_none() {
-        assert!(parse_go_version_m("some random text\nno module info here\n").is_none());
-    }
-
-    /// Captured from `go version -m` on a real install of
-    /// `golang.org/x/tools/cmd/goimports@latest` (go1.26.5).
-    const SUBPACKAGE: &str = include_str!("../../tests/fixtures/go/version-m-subpackage.txt");
-    /// Captured from a real install of `golang.org/x/example/hello@latest`, where the
-    /// package sits at the module root so `path` and `mod` agree.
-    const MODULE_ROOT: &str = include_str!("../../tests/fixtures/go/version-m-module-root.txt");
-    /// Captured from `go env GOPATH` on Windows — a drive letter, so a colon.
-    #[cfg(windows)]
-    const GOPATH_WINDOWS: &str = include_str!("../../tests/fixtures/go/env-gopath-windows.txt");
-
-    /// `sync` compares what was declared against what `list` reports, so the name `list`
-    /// reports must be the name `go install` takes — the package path. Preferring the `mod`
-    /// line reported `golang.org/x/tools` for a binary declared as
-    /// `golang.org/x/tools/cmd/goimports`: never equal, so drift that never converges, and an
-    /// `upgrade` that reinstalls a module with no program in it.
-    #[test]
-    fn the_identity_is_the_package_path_not_the_module() {
-        let (name, version) = parse_go_version_m(SUBPACKAGE).unwrap();
-        assert_eq!(name, "golang.org/x/tools/cmd/goimports");
-        assert_eq!(version.as_deref(), Some("v0.48.0"));
-    }
-
-    #[test]
-    fn a_package_at_the_module_root_still_carries_its_version() {
-        let (name, version) = parse_go_version_m(MODULE_ROOT).unwrap();
-        assert_eq!(name, "golang.org/x/example/hello");
-        assert_eq!(
-            version.as_deref(),
-            Some("v0.0.0-20250915201037-7f05d217867b")
-        );
-    }
-
-    /// GOPATH is a list in the platform's own separator. Splitting on `:` as well as `;`
-    /// decapitated every Windows path at the drive letter, so the bin dir resolved to `C\bin`,
-    /// which does not exist — and a missing bin dir is reported as "nothing installed".
-    ///
-    /// Windows only, and that is the point rather than a gap: on Unix a colon *is* the
-    /// separator, so the same string is two entries there and reading it as one would be the
-    /// bug. `the_first_entry_of_a_gopath_list_owns_bin` pins that half, on both platforms.
-    #[cfg(windows)]
-    #[test]
-    fn a_windows_gopath_keeps_its_drive_letter() {
-        let bin = gopath_bin(GOPATH_WINDOWS).unwrap();
-        assert_eq!(bin, PathBuf::from(r"C:\Users\Administrator\go").join("bin"));
-    }
-
-    #[test]
-    fn the_first_entry_of_a_gopath_list_owns_bin() {
-        let (list, first) = if cfg!(windows) {
-            (r"C:\one;D:\two", r"C:\one")
-        } else {
-            ("/one:/two", "/one")
-        };
-        assert_eq!(gopath_bin(list).unwrap(), PathBuf::from(first).join("bin"));
-    }
-
-    #[test]
-    fn an_empty_gopath_resolves_to_nothing_rather_than_to_bin() {
-        assert!(gopath_bin("").is_none());
-        assert!(gopath_bin("   \n").is_none());
-    }
 }

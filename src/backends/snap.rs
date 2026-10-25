@@ -77,7 +77,7 @@ pub struct SnapInstallable {
     pub core: Arc<SnapBackendCore>,
 }
 
-fn install_args(spec: &PackageSpec) -> Vec<String> {
+pub fn install_args(spec: &PackageSpec) -> Vec<String> {
     let mut args = vec!["install".to_string()];
 
     if spec.options.one("classic") == Some("true") {
@@ -105,7 +105,7 @@ fn risk_rank(channel: &str) -> Option<usize> {
 /// Whether moving from `from` to `to` is a downgrade (a more-stable, less-recent channel). An
 /// unknown risk on either side is not called a downgrade — better to under-warn than to cry
 /// downgrade on a channel we do not understand.
-fn is_channel_downgrade(from: &str, to: &str) -> bool {
+pub fn is_channel_downgrade(from: &str, to: &str) -> bool {
     match (risk_rank(from), risk_rank(to)) {
         (Some(f), Some(t)) => t < f,
         _ => false,
@@ -118,9 +118,9 @@ fn is_channel_downgrade(from: &str, to: &str) -> bool {
 /// `snap info` for facts that are on the same page of the same report, so a snap was interrogated
 /// twice per sync and the two answers could disagree across the gap between them.
 #[derive(Debug, Default, PartialEq, Eq)]
-struct SnapState {
-    channel: Option<String>,
-    classic: bool,
+pub struct SnapState {
+    pub channel: Option<String>,
+    pub classic: bool,
 }
 
 /// `snap info`'s account of an installed snap, or `None` when it names one that is not.
@@ -128,7 +128,7 @@ struct SnapState {
 /// Presence is the `installed:` line, not the exit code: `snap info` answers happily for a snap
 /// that only exists in the store, and reading that as installed would send every first install
 /// down the refresh path.
-fn installed_state(output: &str) -> Option<SnapState> {
+pub fn installed_state(output: &str) -> Option<SnapState> {
     let installed = output.lines().find_map(|l| l.strip_prefix("installed:"))?;
     // `installed:  1.85.1  (139)  351MB  classic` — the last field is the notes, and it is the
     // only place `snap info` says whether confinement was relaxed. A snap with no notes ends on
@@ -152,7 +152,7 @@ fn installed_state(output: &str) -> Option<SnapState> {
 /// **Both switches ride one refresh.** A snap that needs a channel *and* a confinement change
 /// used to get only the channel — the branch that built the refresh looked at `@channel` alone,
 /// so writing the two options together silently dropped one.
-fn refresh_args(name: &str, channel: Option<&str>, to_classic: bool) -> Option<Vec<String>> {
+pub fn refresh_args(name: &str, channel: Option<&str>, to_classic: bool) -> Option<Vec<String>> {
     if channel.is_none() && !to_classic {
         return None;
     }
@@ -391,7 +391,7 @@ impl Searchable for SnapSearchable {
 }
 
 /// Parse `snap find <q>` => "Name  Version  Publisher  Notes  Summary" (header + rows).
-fn parse_snap_find(output: &str) -> Vec<Package> {
+pub fn parse_snap_find(output: &str) -> Vec<Package> {
     let mut results = Vec::new();
     for line in sanitize(output).lines().skip(1) {
         let parts: Vec<&str> = line.split_whitespace().collect();
@@ -448,296 +448,4 @@ pub fn register(
             .with_metadata_provider(core.clone())
             .build(),
     ));
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Real `snap info` shape. Presence is the `installed:` line — `snap info` answers just as
-    /// happily for a snap that only exists in the store, and reading that as installed would
-    /// send every first install down the refresh path.
-    #[test]
-    fn a_snaps_state_is_read_from_the_one_report() {
-        let classic = "name:      code\n\
-                       summary:   Code editing. Redefined.\n\
-                       tracking:     latest/stable\n\
-                       installed:          1.85.1                     (139) 351MB classic\n";
-        assert_eq!(
-            installed_state(classic),
-            Some(SnapState {
-                channel: Some("stable".into()),
-                classic: true
-            })
-        );
-
-        // No notes: the line ends on its size, and a size can never spell `classic`.
-        let strict = "name:      hello\n\
-                      tracking:     latest/edge\n\
-                      installed:          2.10                       (42) 98kB -\n";
-        assert_eq!(
-            installed_state(strict),
-            Some(SnapState {
-                channel: Some("edge".into()),
-                classic: false
-            })
-        );
-
-        // Several notes at once, comma-separated — `classic` is one of them and must be found
-        // among them rather than by the field being equal to it.
-        let both = "installed:  1.0 (7) 2MB classic,disabled\n";
-        assert!(installed_state(both).unwrap().classic);
-
-        // In the store, not on the machine.
-        assert_eq!(installed_state("name: code\nsummary: x\n"), None);
-    }
-
-    /// **`snap info` answers from the store.** It prints publisher, summary and channels for
-    /// any snap that exists, installed or not — the fixture above already says so, and
-    /// `installed_state` already returns `None` for it. `info` was the caller that did not ask:
-    /// it returned `Some` for the whole report, so the planner read every declared snap as
-    /// already present and `shall install snap:x` reported success having installed nothing.
-    #[tokio::test]
-    async fn info_answers_installed_here_not_present_in_the_store() {
-        let store_only = "name:      code\n\
-                          summary:   Code editing. Redefined.\n\
-                          publisher: Snapcrafters\n\
-                          channels:\n  \
-                          latest/stable:    1.85.1\n";
-        let (core, _) = snap_with("snap info -- code", store_only);
-        assert!(
-            SnapQueryable { core }.info("code").await.unwrap().is_none(),
-            "a snap that only exists in the store was reported as installed"
-        );
-
-        let on_the_machine = "name:      code\n\
-                              tracking:     latest/stable\n\
-                              installed:          1.85.1                     (139) 351MB classic\n";
-        let (core, _) = snap_with("snap info -- code", on_the_machine);
-        let found = SnapQueryable { core }
-            .info("code")
-            .await
-            .unwrap()
-            .expect("installed");
-        assert_eq!(found.version.as_deref(), Some("1.85.1"));
-        assert_eq!(
-            found.properties.get("classic").map(String::as_str),
-            Some("true"),
-            "Q20's confinement still reaches the planner"
-        );
-        assert_eq!(
-            found.properties.get("channel").map(String::as_str),
-            Some("stable"),
-            "and D13's channel with it"
-        );
-    }
-
-    fn snap_with(
-        pattern: &str,
-        output: &str,
-    ) -> (
-        Arc<SnapBackendCore>,
-        Arc<crate::core::executor::MockExecutor>,
-    ) {
-        let vfs = Arc::new(dashmap::DashMap::new());
-        let mock = Arc::new(crate::core::executor::MockExecutor::new(vfs.clone()));
-        mock.set_response(
-            pattern,
-            Ok(crate::core::executor::DryRunOutput {
-                stdout: output.as_bytes().to_vec(),
-                stderr: vec![],
-            }
-            .into()),
-        );
-        let exec = CommandExecutor::with_layer(
-            false,
-            false,
-            mock.clone(),
-            vfs,
-            Arc::new(dashmap::DashMap::new()),
-        );
-        (Arc::new(SnapBackendCore::new(exec)), mock)
-    }
-
-    /// Q20's argv. Both switches ride one refresh: a snap needing a channel *and* a confinement
-    /// change used to get only the channel, because the branch that built the refresh looked at
-    /// `@channel` alone.
-    #[test]
-    fn a_refresh_carries_every_switch_the_declaration_asks_for() {
-        let ch = "stable".to_string();
-        assert_eq!(
-            refresh_args("code", Some(&ch), false).unwrap(),
-            vec!["refresh", "--channel", "stable", "--", "code"]
-        );
-        assert_eq!(
-            refresh_args("code", None, true).unwrap(),
-            vec!["refresh", "--classic", "--", "code"]
-        );
-        assert_eq!(
-            refresh_args("code", Some(&ch), true).unwrap(),
-            vec!["refresh", "--channel", "stable", "--classic", "--", "code"],
-            "a line carrying both options must not lose one"
-        );
-        // Nothing to change is not a refresh — the caller decides what to do instead.
-        assert!(refresh_args("code", None, false).is_none());
-    }
-
-    /// The install argv still carries `@classic` for a snap that is not there yet: Q20 is about
-    /// the *change*, and a first install must not regress into a strict one.
-    #[test]
-    fn a_first_install_still_asks_for_classic() {
-        let mut spec = PackageSpec {
-            name: "code".into(),
-            backend: "snap".into(),
-            options: Default::default(),
-            requires: vec![],
-            present: true,
-        };
-        spec.options.set("classic", "true");
-        assert_eq!(
-            install_args(&spec),
-            vec!["install", "--classic", "--", "code"]
-        );
-        spec.options.set("classic", "false");
-        assert_eq!(install_args(&spec), vec!["install", "--", "code"]);
-    }
-
-    #[test]
-    fn snap_find_parses_rows() {
-        let out = "Name   Version  Publisher  Notes  Summary\n\
-                   hello  2.10     canonical  -      GNU Hello prints a greeting\n\
-                   code   1.85     vscode✓    classic Code editing redefined\n";
-        let pkgs = parse_snap_find(out);
-        assert_eq!(pkgs.len(), 2);
-        assert_eq!(pkgs[0].name, "hello");
-        assert_eq!(pkgs[0].version.as_deref(), Some("2.10"));
-        assert_eq!(
-            pkgs[0].properties.get("publisher").map(String::as_str),
-            Some("canonical")
-        );
-        assert!(pkgs[0]
-            .properties
-            .get("summary")
-            .unwrap()
-            .contains("greeting"));
-    }
-
-    fn spec_with(name: &str, options: &[(&str, &str)]) -> PackageSpec {
-        PackageSpec {
-            name: name.to_string(),
-            backend: "snap".to_string(),
-            options: options
-                .iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
-            ..Default::default()
-        }
-    }
-
-    #[test]
-    fn snap_channel_reaches_the_command() {
-        let args = install_args(&spec_with("code", &[("channel", "edge")]));
-        assert_eq!(args, ["install", "--channel", "edge", "--", "code"]);
-    }
-
-    #[test]
-    fn snap_without_a_channel_passes_no_channel_flag() {
-        let args = install_args(&spec_with("code", &[]));
-        assert_eq!(args, ["install", "--", "code"]);
-    }
-
-    #[test]
-    fn moving_to_a_more_stable_channel_is_a_downgrade() {
-        // D13: edge -> stable gives an older build, so the guard/plan should see it.
-        assert!(is_channel_downgrade("edge", "stable"));
-        assert!(is_channel_downgrade("latest/beta", "latest/candidate"));
-        // stable -> edge is newer, not a downgrade.
-        assert!(!is_channel_downgrade("stable", "edge"));
-        // Same channel, whichever way it is spelled, is not a downgrade.
-        assert!(!is_channel_downgrade("latest/stable", "stable"));
-        // A channel we do not understand is never called a downgrade.
-        assert!(!is_channel_downgrade("weird", "stable"));
-    }
-
-    #[tokio::test]
-    async fn snaps_other_name_carrying_commands_terminate_too() {
-        let vfs = Arc::new(dashmap::DashMap::new());
-        let mock = Arc::new(crate::core::executor::MockExecutor::new(vfs.clone()));
-        let exec = CommandExecutor::with_layer(
-            false,
-            false,
-            mock.clone(),
-            vfs,
-            Arc::new(dashmap::DashMap::new()),
-        );
-        let core = Arc::new(SnapBackendCore::new(exec));
-
-        SnapInstallable { core: core.clone() }
-            .remove(
-                &["code".to_string()],
-                false,
-                crate::app::sync::guard::reaped_for_a_unit_test(
-                    crate::app::sync::guard::GuardScope::Remove,
-                    "a unit test of the effector itself",
-                ),
-            )
-            .await
-            .unwrap();
-        SnapQueryable { core: core.clone() }.info("code").await.ok();
-        SnapSearchable { core: core.clone() }
-            .search("code")
-            .await
-            .unwrap();
-        core.get_dependencies("code").await.unwrap();
-
-        assert_eq!(
-            mock.get_calls().await,
-            vec![
-                "snap remove -- code",
-                "snap info -- code",
-                "snap find -- code",
-                "snap info -- code",
-            ]
-        );
-    }
-
-    #[test]
-    fn a_snap_named_like_a_flag_stays_a_name() {
-        let args = install_args(&spec_with("--classic", &[]));
-        assert_eq!(args, ["install", "--", "--classic"]);
-    }
-
-    /// Q45. Removal batches; install does not, and the asymmetry is the point — `snap install`
-    /// has to choose per package between `install` and `refresh --channel=` depending on what
-    /// is already there (D13, Q20), so those specs cannot share a command. Removal asks no
-    /// such question.
-    #[tokio::test]
-    async fn a_batch_of_snaps_is_one_remove_call() {
-        let vfs = Arc::new(dashmap::DashMap::new());
-        let mock = Arc::new(crate::core::executor::MockExecutor::new(vfs.clone()));
-        let exec = CommandExecutor::with_layer(
-            false,
-            false,
-            mock.clone(),
-            vfs,
-            Arc::new(dashmap::DashMap::new()),
-        );
-        let core = Arc::new(SnapBackendCore::new(exec));
-
-        SnapInstallable { core: core.clone() }
-            .remove(
-                &["code".to_string(), "firefox".to_string()],
-                false,
-                crate::app::sync::guard::reaped_for_a_unit_test(
-                    crate::app::sync::guard::GuardScope::Remove,
-                    "a unit test of the effector itself",
-                ),
-            )
-            .await
-            .unwrap();
-
-        let calls = mock.get_calls().await;
-        assert_eq!(calls.len(), 1, "one removal for the batch, got {:?}", calls);
-        assert_eq!(calls[0], "snap remove -- code firefox");
-    }
 }

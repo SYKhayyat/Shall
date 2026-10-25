@@ -30,12 +30,12 @@ pub const NO_LIMIT: &str = "none";
 // --- ZFS datasets -----------------------------------------------------------------------------
 
 /// The argv to create a ZFS dataset. Pure, so the command is unit-testable without a pool.
-fn zfs_create(name: &str) -> Vec<String> {
+pub fn zfs_create(name: &str) -> Vec<String> {
     vec!["create".into(), name.into()]
 }
 
 /// `zfs set quota=<size> <name>` — a property, set after create.
-fn zfs_set(property: &str, value: &str, name: &str) -> Vec<String> {
+pub fn zfs_set(property: &str, value: &str, name: &str) -> Vec<String> {
     vec!["set".into(), format!("{}={}", property, value), name.into()]
 }
 
@@ -55,7 +55,7 @@ fn zfs_set(property: &str, value: &str, name: &str) -> Vec<String> {
 /// `@mount=/srv` against a dataset ZFS is not mounting is unsatisfied, and the planner has to be
 /// able to see that. Reporting `legacy` as if it were a path would make the comparison false and
 /// re-run `zfs set mountpoint=` on every sync.
-fn parse_zfs_list(output: &str) -> Vec<Package> {
+pub fn parse_zfs_list(output: &str) -> Vec<Package> {
     output
         .lines()
         .filter_map(|line| {
@@ -94,7 +94,7 @@ fn parse_zfs_list(output: &str) -> Vec<Package> {
 
 /// `zfs destroy -r <name>` — destroys the dataset and its children. The dangerous verb; it runs
 /// only after the sync guard has cleared the removal.
-fn zfs_destroy(name: &str) -> Vec<String> {
+pub fn zfs_destroy(name: &str) -> Vec<String> {
     vec!["destroy".into(), "-r".into(), name.into()]
 }
 
@@ -241,7 +241,7 @@ impl Queryable for ZfsQueryable {
 
 /// Split `vg/lv` into its volume group and logical volume. An LVM object is named `group/volume`,
 /// the one spelling both `lvcreate` and `lvremove` accept via their own conventions.
-fn split_lvm(name: &str) -> Result<(&str, &str)> {
+pub fn split_lvm(name: &str) -> Result<(&str, &str)> {
     name.split_once('/')
         .filter(|(vg, lv)| !vg.is_empty() && !lv.is_empty())
         .ok_or_else(|| {
@@ -254,12 +254,12 @@ fn split_lvm(name: &str) -> Result<(&str, &str)> {
 
 /// `lvcreate -n <lv> -L <size> <vg>` — a logical volume needs a size; without one there is
 /// nothing to create, which is a refusal, not a guess.
-fn lvm_create(vg: &str, lv: &str, size: &str) -> Vec<String> {
+pub fn lvm_create(vg: &str, lv: &str, size: &str) -> Vec<String> {
     vec!["-n".into(), lv.into(), "-L".into(), size.into(), vg.into()]
 }
 
 /// `lvremove -y <vg>/<lv>` — destroys the volume. The dangerous verb, run only past the guard.
-fn lvm_remove(vg: &str, lv: &str) -> Vec<String> {
+pub fn lvm_remove(vg: &str, lv: &str) -> Vec<String> {
     vec!["-y".into(), format!("{}/{}", vg, lv)]
 }
 
@@ -306,7 +306,7 @@ fn lvm_reduce(vg: &str, lv: &str, size: &str) -> Vec<String> {
 /// as a refusal that names both sizes rather than a silent no-op or a silent truncation.
 ///
 /// Pure, so the decision is testable without a volume group: the argv was never the hard part.
-fn resize_plan(
+pub fn resize_plan(
     vg: &str,
     lv: &str,
     declared: &str,
@@ -360,7 +360,7 @@ fn resize_plan(
 /// in bytes.
 ///
 /// Bytes, not `10.00g`: the reported side is never parsed as a display string (`core::size`).
-fn parse_lvs_list(output: &str) -> Vec<Package> {
+pub fn parse_lvs_list(output: &str) -> Vec<Package> {
     output
         .lines()
         .filter_map(|line| {
@@ -588,333 +588,4 @@ pub fn register(
             .with_metadata_provider(lvm.clone())
             .build(),
     ));
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::core::executor::{DryRunOutput, MockExecutor};
-    use dashmap::DashMap;
-    use std::process::Output;
-
-    fn storage_layer(responses: &[(&str, Result<Output>)]) -> (Arc<MockExecutor>, CommandExecutor) {
-        let vfs = Arc::new(DashMap::new());
-        let mock = Arc::new(MockExecutor::new(vfs.clone()));
-        for (cmd, res) in responses {
-            mock.set_response(cmd, res.clone());
-        }
-        let exec =
-            CommandExecutor::with_layer(false, false, mock.clone(), vfs, Arc::new(DashMap::new()));
-        (mock, exec)
-    }
-
-    fn out(text: &str) -> Result<Output> {
-        Ok(DryRunOutput {
-            stdout: text.as_bytes().to_vec(),
-            stderr: vec![],
-        }
-        .into())
-    }
-
-    fn removal_token() -> crate::app::sync::guard::Reaped {
-        crate::app::sync::guard::reaped_for_a_unit_test(
-            crate::app::sync::guard::GuardScope::Sync,
-            "unit test drives the effector directly",
-        )
-    }
-
-    #[test]
-    fn zfs_creates_and_destroys_by_name() {
-        assert_eq!(zfs_create("tank/data"), vec!["create", "tank/data"]);
-        // Destroy is recursive: a dataset with children is one object, and the guard cleared the
-        // whole of it.
-        assert_eq!(zfs_destroy("tank/data"), vec!["destroy", "-r", "tank/data"]);
-    }
-
-    #[test]
-    fn zfs_properties_become_set_commands() {
-        assert_eq!(
-            zfs_set("quota", "10G", "tank/data"),
-            vec!["set", "quota=10G", "tank/data"]
-        );
-        assert_eq!(
-            zfs_set("mountpoint", "/mnt/data", "tank/data"),
-            vec!["set", "mountpoint=/mnt/data", "tank/data"]
-        );
-    }
-
-    /// The listing carries where each dataset is mounted, so `sync` can tell a `@mount=` that
-    /// took effect from one that did not. `legacy`, `none` and `-` are ZFS saying it mounts this
-    /// nowhere, and none of them is a path — reporting one as if it were would leave a declared
-    /// mountpoint looking satisfied by a word.
-    #[test]
-    fn the_dataset_listing_reads_mountpoints_and_knows_when_there_is_none() {
-        let pkgs = parse_zfs_list(
-            "tank\t0\t/tank\n\
-             tank/data\t0\t/mnt/data\n\
-             tank/legacy\t0\tlegacy\n\
-             tank/hidden\t0\tnone\n\
-             tank/blank\t0\t-\n\
-             tank/spaced\t0\t/mnt/my data\n\
-             \n",
-        );
-        let at = |n: &str| {
-            pkgs.iter()
-                .find(|p| p.name == n)
-                .unwrap_or_else(|| panic!("{} was not listed", n))
-                .properties
-                .get("mount")
-                .map(String::as_str)
-        };
-        assert_eq!(pkgs.len(), 6, "a blank line is not a dataset");
-        assert_eq!(at("tank/data"), Some("/mnt/data"));
-        assert_eq!(
-            at("tank/spaced"),
-            Some("/mnt/my data"),
-            "tab-separated, not whitespace"
-        );
-        // Three spellings of "ZFS is not mounting this". None is a path, so none is reported as
-        // one — a declared `@mount=` against any of them is unsatisfied, which is what the
-        // planner needs to see.
-        assert_eq!(at("tank/legacy"), None);
-        assert_eq!(at("tank/hidden"), None);
-        assert_eq!(at("tank/blank"), None);
-    }
-
-    #[test]
-    fn lvm_name_splits_into_group_and_volume() {
-        assert_eq!(split_lvm("vg0/data").unwrap(), ("vg0", "data"));
-        // A name that is not `group/volume` is refused, not guessed at.
-        assert!(split_lvm("data").is_err());
-        assert!(split_lvm("vg0/").is_err());
-        assert!(split_lvm("/data").is_err());
-    }
-
-    #[test]
-    fn lvm_create_needs_a_group_size_and_volume() {
-        assert_eq!(
-            lvm_create("vg0", "data", "10G"),
-            vec!["-n", "data", "-L", "10G", "vg0"]
-        );
-    }
-
-    #[test]
-    fn lvm_remove_confirms_and_names_the_path() {
-        assert_eq!(lvm_remove("vg0", "data"), vec!["-y", "vg0/data"]);
-    }
-
-    #[tokio::test]
-    async fn zfs_removal_of_an_absent_dataset_is_done_not_an_error() {
-        let (mock, exec) = storage_layer(&[("zfs list -H -o name tank/data", out(""))]);
-        let z = ZfsInstallable {
-            core: Arc::new(ZfsBackendCore {
-                executor: exec,
-                name: "zfs".to_string(),
-            }),
-        };
-        z.remove(&["tank/data".to_string()], false, removal_token())
-            .await
-            .expect("already absent is convergence, not a failure");
-        assert!(
-            !mock.get_calls().await.iter().any(|c| c.contains("destroy")),
-            "an absent dataset must not be destroyed: {:?}",
-            mock.get_calls().await
-        );
-    }
-
-    #[tokio::test]
-    async fn zfs_destroys_a_dataset_that_is_there() {
-        let (mock, exec) = storage_layer(&[("zfs list -H -o name tank/data", out("tank/data\n"))]);
-        let z = ZfsInstallable {
-            core: Arc::new(ZfsBackendCore {
-                executor: exec,
-                name: "zfs".to_string(),
-            }),
-        };
-        z.remove(&["tank/data".to_string()], false, removal_token())
-            .await
-            .expect("present dataset is removed");
-        assert!(
-            mock.get_calls()
-                .await
-                .iter()
-                .any(|c| c.contains("zfs destroy -r tank/data")),
-            "the present dataset was never destroyed: {:?}",
-            mock.get_calls().await
-        );
-    }
-
-    #[tokio::test]
-    async fn zfs_cannot_verify_is_refused_not_read_as_absent() {
-        // The M5 posture at the effector: an ask that fails is not "nothing there", or a
-        // listing outage would skip the destroy in silence.
-        let (mock, exec) = storage_layer(&[(
-            "zfs list -H -o name tank/data",
-            Err(Error::Io("zfs exited 2".into())),
-        )]);
-        let z = ZfsInstallable {
-            core: Arc::new(ZfsBackendCore {
-                executor: exec,
-                name: "zfs".to_string(),
-            }),
-        };
-        let e = z
-            .remove(&["tank/data".to_string()], false, removal_token())
-            .await
-            .expect_err("cannot verify must refuse, not skip");
-        assert!(!e.to_string().is_empty());
-        assert!(
-            !mock.get_calls().await.iter().any(|c| c.contains("destroy")),
-            "no destroy runs on an unverifiable ask"
-        );
-    }
-
-    #[tokio::test]
-    async fn lvm_removal_of_an_absent_volume_is_done_not_an_error() {
-        let (mock, exec) = storage_layer(&[(
-            "lvs --noheadings --units b --nosuffix -o vg_name,lv_name vg0/data",
-            out(""),
-        )]);
-        let l = LvmInstallable {
-            core: Arc::new(LvmBackendCore {
-                executor: exec,
-                name: "lvm".to_string(),
-            }),
-        };
-        l.remove(&["vg0/data".to_string()], false, removal_token())
-            .await
-            .expect("already absent is convergence");
-        assert!(
-            !mock
-                .get_calls()
-                .await
-                .iter()
-                .any(|c| c.contains("lvremove")),
-            "an absent volume must not be lvremoved: {:?}",
-            mock.get_calls().await
-        );
-    }
-
-    /// The listing carries each volume's size in bytes, so `sync` can see a `@size=` that no
-    /// longer matches (Q19). Bytes, because `lvs` would otherwise print `10.00g` and the
-    /// comparison would be against a rounded display string.
-    #[test]
-    fn the_volume_listing_reads_sizes_in_bytes() {
-        let pkgs = parse_lvs_list(
-            "  vg0 data 10737418240\n\
-             \x20 vg0 logs 5368709120\n\
-             \x20 vg1 data 1073741824\n\
-             \n",
-        );
-        assert_eq!(pkgs.len(), 3, "a blank line is not a volume");
-        let at = |n: &str| {
-            pkgs.iter()
-                .find(|p| p.name == n)
-                .unwrap_or_else(|| panic!("{} was not listed", n))
-                .properties
-                .get("size")
-                .map(String::as_str)
-        };
-        // `vg0/data` and `vg1/data` are two volumes; the group is part of the name, not decoration.
-        assert_eq!(at("vg0/data"), Some("10737418240"));
-        assert_eq!(at("vg0/logs"), Some("5368709120"));
-        assert_eq!(at("vg1/data"), Some("1073741824"));
-    }
-
-    /// A quota is three states — a limit, a dataset read with no limit, and (by the property
-    /// being absent) a listing that could not run. The middle one is why `NO_LIMIT` exists: a
-    /// declared `@quota=` against a dataset with none is drift, and reading "no limit" as
-    /// "unknown" would leave that quota unapplied for ever.
-    #[test]
-    fn the_dataset_listing_tells_no_quota_apart_from_a_quota() {
-        let pkgs = parse_zfs_list(
-            "tank/capped\t10737418240\t/mnt/capped\n\
-             tank/free\t0\t/mnt/free\n\
-             tank/legacy\t0\tlegacy\n",
-        );
-        let at = |n: &str| {
-            pkgs.iter()
-                .find(|p| p.name == n)
-                .unwrap()
-                .properties
-                .get("quota")
-                .map(String::as_str)
-        };
-        assert_eq!(at("tank/capped"), Some("10737418240"));
-        assert_eq!(at("tank/free"), Some(NO_LIMIT));
-        assert_eq!(at("tank/legacy"), Some(NO_LIMIT));
-        // The mountpoint column still reads correctly with a quota column in front of it.
-        let mount = |n: &str| {
-            pkgs.iter()
-                .find(|p| p.name == n)
-                .unwrap()
-                .properties
-                .get("mount")
-                .map(String::as_str)
-        };
-        assert_eq!(mount("tank/capped"), Some("/mnt/capped"));
-        assert_eq!(mount("tank/legacy"), None);
-    }
-
-    /// Q19's ruling, in the one function that carries it. A volume already the declared size is
-    /// left alone; a bigger declaration grows it; a smaller one is refused unless the line says
-    /// otherwise, and the refusal names both sizes so the reader can tell which way it went.
-    #[test]
-    fn a_declared_size_grows_a_volume_and_will_not_shrink_one_unasked() {
-        let ten = 10 * (1 << 30);
-
-        // Already right: nothing to run. Including when the unit differs from the one on disk —
-        // a comparison by string here is the "a change on every sync, for ever" bug.
-        assert!(resize_plan("vg0", "data", "10G", ten, false)
-            .unwrap()
-            .is_none());
-        assert!(resize_plan("vg0", "data", "10240M", ten, false)
-            .unwrap()
-            .is_none());
-
-        // Growing needs no permission: the space was not being used by anything.
-        let (program, args) = resize_plan("vg0", "data", "20G", ten, false)
-            .unwrap()
-            .expect("a bigger declaration is a change");
-        assert_eq!(program, "lvextend");
-        assert_eq!(args, vec!["--resizefs", "-L", "20G", "vg0/data"]);
-
-        // Shrinking without the flag is refused, and the message carries both sizes and the way
-        // out — an error that says "no" without saying what to do is a puzzle.
-        let err = resize_plan("vg0", "data", "5G", ten, false)
-            .expect_err("shrinking unasked must be refused")
-            .to_string();
-        assert!(err.contains("10G"), "{}", err);
-        assert!(err.contains("5G"), "{}", err);
-        assert!(err.contains("@allow_shrink=true"), "{}", err);
-
-        // With the flag it runs — and it runs `--resizefs`, which shrinks the filesystem first.
-        // A bare `lvreduce` here would be the data loss the flag was supposed to make
-        // deliberate rather than the resize it was supposed to permit.
-        let (program, args) = resize_plan("vg0", "data", "5G", ten, true)
-            .unwrap()
-            .expect("with the flag, a smaller declaration is a change");
-        assert_eq!(program, "lvreduce");
-        assert_eq!(
-            args,
-            vec!["--resizefs", "--yes", "-L", "5G", "vg0/data"],
-            "the filesystem shrinks before the volume, or this is truncation"
-        );
-
-        // The flag is `true` and nothing else — a typo must not read as permission. (The
-        // decision is made from a bool here; `install` is where the string is compared, and
-        // this is the assertion that anything but `true` never reaches the shrink branch.)
-        assert!(resize_plan("vg0", "data", "5G", ten, false).is_err());
-    }
-
-    /// A `@size` that is not a size is refused rather than guessed at — and refused *before* any
-    /// resize decision, so a typo can never be read as "smaller".
-    #[test]
-    fn a_size_that_is_not_a_size_is_refused_before_anything_is_decided() {
-        let err = resize_plan("vg0", "data", "ten gigs", 10 * (1 << 30), true)
-            .expect_err("junk must not resize a volume")
-            .to_string();
-        assert!(err.contains("is not a size"), "{}", err);
-        assert!(err.contains("vg0/data"), "{}", err);
-    }
 }
