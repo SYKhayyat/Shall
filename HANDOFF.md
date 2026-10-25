@@ -21,7 +21,7 @@ easier.
 | converter scripts in the repo | 2, both with passing self-tests |
 
 `cargo build --all-targets`, clippy at `-D warnings --all-features`, and `cargo fmt -- --check` are
-green after the current batch. The library target reports **628 passed, 0 failed**. The latest
+green after the current batch. The library target reports **578 passed, 0 failed**. The latest
 focused mirrors report **17 artifact-selection, 17 flatpak, and 16 packages tests**, all passing.
 The latest setting and NixOS mirrors each report **24 passed, 0 failed**; registry, GitHub, and
 btrfs report **23, 21, and 21 passed**. The latest full test run
