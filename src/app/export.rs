@@ -222,7 +222,7 @@ pub enum Outcome {
 /// The export's filename with `.shall` inserted before the extension, used when the real
 /// filename is already taken: `package.json` -> `package.shall.json`, `Brewfile` ->
 /// `Brewfile.shall`.
-fn beside(name: &str) -> String {
+pub fn beside(name: &str) -> String {
     match name.split_once('.') {
         Some((stem, ext)) => format!("{}.shall.{}", stem, ext),
         None => format!("{}.shall", name),
@@ -231,7 +231,7 @@ fn beside(name: &str) -> String {
 
 /// The first free name in the `beside` family, so a second export never clobbers the first
 /// export's fallback either.
-async fn free_path(out_dir: &Path, name: &str) -> PathBuf {
+pub async fn free_path(out_dir: &Path, name: &str) -> PathBuf {
     let base = beside(name);
     let first = out_dir.join(&base);
     if !tokio::fs::try_exists(&first).await.unwrap_or(false) {
@@ -330,134 +330,4 @@ pub async fn export(
         results.push((name, outcome));
     }
     Ok(results)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn p(backend: &str, name: &str, ver: Option<&str>) -> Pkg {
-        (backend.into(), name.into(), ver.map(|s| s.into()))
-    }
-
-    /// `J5`: the nix format takes BOTH prefixes, and renders through the backend rather than
-    /// through a second copy of the format.
-    #[test]
-    fn the_nix_format_takes_both_prefixes_and_renders_a_module() {
-        assert_eq!(Format::parse("nix"), Some(Format::Nix));
-        assert_eq!(Format::parse("nixos"), Some(Format::Nix));
-        assert_eq!(Format::Nix.filename(), "shall-packages.nix");
-
-        let out = Format::Nix
-            .render(&[
-                p("nix", "ripgrep", Some("14.1.0")),
-                p("nixos", "jq", None),
-                p("apt", "curl", None),
-            ])
-            .expect("renders")
-            .expect("two nix packages apply");
-
-        // A NixOS module, not a list of names.
-        assert!(
-            out.contains("environment.systemPackages = with pkgs; ["),
-            "{out}"
-        );
-        assert!(out.contains("ripgrep"), "{out}");
-        assert!(out.contains("jq"), "{out}");
-        // The apt package is somebody else's format.
-        assert!(!out.contains("curl"), "{out}");
-        // **No version.** A NixOS module pins by pinning nixpkgs, not per package — the same
-        // reason `nixos:` refuses an `@version=`. A rendered `14.1.0` would not evaluate.
-        assert!(!out.contains("14.1.0"), "{out}");
-    }
-
-    /// A machine with no nix packages writes no nix file, rather than an empty module that
-    /// would import cleanly and silently declare nothing.
-    #[test]
-    fn no_nix_packages_means_no_nix_file() {
-        assert!(matches!(
-            Format::Nix.render(&[p("apt", "curl", None)]),
-            Ok(None)
-        ));
-    }
-
-    #[test]
-    fn format_parse_accepts_aliases() {
-        assert_eq!(Format::parse("brewfile"), Some(Format::Brew));
-        assert_eq!(Format::parse("requirements"), Some(Format::Pip));
-        assert_eq!(Format::parse("package.json"), Some(Format::Npm));
-        assert_eq!(Format::parse("deb"), Some(Format::Apt));
-        assert_eq!(Format::parse("nonsense"), None);
-    }
-
-    #[test]
-    fn brewfile_lists_only_brew_packages() {
-        let pkgs = vec![p("brew", "ripgrep", Some("14.1")), p("apt", "curl", None)];
-        let out = Format::Brew.render(&pkgs).unwrap().unwrap();
-        assert!(out.contains("brew \"ripgrep\"\n"));
-        assert!(!out.contains("curl"));
-    }
-
-    #[test]
-    fn requirements_pins_versions_and_falls_back() {
-        let pkgs = vec![
-            p("pip", "requests", Some("2.31.0")),
-            p("pipx", "black", None),
-            p("npm", "left-pad", Some("1.3.0")),
-        ];
-        let out = Format::Pip.render(&pkgs).unwrap().unwrap();
-        assert!(out.contains("requests==2.31.0\n"));
-        assert!(out.contains("black\n"));
-        assert!(!out.contains("left-pad"));
-    }
-
-    #[test]
-    fn package_json_is_valid_and_scoped_to_node() {
-        let pkgs = vec![
-            p("yarn", "react", Some("18.2.0")),
-            p("pnpm", "vite", None),
-            p("apt", "curl", None),
-        ];
-        let out = Format::Npm.render(&pkgs).unwrap().unwrap();
-        let doc: serde_json::Value = serde_json::from_str(&out).unwrap();
-        assert_eq!(doc["dependencies"]["react"], "^18.2.0");
-        assert_eq!(doc["dependencies"]["vite"], "*");
-        assert!(doc["dependencies"].get("curl").is_none());
-    }
-
-    #[test]
-    fn empty_when_no_package_applies() {
-        let pkgs = vec![p("cargo", "ripgrep", Some("14.1"))];
-        assert!(matches!(Format::Brew.render(&pkgs), Ok(None)));
-        assert!(matches!(Format::Apt.render(&pkgs), Ok(None)));
-    }
-
-    #[test]
-    fn beside_keeps_the_extension_readable() {
-        assert_eq!(beside("package.json"), "package.shall.json");
-        assert_eq!(beside("requirements.txt"), "requirements.shall.txt");
-        assert_eq!(beside("Brewfile"), "Brewfile.shall");
-        assert_eq!(beside("Aptfile"), "Aptfile.shall");
-    }
-
-    #[tokio::test]
-    async fn free_path_steps_past_a_fallback_that_is_also_taken() {
-        let dir = tempfile::tempdir().unwrap();
-        let d = dir.path();
-
-        // Nothing taken: the plain `.shall` name.
-        assert_eq!(
-            free_path(d, "package.json").await,
-            d.join("package.shall.json")
-        );
-
-        // The fallback itself exists, so a second export must not clobber the first one's.
-        tokio::fs::write(d.join("package.shall.json"), "first")
-            .await
-            .unwrap();
-        assert_eq!(
-            free_path(d, "package.json").await,
-            d.join("package.shall.json.2")
-        );
-    }
 }

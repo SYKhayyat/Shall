@@ -14,6 +14,8 @@ mod a_health_command_that_was_never_approved_stops_the_sync;
 mod a_rebuild_is_narrated_as_a_rebuild;
 mod guard;
 mod planner;
+mod resolver;
+mod saved_plan;
 mod the_advice_names_the_thing_to_do_about_it;
 mod the_declared_health_checks_are_the_declared_ones;
 mod the_engine_finds_the_hooks_this_machine_wrote;

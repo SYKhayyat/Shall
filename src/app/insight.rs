@@ -46,7 +46,7 @@ async fn resolve_managed(
 
 /// Returns None for backends with no standardized purl type — those must be omitted from
 /// SBOM output rather than guessed at.
-fn purl_type(backend: &str) -> Option<&'static str> {
+pub fn purl_type(backend: &str) -> Option<&'static str> {
     Some(match backend {
         "cargo" => "cargo",
         "npm" | "pnpm" | "yarn" | "bun" => "npm",
@@ -66,7 +66,7 @@ fn purl_type(backend: &str) -> Option<&'static str> {
 }
 
 /// Build a purl string for a package, if its backend maps to a known type.
-fn purl(backend: &str, name: &str, version: Option<&str>) -> Option<String> {
+pub fn purl(backend: &str, name: &str, version: Option<&str>) -> Option<String> {
     let ty = purl_type(backend)?;
     Some(match version {
         Some(v) if !v.is_empty() => format!("pkg:{}/{}@{}", ty, name, v),
@@ -76,7 +76,7 @@ fn purl(backend: &str, name: &str, version: Option<&str>) -> Option<String> {
 
 /// Map a Shall backend to its OSV.dev ecosystem identifier for vulnerability queries.
 /// Returns None for backends OSV does not cover (so we skip them honestly).
-fn osv_ecosystem(backend: &str) -> Option<&'static str> {
+pub fn osv_ecosystem(backend: &str) -> Option<&'static str> {
     Some(match backend {
         "cargo" => "crates.io",
         "npm" | "pnpm" | "yarn" | "bun" => "npm",
@@ -97,7 +97,7 @@ fn is_concrete(v: &str) -> bool {
 }
 
 /// Build a CycloneDX 1.5 document from resolved packages. Pure — unit tested.
-fn build_cyclonedx(pkgs: &[ResolvedPkg]) -> Value {
+pub fn build_cyclonedx(pkgs: &[ResolvedPkg]) -> Value {
     let components: Vec<Value> = pkgs
         .iter()
         .map(|p| {
@@ -164,7 +164,7 @@ pub struct AuditReport {
 
 /// Build an OSV `querybatch` body from resolved packages. Returns the JSON body and a
 /// map from each query's position back to the source package index. Pure — unit tested.
-fn build_querybatch(pkgs: &[ResolvedPkg]) -> (Value, Vec<usize>) {
+pub fn build_querybatch(pkgs: &[ResolvedPkg]) -> (Value, Vec<usize>) {
     let mut queries = Vec::new();
     let mut index_map = Vec::new();
     for (i, p) in pkgs.iter().enumerate() {
@@ -185,7 +185,7 @@ fn build_querybatch(pkgs: &[ResolvedPkg]) -> (Value, Vec<usize>) {
 
 /// Extract the per-query vulnerability IDs from an OSV `querybatch` response, aligned to
 /// the request order. Pure — unit tested.
-fn parse_querybatch_ids(v: &Value) -> Vec<Vec<String>> {
+pub fn parse_querybatch_ids(v: &Value) -> Vec<Vec<String>> {
     v.get("results")
         .and_then(|r| r.as_array())
         .map(|arr| {
@@ -208,7 +208,7 @@ fn parse_querybatch_ids(v: &Value) -> Vec<Vec<String>> {
 }
 
 /// Pull the first "fixed" version out of an OSV vulnerability detail record. Pure.
-fn extract_fixed(detail: &Value) -> Option<String> {
+pub fn extract_fixed(detail: &Value) -> Option<String> {
     let affected = detail.get("affected")?.as_array()?;
     for a in affected {
         let Some(ranges) = a.get("ranges").and_then(|r| r.as_array()) else {
@@ -229,7 +229,7 @@ fn extract_fixed(detail: &Value) -> Option<String> {
 }
 
 /// A short human summary from an OSV vulnerability detail record. Pure.
-fn summarize(detail: &Value) -> Option<String> {
+pub fn summarize(detail: &Value) -> Option<String> {
     if let Some(s) = detail.get("summary").and_then(|s| s.as_str()) {
         return Some(s.to_string());
     }
@@ -478,7 +478,7 @@ pub struct Declared {
 ///
 /// The absent tag is the built-in default: `to_spec` writes the tag only when a level above
 /// it answered.
-fn format_choice(backend: &str, options: &crate::config::grammar::Options) -> Option<String> {
+pub fn format_choice(backend: &str, options: &crate::config::grammar::Options) -> Option<String> {
     if !crate::backends::capability::selects_artifacts(backend) {
         return None;
     }
@@ -660,7 +660,7 @@ async fn introduced_in_git(
 /// The arms must match what the writers actually store: `declare.rs` writes `hook:<manager>`
 /// and never a bare `hook`, so a reader matching the bare word answers every hooked package
 /// with the fallback and nothing says so.
-fn provenance(source: &str) -> String {
+pub fn provenance(source: &str) -> String {
     match source {
         "imperative" => "installed by `shall install`".to_string(),
         "adopt" => "adopted from this machine".to_string(),
@@ -852,240 +852,4 @@ pub async fn why(
         );
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Every string a writer in the tree stores in `ManagedPackage::source`, against the
-    /// sentence `why` gives back. One entry per writer, so a new writer with no arm here is
-    /// visible as a bare "recorded by" rather than as nothing at all.
-    #[test]
-    fn why_names_each_writer_by_the_string_that_writer_stores() {
-        // `app/shell/mod.rs`, `app/leases.rs`, `app/snapshot_restore.rs`.
-        assert_eq!(provenance("imperative"), "installed by `shall install`");
-        // `app/adopt.rs`.
-        assert_eq!(provenance("adopt"), "adopted from this machine");
-        // `verbs/declare.rs` — `hook:<manager>`, one arm per manager it can be. Matching a
-        // bare `hook` made this unreachable for every one of them.
-        for manager in ["choco", "scoop", "apt", "brew"] {
-            let said = provenance(&format!("hook:{manager}"));
-            assert!(
-                said.contains("caught by the hook") && said.contains(manager),
-                "hook:{manager} answered {said:?}"
-            );
-        }
-        // `verbs/declare.rs` local-file arm, `app/diagnostics.rs`, `verbs/plan.rs`,
-        // `app/sync/mod.rs` — no dedicated sentence, and the fallback names them.
-        for other in ["local-file", "diagnostics", "plan", "sync"] {
-            assert_eq!(provenance(other), format!("recorded by {other}"));
-        }
-        // A declared package: `model/resolve.rs` stamps `file:line`, which is the answer
-        // `why` exists to give.
-        assert_eq!(
-            provenance("modules/dev.txt:14"),
-            "recorded by modules/dev.txt:14"
-        );
-    }
-
-    fn p(backend: &str, name: &str, version: Option<&str>) -> ResolvedPkg {
-        ResolvedPkg {
-            backend: backend.into(),
-            name: name.into(),
-            version: version.map(String::from),
-        }
-    }
-
-    fn opts(pairs: &[(&str, &str)]) -> crate::config::grammar::Options {
-        let mut o = crate::config::grammar::Options::default();
-        for (k, v) in pairs {
-            for part in v.split(';') {
-                o.insert(*k, part);
-            }
-        }
-        o
-    }
-
-    #[test]
-    fn a_backend_that_installs_one_artifact_gets_no_formats_line() {
-        assert_eq!(format_choice("apt", &opts(&[])), None);
-        assert_eq!(format_choice("cargo", &opts(&[("formats", "deb")])), None);
-    }
-
-    #[test]
-    fn the_line_says_so_when_the_declaration_carried_formats() {
-        let c = format_choice(
-            "github",
-            &opts(&[("formats", "deb;tarball"), ("__formats_from", "line")]),
-        )
-        .unwrap();
-        assert_eq!(c, "deb, tarball — set on the line");
-    }
-
-    #[test]
-    fn the_priority_file_says_so_when_the_backend_body_won() {
-        let c = format_choice(
-            "github",
-            &opts(&[
-                ("formats", "appimage;binary"),
-                ("__formats_from", "priority (github)"),
-            ]),
-        )
-        .unwrap();
-        assert_eq!(c, "appimage, binary — set by `github` in `priority`");
-    }
-
-    #[test]
-    fn an_absent_tag_is_the_built_in_default_and_prints_this_machines_order() {
-        let c = format_choice("github", &opts(&[])).unwrap();
-        let expected = crate::backends::artifact::default_formats();
-        assert_eq!(
-            c,
-            format!("{} — the built-in default for this machine", expected)
-        );
-    }
-
-    #[test]
-    fn purl_and_ecosystem_maps() {
-        assert_eq!(purl_type("cargo"), Some("cargo"));
-        assert_eq!(purl_type("pnpm"), Some("npm"));
-        assert_eq!(purl_type("pipx"), Some("pypi"));
-        assert_eq!(purl_type("winget"), None);
-        assert_eq!(osv_ecosystem("pip"), Some("PyPI"));
-        assert_eq!(osv_ecosystem("cargo"), Some("crates.io"));
-        assert_eq!(osv_ecosystem("snap"), None);
-        assert_eq!(
-            purl("cargo", "ripgrep", Some("13.0.0")).as_deref(),
-            Some("pkg:cargo/ripgrep@13.0.0")
-        );
-    }
-
-    #[test]
-    fn cyclonedx_has_expected_shape() {
-        let pkgs = vec![
-            p("cargo", "ripgrep", Some("13.0.0")),
-            p("winget", "Foo", None),
-        ];
-        let doc = build_cyclonedx(&pkgs);
-        assert_eq!(doc["bomFormat"], "CycloneDX");
-        assert_eq!(doc["specVersion"], "1.5");
-        let comps = doc["components"].as_array().unwrap();
-        assert_eq!(comps.len(), 2);
-        assert_eq!(comps[0]["name"], "ripgrep");
-        assert_eq!(comps[0]["version"], "13.0.0");
-        assert_eq!(comps[0]["purl"], "pkg:cargo/ripgrep@13.0.0");
-        // winget has no purl mapping and no version → those keys absent.
-        assert!(comps[1].get("purl").is_none());
-        assert!(comps[1].get("version").is_none());
-        assert_eq!(comps[1]["properties"][0]["value"], "winget");
-    }
-
-    #[test]
-    fn querybatch_skips_uncovered_and_floating() {
-        let pkgs = vec![
-            p("cargo", "ripgrep", Some("13.0.0")), // covered + concrete -> included
-            p("cargo", "exa", Some("latest")),     // floating -> skipped
-            p("winget", "Foo", Some("1.0")),       // no ecosystem -> skipped
-            p("pip", "requests", None),            // no version -> skipped
-        ];
-        let (body, map) = build_querybatch(&pkgs);
-        assert_eq!(map, vec![0]);
-        let queries = body["queries"].as_array().unwrap();
-        assert_eq!(queries.len(), 1);
-        assert_eq!(queries[0]["package"]["ecosystem"], "crates.io");
-        assert_eq!(queries[0]["version"], "13.0.0");
-    }
-
-    #[test]
-    fn parses_querybatch_ids_aligned() {
-        let resp = json!({
-            "results": [
-                { "vulns": [ {"id": "RUSTSEC-1"}, {"id": "GHSA-2"} ] },
-                {},
-                { "vulns": [] }
-            ]
-        });
-        let ids = parse_querybatch_ids(&resp);
-        assert_eq!(
-            ids,
-            vec![
-                vec!["RUSTSEC-1".to_string(), "GHSA-2".to_string()],
-                vec![],
-                vec![]
-            ]
-        );
-    }
-
-    #[test]
-    fn a_declaration_reads_as_a_place_you_can_open() {
-        // `why` answers "where is this declared?", so the answer is a file and a line — not
-        // a label like "manifest: local.txt" that names a file the model no longer reads.
-        let d = Declaration {
-            at: "modules/dev.txt:3".into(),
-            scopes: vec!["module:dev".into(), "profile:Work".into()],
-            lapsed: false,
-            from_regex: None,
-        };
-        assert_eq!(
-            d.describe(),
-            "at modules/dev.txt:3 (module:dev, profile:Work)"
-        );
-    }
-
-    #[test]
-    fn a_lapsed_declaration_says_it_stopped_counting() {
-        // II.16: an expired line lingers in your file. `why` must not report it as the
-        // reason a package is present when it has stopped being that reason.
-        let d = Declaration {
-            at: "modules/imperative.txt:2".into(),
-            scopes: vec!["module:imperative".into()],
-            lapsed: true,
-            from_regex: None,
-        };
-        assert!(d.describe().contains("expired, so it no longer counts"));
-    }
-
-    #[test]
-    fn a_declaration_with_no_scope_still_names_its_file() {
-        // A line in a profile belongs to no module, and an imperative spec to neither.
-        let d = Declaration {
-            at: "profiles/Work:5".into(),
-            scopes: vec![],
-            lapsed: false,
-            from_regex: None,
-        };
-        assert_eq!(d.describe(), "at profiles/Work:5");
-    }
-
-    #[test]
-    fn a_package_a_pattern_matched_names_the_pattern() {
-        // II.15: no line says `fonts-cantarell`. Sending the reader to `modules/dev.txt:3`
-        // without saying why would send them to a line that does not mention the package.
-        let d = Declaration {
-            at: "modules/dev.txt:3".into(),
-            scopes: vec!["module:dev".into()],
-            lapsed: false,
-            from_regex: Some("^fonts-".into()),
-        };
-        assert_eq!(
-            d.describe(),
-            "matched by `re:^fonts-` at modules/dev.txt:3 (module:dev)"
-        );
-    }
-
-    #[test]
-    fn extracts_fixed_version_and_summary() {
-        let detail = json!({
-            "summary": "Memory corruption in foo",
-            "affected": [
-                { "ranges": [ { "type": "SEMVER", "events": [ {"introduced": "0"}, {"fixed": "1.2.3"} ] } ] }
-            ]
-        });
-        assert_eq!(extract_fixed(&detail).as_deref(), Some("1.2.3"));
-        assert_eq!(
-            summarize(&detail).as_deref(),
-            Some("Memory corruption in foo")
-        );
-    }
 }

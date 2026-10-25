@@ -1901,7 +1901,7 @@ fn validate_setting(origin: &Origin, name: &str, options: &Options) -> Result<()
 /// "takes: a, b, c" lists the keys and explains none of them, and a refusal that only names
 /// the legal spellings makes the reader go and look up what they do — so each caller keeps the
 /// sentence it had, and only the *table* is shared.
-pub(super) fn validate_extra_options(
+pub fn validate_extra_options(
     origin: &Origin,
     kind: OptionKind,
     name: &str,
