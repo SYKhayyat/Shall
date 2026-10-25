@@ -12,7 +12,7 @@
 /// `web:` is absent on purpose: a `web:URL` spec names exactly one file, so there is nothing
 /// to select. It joins this list if and when a `web:` spec can resolve to several candidates.
 /// `appimage:` is absent because the backend name is already the format.
-const SELECTS_ARTIFACTS: &[&str] = &["github"];
+pub const SELECTS_ARTIFACTS: &[&str] = &["github"];
 
 /// Backends that fetch a URL, make the result executable and put it on `PATH`, so SEC2's
 /// download rules — HTTPS, a checksum, and the two flags that relax them — mean something.
@@ -43,7 +43,7 @@ const HAS_CHANNELS: &[&str] = &["snap", "flatpak"];
 ///
 /// One table, read by both ends: the grammar decides the key is legal here and nowhere else,
 /// and `backends/registry.rs` builds the backend's `install_source_option` from it.
-const INSTALLS_FROM_SOURCE: &[(&str, &str)] = &[("helm", "url")];
+pub const INSTALLS_FROM_SOURCE: &[(&str, &str)] = &[("helm", "url")];
 
 /// Options one family of backends reads and no other backend can act on: the geometry of a
 /// declared storage object (Q18), and snap's confinement. Each is legal exactly where something
@@ -58,7 +58,7 @@ const INSTALLS_FROM_SOURCE: &[(&str, &str)] = &[("helm", "url")];
 ///
 /// The third column is what the key means, and a refusal is that sentence plus the backends
 /// that take it — an error that says "not here" and not where is a puzzle, not a message.
-const SCOPED_OPTIONS: &[(&str, &[&str], &str)] = &[
+pub const SCOPED_OPTIONS: &[(&str, &[&str], &str)] = &[
     (
         "size",
         &["lvm"],
@@ -387,107 +387,4 @@ pub fn backends_that_cannot_pin() -> Vec<&'static str> {
 /// compare equal or a channel change would fire on every sync (D13).
 pub fn channel_risk(channel: &str) -> &str {
     channel.rsplit('/').next().unwrap_or(channel).trim()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_two_axes_do_not_overlap() {
-        for b in SELECTS_ARTIFACTS {
-            assert!(
-                !has_channels(b),
-                "{} would accept both formats and channel",
-                b
-            );
-        }
-    }
-
-    #[test]
-    fn a_backend_whose_ecosystem_chose_the_file_has_neither() {
-        for b in ["apt", "dnf", "cargo", "npm", "pacman"] {
-            assert!(!selects_artifacts(b));
-            assert!(!has_channels(b));
-        }
-    }
-
-    #[test]
-    fn appimage_does_not_select_a_format_because_it_is_one() {
-        assert!(!selects_artifacts("appimage"));
-    }
-
-    /// The two ends of U39's one table. A source key the grammar has never heard of is
-    /// rejected as a misspelling, and the backend then refuses every line that carries it —
-    /// which is how the fix shipped the first time, and it took a real helm to notice.
-    #[test]
-    fn every_install_source_key_is_a_legal_option_key() {
-        for (backend, key) in INSTALLS_FROM_SOURCE {
-            assert!(
-                crate::config::grammar::statement::PACKAGE_OPTION_KEYS.contains(key),
-                "`@{}` is {}'s install source and the grammar would refuse it",
-                key,
-                backend
-            );
-            assert_eq!(install_source_key(backend), Some(*key));
-            assert!(is_source_key(key));
-        }
-    }
-
-    /// The same two ends as the test above, for the wider table (Q18). Five keys were read by a
-    /// backend and refused by the parser at once, so this asserts the join rather than any one
-    /// of them: a key that reaches no line is a feature nobody can use.
-    #[test]
-    fn every_scoped_option_is_a_legal_option_key() {
-        for (key, backends, meaning) in SCOPED_OPTIONS {
-            assert!(
-                crate::config::grammar::statement::PACKAGE_OPTION_KEYS.contains(key),
-                "`@{}` is read by {} and the grammar would refuse it",
-                key,
-                backends.join(", ")
-            );
-            assert!(!backends.is_empty(), "`@{}` is legal on nothing", key);
-            assert!(!meaning.is_empty(), "`@{}` refuses without saying why", key);
-            for b in *backends {
-                assert!(takes_scoped_option(b, key));
-            }
-            assert!(is_scoped_option(key));
-            let reason = scoped_option_reason(key);
-            assert!(reason.contains(backends[0]));
-            // One backend takes it; several take it. A refusal is read by a person.
-            assert!(
-                reason.ends_with(if backends.len() == 1 {
-                    "takes."
-                } else {
-                    "take."
-                }),
-                "`@{}`: {}",
-                key,
-                reason
-            );
-        }
-    }
-
-    #[test]
-    fn a_scoped_option_is_refused_on_a_backend_that_cannot_read_it() {
-        for b in ["apt", "cargo", "npm", "github", "brew"] {
-            for (key, _, _) in SCOPED_OPTIONS {
-                assert!(!takes_scoped_option(b, key), "{} takes @{}", b, key);
-            }
-        }
-        // The neighbours inside the family are the ones worth naming: each storage backend
-        // takes a different subset, and a table that let them share everything would put
-        // `@size` on a subvolume that has no size to set.
-        assert!(!takes_scoped_option("zfs", "size"));
-        assert!(!takes_scoped_option("btrfs", "size"));
-        assert!(!takes_scoped_option("zfs", "mount_options"));
-        assert!(!takes_scoped_option("lvm", "quota"));
-    }
-
-    #[test]
-    fn a_backend_that_installs_by_name_has_no_source_key() {
-        for b in ["apt", "cargo", "npm", "krew", "github", "web"] {
-            assert!(install_source_key(b).is_none(), "{}", b);
-        }
-    }
 }

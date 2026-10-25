@@ -1,0 +1,8 @@
+pub use shall::backends::capability::*;
+mod a_backend_that_installs_by_name_has_no_source_key;
+mod a_backend_whose_ecosystem_chose_the_file_has_neither;
+mod a_scoped_option_is_refused_on_a_backend_that_cannot_read_it;
+mod appimage_does_not_select_a_format_because_it_is_one;
+mod every_install_source_key_is_a_legal_option_key;
+mod every_scoped_option_is_a_legal_option_key;
+mod the_two_axes_do_not_overlap;

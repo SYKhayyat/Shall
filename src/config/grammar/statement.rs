@@ -1993,6 +1993,10 @@ pub(crate) const PACKAGE_OPTION_KEYS: &[&str] = &[
     "allow_shrink",
 ];
 
+pub fn package_option_keys() -> &'static [&'static str] {
+    PACKAGE_OPTION_KEYS
+}
+
 /// Whether `key` names an option a package line may carry.
 ///
 /// The one predicate over II.2's table. It exists because the lexer needs the same answer the

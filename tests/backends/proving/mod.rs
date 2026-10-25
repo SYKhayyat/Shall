@@ -1,0 +1,7 @@
+pub use shall::backends::proving::*;
+mod a_driven_backend_whose_bytes_were_never_captured_reads_unproven;
+mod a_name_neither_table_names_reads_unproven;
+mod a_retired_row_reads_retired_and_is_never_driven;
+mod every_entry_states_a_reason;
+mod no_backend_is_both_a_receipt_and_a_driven_lifecycle;
+mod the_table_answers_both_ways;
