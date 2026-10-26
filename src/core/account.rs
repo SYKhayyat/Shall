@@ -171,7 +171,7 @@ fn sid_text(sid: &[u32]) -> Option<String> {
     if unsafe { ConvertSidToStringSidW(sid.as_ptr().cast_mut().cast(), &mut text) } == 0 {
         return None;
     }
-    let out = wide_to_string(text)?;
+    let out = unsafe { wide_to_string(text) }?;
     unsafe { LocalFree(text.cast()) };
     Some(out)
 }
@@ -473,7 +473,7 @@ fn resolve_named(name: &str) -> Result<Account> {
     // the first `u16`. The SID therefore read back as `"S"`, the `ProfileList` key below did not
     // exist, and `Account::current()` failed on Windows for every account. That is #106's
     // missing drift row: a `link:` target resolves through the current account.
-    let sid_key = wide_to_string(sid_text).ok_or_else(|| {
+    let sid_key = unsafe { wide_to_string(sid_text) }.ok_or_else(|| {
         Error::Other(format!(
             "could not read the identity of `{name}` back from Windows"
         ))
@@ -532,9 +532,13 @@ fn resolve_named(name: &str) -> Result<Account> {
             name
         )));
     }
-    let mut raw = bytes
-        .chunks_exact(std::mem::size_of::<u16>())
-        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+    // `as_chunks` rather than `chunks_exact`: the pair arrives as `[u8; 2]`, so the two indexes
+    // that could panic stop existing. The length check above already refuses an odd byte count.
+    let (pairs, _odd_trailing_byte) = bytes.as_chunks::<2>();
+    let mut raw = pairs
+        .iter()
+        .copied()
+        .map(u16::from_le_bytes)
         .collect::<Vec<_>>();
     while raw.last() == Some(&0) {
         raw.pop();
@@ -726,10 +730,16 @@ fn open_windows_path(path: &Path, write: bool) -> Result<winapi::um::winnt::HAND
 /// One reader for both SID strings, because the bug was one reader written twice: `sid_text`
 /// and `resolve_named` each decoded a wide buffer with `CStr::from_ptr` and each produced `"S"`.
 ///
+/// # Safety
+///
+/// `wide` must be null, or point to a NUL-terminated UTF-16 buffer that stays readable up to
+/// that NUL for the length of the call — the shape `ConvertSidToStringSidW` hands back and the
+/// only shape its callers hold.
+///
 /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
 /// test crate links the library without `cfg(test)`, so a private item is invisible there.
 #[cfg(windows)]
-pub fn wide_to_string(wide: *const u16) -> Option<String> {
+pub unsafe fn wide_to_string(wide: *const u16) -> Option<String> {
     if wide.is_null() {
         return None;
     }

@@ -180,6 +180,13 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   constant-time mask generation behind `zip`'s password handling) and `tokio 1.53.1 → 1.53.3`
   (RUSTSEC-2026-0386, `AsyncFd`'s safe constructors). Two `cargo update --precise` lines; the
   gate is the resolving check, and the suite stays green over the new versions.)
+- [x] #126 CI: the Windows build is red on a clippy lint in the account code — a public function
+  that dereferences a raw pointer. (High — **BUILT**: `wide_to_string` is now `pub unsafe fn` with
+  a `# Safety` section, because a public *safe* function that walks a raw pointer is a soundness
+  hole in the API and not only a lint; the two call sites and the mirror test carry the unsafe
+  block. The second lint — `chunks_exact` on the newest Rust — is the same family one toolchain
+  version away from red: `as_chunks` now, as `src/app/scheduler/mod.rs` already does it.
+  **The Windows cross-check is the only thing that can see this code**, and it is green.)
 
 ## Phase 3 — Correctness Mediums
 - [x] **Gate names cited anywhere are not checked for resolving, while `V.n` citations are.**
