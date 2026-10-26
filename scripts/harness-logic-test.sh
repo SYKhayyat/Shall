@@ -576,6 +576,10 @@ for _src in $SOURCES; do
         # shellcheck disable=SC2034
         PASS=0; FAILC=0; SOFTC=0
         soft() { SOFTC=$((SOFTC + 1)); }
+        # The lifted scoring helpers credit the section they ran in, and the credit is
+        # bookkeeping this test does not measure — so it is a no-op here rather than a call
+        # into a section file this test has no reason to keep.
+        _credit_section() { :; }
         # Both stubs are lifted too: the point is that `install_delivered` asks them, and a stub
         # here that the real body does not call would make this test pass for the wrong reason.
         _ok="$(lift grep_ok "$_src")"

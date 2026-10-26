@@ -1,4 +1,4 @@
-﻿# Shall v7 â€” the declarative model
+﻿# Shall v7 — the declarative model
 
 **This file is the way in. It holds the instructions and the map; the specification itself is
 in [`spec/`](spec/), one file per part.** It was 9,308 lines in one file until 2026-07-23, at
@@ -13,7 +13,7 @@ which point nobody could find a decision in it and 84 of them had no recorded an
 | [`spec/why.md`](spec/why.md) | V | The reason behind every Part II rule — each one the scar of a real bug. | **Before changing any Part II rule.** |
 | [`spec/plan.md`](spec/plan.md) | III + IV | The work in dependency order, each phase with its exit condition; then the proofs. | When picking up work. |
 | [`spec/bugs.md`](spec/bugs.md) | VI | Bugs killed by this design, and bugs carried forward. | Before building anything. |
-| [`spec/decisions.md`](spec/decisions.md) | — | **All 241 decisions. 236 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN.** Counted, not typed — `scripts/decision-count.sh --check`. | Before proposing anything. |
+| [`spec/decisions.md`](spec/decisions.md) | — | **All 243 decisions. 238 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN.** Counted, not typed — `scripts/decision-count.sh --check`. | Before proposing anything. |
 | [`attic/lessons.md`](attic/lessons.md) | — | Thirty-one lessons, each the residue of a shipped defect. For a person, once. | **Never.** It says so at the top, and it means agents. |
 
 **Parts VIII–XIII were proposal documents — artifacts and channels (`D1`–`D17`), `when`

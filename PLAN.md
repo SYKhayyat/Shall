@@ -187,6 +187,15 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   block. The second lint — `chunks_exact` on the newest Rust — is the same family one toolchain
   version away from red: `as_chunks` now, as `src/app/scheduler/mod.rs` already does it.
   **The Windows cross-check is the only thing that can see this code**, and it is green.)
+- [x] #127 CI: the Linux build is red on the decision register's counts — and two ruled entries
+  have no row in the index. (High — **BUILT**: the register holds 243 (238 ANSWERED) where the
+  docs said 241 (236 ANSWERED); `C5` and `C6` are ruled in the body — II.68/II.69, V.218/V.219 —
+  with no row in the index, and the `C` heading said 4 where the series holds 6. **And the title
+  line said 228, which the checker could not see**, because the dash in it is a mojibake `â€”`
+  rather than an em dash: a stale figure hidden behind a broken byte pair. Two index rows, four
+  numbers, one dash. The same step printed `_credit_section: command not found` four times,
+  because the lifted scoring helpers credit a section the sandbox does not have; the credit is a
+  no-op there now, and the gate prints no "command not found".)
 
 ## Phase 3 — Correctness Mediums
 - [x] **Gate names cited anywhere are not checked for resolving, while `V.n` citations are.**
