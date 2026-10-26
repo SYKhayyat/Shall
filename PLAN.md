@@ -440,7 +440,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   - **What is not claimed:** no product fix. Whether a listing that cannot see an installed
     package is a lister bug or an install that delivered nothing is still unknown, because the
     harness threw that evidence away on every previous run. The next native run carries it.)
-- [ ] #113 the `guix` leg's section floor is red. (**Filed 2026-10-18 off the nightly logs.**
+- [~] #113 the `guix` leg's section floor is red. (**Filed 2026-10-18 off the nightly logs.**
   `RESULT pass=316 fail=9 soft=12`, and the most specific line is not one of the nine: **`section
   floor: this run credited fewer checks than container-linux-guix-local has before`**, naming six
   sections short — `Chains and the per-host lock` 17→15, `Git history + rollback` 8→3, `rebuild`
@@ -451,8 +451,18 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   **the first step is to say whether `guix install` delivers on that image**, with `#100`'s trap in
   mind: an `rc` of 0 is not delivery. Slackware's single red is `go: … failed permanently` and is
   filed here rather than alone, because `go` is the one backend failing on three legs for the same
-  subject (`arch`'s is in `#100`). **Not started here: it needs a container runtime, and there is
-  no Docker on this host.**)
+  subject (`arch`'s is in `#100`). **Diagnosed 2026-10-26 on a podman host, root cause measured:**
+  the entrypoint installed `git` and `bash` in ONE `guix install`, and git's chain fails to build
+  (`glib-2.86.5`, *with* a C toolchain present, so the compiler was not the missing piece). One
+  failing derivation took the whole profile down, so the leg lost **bash too** — and with no git,
+  section 11's `lx install "$PKG"` never ran, which is why the rebuild/lock/rollback checks all
+  reported the package still removed. Control measured: an image with **no** apt packages installs
+  `guix install bash` fine (`bash 5.2.37` in the profile), so the toolchain was never needed.
+  **BUILT**: the image carries apt's `git` (the history proofs want a git *binary*, not a guix
+  feature), the entrypoint installs `bash` alone and keeps its log; the guard's FAIL now prints
+  the protected list and what is installed under the backend. **Not yet run**: the full image
+  build + harness run on this host (the loader forbids running NixOS-linked binaries in Debian;
+  the image's own builder stage is building it).)
 - [x] #115 the removal guard's undo door has never been tested. (**Filed 2026-10-20 off the
   nightly's own mutation output, and the finding is a family.** `enforce_own_work`
   (`src/app/sync/guard.rs:1371`) — the door a failed sync uses to undo what it just installed —

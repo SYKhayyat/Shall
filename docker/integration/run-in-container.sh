@@ -1114,6 +1114,12 @@ if [ -z "$GUARD_VICTIM" ]; then
     echo "  FAIL  not one of Shall's protected packages is installed here, so nothing could be"
     echo "        protected and this check proved nothing. Add one to the image, or widen"
     echo "        default_protected_packages so it names something this distro ships."
+    # **The two lists it compared.** "Not one of them" is a claim about a protected set and an
+    # installed set, and the reader could see neither: on the guix image (2026-10-26) the
+    # fixtures that would have supplied a victim had failed to install, and this said nothing
+    # about either list — a verdict with nothing to act on.
+    echo "        protected: $(lx protected 2>/dev/null | sed -n 's/^  \([a-z0-9][a-z0-9._+-]*\)$/\1/p' | tr '\n' ' ')"
+    echo "        installed under $BACKEND: $(printf '%s\n' "$_have" | head -20 | tr '\n' ' ')"
 else
     echo "        guard victim: $GUARD_VICTIM (from \`shall protected\`, and installed here)"
     lx -y uninstall "$GUARD_VICTIM" >/dev/null 2>&1 || true

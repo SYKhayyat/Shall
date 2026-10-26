@@ -45,6 +45,29 @@ RUN cargo test --release --no-run --test suite \
 
 FROM metacall/guix:latest
 ENV SHALL_IT_IMAGE=guix
+# **The system `git`, and why it is not guix's.**
+#
+# The history and rollback proofs want a `git` BINARY on PATH. Every other image in this matrix
+# gets it from its base, and Shall's git-backed history is not a guix feature — so this image
+# should too. Guix's own `git` cannot be built here: on 2026-10-26 `guix install git` failed at
+# `glib-2.86.5` — **and that was with a C toolchain in the image**, so the compiler was not the
+# missing piece. (What it wanted is in the build log the daemon writes and the image discards,
+# `/var/log/guix/drvs/*.drv.gz`; that log is the next thing to read if guix's git is ever wanted
+# here.)
+#
+# **And the failure was not one failure.** The fixtures were installed in ONE command, so
+# git's dependency chain failing took `bash` down with it: the profile derivation that
+# carried both could not be built, and the leg lost its removal-guard victim, its git, its
+# rebuild proof and its lock file — four failures and a section floor, from one package that
+# could not be built. The fixtures are installed one at a time now, and only the one that has
+# to come from guix is installed by guix.
+#
+# Not fatal when it fails: the image is then what it was, the fixture reports itself
+# unrunnable, and the leg measures what it can rather than dying before it measures anything.
+RUN (apt-get update \
+     && apt-get install -y --no-install-recommends git \
+     && rm -rf /var/lib/apt/lists/*) \
+  || echo "WARNING: this image carries no apt, so it has no git for the history proofs."
 # **On the image, not in the entrypoint, because CI overrides the entrypoint.** `guix install`
 # writes to `/root/.guix-profile/bin` and then tells you to put it on PATH yourself; the harness
 # needs it to find a canary it just installed. The argv and terminator probes run this image with
