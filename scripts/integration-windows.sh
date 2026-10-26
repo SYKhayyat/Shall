@@ -746,26 +746,54 @@ ok "priority file exists" test -f "$SHALL_CONFIG_DIR/priority"
 ok "active file exists" test -f "$SHALL_CONFIG_DIR/active"
 grep_ok "priority names this backend" "$BACKEND" cat "$SHALL_CONFIG_DIR/priority"
 
-# --- 2. Discovery / read-only ---------------------------------------------
-echo "[2] Discovery / read-only verbs"
-# A shared runner ships managers this sweep does not test (composer, winget), and the
-# image updates move their state under us: composer stopped answering JSON, winget lost its
-# listing, between two green runs with no Shall commit between. The gate keeps its teeth for
-# the BACKEND UNDER TEST - if it cannot run, the sweep is red - and downgrades failures in
-# other managers to soft, naming each, because those are facts about GitHub's image.
-if ok "check health" lx check health; then
-    :
-else
-    _bad="$(grep '^  \[FAIL\]' /tmp/itw.out | grep -v "\[$BACKEND\]" || true)"
-    if [ -n "$_bad" ]; then
+# The health gate: one verdict, and the count follows it.
+#
+# **A shared runner ships managers this sweep does not test**, and the image updates move
+# their state under us: composer stopped answering JSON, winget lost its listing, between two
+# green runs with no Shall commit between. The gate keeps its teeth for the BACKEND UNDER TEST
+# — if it cannot run, the sweep is red — and downgrades failures in other managers to soft,
+# naming each, because those are facts about GitHub's image.
+#
+# **It had no teeth at all.** The question it asked was `grep -v "\[$BACKEND\]"`, and a health
+# row reads `[FAIL] composer` — so the pattern never matched anything, and a sick backend under
+# test was excused by a sick manager that was not. And the soft branch never took back the
+# FAIL that `ok` had already counted, so the sweep went red on a health check it had just
+# excused: measured on the 2026-10-26 nightly, where composer and winget were excused and the
+# leg still failed on them.
+health_gate() {
+    _hg_out=/tmp/itw-health.out
+    lx check health >"$_hg_out" 2>&1
+    _hg_rc=$?
+    if [ "$_hg_rc" -eq 0 ]; then
+        PASS=$((PASS + 1)); echo "  PASS  check health"; return 0
+    fi
+    # The rows that are not OK, and the backend under test's own row among them. `absent` is in
+    # the second list and not the first: a manager nobody installed is information, and the
+    # backend under test being absent is this sweep's business.
+    _hg_sick="$(grep -E '^  \[(FAIL|WARN)\]' "$_hg_out" || true)"
+    _hg_mine="$(grep -E "^  \[(FAIL|WARN|absent)\] $BACKEND( |$)" "$_hg_out" || true)"
+    if [ -n "$_hg_mine" ]; then
+        FAILC=$((FAILC + 1))
+        FAILED_NAMES="$FAILED_NAMES\n    - check health (rc=$_hg_rc, backend under test implicated)"
+        echo "  FAIL  check health (rc=$_hg_rc) — the backend under test is sick"
+        printf '%s\n' "$_hg_mine" | sed 's/^/          /'
+        return 1
+    fi
+    if [ -n "$_hg_sick" ]; then
         SOFTC=$((SOFTC + 1))
         echo "  soft  check health reports sickness in managers this sweep does not test:"
-        printf '%s\n' "$_bad" | sed 's/^/          /'
-    else
-        FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES\n    - check health (rc=$?, backend under test implicated)"
-        echo "  FAIL  check health"; excerpt /tmp/itw.out
+        printf '%s\n' "$_hg_sick" | sed 's/^/          /'
+        return 0
     fi
-fi
+    FAILC=$((FAILC + 1))
+    FAILED_NAMES="$FAILED_NAMES\n    - check health (rc=$_hg_rc, with no sick row to name)"
+    echo "  FAIL  check health (rc=$_hg_rc)"; excerpt "$_hg_out"
+    return 1
+}
+
+# --- 2. Discovery / read-only ---------------------------------------------
+echo "[2] Discovery / read-only verbs"
+health_gate
 ok "check drift" lx check drift
 # The aggregate `check` exits 2 when it has findings to report, and an unmanaged package
 # on a developer's own machine is a finding. Every named section exits 0.
@@ -1346,6 +1374,45 @@ list_cannot_show() {
     esac
 }
 
+# Did the install DELIVER anything? The manager's exit code is its opinion, not evidence.
+#
+# **This gate was written for the container harness and never came here.** `install_delivered`
+# lives in `docker/integration/run-in-container.sh`, where an install that returned 0 having
+# delivered nothing was scored as a real lifecycle and every removal check below it passed
+# vacuously. The sibling harness kept the old shape — "PASS <be> installed <pkg> for real" on
+# rc=0 alone — so on Windows every manager could report an install that put nothing on the
+# machine, and the two checks after it (the listing and the PATH) were the only witnesses, both
+# of them reported as failures without the evidence that would say which one was broken.
+#
+# **Both witnesses are asked, and neither returns early.** The listing matching is not evidence
+# that the binary arrived, and the binary arriving is not evidence that the listing works; a
+# backend needs one of them, and the gate says which.
+install_delivered() { # backend
+    _id_be="$1"
+    _id_arrived=0
+    # The listing is captured rather than piped, because a failure here is the one place the
+    # reader needs to see what Shall said — and `grep_ok` throws the output away by design.
+    _id_list=/tmp/itw-listing.txt
+    # A lister that cannot speak for its backend is not evidence against it, so its listing is
+    # not asked; the binary is the only witness it has.
+    if [ -z "$(list_cannot_show "$_id_be")" ]; then
+        lx list --backend "$_id_be" >"$_id_list" 2>&1
+        # **A listing that does not show the package is printed, not just scored.** "Output
+        # missing /x/" says what the check wanted; what Shall actually said is the diagnosis,
+        # and it is the one thing this gate exists to make visible.
+        if grep_ok "$_id_be: list shows $ctok" "$ctok" cat "$_id_list"; then
+            _id_arrived=1
+        else
+            echo "        --- what the listing said ---"
+            sed 's/^/        | /' "$_id_list" | head -20
+        fi
+    fi
+    if [ -n "$cbin" ] && assert_binary_reachable "$_id_be" "$cbin" "$LIFELOG" "$_prepath"; then
+        _id_arrived=1
+    fi
+    [ "$_id_arrived" -eq 1 ]
+}
+
 # Take a canary's line back out of the manifest.
 #
 # Every install syncs the WHOLE model, so a line left behind is retried by every backend
@@ -1445,12 +1512,27 @@ lifecycle() {
     echo "$be" >> "$LEDGER/be-life"
 
     _nolist="$(list_cannot_show "$be")"
-    if [ -n "$_nolist" ]; then
-        soft "$be: list does not show $ctok — $_nolist"
-    else
-        grep_ok "$be: list shows $ctok" "$ctok" lx list --backend "$be"
+    [ -n "$_nolist" ] && soft "$be: list does not show $ctok — $_nolist"
+
+    # **Did it actually arrive?** The manager's exit code is its opinion, not evidence, and the
+    # removal half below answers `nok "$be: $ctok is gone from list"` — a grep that finds
+    # nothing, which passes on a package that was never here.
+    #
+    # So the two witnesses are asked first, and their answer decides whether the rest of the
+    # lifecycle can mean anything. When nothing arrived the backend is recorded as UNMEASURED,
+    # because this registry answered 0 and served nothing: that is a fact about the machine,
+    # and the coverage ratchet must not read it as coverage lost.
+    if ! install_delivered "$be"; then
+        soft "$be: the install returned 0 and delivered nothing — \`$ctok\` is not in this backend's listing and \`$cbin\` is not on PATH, so the removal half below would have scored a package that was never here"
+        echo "$be" >> "$LEDGER/be-life-unmeasured"
+        echo "$be" >> "$LEDGER/be-life-partial"
+        echo "        --- what the install said ---"
+        excerpt "$LIFELOG" 12
+        echo "        --- what the listing said ---"
+        excerpt /tmp/itw-listing.txt 20
+        undeclare_canary "$be:$cpkg"
+        return 1
     fi
-    [ -n "$cbin" ] && assert_binary_reachable "$be" "$cbin" "$LIFELOG" "$_prepath"
 
     if [ "$cmode" = "unsupported" ]; then
         grep_ok "$be: removal reports a graceful unsupported" \

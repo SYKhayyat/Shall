@@ -852,9 +852,23 @@ ok "priority file exists" test -f "$SHALL_CONFIG_DIR/priority"
 grep_ok "priority names this backend" "$BACKEND" cat "$SHALL_CONFIG_DIR/priority"
 ok "active file exists" test -f "$SHALL_CONFIG_DIR/active"
 
+# The health check, and the evidence when it fails.
+#
+# **The sick rows are printed ABOVE the system section, and the failure excerpt is the tail.**
+# So a health check that failed on a backend showed the system checks and hid the backend that
+# was sick — the evidence named the wrong thing. The rows are printed here, by name, because
+# "some checks are CRITICAL" is not a diagnosis.
+health_check() {
+    if ok "check health" lx check health; then
+        return 0
+    fi
+    grep -E '^  \[(FAIL|WARN)\]' /tmp/it.out | sed 's/^/        | /'
+    return 1
+}
+
 # --- 2. Discovery (read-only) ---------------------------------------------
 section "[2] Discovery / read-only verbs"
-ok "check health" lx check health
+health_check
 ok "check drift" lx check drift
 # `plan` exits 2 when it finds work (`H2`, owner 2026-08-13) — it is a read-only command
 # that looked, which is what 2 means. `answers` is the helper for exactly that: 0 or 2 is
@@ -1940,12 +1954,27 @@ undeclare_canary() {
 # the four systematic failures from the six that rotated.
 #
 # **Either signal is evidence, and a manager that cannot show its listing is not a failure.** A
-# backend whose `list` cannot report the package (`cabal`) still installed it, so it counts as
-# delivered and only the PATH check decides.
+# backend whose `list` cannot report the package (`cabal`) still installed it, so its listing is
+# not asked at all and only the binary decides.
+#
+# **The listing is captured rather than piped.** `grep_ok` throws the output away by design, and
+# this is the one place a reader needs to see what Shall said: a listing that does not show a
+# package the install just put on the machine is the whole of #112, and "output missing /x/" is
+# not a diagnosis.
 install_delivered() { # backend
     _id_be="$1"
-    if [ -n "$(list_cannot_show "$_id_be")" ]; then
-        return 0            # cannot show it; the PATH check below is the only witness
+    _id_arrived=0
+    _id_list=/tmp/it-listing.txt
+    if [ -z "$(list_cannot_show "$_id_be")" ]; then
+        lx list --backend "$_id_be" >"$_id_list" 2>&1
+        # **A listing that does not show the package is printed, not just scored.** "Output
+        # missing /x/" says what the check wanted; what Shall actually said is the diagnosis.
+        if grep_ok "$_id_be: list shows $ctok" "$ctok" cat "$_id_list"; then
+            _id_arrived=1
+        else
+            echo "        --- what the listing said ---"
+            sed 's/^/        | /' "$_id_list" | head -20
+        fi
     fi
     # **Both witnesses are asked, and neither returns early.** Asking the listing and stopping
     # there dropped the PATH check on every backend whose listing matched — five checks per run,
@@ -1953,8 +1982,6 @@ install_delivered() { # backend
     # not "how many questions did it take to find out", so it ORs the two answers *after* both
     # have been scored. That is also why `install_delivered` is not the place the PASS lines come
     # from: they come from the checks it calls.
-    _id_arrived=0
-    grep_ok "$_id_be: list shows $ctok" "$ctok" lx list --backend "$_id_be" && _id_arrived=1
     if [ -n "$cbin" ] && assert_binary_reachable "$_id_be" "$cbin" "$LIFELOG" "$_prepath"; then
         _id_arrived=1
     fi
@@ -2026,7 +2053,10 @@ lifecycle() {
         # served nothing. `be-life-partial` is also written because the lifecycle genuinely did
         # not complete, and one of the two ledgers has to say so.
         soft "$be: install returned 0 and delivered nothing — \`$ctok\` is not in its listing and \`$cbin\` is not on PATH, so the removal half below would have scored a package that was never here"
+        echo "        --- what the install said ---"
         excerpt "$LIFELOG" 6
+        echo "        --- what the listing said ---"
+        excerpt /tmp/it-listing.txt 20
         echo "$be" >> "$LEDGER/be-life-unmeasured"
         echo "$be" >> "$LEDGER/be-life-partial"
         undeclare_canary "$be:$cpkg"

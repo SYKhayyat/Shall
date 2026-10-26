@@ -922,6 +922,23 @@ jobs:
       run: brew install coreutils
     - name: Native sweep (brew)
       run: SHALL="$PWD/target/release/shall" bash scripts/integration-windows.sh brew wget
+    # The sweep's own evidence, kept. The listing and the install log are what a failure needs
+    # and the CI log alone does not carry: a sweep that fails on "list shows X" says what it
+    # wanted, not what Shall said. The harness prints both now, and these files are the same
+    # bytes, kept so a reader does not have to dig them out of a log.
+    - name: Keep the macOS sweep's evidence
+      if: always()
+      shell: bash
+      run: |
+        mkdir -p "$GITHUB_WORKSPACE/native-evidence/macos"
+        cp /tmp/itw*.out /tmp/itw-listing.txt "$GITHUB_WORKSPACE/native-evidence/macos/" 2>/dev/null || true
+    - name: Upload the macOS sweep's evidence
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: native-sweep-evidence-macos
+        path: native-evidence/macos/
+        if-no-files-found: ignore
 
   # The native Windows sweep — the gate that found every hard failure in the 2026-07-27
   # readiness assessment, and which no automated job ran on any platform. `release-check.ps1`
@@ -959,9 +976,33 @@ jobs:
     - name: Native sweep (scoop)
       shell: bash
       run: SHALL="$PWD/target/release/shall.exe" bash scripts/integration-windows.sh scoop jq
+    # **The second sweep runs even when the first one failed.** It did not, and the nightly
+    # said so: the 2026-10-26 Windows job ran the scoop sweep, the sweep failed, and the
+    # nimble sweep never started — so the nightly's answer for one of the two backends it
+    # exists to answer was "never ran", which reads exactly like a pass.
+    - name: Keep the scoop sweep's evidence
+      if: always()
+      shell: bash
+      run: |
+        mkdir -p "$GITHUB_WORKSPACE/native-evidence/scoop"
+        cp /tmp/itw*.out /tmp/itw-listing.txt "$GITHUB_WORKSPACE/native-evidence/scoop/" 2>/dev/null || true
     - name: Native sweep (nimble)
+      if: always()
       shell: bash
       run: SHALL="$PWD/target/release/shall.exe" bash scripts/integration-windows.sh nimble nimjson
+    - name: Keep the nimble sweep's evidence
+      if: always()
+      shell: bash
+      run: |
+        mkdir -p "$GITHUB_WORKSPACE/native-evidence/nimble"
+        cp /tmp/itw*.out /tmp/itw-listing.txt "$GITHUB_WORKSPACE/native-evidence/nimble/" 2>/dev/null || true
+    - name: Upload the native sweeps' evidence
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: native-sweep-evidence-windows
+        path: native-evidence/
+        if-no-files-found: ignore
 
   # Does every subcommand Shall invokes still exist in the tool it invokes it on?
   #

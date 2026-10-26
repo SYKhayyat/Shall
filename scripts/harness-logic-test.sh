@@ -564,14 +564,23 @@ done
 # On 2026-10-02 `void` reported `PASS uv installed pyjokes for real` for four backends whose
 # package was never on the machine, and every removal check below it passed *vacuously* —
 # `nok "... is gone from list"` is satisfied by a grep that finds nothing.
-# **One harness, and that is a fact rather than a loop that forgot to spread.** The Windows
-# harness has no `install_delivered`: it drives its managers through `lx`, has no real-lifecycle
-# section and no `be-life` ledger, so there is nothing for this gate to guard there. A loop over
-# both would report "ok" for a harness the gate was never in.
+# **Both harnesses have to have it, and that is checked here rather than asserted in a
+# comment.** The Windows harness had no gate until 2026-10-26: it scored "PASS <be> installed
+# <pkg> for real" on rc=0 alone, and the two checks under it were the only witnesses — both
+# reported as failures, with no evidence of which one was broken. The sentence that excused
+# it — "the Windows harness has no real-lifecycle section and no be-life ledger" — was true
+# when it was written and stopped being true when the lifecycle and the ledger arrived; the
+# sentence outlived the fact and the gate stayed in one harness. A harness without the gate is
+# a FAIL here, not a skip.
 for _src in $SOURCES; do
+    TOTAL=$((TOTAL + 1))
     # shellcheck disable=SC2043
     _body="$(lift install_delivered "$_src")"
-    [ -n "$_body" ] || continue          # this harness does not have that lifecycle
+    if [ -z "$_body" ]; then
+        echo "  BAD   $(basename "$_src") has no install_delivered — an install that returned 0 having delivered nothing is scored as a real lifecycle there"
+        BAD=$((BAD + 1))
+        continue
+    fi
     (
         # shellcheck disable=SC2034
         PASS=0; FAILC=0; SOFTC=0
@@ -631,23 +640,27 @@ for _src in $SOURCES; do
             _bad=1
         fi
 
-        # (4) A manager whose listing cannot show the package is judged DELIVERED — it still
-        # installed the thing, the listing is simply the wrong witness for it. Refusing to judge
-        # would take every cabal-class backend's PATH check with it, and a backend that installed
-        # correctly would be recorded as having installed nothing. This is the control for (3):
-        # the same empty listing, opposite answers, and the difference is whether the lister can
-        # speak for this backend at all.
+        # (4) A manager whose listing cannot show the package is judged by its BINARY — the
+        # listing is the wrong witness for it, so it is not asked at all. This is the control
+        # for (3): the same empty listing, opposite answers, and the difference is whether the
+        # lister can speak for this backend at all.
+        #
+        # **It used to be judged DELIVERED without asking anything**, because the code returned
+        # before the binary witness, while the comment above it said "only the PATH check
+        # decides". A cabal install that put nothing on the machine was therefore scored as a
+        # full lifecycle — the same bug this gate exists for, wearing the listing's name. The
+        # binary is asked now, and it is the witness that decides.
         list_cannot_show() { echo "this lister reports the library DB, not executables"; }
+        path_of() { case "$1" in the-binary) echo /usr/bin/the-binary ;; *) echo "" ;; esac; }
         install_delivered cabal || {
-            echo "  BAD   a backend whose listing cannot show the package was judged undelivered, so a correct cabal install would be recorded as having installed nothing"
+            echo "  BAD   a backend whose lister cannot speak for it was judged undelivered even though its binary was on PATH"
             _bad=1
         }
-        # And with a real listing plus nothing on PATH it is judged undelivered — so (4) is the
-        # lister's inability and not the gate having stopped looking.
-        list_cannot_show() { echo ""; }
+        # (5) And with neither — a lister that cannot speak for it AND no binary anywhere — it
+        # is undelivered, because nothing arrived and there is no witness that says otherwise.
         path_of() { echo ""; }
         if install_delivered cabal; then
-            echo "  BAD   the lister exception made the gate accept a backend with nothing listed and nothing on PATH"
+            echo "  BAD   a backend with no witness at all was judged delivered, so an install that put nothing on the machine is scored as a lifecycle"
             _bad=1
         fi
 
@@ -655,6 +668,107 @@ for _src in $SOURCES; do
     )
     if [ $? -eq 0 ]; then
         echo "  ok    $(basename "$_src") asks whether an install DELIVERED, not whether it returned 0"
+    else
+        BAD=$((BAD + 1))
+    fi
+done
+
+# The health gate — one verdict, and the count follows it.
+#
+# **The native sweep's gate had no teeth, and left behind a FAIL it had excused.** It asked
+# `grep -v "\[$BACKEND\]"` to find the sick rows that were NOT about the backend under test,
+# and a health row reads `[FAIL] composer` — so the exclusion matched nothing, every sick
+# manager matched, and a sick backend under test was excused by a sick manager that was not.
+# And the soft branch never took back the FAIL `ok` had already counted, so the sweep went
+# red on a check it had just excused: measured on the 2026-10-26 nightly, where composer and
+# winget were named as the sick managers and the sweep still failed on them.
+for _src in $SOURCES; do
+    # shellcheck disable=SC2043
+    _body="$(lift health_gate "$_src")"
+    [ -n "$_body" ] || continue          # this harness has no health gate
+    TOTAL=$((TOTAL + 1))
+    (
+        PASS=0; FAILC=0; SOFTC=0
+        soft() { SOFTC=$((SOFTC + 1)); }
+        _credit_section() { :; }
+        FAILED_NAMES=""
+        excerpt() { :; }
+        # Read by the `eval`'d body, which shellcheck cannot see across the boundary.
+        # shellcheck disable=SC2034
+        BACKEND=scoop
+        eval "$_body"
+
+        _bad=0
+        # (1) Healthy: one pass, and nothing else counted.
+        lx() { return 0; }
+        health_gate >/dev/null
+        [ "$PASS" -eq 1 ] && [ "$FAILC" -eq 0 ] || {
+            echo "  BAD   a healthy machine was not scored as exactly one pass (pass=$PASS fail=$FAILC)"
+            _bad=1
+        }
+
+        # (2) Sick in a manager this sweep does not test: a soft, and NOT a failure. The count
+        # follows the verdict — the old gate counted the FAIL first and never took it back.
+        lx() { echo "  [FAIL] composer — says it is ready but cannot list"; return 2; }
+        PASS=0; FAILC=0; SOFTC=0
+        health_gate >/dev/null
+        [ "$SOFTC" -eq 1 ] && [ "$FAILC" -eq 0 ] || {
+            echo "  BAD   a sick manager this sweep does not test left a FAIL counted (soft=$SOFTC fail=$FAILC)"
+            _bad=1
+        }
+
+        # (3) Sick in the backend under test: a failure, whatever else is sick with it.
+        lx() {
+            echo "  [FAIL] composer — says it is ready but cannot list"
+            echo "  [FAIL] scoop — says it is ready but cannot list"
+            return 2
+        }
+        PASS=0; FAILC=0; SOFTC=0
+        health_gate >/dev/null
+        [ "$FAILC" -eq 1 ] || {
+            echo "  BAD   the backend under test being sick was excused because another manager was sick too (fail=$FAILC)"
+            _bad=1
+        }
+
+        exit "$_bad"
+    )
+    if [ $? -eq 0 ]; then
+        echo "  ok    $(basename "$_src") keeps the health verdict and the failure count the same fact"
+    else
+        BAD=$((BAD + 1))
+    fi
+done
+
+# The container harness's health evidence: the sick rows, by name.
+#
+# **The failure excerpt is the tail, and the sick rows are printed above the system section.**
+# So a health check that failed on a backend showed the system checks and hid the backend that
+# was sick — the evidence named the wrong thing. "Some checks are CRITICAL" is not a diagnosis.
+for _src in $SOURCES; do
+    # shellcheck disable=SC2043
+    _body="$(lift health_check "$_src")"
+    [ -n "$_body" ] || continue          # this harness prints its own sick rows
+    TOTAL=$((TOTAL + 1))
+    (
+        PASS=0; FAILC=0; SOFTC=0
+        soft() { SOFTC=$((SOFTC + 1)); }
+        _credit_section() { :; }
+        FAILED_NAMES=""
+        eval "$_body"
+        _ok="$(lift ok "$_src")"
+        eval "$_ok"
+
+        _bad=0
+        lx() { echo "  [FAIL] apt — says it is ready but cannot list"; return 2; }
+        _out="$(health_check 2>&1)"
+        case "$_out" in
+            *"[FAIL] apt"*) : ;;
+            *) echo "  BAD   the health evidence did not name the sick backend, so the failure showed the system checks instead"; _bad=1 ;;
+        esac
+        exit "$_bad"
+    )
+    if [ $? -eq 0 ]; then
+        echo "  ok    $(basename "$_src") names the sick backend when the health check fails"
     else
         BAD=$((BAD + 1))
     fi

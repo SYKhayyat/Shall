@@ -39,8 +39,13 @@ fn windows_native_job_sets_up_and_runs_the_nimble_canary() {
     assert!(job.contains(
         "- name: Refresh Nimble package index\n      shell: powershell\n      run: nimble -y refresh"
     ));
+    // **`if: always()`, and that is the point of pinning it.** The sweep used to be skipped
+    // when the sweep before it failed — so the nightly's answer for one of the two backends
+    // this job exists to answer was "never ran", which reads exactly like a pass. Measured on
+    // the 2026-10-26 nightly: the scoop sweep failed and the nimble sweep never started.
+    assert!(job.contains("- name: Native sweep (nimble)\n      if: always()\n      shell: bash\n"));
     assert!(job.contains(
-        "- name: Native sweep (nimble)\n      shell: bash\n      run: SHALL=\"$PWD/target/release/shall.exe\" bash scripts/integration-windows.sh nimble nimjson"
+        "- name: Native sweep (nimble)\n      if: always()\n      shell: bash\n      run: SHALL=\"$PWD/target/release/shall.exe\" bash scripts/integration-windows.sh nimble nimjson"
     ));
 
     let setup = job

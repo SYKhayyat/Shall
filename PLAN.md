@@ -392,6 +392,34 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   not the backend. macOS's
   `installing a nonexistent package fails (expected non-zero, got 0)` is filed as a suspected
   *consequence* of the listing family, with the order of repair as its control.)
+  - **The harness side is BUILT (2026-10-26); the product side is not diagnosed, and cannot be
+    until it is.** The 2026-10-26 nightly (run `40294359242`, Windows job `121476681820`) is
+    `pass=306 fail=16 soft=15`, and the 16 are one family plus two neighbours: nine `list shows
+    <pkg>`, five `<pkg> is not on PATH and nothing said where it went`, one `check health
+    (rc=2)` — **a FAIL the sweep had itself excused** — and the coverage ceiling. Four harness
+    defects came out of it, and each is a family:
+    - **The Windows harness had no `install_delivered` gate.** It was written for the container
+      twin (#100) and never came here, so `PASS <be> installed <pkg> for real` was rc=0 and
+      nothing else. The excuse — "the Windows harness has no real-lifecycle section and no
+      `be-life` ledger" — was true when written and stopped being true when the lifecycle and
+      the ledger arrived; `harness-logic-test.sh` repeated it as a reason to skip, so the test
+      enshrined the gap. **Built:** the gate is in both harnesses with one rule (the listing
+      shows it OR the binary is where it can be found), a lister that cannot speak for its
+      backend is judged by the binary rather than excused, and a harness without the gate is a
+      **FAIL** in the predicate test, not a skip.
+    - **The native health gate had no teeth and left a counted FAIL behind.** It asked
+      `grep -v "\[$BACKEND\]"` for rows that were not about the backend under test, and a health
+      row reads `[FAIL] composer` — so the exclusion matched nothing, and the soft branch never
+      took back the FAIL `ok` had already counted. **Built:** one verdict, and the count follows
+      it.
+    - **The evidence was discarded, and this issue's premise about it was wrong.** "The job
+      uploads the logs" — it does not: the native jobs upload **no artifacts at all**. The
+      listing and the install log are now captured and printed, and the native jobs keep them.
+    - **The second native sweep never ran when the first failed** (the 2026-10-26 job ran
+      scoop, failed, and skipped nimble). `if: always()` now.
+  - **What is not claimed:** no product fix. Whether a listing that cannot see an installed
+    package is a lister bug or an install that delivered nothing is still unknown, because the
+    harness threw that evidence away on every previous run. The next native run carries it.)
 - [ ] #113 the `guix` leg's section floor is red. (**Filed 2026-10-18 off the nightly logs.**
   `RESULT pass=316 fail=9 soft=12`, and the most specific line is not one of the nine: **`section
   floor: this run credited fewer checks than container-linux-guix-local has before`**, naming six
