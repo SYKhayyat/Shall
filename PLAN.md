@@ -196,6 +196,26 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   numbers, one dash. The same step printed `_credit_section: command not found` four times,
   because the lifted scoring helpers credit a section the sandbox does not have; the credit is a
   no-op there now, and the gate prints no "command not found".)
+- [x] #128 CI: `Advisories and licences` is red on `main` — three published advisories in the `zstd`
+  chain. (High — **BUILT**: `RUSTSEC-2026-0391` (`zstd` 0.13.3) and `RUSTSEC-2026-0398` /
+  `RUSTSEC-2026-0403` (`zstd-safe` 7.2.4). `zstd` 0.13 → 0.14 in `Cargo.toml` — a breaking bump
+  for the crate's users, and Shall's one use of it (`zstd::stream::read::Decoder`) is the read
+  path the third advisory says is *not* affected. `zstd-safe` 8.2.0 comes with it, and the tree
+  already carried `zstd` 0.14.3 for `zip` — so the fixed version of the crate was in the lock
+  file all along, twice over. The gate is the resolving check, and the suite stays green over the
+  new versions.)
+- [ ] #129 four container legs are red on `check health (rc=2)`, and the failure names no backend.
+  (**Filed 2026-10-26 off the push run's logs**, `40353618389`: ubuntu `121680058151`
+  (`pass=395 fail=2`), fedora `121680058263` (`pass=374 fail=2`), opensuse `121680058267`
+  (`pass=375 fail=2`), arch `121680058061` (`pass=385 fail=6`) — the same `FAIL check health
+  (rc=2)` and the same section-floor breach. **The evidence is thrown away by the harness**: the
+  health output prints the sick backend rows ABOVE the `System:` section, and the failure excerpt
+  is the tail, so the reader gets four system rows, a summary line, and no backend. There are
+  two ways a backend is critical — absent-but-named-in-`priority` (`src/verbs/check.rs:197`) and
+  claims-healthy-but-cannot-list (`src/verbs/check.rs:287`) — and they are different bugs.
+  **Partly built**: the container harness prints the sick rows by name now (the `health_check`
+  in `docker/integration/run-in-container.sh`, with #112's commit), so the next run names the
+  backend. **That is the evidence, not the fix** — the issue stays open until the cause is found.)
 
 ## Phase 3 — Correctness Mediums
 - [x] **Gate names cited anywhere are not checked for resolving, while `V.n` citations are.**

@@ -101,7 +101,7 @@ bzip2 = "0.6"
 # Already in the tree as a transitive dependency of `zip`; named here because
 # `Format` offers `.tar.zst` and the extractor has to be able to open what the selector
 # chooses. Pinned to the version already resolved, so this adds no build.
-zstd = "0.13"
+zstd = "0.14"
 
 # Versioning Logic
 semver = "1.0"
