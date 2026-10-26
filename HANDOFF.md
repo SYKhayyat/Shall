@@ -1,280 +1,174 @@
-# HANDOFF — the #120 test-layout sweep
+# Handoff — 2026-10-26
 
-**Written 2026-10-24, updated 2026-10-25. Read this first; it is the whole operating manual.**
+State of the tree, what is verified, what is not, and how to continue. Read `CLAUDE.md` and
+`docs/SPEC.md` first; they still govern everything below.
 
-The objective is one thing: **no `src/` file keeps its own tests.** Every
-`#[cfg(test)]` mod moves to a mirror folder in `tests/`, one file per assertion,
-until the library builds without `cfg(test)` and every test the library had still
-runs. Ceilings are retired, not raised. Nothing is ever deleted to make the move
-easier.
+## Where the tree is
 
-**Done 2026-10-25 — the objective is reached.** The last two standalone source test
-modules moved (`src/backends/link_teardown_test.rs` → nine files in `tests/backends/link/`,
-`src/backends/artifact/real_releases_test.rs` → `tests/backends/artifact/real_releases/`,
-with the `real_releases.txt` fixture travelling with it), and the
-`#[cfg(all(test, windows))]` module in `src/core/launch.rs` went to `tests/core/launch/`.
-`cargo test --lib` now reports **0** tests: the library builds without `cfg(test)`.
-All 19 moved tests are in the suite (3,032 total; +13 runnable ones on this host — 6 of the
-launch mirror are `cfg(windows)`, counted exactly: lib fell 13, suite rose 13).
+- Branch `main`, HEAD `74dd8cc4`, pushed to `origin`.
+- Last three commits:
+  - `99540c13` — `#112`: native sweep delivery gate, health gate, evidence (verified, issue
+    commented, closed).
+  - `432dd20e` — `#128`: `zstd` 0.13 → 0.14, `zstd-safe` 8.2.0. **Verified**: build, clippy
+    `--all-features -D warnings`, `cargo deny check advisories` → `advisories ok`.
+    `cargo test --no-fail-fast` was re-run at HEAD; see "Background jobs" — check
+    `/tmp/opencode/suite-128.log` before closing the issue. One earlier full run tripped the
+    known load-sensitive `startup_budget_tests` at load average 25 (issue `#123`'s class); it
+    passes in isolation at the 120 ms ceiling.
+  - `74dd8cc4` — `#113`: guix fixture fix (image gets apt `git`; entrypoint installs `bash`
+    alone, one package at a time, keeps the log; guard FAIL prints both lists it compared).
+    **Not verified by a container run yet** — see below.
+- Working tree: only untracked `scripts/__pycache__/` and `scripts/widen-for-tests.py`
+  (deliberately never committed) plus this file until it is committed.
 
-Deleted with the move, in the same change:
+## Environment — no boundaries, and how
 
-- the guard's `#[cfg(test)]` token constructor `reaped_for_a_unit_test` — its last callers
-  were the moved link tests; nothing mints a token outside `guard.rs` at all now;
-- the `link_teardown_test.rs` special cases in `a_spawned_child_has_an_owner_tests` (exemption
-  row) and `a_removal_token_cannot_be_minted_tests` (path carve-out, now also carrying one
-  less `path` parameter);
-- `classify_format`, `windows_shim_wrap`, `Wrapped::with_config_file`,
-  `Sandbox::generate_wsb_config`, `core::account::wide_to_string` widened from private to
-  `pub`, each with the **`pub` for the tests' sake** note.
-
-**The Windows cross-check runs on this host after all** — the "cross compiler is not
-installed" note was stale: `/tmp/mingw-cc` (built 3 weeks ago, still in `/tmp`) plus the
-`x86_64-pc-windows-gnu` rust-std already in the toolchain. The check found and I fixed four
-pre-existing errors in earlier mirror batches (`sandbox`'s two private constructors,
-`account`'s `wide_to_string`, and — the same defect's twin — the `#[cfg(unix)]`-consumed-only
-helpers in `tests/core/account_exec/mod.rs` that became dead code on Windows). `cargo check
---target x86_64-pc-windows-gnu --lib --tests` with `RUSTFLAGS="-D warnings"` is **green**.
-
-Windows-gated mirrors need one care the other mirrors do not: a test that is `#[cfg(windows)]`
-cannot reach an item through a file-level `use super::*` that resolves only on Windows, so
-those test files call `shall::core::launch::windows_shim_wrap` by full path inside the gated
-function. The seam that stays private is C3's: nothing in `src/` mints authority for tests,
-and the guard no longer ships even a `cfg(test)` mint.
-
----
-
-## 1. Where the sweep is, in numbers
-
-| | |
-|---|---|
-| src files still carrying an inline test module | **0** — and the library carries **0** tests at all: `cargo test --lib` reports 0 |
-| tests already in mirror folders | executor, guard, transaction, generic, statement, sync, scheduler, language, windows, ecosystem, dnf, common, pacman, main, plan, resolve, vars, service, file, extras_lock, grammar, model, parsers, core, backends, launch, artifact/real_releases, link (teardown) |
-| `TOO_BIG_FOR_NOW` rows | **0** — the target state, and `executor.rs` was the last |
-| moved in this session | **2,129 tests** from 164 files; every inline test module is now mirrored under `tests/` |
-| converter scripts in the repo | 2, both with passing self-tests |
-| Windows cross-check | **green**, run for real from this host |
-
-`cargo build --all-targets`, clippy at `-D warnings --all-features`, `cargo fmt -- --check`,
-and the Windows cross-check are green after the current batch. The library target reports
-**0 tests**; the latest full suite run reported **3,047 passed, 0 failed** — the fresh-process
-`startup_budget_tests` (`#123`), the five `#117` sync-engine subjects, the inline-test
-exception gate, and the flat-file sweep are all in. The suite runs **3,047 tests**. The suite
-wiring audit and both converter self-tests pass. The Windows cross-check and
-`scripts/unix-check.sh` did **not** run this batch: no Docker and no MSVC toolchain on this
-host — a said-so skip.
-
-**Next session, in this order:** nothing left from the sweep. The remaining work is what
-`docs/spec/plan.md` calls Tier 0c and the open decisions register names; re-derive there.
-
-The sweep commit is this tree's HEAD; the hash is in the push record.
-
----
-
-## 2. The pipeline — four commands per file
+The host is NixOS 26.05 (`desktop`), 8 cores, 11 GB. There is **no Docker**, but there is
+**podman working rootless**, and **`nix-shell` may install anything needed**. Explicitly do
+**not** use `nix profile install`; use `nix-shell -p <pkg> --run '…'`.
 
 ```bash
-# 1. Move
-python3 scripts/move-inline-tests.py src/core/foo.rs tests/core/foo core::foo
+# Containers (verified: overlay storage, subuid 100000:65536, seccomp override works)
+nix-shell -p podman --run 'podman run --rm --security-opt seccomp=unconfined <image> ...'
+nix-shell -p podman --run 'podman build -f docker/integration/Dockerfile.guix -t shall-it-guix .'
 
-# 2. Widen — a small per-file script you write by hand from the compiler's errors.
-#    (no automated widen script; see §6)
-
-# 3. Fix the imports — ask both compilers, gate or drop each name
-python3 scripts/fix-mirror-imports.py --apply
-
-# 4. Verify
-cargo fmt && cargo build --all-targets && cargo test --lib \
-  && cargo clippy --all-targets --all-features --locked -- -D warnings \
-  && cargo test --no-fail-fast
-```
-
-**Read an existing mirror before running anything.** `tests/core/executor/mod.rs` is
-the smallest one and its shape is the one to copy: a `//!` line naming the mirrored
-item, then one `mod` per inline test module, then the shared helpers, then the imports.
-`tests/app/sync/guard/mod.rs` is the largest and shows the module-doc-comment style
-the repo prefers for a mirror that earned its place.
-
----
-
-## 3. The environment — this host, not a generic one
-
-**Every cargo command needs these exports, in the same shell invocation.** The system
-`cargo` at `/usr/bin/cargo` has no `fmt` subcommand and its `rustc` needs libz, so a
-command without them fails in a way that looks like a code error:
-
-```bash
-export LD_LIBRARY_PATH="/nix/store/lw86vj9kfwgvlivg3p8qg2nibpmhmsl9-zlib-1.3.2/lib"
+# Rust toolchain for cargo (host cargo is 1.98; CI pins 1.97.1)
+export LD_LIBRARY_PATH=/nix/store/lw86vj9kfwgvlivg3p8qg2nibpmhmsl9-zlib-1.3.2/lib
 export PATH="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:$PATH"
 export RUSTFMT=/nix/store/k2hwcha2p1fy0v0py34vq3jyvwqk339p-rustfmt-1.97.1/bin/rustfmt
+
+# shellcheck (CI parity: -S warning)
+/nix/store/qbz6d105ngpkwxlvxd303lafwavfpz8q-shellcheck-0.11.0-bin/bin/shellcheck -S warning \
+  scripts/*.sh docker/**/*.sh .githooks/*
+
+# Deny gate
+nix-shell -p cargo-deny --run 'cargo deny check advisories'
 ```
 
-**`RUSTFMT` must be 1.97.1, not whatever is default** — that is the version
-`.github/workflows/ci.yml` pins, and a locally-clean run at a different version is
-the trap this repo already documented once.
+The pre-commit hook (`cargo fmt -- --check`) **needs `PATH` and `RUSTFMT` above** or it fails
+with `no such command: fmt`. `git commit --no-verify` is the documented bypass when you mean it.
 
-**`git commit` needs the same exports in the same command.** The pre-commit hook runs
-`cargo fmt -- --check`, and without `PATH` carrying the toolchain it refuses a commit
-that is correctly formatted. If a commit is refused with *"Run 'cargo fmt'"*, check
-your exports before believing it.
+Long commands must be backgrounded and detached (`setsid nohup bash -c '…' >/tmp/x.log 2>&1
+</dev/null & disown`); a plain `&` dies when the tool call times out. Container image builds
+(Rust compiled in-image) take 20–40 minutes on this host; the machine cannot profitably run two
+at once (11 GB RAM, load spikes to 25 with two cargo builds).
 
-**The Windows cross-check is the fifth step of the chain and it is not optional** —
-CI runs on Windows, and `scripts/unix-check.sh` needs Docker (absent here). From this
-host:
+## Verification chain (repo rule)
+
+`cargo build --all-targets` → `cargo test --no-fail-fast` → `cargo clippy --all-targets
+--all-features --locked -- -D warnings` → `cargo fmt -- --check` → `scripts/unix-check.sh`.
+Never claim a step you did not run. The suite is one target, `suite`, built from `tests/main.rs`
+(`autotests = false`); a new test file is invisible until it is a `mod` there.
+
+## Issues — all of them exist and are posted
+
+Open, in order of what unblocks most:
+
+| # | Subject | State |
+|---|---|---|
+| `#128` | `Advisories and licences` red: three `zstd`-chain advisories | **Fixed** in `432dd20e`; close after the suite log is green |
+| `#113` | guix section floor + guix/slackware `go` | **Root cause measured, fix committed, harness run pending** (below) |
+| `#129` | Four legs red on `check health (rc=2)`, no backend named | Filed 2026-10-26; evidence now printed by `99540c13`, cause still unknown |
+| `#109` | apt legs install off baked lists | Open; reproduction now possible with podman |
+| `#100` | void leg's uv/yarn/gem/github listing failures | Open; `#112`'s delivery evidence lands on the next run |
+| `#112` | native sweep family | **Done** (`99540c13`), commented |
+| `#25` | stale umbrella | Open, untouched |
+| `#111` | fan-out bounded by core count | Open, untouched |
+| `#124`, `#94` | auto-declare on use | Open, untouched |
+
+Closed this session: `#125`, `#126`, `#127`, `#112` (commented, stays open until its evidence
+run lands — read the issue before acting).
+
+Decision register: **0 OPEN, 0 BUILT NEVER RULED**, 238 ANSWERED, 2 PARKED (D15, D16), 1
+DEFERRED (Q26), 2 HALF RULED (Q29, J4). None gate this work. Any ruling ships in the same commit
+(`docs/spec/decisions.md`, plus `target-state.md`/`why.md` if it is a rule) and
+`scripts/decision-count.sh --check` is the gate.
+
+## `#113` — measured root cause, and what is left
+
+Measured with podman on 2026-10-26:
+
+1. The entrypoint ran `guix install git bash` as **one** command. Guix's `git` chain fails on
+   this image at `glib-2.86.5` — **with a C toolchain present**, so the compiler was not the
+   missing piece. A profile derivation is one unit, so the failure took **`bash` down too**.
+2. Consequence chain: no `bash` → the removal guard has no victim (`The guard` 3→2); no `git` →
+   section 11's `lx -y install "$PKG"` never runs → the rebuild proof, the three lock proofs and
+   the rollback audit all report the package still removed (that is most of the six-section
+   floor breach).
+3. Control: an image with **no** apt packages does `guix install bash` fine (`bash 5.2.37` in
+   `/root/.guix-profile`). The toolchain was never needed.
+
+Fix committed in `74dd8cc4`. **To confirm it**, build the full image and drive the harness:
 
 ```bash
-export PATH="$(dirname $(command -v x86_64-w64-mingw32-cc 2>/dev/null)):$PATH"
-export CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-cc
-export CXX_x86_64_pc_windows_gnu=x86_64-w64-mingw32-c++
-export AR_x86_64_pc_windows_gnu=x86_64-w64-mingw32-ar
-RUSTFLAGS="-D warnings" cargo check --target x86_64-pc-windows-gnu --lib --tests
+cd /home/shaul/shall
+setsid nohup bash -c 'nix-shell -p podman --run "podman build -f docker/integration/Dockerfile.guix -t shall-it-guix ."' \
+  >/tmp/opencode/podman-build-full.log 2>&1 </dev/null & disown
+# then
+nix-shell -p podman --run 'podman run --rm --security-opt seccomp=unconfined \
+  -e GITHUB_TOKEN -v "$PWD/docker/integration/run-in-container.sh:/src/docker/integration/run-in-container.sh:ro" \
+  -v "$PWD/scripts/lifecycle-floor.txt:/src/scripts/lifecycle-floor.txt:ro" \
+  -v "$PWD/scripts/section-floor.txt:/src/scripts/section-floor.txt:ro" \
+  shall-it-guix guix hello'
 ```
 
-`-D warnings` matters here: two of the fourteen historical Windows errors were
-`unused_variables`, fatal only under CI's gate.
+Read: `check health`, `The guard`, `Git history + rollback`, `rebuild`, `Chains and the per-host
+lock`, `Coverage audit`, and the section-floor verdict. A green `git --version` alone is not the
+proof — the floor sections are.
 
-**Never run anything over ~30 seconds in the foreground.** The suite is ~2 minutes,
-a first Windows cross-check ~25 (all 448 target crates, then ~40s), a full
-`cargo mutants` longer than everything. Background it and do the next thing.
+Local probe Dockerfiles used for the control experiment are in `/tmp/opencode/` (`Dockerfile.guix-fixtures`,
+`Dockerfile.guix-control`); logs `/tmp/opencode/{guix-fixtures,guix-control,podman-build-full}.log`.
+Do not commit them.
 
----
+**Slackware's `go` line is the same family's sibling and is not fixed.** The log
+(`/tmp/opencode/slackware.log`, job `121476681205`) shows the real failure is the whole-model
+sync hitting `slackpkg:clucene` (`modules/adopted.txt:107`, "No packages match the pattern for
+install"). Shall already says so (`kept_line_advice`/`WhyKept::NameAbsentElsewhere`,
+`src/verbs/packages.rs:383-406`) — the **harness** blames `go`. Planned fix: `classify_install`
+in `docker/integration/run-in-container.sh:562` should extract ``while applying `X` `` from
+`src/core/error.rs` and name the real culprit.
 
-## 4. Rules the repo enforces, that a layout change can break
+## Red legs on the last push run, by job
 
-Each of these is a test that fails loudly. Read the test before fighting it.
+`40353618389` at `99540c13`:
 
-- **`a_module_is_a_subject_not_a_pile_tests`** — a file over the ceiling needs a row
-  in `TOO_BIG_FOR_NOW`, **and the table is audited in both directions**: a file that
-  drops back under the line must have its row deleted. `src/core/executor.rs` came off
-  this way at the end of 2026-10-23. Do not add a row to make a gate pass.
-- **`every_test_file_is_in_the_suite`** — `tests/` has `autotests = false`; a file is
-  not a `mod` somewhere, it does not run. Every new mirror file and folder needs
-  wiring.
-- **Comments (P6):** a comment states a constraint the code cannot show. Not what a
-  line does, not `V.n` citations as design documents. Prefer a name or a type.
-- **`no_comment_cites_a_line_number`** — do not write "line 1318"; write the name.
-- **`a_pub_fn_nobody_calls_is_dead`** — widening something only tests call is fine,
-  but it must carry the note in §5 or it reads as dead code.
-- **Widen, don't duplicate.** If a test cannot see an item, widen that item. Never add
-  a second implementation or a `#[cfg(test)]` constructor that ships.
+- `Integration (arch)` `121680058061` — `check health (rc=2)`, `go: list shows hello`,
+  `go: not on PATH`, `pipx: install of pipx:pycowsay failed twice, unclassified`,
+  lifecycle ratchet 11 vs 12, section floor. `pass=385 fail=6 soft=8`.
+- `Integration (ubuntu)` `121680058151` — `check health`, section floor. `pass=395 fail=2 soft=4`.
+- `Integration (fedora)` `121680058263` — same two. `pass=374 fail=2 soft=7`.
+- `Integration (opensuse)` `121680058267` — same two. `pass=375 fail=2 soft=5`.
+- `Integration (void)` `121680058489` — gem/github/uv/yarn listing + PATH failures (`#100`).
+  `pass=331 fail=7 soft=15`.
+- `Advisories and licences` — the zstd advisories (`#128`).
 
----
+Logs downloaded to `/tmp/opencode/leg-<job>.log`; fetch fresh ones with
+`gh run view <run> --job <job> --log` (only after the run completes).
 
-## 5. The widening, and the two shapes it has
+Dispatch run `40353656991` (head `99540c13`) was still running when this was written; it exists
+to produce native-sweep evidence (`native-sweep-evidence-{macos,windows}` artifacts). Read it
+before concluding anything about the native family.
 
-A test crate links the library *without* `cfg(test)`, so a private item is invisible
-there. When the compiler says `is private` (`E0603`/`E0616`/`E0624`), widen it and
-put a note on it:
+## Background jobs left running at handoff
 
-```rust
-/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
-/// test crate links the library without `cfg(test)`, so a private item is invisible there.
-pub reader: Arc<dyn ExecutionLayer>,
-```
+- `/tmp/opencode/suite-128.log` — `cargo test --no-fail-fast` at `432dd20e`. Check the tail for
+  `rc=0` and `test result: FAILED`. The `startup_budget_tests` flake is load, not code.
+- `/tmp/opencode/podman-build-full.log` — full guix image build. `rc=` line at the end is the
+  verdict; failures in the builder stage are usually network/crates.
+- `/tmp/opencode/deny-128.log` — already green (`advisories ok`).
 
-**There are two shapes, and telling them apart is the C6 decision:**
+## Suggested order from here
 
-1. **The tests' sake** — as above. This is most of them.
-2. **It ships.** A `#[cfg(test)]` helper that mints no authority — it only sets fields
-   a constructor already has, or is a plain value holder — should be published and
-   un-gated, *not* stuck behind `pub(crate)` so a test can call it.
-   `RawExecutor::with_idle` was exactly this and is the example to copy (it says so in
-   its doc comment). C3 stays the ruling for anything that *does* mint authority:
-   that one stays inline.
+1. Confirm the suite log; if green, `gh issue close 128` with a one-line note.
+2. Finish `#113`: full image build → harness run → fix whatever the floor sections still show →
+   close with the numbers.
+3. `classify_install` naming the real culprit (slackware `go`), then re-run slackware.
+4. `#129`: the next run names the sick backend — read it, then fix the actual promotion/lister.
+5. `#109` with podman: build `Dockerfile.ubuntu`, show the apt install against stale lists,
+   refresh, close.
+6. `#100`'s void leg should now carry `#112`'s evidence (listing + install log) — read the next
+   run before changing anything.
 
-**Write a small script per file listing the edits, and keep it out of the repo.** For
-`executor.rs` the record was `/tmp/opencode/widen-executor.py`. Do not try to
-automate this — see §6.
-
----
-
-## 6. What not to redo, and why
-
-These cost the most time. All are written down rather than re-derived.
-
-- **Do not automate the widening.** `scripts/widen-for-tests.py` is an abandoned
-  experiment, left untracked and deliberately not deleted only as a warning. It
-  mangled five tuple structs into invalid syntax and wrote `pub` into struct
-  initializers. The compiler's errors are a short, precise list; a hand script that
-  carries them is faster than an automation that has to guess where an item's body
-  ends.
-- **Widen before fixing imports, not after.** A successful widen changes what the
-  compiler reports: an import that *could not be resolved* is not yet *unused*. Run
-  `fix-mirror-imports.py` after the widening and the build is clean, and running it
-  before leaves unusable output. This ordering is not obvious and cost a full cycle.
-- **Never `cargo fix` a mirror.** `--all-targets` is single-platform: it deletes
-  imports that are used only inside `#[cfg(windows)]` blocks, and the Windows cross
-  check then fails with `E0425`/`E0433` for names that are gone on Linux and alive on
-  Windows. That is exactly the bug `fix-mirror-imports.py` exists to avoid, by asking
-  both compilers and classifying each **name** rather than each line.
-- **A name, not a line.** `use shall::core::{Error, ExitPolicy}` where one platform
-  calls both dead and the other needs one of them: the statement is split
-  `#[cfg(unix)]`/`#[cfg(windows)]`, not deleted.
-- **Run the tools' own tests after any change to them.** `scripts/move-inline-tests_test.py`
-  (11/11) and `scripts/fix-mirror-imports_test.py` (12/12). Both run in about a second
-  against fixtures and no compiler. **Ten full cargo builds were spent discovering
-  what a fixture test finds immediately** — this is the one lesson from the retro that
-  is binding on the next file.
-- **Verify the count, not the colour.** For a move to be done, `cargo test --lib` must
-  fall by exactly the number of tests that moved and the suite must rise by the same
-  number. A green suite over a silently dropped test is the failure this catches.
-
----
-
-## 7. Deliverables and definitions of done
-
-Per file: all ten criteria hold.
-
-1. `cargo build --all-targets` clean.
-2. `cargo test --no-fail-fast` none failed.
-3. **No test lost** — lib fell by N, suite rose by N, measured.
-4. Clippy clean at `-D warnings --all-features`.
-5. `cargo fmt -- --check` clean at 1.97.1.
-6. `every_test_file_is_in_the_suite` passes.
-7. The scanning gates pass (ceiling, comment rules, dead `pub`).
-8. A ceiling row that stopped being needed is retired.
-9. Every widened item carries its note.
-10. A file that genuinely cannot move is on an exception table with a reason — the
-    table does not exist yet, and it is a deliverable (§8).
-
-But **the sweep is not one file at a time for 183 files.** Batch 3–5 small files per
-verify cycle once `parsers/` has proved the path is repeatable: the wall-clock is the
-cargo check, not the edit, and the two smaller parsers are near-certain to need
-identical widening for the same parser-shaped items.
-
----
-
-## 8. Still to build, outside the move itself
-
-- **`tests/parsers/mod.rs` already exists and owns 16 subfolders; the flat top level is
-  ~159 `.rs` files declared as 75 straight `mod` lines of `tests/main.rs`.** Each is
-  classified by what it drives — parser fixture, review output, or a mirror of an item
-  that no longer has a src home. Mechanical, so a script plus a table rather than 159
-  judgement calls. Nothing here blocks anything else.
-- **The exception table** for src files that must keep `cfg(test)` inline, and the gate
-  that audits it in both directions. **Vacuously empty today** — `src/` carries no
-  `#[cfg(test)]` at all — so the table starts empty and the gate's job is to make the
-  next re-introduction name its reason instead of landing silently. The shared oracle
-  (`tests/ledger/`) it would audit with already exists.
-- **Issue #117**, five remaining subjects: `prune_snapshots_after_sync`,
-  `execute_transaction`'s counters, `heal`, `rebuild_kernel_modules`, and `sync`'s
-  `PurgeUndeclared` arm. These need the machine fixture that
-  `tests/a_machine_converges_tests.rs` already builds.
-- **Issue #123**, the registry-budget test's load-sensitivity, whose honest fix is to
-  measure in a fresh process.
-
-Closed this week and not reopened: #116, #118, #119, #121, #122.
-
----
-
-## 9. Repo and remote
-
-```bash
-git remote -v          # https://github.com/SYKhayyat/Shall.git
-git log --oneline -6   # six leadership commits, each with the full reasoning inline
-```
-
-Read `docs/SPEC.md` first for the rules of the road, and `docs/spec/decisions.md`
-for every open question — an ID in that register (`D*`, `W*`, `K*`, `N*`, `T*`, `U*`)
-is the owner's ruling, not a coder's. **If Part II of a spec ever looks wrong, stop
-and ask; do not fix it in passing.**
+Anything you find that is not already an issue must get one, with file:symbol evidence, a
+reproduction or the test gap, and a proposed resolving test — that is the rule the owner set
+this session.
