@@ -250,3 +250,5 @@ mod unprotecting_cannot_release_a_name_that_cannot_be_declared;
 mod vet_refuses_what_enforce_refuses_and_says_it_the_same_way;
 mod yes_does_not_override_the_guard;
 mod yes_does_not_override_the_install_ceiling;
+
+mod a_firewall_teardown_is_a_removal_tests;

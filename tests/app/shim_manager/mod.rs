@@ -14,3 +14,5 @@ mod deploy_read_and_remove_agree_for_a_named_account;
 mod list_shims_reports_only_deployed_shims;
 mod remove_shim_deletes_a_real_deployed_shim;
 mod remove_shim_never_deletes_a_file_shall_did_not_deploy;
+
+mod a_shim_runs_what_its_line_named_tests;

@@ -112,6 +112,19 @@ impl<'a> Ledger<'a> {
     /// The four assertions. `scanned` is what the walk read; `found` is what it matched.
     #[track_caller]
     pub fn audit(&self, scanned: usize, found: &BTreeSet<String>) {
+        self.audit_inner(scanned, found, true);
+    }
+
+    /// The same audit for a subject whose clean state is empty.
+    ///
+    /// The floor still proves that the walk reached the tree, and a non-empty table still has
+    /// to match it. Only the assertion that a predicate must find something is lifted.
+    #[track_caller]
+    pub fn audit_allowing_no_findings(&self, scanned: usize, found: &BTreeSet<String>) {
+        self.audit_inner(scanned, found, false);
+    }
+
+    fn audit_inner(&self, scanned: usize, found: &BTreeSet<String>, require_findings: bool) {
         assert!(
             self.floor > 0,
             "{}'s ledger has no floor. Without one, a predicate that has stopped matching \
@@ -126,13 +139,15 @@ impl<'a> Ledger<'a> {
             self.subject,
             self.floor
         );
-        assert!(
-            !found.is_empty(),
-            "the walk for {} matched nothing at all across {scanned} unit(s). The predicate has \
-             stopped recognising its subject; {} is now excusing sites that no longer exist.",
-            self.subject,
-            self.table
-        );
+        if require_findings {
+            assert!(
+                !found.is_empty(),
+                "the walk for {} matched nothing at all across {scanned} unit(s). The predicate has \
+                 stopped recognising its subject; {} is now excusing sites that no longer exist.",
+                self.subject,
+                self.table
+            );
+        }
 
         let excused: BTreeSet<&str> = self.entries.iter().map(|e| e.site).collect();
 
@@ -211,3 +226,5 @@ impl<'a> Ledger<'a> {
             .collect()
     }
 }
+
+mod an_exemption_table_is_audited_the_same_way_tests;

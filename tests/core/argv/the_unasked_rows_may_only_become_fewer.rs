@@ -18,7 +18,7 @@ fn the_unasked_rows_may_only_become_fewer() {
         unasked.len() <= UNASKED_CEILING,
         "{} rows say nobody asked, and the ceiling is {}: {:?}\n\n\
          A new row on a family resemblance is how this file broke four times. Measure it \
-         — `tests/terminator_probe_tests.rs` in an image that has the tool — and lower \
+         — `tests/core/argv/terminator_probe_tests.rs` in an image that has the tool — and lower \
          the ceiling.",
         unasked.len(),
         UNASKED_CEILING,

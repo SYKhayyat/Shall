@@ -5,7 +5,7 @@ use std::path::PathBuf;
 ///
 /// **No count is written here.** It said "61" while the map held 60, because a number in prose is
 /// a copy of something and nothing checked the copy. What is checked is stronger than a count:
-/// `tests/help_map_tests.rs` compares this map against `--help` name for name, so a verb missing
+/// `tests/e2e/help_map_tests.rs` compares this map against `--help` name for name, so a verb missing
 /// from the map and a verb in the map that is not a verb are both build failures. A
 /// hand-maintained list of names beside the enum, checked by nothing, is the shape that let
 /// `undo` sit in two exemption lists for months after it stopped existing.

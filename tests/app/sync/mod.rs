@@ -10,12 +10,22 @@
 //! has a home and a home is where its tests go.
 
 mod a_declared_health_check_with_nothing_to_revert_it_stops_the_sync;
+mod a_deliberate_purge_is_not_refused_by_the_accidental_removal_ceiling;
+mod a_dry_run_does_not_rebuild_the_out_of_tree_modules;
+mod a_failed_snapshot_prune_is_reported_instead_of_being_swallowed;
 mod a_health_command_that_was_never_approved_stops_the_sync;
+mod a_kernel_change_rebuilds_the_out_of_tree_modules;
+mod a_module_that_did_not_build_fails_the_sync_loudly;
+mod a_partial_sync_counts_only_the_operations_that_happened;
 mod a_rebuild_is_narrated_as_a_rebuild;
+mod a_successful_sync_prunes_the_snapshots_the_retention_policy_doomed;
+mod an_ordinary_sync_is_refused_by_the_accidental_removal_ceiling;
 mod guard;
 mod pin_advice;
 mod pins;
 mod planner;
+mod recovery_carries_past_a_failure_without_rolling_back_the_success;
+mod recovery_uses_its_own_transaction_policy;
 mod resolver;
 mod saved_plan;
 mod the_advice_names_the_thing_to_do_about_it;
@@ -24,12 +34,16 @@ mod the_engine_finds_the_hooks_this_machine_wrote;
 mod the_probe_answers_both_ways;
 
 use dashmap::DashMap;
+use shall::app::sync::guard::GuardScope;
 use shall::app::sync::planner::SyncChanges;
 use shall::app::sync::SyncEngine;
 use shall::config::Config;
 use shall::core::executor::{CommandExecutor, MockExecutor};
+use shall::core::PackageSpec;
+use std::fmt::Write as _;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use tracing::Subscriber;
 
 /// A config directory of its own, so a test's writes land nowhere else.
 pub(crate) fn config_dir(tag: &str) -> PathBuf {
@@ -85,3 +99,72 @@ pub(crate) fn no_changes() -> SyncChanges {
         skipped: Vec::new(),
     }
 }
+
+pub(crate) fn package(backend: &str, name: &str) -> PackageSpec {
+    PackageSpec {
+        backend: backend.to_string(),
+        name: name.to_string(),
+        options: Default::default(),
+        requires: Vec::new(),
+        present: false,
+    }
+}
+
+pub(crate) fn install_changes(packages: &[PackageSpec]) -> SyncChanges {
+    let mut changes = SyncChanges::default();
+    changes.add_installs(packages);
+    changes
+}
+
+pub(crate) fn removal_changes(packages: &[(&str, &str)]) -> SyncChanges {
+    let mut changes = SyncChanges::default();
+    for (backend, name) in packages {
+        changes.add_removal(backend, name);
+    }
+    changes
+}
+
+pub(crate) fn log_collector() -> (Arc<Mutex<Vec<String>>>, tracing::subscriber::DefaultGuard) {
+    struct Collect(Arc<Mutex<Vec<String>>>);
+
+    impl Subscriber for Collect {
+        fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+            true
+        }
+
+        fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+            tracing::span::Id::from_u64(1)
+        }
+
+        fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+
+        fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+
+        fn event(&self, event: &tracing::Event<'_>) {
+            let mut visitor = MessageVisitor(Arc::new(Mutex::new(String::new())));
+            event.record(&mut visitor);
+            let text = std::mem::take(&mut *visitor.0.lock().expect("the log mutex"));
+            self.0.lock().expect("the log mutex").push(text);
+        }
+
+        fn enter(&self, _: &tracing::span::Id) {}
+
+        fn exit(&self, _: &tracing::span::Id) {}
+    }
+
+    struct MessageVisitor(Arc<Mutex<String>>);
+
+    impl tracing::field::Visit for MessageVisitor {
+        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+            let _ = write!(self.0.lock().expect("the log mutex"), "{} ", field.name());
+            let _ = write!(self.0.lock().expect("the log mutex"), "{value:?}");
+        }
+    }
+
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let guard = tracing::subscriber::set_default(Collect(seen.clone()));
+    (seen, guard)
+}
+
+mod a_machine_converges_tests;
+mod critical_paths_tests;

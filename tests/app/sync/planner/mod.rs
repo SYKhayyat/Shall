@@ -362,3 +362,9 @@ mod sync_removes_what_it_manages_and_you_stopped_declaring;
 mod the_config_says_how_many_times_to_ask_again;
 mod the_fake_manager_really_does_answer_a_dependency_query;
 mod the_report_is_sorted_for_a_stable_plan;
+
+mod a_config_travels_between_machines_tests;
+mod a_drifted_ecosystem_does_not_strand_the_config_tests;
+mod a_plan_reaps_only_what_it_was_asked_about_tests;
+mod declared_options_converge_tests;
+mod time_travel_tests;

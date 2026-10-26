@@ -383,7 +383,7 @@ pub const TERMINATORS: &[Terminator] = &[
         Evidence::Measured(
             "the differential probe ran kubectl's real argv both ways in the tools image and the \
              two runs agreed in every signal — same exit code, same operand echo, no stray `--` \
-             (tests/terminator_probe_tests.rs, 2026-08-04)",
+             (tests/core/argv/terminator_probe_tests.rs, 2026-08-04)",
         ),
     ),
     row("krew", true, GETOPT),
@@ -403,7 +403,7 @@ pub const TERMINATORS: &[Terminator] = &[
         true,
         Evidence::Measured(
             "the differential probe ran systemctl's real argv both ways in the tools image and \
-             the two runs agreed in every signal (tests/terminator_probe_tests.rs, 2026-08-04)",
+             the two runs agreed in every signal (tests/core/argv/terminator_probe_tests.rs, 2026-08-04)",
         ),
     ),
     // ---- Go-flag parsers: `age` and `sops` are handed a source path a declaration chose.
@@ -509,7 +509,7 @@ pub const TERMINATORS: &[Terminator] = &[
     // Listed as NOT terminating on the reasoning that .NET takes the tool id positionally and
     // would read `--` as one. It does not: `System.CommandLine` ends option parsing there like
     // any GNU-style CLI, and the guess cost every `dotnet:` install the protection this file
-    // exists to give. Found by `tests/terminator_probe_tests.rs` on its first real run — an
+    // exists to give. Found by `tests/core/argv/terminator_probe_tests.rs` on its first real run — an
     // unmeasured row, wrong, which is the entire reason the probe was written.
     row(
         "dotnet",
@@ -674,7 +674,7 @@ pub fn terminator_evidence(binary: &str) -> Option<(bool, &'static str)> {
 
 /// Whether this row's answer is known to differ between hosts.
 ///
-/// Read by `tests/terminator_probe_tests.rs`, which asserts the table against the tools
+/// Read by `tests/core/argv/terminator_probe_tests.rs`, which asserts the table against the tools
 /// themselves and otherwise has no way to be right on both platforms at once: whichever value
 /// the row carries, one host's probe reports a disagreement. See [`Evidence::Divergent`].
 pub fn terminator_answer_differs_by_host(binary: &str) -> bool {

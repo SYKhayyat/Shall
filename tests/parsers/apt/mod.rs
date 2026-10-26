@@ -2,3 +2,5 @@
 
 mod outdated_tests;
 mod tests;
+
+mod a_lister_cannot_report_what_was_removed_tests;

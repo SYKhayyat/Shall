@@ -16,3 +16,6 @@ mod ps1_args_are_single_quote_escaped_no_injection;
 mod the_program_name_is_quoted_and_invoked_through_the_call_operator;
 #[cfg(windows)]
 mod wraps_ps1_via_command_with_out_string;
+
+#[cfg(windows)]
+mod grader_shim_exit_code_tests;

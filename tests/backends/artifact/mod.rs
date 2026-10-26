@@ -9,3 +9,5 @@ mod real_releases;
 mod select;
 mod system_pkg;
 mod teardown;
+
+mod a_downloaded_artifact_is_named_by_its_key_tests;

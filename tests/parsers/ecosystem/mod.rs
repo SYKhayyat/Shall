@@ -3,3 +3,5 @@
 mod pixi_json_tests;
 mod pixi_real_output_tests;
 mod tests;
+
+mod grade3_pixi_list_fixture_tests;

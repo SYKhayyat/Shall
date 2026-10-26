@@ -4,7 +4,7 @@
 //! is no `outdated` subcommand — it is `shall list --outdated`, a flag — so the arm was dead.
 //!
 //! The interesting half was why nothing caught it. `Class::of`'s own doc said *"the list is
-//! asserted against `--help` by `tests/latency_budget_tests.rs` — a name that stops existing
+//! asserted against `--help` by `tests/core/latency/latency_budget_tests.rs` — a name that stops existing
 //! fails that test rather than sitting here forever, which is the mistake `undo` made in two
 //! harness exemption lists."* That test did not read the table. It read a `NAMED` array of
 //! twenty-four hand-typed strings sitting beside it, and the array omitted `outdated` and
@@ -33,7 +33,7 @@ fn repo_root() -> PathBuf {
 }
 
 fn guard_source() -> String {
-    let p = repo_root().join("tests/latency_budget_tests.rs");
+    let p = repo_root().join("tests/core/latency/latency_budget_tests.rs");
     std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("cannot read {}: {e}", p.display()))
 }
 

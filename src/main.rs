@@ -245,7 +245,7 @@ pub(crate) async fn finish(config: &Config, outcome: Result<()>) -> Result<()> {
                     // the hook hearing about it". That was false for nine sites — every
                     // security refusal, the whole SEC/T series — which returned 1 and were
                     // never announced. The claim is now checked rather than asserted:
-                    // `tests/grader_refusal_exit_code_tests.rs` enumerates every site whose
+                    // `tests/e2e/grader_refusal_exit_code_tests.rs` enumerates every site whose
                     // message says it is refusing and fails on one not built as
                     // `Error::Refused`, and fires a real hook through a real refusal. A
                     // sentence that quantifies over paths belongs in a test, not in a comment.
@@ -274,7 +274,7 @@ pub(crate) async fn finish(config: &Config, outcome: Result<()>) -> Result<()> {
                     //
                     // One stable line, on failure only, on stderr, in a shape a script can read
                     // without grepping an English sentence — the token is pinned by
-                    // `tests/failure_class_line_tests.rs` precisely so the wording above it
+                    // `tests/e2e/failure_class_line_tests.rs` precisely so the wording above it
                     // stays free to change.
                     print_failure_class(&e);
                     return Err(e);

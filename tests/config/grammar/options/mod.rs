@@ -21,3 +21,5 @@ mod an_option_with_nothing_after_the_equals_is_refused;
 mod every_error_names_the_file_and_line;
 mod short_form_reads_key_value_pairs;
 mod short_form_reads_several_pairs;
+
+mod an_option_list_survives_the_seam_tests;

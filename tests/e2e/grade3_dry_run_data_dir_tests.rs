@@ -34,7 +34,7 @@
 //!     // would leave the package unmanaged for real while promising it had changed nothing.
 //!     if !app.config.dry_run {
 //!
-//! **Why no gate caught it.** `tests/dry_run_every_verb_tests.rs` asserts that every subcommand
+//! **Why no gate caught it.** `tests/e2e/dry_run_every_verb_tests.rs` asserts that every subcommand
 //! `--help` lists is exercised or exempted with a reason. Its `snapshot()` walks the **config**
 //! directory only, and its exemption list reads:
 //!

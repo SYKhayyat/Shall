@@ -1,4 +1,4 @@
-// tests/hardening_tests.rs
+// tests/integration/hardening_tests.rs
 //
 // Integration coverage for behavior added/changed during the v5 hardening pass:
 //  - resolver merges multiple sources for one package (was first-write-wins)

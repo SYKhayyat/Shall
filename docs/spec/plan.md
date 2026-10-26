@@ -582,7 +582,7 @@ build and what is deferred to hardware.**
      - **What is not claimed.** The code was never wrong. The instrument's own false-catch hazard
        is `#116`, and it is not fixed by any of this.
 
-### Tier 34 continuation — the remaining `#120` test-layout sweep: IN PROGRESS
+### Tier 34 continuation — the remaining `#120` test-layout sweep: DONE (2026-10-25)
 
 The first mirror move proved the shape; this is the rest of the same rule, not a new behavior
 change. On 2026-10-23, 160 tests moved out of eight source files into `tests/` mirrors:
@@ -626,6 +626,34 @@ The next batch moved 29 tests each from `src/utils/file.rs`, `src/core/extras_lo
 `src/config/grammar/mod.rs` into their mirrors. The three focused integration runs passed all 87
 tests; `ends_mid_line` is public only so its external mirror can exercise the one-byte file-tail
 boundary. The frontier is now 168 source files and 404 tests have moved in this session.
+
+**The sweep is finished (2026-10-25).** The library target carries **zero** tests —
+`cargo test --lib` reports 0 and no `#[cfg(test)]` module remains under `src/` — and the
+inline-test exception table shipped with a two-way gate
+(`tests/review/every_inline_test_module_is_on_an_exception_table_with_a_reason.rs`) whose table
+starts empty. The last three pieces of the sweep:
+
+- **The five `#117` sync-engine subjects** — `prune_snapshots_after_sync`,
+  `execute_transaction`'s counters, `heal` (through a new `SyncEngine::heal_transaction_config()`),
+  `rebuild_kernel_modules`, and `sync`'s `PurgeUndeclared` arm — each got its own mirror under
+  `tests/app/sync/`, watched failing before the fix.
+- **The flat `tests/*.rs` files are gone.** All 158 top-level test files moved to their
+  classification home — `tests/review/` (53), `tests/e2e/` (42), `tests/integration/` (5),
+  58 mirrors under the `src/` folder that owns them, and five integration-class files with no
+  single owner kept whole under `tests/integration/`. `tests/main.rs` now declares 16 module
+  trees instead of ~160 flat files.
+- **The path-shaped metadata moved with the files.** 48 stale `tests/<stem>.rs` citations were
+  re-pointed across 30 files — exemption-corpus paths in the citation gates, self-skip paths,
+  fixture `include_str!` paths, and cross-test reads such as
+  `the_class_table_is_read_not_copied_tests`'s read of `latency_budget_tests` — because the
+  citation gates check that every path a comment names exists.
+
+The full chain is green on this host: `cargo fmt -- --check`, clippy
+`--all-targets --all-features --locked -- -D warnings`, and the full suite
+(**3,047 passed, 0 failed** — the fresh-process `startup_budget_tests` fix from `#123` and the
+load-sensitive timing test both pass). The Windows cross-check and `scripts/unix-check.sh`
+could not run: no Docker, no MSVC toolchain on this host; both are recorded as said-so skips
+under `HANDOFF.md`.
 
 ### Tier 33 — a ratio that measured the host (`PLAN.md` #107, and `#111` for what is left): BUILT
 
@@ -3069,7 +3097,10 @@ source-side test modules moved too (2026-10-25): `backends/link_teardown_test.rs
 `tests/backends/link/` and `backends/artifact/real_releases_test.rs` into
 `tests/backends/artifact/real_releases/` (fixture travelling with it), and the library now carries
 **zero** tests — `cargo test --lib` reports 0. The current batch moved **2,110 tests from 162 files** into the single `tests/main.rs`
-integration suite. Focused verification passed
+integration suite. The sweep is finished (2026-10-25): the five `#117` sync-engine subjects got
+their own mirrors, the inline-test exception table shipped empty behind a two-way gate, and all
+158 flat `tests/*.rs` files moved to their classification home (see Tier 34 continuation above).
+Focused verification passed
 for the moved model (409), parser (169), core (440), stale-lock (26), onboarder (26),
 config-parser (26), link (26), planner (25), config (18), setting (24), and NixOS (24) mirrors,
 setting (24), NixOS (24), registry (23), GitHub (21), btrfs (21), artifact (81), capability (7),

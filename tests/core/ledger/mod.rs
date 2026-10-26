@@ -16,3 +16,5 @@ mod a_corrupt_file_is_an_error_and_not_an_empty_ledger;
 mod a_corrupt_json_record_is_an_error_and_a_missing_one_is_empty;
 mod a_missing_file_loads_empty_rather_than_failing;
 mod it_round_trips_through_the_file_and_creates_the_directory;
+
+mod ledger_file_rules_tests;

@@ -23,7 +23,7 @@
 
 use shall::parsers::ecosystem::pixi_list;
 
-const FIXTURE: &str = include_str!("fixtures/pixi/list-one-tool.txt");
+const FIXTURE: &str = include_str!("../../fixtures/pixi/list-one-tool.txt");
 
 /// One tool installed → one package. The `exposes:` line is a property of that tool, not a
 /// second tool.

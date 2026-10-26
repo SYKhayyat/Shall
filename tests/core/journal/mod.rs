@@ -29,3 +29,7 @@ mod an_abandoned_mutation_stays_interrupted;
 mod an_aged_out_crash_is_still_healable;
 mod recovery_finishes_interrupted_work_and_does_not_retry_failures;
 mod the_record_reaches_disk_before_the_mutation_runs;
+
+mod a_finished_package_is_recorded_in_batches_tests;
+mod an_orphan_of_a_killed_run_is_taken_back_tests;
+mod the_log_covers_what_cannot_be_recomputed_tests;

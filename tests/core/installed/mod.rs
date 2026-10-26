@@ -22,3 +22,5 @@ mod only_a_command_that_just_reports_may_be_answered_from_disk;
 mod the_essential_set_is_asked_once_and_forgotten_with_the_listings;
 mod two_askers_at_once_still_produce_one_fetch;
 mod two_managers_do_not_share_one_answer;
+
+mod a_mutation_forgets_only_what_it_could_have_changed_tests;

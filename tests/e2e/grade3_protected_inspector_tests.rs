@@ -36,7 +36,7 @@
 //! resolved plan, so none can be empty; the extras path uses `RemovalKind::Extra`, which skips the
 //! declarability test on purpose. The empty-backend call is unique to this inspector.
 //!
-//! **Why no gate caught it.** `tests/unknown_backend_family_tests.rs` derives the verbs that take a
+//! **Why no gate caught it.** `tests/e2e/unknown_backend_family_tests.rs` derives the verbs that take a
 //! package spec from `--help` — good — and then exempts this one by hand:
 //! `("protected", "nothing — it lists the protected set")`. It takes `[PACKAGES]...`, and answers
 //! about them. E29 was a stale exemption naming a verb that no longer existed; this is the same

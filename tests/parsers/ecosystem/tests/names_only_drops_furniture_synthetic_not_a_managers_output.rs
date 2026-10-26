@@ -12,7 +12,7 @@ use super::*;
 /// It is kept because what it asserts is real and cheap — a header row and a dashed rule are
 /// not packages, which is a property of the *function* rather than of any manager. It is
 /// renamed so that nobody reads it as coverage of a manager. The coverage lives in
-/// `tests/installed_listing_fixture_tests.rs`, against output captured from the tools
+/// `tests/parsers/installed_listing_fixture_tests.rs`, against output captured from the tools
 /// themselves.
 #[test]
 fn names_only_drops_furniture_synthetic_not_a_managers_output() {

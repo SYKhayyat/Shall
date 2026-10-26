@@ -2,3 +2,5 @@
 
 mod conditional_tests;
 mod removal_target_tests;
+
+mod one_parser_reads_a_removal_target_tests;

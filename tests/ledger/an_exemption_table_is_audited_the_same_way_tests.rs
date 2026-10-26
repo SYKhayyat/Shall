@@ -130,3 +130,35 @@ fn a_reason_is_measured_in_characters() {
         .scanning_at_least(10)
         .audit(50, &set(&["excused.rs"]));
 }
+
+#[test]
+fn an_empty_subject_may_be_clean_when_the_table_is_empty() {
+    Ledger::of("a planted offence", "PLANTED")
+        .scanning_at_least(10)
+        .audit_allowing_no_findings(50, &set(&[]));
+}
+
+#[test]
+#[should_panic(expected = "under its floor")]
+fn an_empty_subject_still_needs_the_scan_to_have_reached_the_tree() {
+    Ledger::of("a planted offence", "PLANTED")
+        .scanning_at_least(10)
+        .audit_allowing_no_findings(3, &set(&[]));
+}
+
+#[test]
+#[should_panic(expected = "not in PLANTED")]
+fn an_empty_subject_still_fails_when_the_table_does_not_explain_a_finding() {
+    Ledger::of("a planted offence", "PLANTED")
+        .scanning_at_least(10)
+        .audit_allowing_no_findings(50, &set(&["surprise.rs"]));
+}
+
+#[test]
+#[should_panic(expected = "excuses [\"gone.rs\"]")]
+fn an_empty_subject_still_fails_when_the_table_names_a_site_that_is_gone() {
+    Ledger::of("a planted offence", "PLANTED")
+        .pairs(&[("gone.rs", REASON)])
+        .scanning_at_least(10)
+        .audit_allowing_no_findings(50, &set(&[]));
+}

@@ -23,3 +23,5 @@ mod the_one_key_is_read;
 mod the_settings_file_is_never_inside_the_repo_it_locates;
 mod the_settings_file_outranks_the_default;
 mod with_nothing_set_the_source_is_the_default;
+
+mod config_root_is_absolute_tests;

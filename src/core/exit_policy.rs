@@ -978,7 +978,7 @@ pub fn pixi() -> ExitPolicy {
 ///
 /// Each registration site reads its own name out of here instead of naming a function, so
 /// *which managers have a policy* is a question with one answer rather than one answer per
-/// registration site — and `tests/absent_marker_coverage_tests.rs` can ask it. npm had no
+/// registration site — and `tests/core/exit_policy/absent_marker_coverage_tests.rs` can ask it. npm had no
 /// policy at all through three rounds of assessment: nothing was wrong with npm, and nothing
 /// anywhere counted the managers that could not tell Shall a name was missing.
 ///

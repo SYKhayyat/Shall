@@ -8,3 +8,7 @@ mod setup;
 mod sync;
 mod upgrade;
 mod watch_signature;
+
+mod verbs_are_reachable_tests;
+
+mod ephemeral;

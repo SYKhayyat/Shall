@@ -10,7 +10,7 @@
 //!
 //! So `@unverified` worked on helm 4 and broke every helm 3: one argv defect traded for
 //! another, from a fix derived from one machine and shipped everywhere. The gate that exists
-//! for exactly this could not see it — `tests/argv_drift_tests.rs` says in its own words that
+//! for exactly this could not see it — `tests/core/argv/argv_drift_tests.rs` says in its own words that
 //! it examines "a token that is a subcommand rather than a flag", so 72 subcommands were
 //! verified against live tools and zero flags were.
 //!

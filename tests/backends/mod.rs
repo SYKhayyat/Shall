@@ -29,3 +29,6 @@ mod snap;
 mod storage;
 mod vscode;
 mod web;
+
+mod backend_tests;
+mod conda_is_a_data_row_tests;

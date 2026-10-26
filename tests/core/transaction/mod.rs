@@ -261,3 +261,9 @@ mod the_second_attempt_is_already_a_repeat;
 mod the_transaction_leaves_no_worker_running_behind_it;
 mod the_wait_budget_is_spent_across_attempts_and_not_per_attempt;
 mod two_managers_are_two_commands_and_not_one;
+
+mod a_batch_of_installs_is_one_command_tests;
+mod recovery_finishes_what_it_can_tests;
+mod the_engine_runs_the_graph_in_order_tests;
+mod the_engine_sends_what_the_manager_can_take_tests;
+mod the_scheduler_hands_out_a_generation_at_a_time_tests;

@@ -1162,7 +1162,7 @@ pub async fn vet(
 /// not where every refusal in the program is built â€” the SEC/T series constructs its own, and
 /// for nine sites those were `Error::Validation`, so they exited 1 and the hook never heard
 /// them. What makes the promise true is the variant, not this function, and what checks it is
-/// `tests/grader_refusal_exit_code_tests.rs`.
+/// `tests/e2e/grader_refusal_exit_code_tests.rs`.
 fn refuse<T>(message: String) -> Result<T> {
     Err(Error::Refused(message))
 }

@@ -1,4 +1,4 @@
-// tests/a_plan_reaps_only_what_it_was_asked_about_tests.rs
+// tests/app/sync/planner/a_plan_reaps_only_what_it_was_asked_about_tests.rs
 //
 // **One question, asked of every path that plans a removal.** A plan's removals are computed as
 // `managed − desired`, so the answer is only as good as the two sets: hand the planner a

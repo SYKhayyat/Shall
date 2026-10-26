@@ -189,7 +189,7 @@ fn every_ci_job_has_something_local_that_runs_it() {
     //   slow-containers the same run.sh — `tools` and `gentoo` are in the default DISTROS
     //   macos-native    release-check.sh's Darwin branch: integration-windows.sh brew wget
     //   windows-native  release-check.ps1: integration-windows.sh $Backend $Package
-    //   argv-drift      `cargo test` builds and runs tests/argv_drift_tests.rs
+    //   argv-drift      `cargo test` builds and runs tests/core/argv/argv_drift_tests.rs
     //   harness-mutation harness-mutation-test.sh — both scripts, both targets
     //   storage         release-check.sh's DISTROS names the image; run.sh gives it --privileged
     //

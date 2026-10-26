@@ -10,7 +10,7 @@ use super::*;
 /// withdrew the line, and the leftover then failed ten of thirteen checks in one sweep.
 ///
 /// A source scan because the defect is a **missing line** — the same reason
-/// `tests/prompt_guard_tests.rs` is one. A registrar added tomorrow joins this test on its
+/// `tests/review/prompt_guard_tests.rs` is one. A registrar added tomorrow joins this test on its
 /// own, which is the only property that keeps the class from coming back.
 #[test]
 fn every_registrar_gives_its_core_the_managers_exit_policy() {

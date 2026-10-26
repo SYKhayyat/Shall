@@ -1,4 +1,4 @@
-// tests/time_travel_tests.rs
+// tests/app/sync/planner/time_travel_tests.rs
 
 use shall::app::sync::planner::{ChangePlanner, HostBackends, PlanScope};
 use shall::core::GraphAction;

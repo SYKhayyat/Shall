@@ -273,3 +273,5 @@ mod unsupported_backend_reports_nothing_rather_than_everything;
 mod unverified_becomes_the_managers_own_opt_out_flag;
 mod upgrading_by_reinstall_is_one_command_when_it_works;
 mod version_pin_renders_native_syntax;
+
+mod the_probe_argv_does_not_depend_on_the_package_tests;

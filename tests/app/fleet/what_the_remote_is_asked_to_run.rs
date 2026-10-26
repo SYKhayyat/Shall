@@ -1,7 +1,7 @@
 use super::*;
 
 /// The commands sent over the wire are commands. `shall check --json` sat here for as long
-/// as `fleet` existed; `tests/named_commands_exist_tests.rs` now reads these two constants
+/// as `fleet` existed; `tests/review/named_commands_exist_tests.rs` now reads these two constants
 /// out of the source and checks them against clap, and this says the same thing from
 /// inside, where a reader of this module can see it.
 #[test]

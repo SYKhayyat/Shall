@@ -31,7 +31,7 @@ static DRY_RUN: AtomicBool = AtomicBool::new(false);
 /// `git.rs` committing both announced themselves to nobody. A preview that silently omits work
 /// it would do is the preview failing at the one thing it is for.
 ///
-/// `tests/dry_run_marker_tests.rs` is why it cannot drift again: the literal appears in this
+/// `tests/review/dry_run_marker_tests.rs` is why it cannot drift again: the literal appears in this
 /// file and nowhere else in `src/`.
 pub const MARKER: &str = "[DRY-RUN]";
 

@@ -236,7 +236,7 @@ async fn every_backend_that_cannot_report_a_missing_name_is_recorded() {
 /// the shape `GRADE` §3 N-4 found in the drift gate.
 #[test]
 fn the_named_exceptions_really_do_answer_structurally() {
-    let source = include_str!("../src/backends/github.rs");
+    let source = include_str!("../../../src/backends/github.rs");
     for name in RESOLVES_ITS_OWN_NAMES {
         assert_eq!(
             *name, "github",

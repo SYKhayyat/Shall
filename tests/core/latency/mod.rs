@@ -58,3 +58,7 @@ mod the_marker_carries_a_stable_greppable_token;
 mod the_two_classes_shall_controls_carry_a_budget_and_the_others_do_not;
 mod too_few_children_is_not_a_measurement;
 mod unmeasured_is_reported_on_every_skip_path;
+
+mod a_fan_out_of_managers_is_asked_concurrently_tests;
+mod latency_budget_tests;
+mod the_other_fan_outs_fan_out_too_tests;

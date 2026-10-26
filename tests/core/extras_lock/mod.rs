@@ -82,3 +82,5 @@ mod the_ledger_round_trips_through_toml;
 mod the_schema_one_applied_list_is_refused_rather_than_migrated;
 mod two_rows_for_one_identity_are_refused;
 mod two_users_of_one_resource_are_two_rows;
+
+mod two_accounts_are_two_resources_tests;

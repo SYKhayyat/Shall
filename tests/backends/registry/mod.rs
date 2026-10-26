@@ -822,3 +822,5 @@ mod the_keyword_backends_can_all_do_the_thing_their_keyword_names;
 mod the_terminator_check_can_actually_fail;
 mod winget_adoption_reads_what_it_can_reinstall_not_what_it_can_see;
 mod winget_is_not_among_the_managers_that_adopt_their_whole_listing;
+
+mod startup_budget_tests;

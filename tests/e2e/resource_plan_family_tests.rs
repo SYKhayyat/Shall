@@ -7,7 +7,7 @@
 //! kind of resource was invisible to all four: `link:`, `service:`, `setting:`, `shim:`,
 //! `schedule:` and `repo:`.
 //!
-//! `tests/grade2_check_extras_tests.rs` and `tests/grade2_plan_extras_tests.rs` pin the
+//! `tests/e2e/grade2_check_extras_tests.rs` and `tests/e2e/grade2_plan_extras_tests.rs` pin the
 //! behaviour for `link:`. This file pins the family, and the two questions the family answers
 //! differently:
 //!

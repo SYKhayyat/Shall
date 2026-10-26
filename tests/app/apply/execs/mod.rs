@@ -42,3 +42,5 @@ mod a_script_that_vanished_between_plan_and_apply_is_an_error_not_a_success;
 mod the_exec_table_parses_and_defaults_to_not_world_writable;
 mod the_gate_reads_real_files;
 mod the_trust_levels_judge_the_same_bits_differently;
+
+mod exec_lifecycle_tests;

@@ -63,10 +63,10 @@ const BUG_LOG: &str = "docs/spec/bugs.md";
 /// record the collision with the register's `W*`. Those numbers were reissued as `B*`; these
 /// quotes are the record of what they used to be.
 const EXEMPT: [(&str, &str); 4] = [
-    ("W1", "tests/id_namespaces_do_not_collide_tests.rs"),
-    ("W29", "tests/id_namespaces_do_not_collide_tests.rs"),
-    ("W43", "tests/id_namespaces_do_not_collide_tests.rs"),
-    ("W9a", "tests/id_namespaces_do_not_collide_tests.rs"),
+    ("W1", "tests/review/id_namespaces_do_not_collide_tests.rs"),
+    ("W29", "tests/review/id_namespaces_do_not_collide_tests.rs"),
+    ("W43", "tests/review/id_namespaces_do_not_collide_tests.rs"),
+    ("W9a", "tests/review/id_namespaces_do_not_collide_tests.rs"),
 ];
 
 fn repo() -> PathBuf {
@@ -120,7 +120,7 @@ fn defined_by_the_venue() -> BTreeSet<String> {
 ///
 /// The file matters: an exemption is a permission granted to **one corpus**, and an ID-level
 /// exemption would excuse the same citation anywhere — which is exactly how `W43` could stay
-/// stale in `tests/dry_run_every_verb_tests.rs` while the pair quoted by the file that is
+/// stale in `tests/e2e/dry_run_every_verb_tests.rs` while the pair quoted by the file that is
 /// *about* the collision went on being excused.
 fn cited_by_code() -> BTreeSet<(String, String)> {
     let mut files = Vec::new();

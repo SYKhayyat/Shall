@@ -1,4 +1,4 @@
-// tests/backend_tests.rs
+// tests/backends/backend_tests.rs
 
 use shall::core::executor::DryRunOutput;
 // Only the two `cfg(target_os = "linux")` tests below escalate, so the import lives with them
@@ -248,7 +248,7 @@ async fn test_link_backend_vfs_integrity() {
 // guarded one backend against a defect that lived in the planner, and the six other managers
 // with a real dependency query were never in its reach. The property it wanted —
 // nothing that plans asks a backend what a package depends on — is
-// `tests/a_plan_installs_only_declarations_tests.rs`, which holds for every backend including
+// `tests/review/a_plan_installs_only_declarations_tests.rs`, which holds for every backend including
 // the ones not written yet. Two gates for one rule is how the weaker one keeps passing.
 
 // ============================================================================

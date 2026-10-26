@@ -4,7 +4,7 @@
 //! one machine's helm 4 error message and emitted unconditionally, and helm 3 answers `unknown
 //! flag: --verify`. The gate built to catch an argv upstream will not accept could not see it,
 //! because it only examined subcommands. The round-2 fix added a flag half to
-//! `tests/argv_drift_tests.rs` and a runtime probe (`tool_help::accepts_flag`) that withholds
+//! `tests/core/argv/argv_drift_tests.rs` and a runtime probe (`tool_help::accepts_flag`) that withholds
 //! the flag when the tool's help does not document it — and the probe defeated the gate:
 //!
 //!     # one character of drift planted in the capability table

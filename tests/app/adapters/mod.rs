@@ -37,3 +37,5 @@ mod a_row_of_the_right_kind_is_counted;
 mod every_surface_is_named_once_and_resolves_by_name;
 mod the_refusal_names_the_surface_the_file_and_how_a_row_opens;
 mod the_row_key_being_a_table_rather_than_an_array_is_not_the_same_as_no_rows;
+
+mod an_extension_surface_has_a_front_door_tests;

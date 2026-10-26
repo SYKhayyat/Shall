@@ -1,0 +1,5 @@
+mod automation_lifecycle_tests;
+mod feature_logic_tests;
+mod hardening_tests;
+mod security_and_resiliency_tests;
+mod the_kernel_assembles_what_it_was_configured_with_tests;

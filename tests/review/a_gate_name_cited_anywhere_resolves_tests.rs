@@ -98,18 +98,18 @@ const EXEMPT: &[(&str, &str)] = &[
         "test_teleport_api_consistency_on_missing_package",
     ),
     (
-        "tests/the_exit_table_is_generated_not_retyped_tests.rs",
+        "tests/review/the_exit_table_is_generated_not_retyped_tests.rs",
         "every_code_is_distinct_and_documented",
     ),
     // Gates of this repo, deleted, and named in a doc comment *because* they were deleted. The
     // second says so in as many words: "What was here before was X — it is deleted, not moved."
     (
-        "tests/a_batch_of_installs_is_one_command_tests.rs",
+        "tests/core/transaction/a_batch_of_installs_is_one_command_tests.rs",
         "test_e2e_sync_flow_hermetic",
     ),
     // A gate of this repo, deleted, and named in a doc comment *because* it was deleted.
     (
-        "tests/a_removal_token_cannot_be_minted_tests.rs",
+        "tests/review/a_removal_token_cannot_be_minted_tests.rs",
         "an_escape_hatch_names_something_that_exists_tests",
     ),
 ];
@@ -390,7 +390,7 @@ fn every_gate_name_cited_anywhere_names_a_gate_that_exists() {
         // **This file is not scanned.** It necessarily cites every name it exempts, so including
         // it would mean the gate can never be green — and a gate that is always red is a gate that
         // gets deleted rather than fixed.
-        if rel == "tests/a_gate_name_cited_anywhere_resolves_tests.rs" {
+        if rel == "tests/review/a_gate_name_cited_anywhere_resolves_tests.rs" {
             continue;
         }
         for name in cited_in(&std::fs::read_to_string(f).unwrap_or_default()) {

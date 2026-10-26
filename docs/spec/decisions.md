@@ -10165,7 +10165,10 @@ end-to-end.
 private item, or use a constructor that must not ship — **cannot** live in a test crate, because
 a test crate links the library without `cfg(test)`. It stays inline, and it is on a table whose
 rows each carry the reason they are rows, audited in both directions so a row that is earned
-back is deleted. **Twenty-six files qualify today.**
+back is deleted. **At the ruling twenty-six files qualified; the sweep finished on 2026-10-25
+and the table is now empty** — `cargo test --lib` reports zero tests, and the two-way gate
+(`tests/review/every_inline_test_module_is_on_an_exception_table_with_a_reason.rs`) keeps it
+that way.
 
 **And the move widens visibility rather than rewriting the test.** A relocated test sees the
 crate's public API, so a test that needed a private item needs that item visible — and

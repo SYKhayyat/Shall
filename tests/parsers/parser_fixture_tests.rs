@@ -21,7 +21,7 @@ use std::path::Path;
 /// a dashed rule. Twenty-two apps on the machine this was captured from.
 #[test]
 fn scoop_list_reads_every_app_and_no_furniture() {
-    const LIST: &str = include_str!("fixtures/scoop/list.txt");
+    const LIST: &str = include_str!("../fixtures/scoop/list.txt");
     let pkgs = windows::parse_installed("scoop", LIST).expect("a captured real listing parses");
     let names: Vec<&str> = pkgs.iter().map(|p| p.name.as_str()).collect();
 
@@ -47,7 +47,7 @@ fn scoop_list_reads_every_app_and_no_furniture() {
 /// the banner and the `N packages found.` summary never appear (E17).
 #[test]
 fn choco_list_reads_the_machine_readable_rows() {
-    const LIST: &str = include_str!("fixtures/choco/list-r.txt");
+    const LIST: &str = include_str!("../fixtures/choco/list-r.txt");
     let pkgs = windows::parse_installed("choco", LIST).expect("a captured real listing parses");
     let rows: Vec<(&str, Option<&str>)> = pkgs
         .iter()
@@ -60,7 +60,7 @@ fn choco_list_reads_the_machine_readable_rows() {
 /// before the first package and the app names as `- pycowsay.exe` children.
 #[test]
 fn pipx_list_reads_its_json() {
-    const LIST: &str = include_str!("fixtures/pipx/list-json.txt");
+    const LIST: &str = include_str!("../fixtures/pipx/list-json.txt");
     let pkgs = language::parse_installed("pipx", LIST).expect("a captured real listing parses");
     let rows: Vec<(&str, Option<&str>)> = pkgs
         .iter()
@@ -75,8 +75,8 @@ fn pipx_list_reads_its_json() {
 /// cannot fail.
 #[test]
 fn the_npm_style_json_parser_reads_both_tools() {
-    const NPM: &str = include_str!("fixtures/npm/ls-global-json.txt");
-    const PNPM: &str = include_str!("fixtures/pnpm/ls-global-json.txt");
+    const NPM: &str = include_str!("../fixtures/npm/ls-global-json.txt");
+    const PNPM: &str = include_str!("../fixtures/pnpm/ls-global-json.txt");
 
     for (label, fixture, backend) in [("npm", NPM, "npm"), ("pnpm", PNPM, "pnpm")] {
         let pkgs =
@@ -98,7 +98,7 @@ fn the_npm_style_json_parser_reads_both_tools() {
 /// installed here.
 #[test]
 fn helm_plugin_list_is_not_its_own_header() {
-    const LIST: &str = include_str!("fixtures/helm/plugin-list.txt");
+    const LIST: &str = include_str!("../fixtures/helm/plugin-list.txt");
     let pkgs = ecosystem::ws_name_version(LIST, "helm").expect("a captured real listing parses");
     let names: Vec<&str> = pkgs.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(
@@ -120,7 +120,7 @@ fn helm_plugin_list_is_not_its_own_header() {
 /// the tool it parses" wants a cargo fixture more than it wants one fewer file.
 #[test]
 fn cargo_list_reads_the_crates_and_not_their_binaries() {
-    const LIST: &str = include_str!("fixtures/cargo/install-list.txt");
+    const LIST: &str = include_str!("../fixtures/cargo/install-list.txt");
     let pkgs = language::parse_installed("cargo", LIST).expect("a captured real listing parses");
     let rows: Vec<(&str, Option<&str>)> = pkgs
         .iter()
@@ -155,7 +155,7 @@ fn cargo_list_reads_the_crates_and_not_their_binaries() {
 /// synthesised table cannot disagree with the parser that reads it.
 #[test]
 fn winget_list_reads_the_id_column_whatever_punctuation_it_carries() {
-    const LIST: &str = include_str!("fixtures/winget/list.txt");
+    const LIST: &str = include_str!("../fixtures/winget/list.txt");
     let pkgs = windows::parse_installed("winget", LIST).expect("a captured real listing parses");
     let names: Vec<&str> = pkgs.iter().map(|p| p.name.as_str()).collect();
 
@@ -181,7 +181,7 @@ fn winget_list_reads_the_id_column_whatever_punctuation_it_carries() {
 
 #[test]
 fn winget_list_reads_one_result_and_no_result() {
-    const ONE: &str = include_str!("fixtures/winget/list-one.txt");
+    const ONE: &str = include_str!("../fixtures/winget/list-one.txt");
     let pkgs = windows::parse_installed("winget", ONE).expect("a captured real listing parses");
     assert_eq!(
         pkgs.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
@@ -189,7 +189,7 @@ fn winget_list_reads_one_result_and_no_result() {
         "a one-row table narrows every column, so the widths differ from the full listing"
     );
 
-    const NONE: &str = include_str!("fixtures/winget/list-not-found.txt");
+    const NONE: &str = include_str!("../fixtures/winget/list-not-found.txt");
     let pkgs = windows::parse_installed("winget", NONE).expect("a captured real listing parses");
     assert!(
         pkgs.is_empty(),
@@ -203,7 +203,7 @@ fn winget_list_reads_one_result_and_no_result() {
 /// become a package name of its own.
 #[test]
 fn winget_reports_a_version_it_cannot_pin_down_as_winget_wrote_it() {
-    const ODD: &str = include_str!("fixtures/winget/list-unknown-version.txt");
+    const ODD: &str = include_str!("../fixtures/winget/list-unknown-version.txt");
     let pkgs = windows::parse_installed("winget", ODD).expect("a captured real listing parses");
     assert_eq!(
         pkgs.iter()

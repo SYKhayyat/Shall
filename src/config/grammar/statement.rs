@@ -518,7 +518,7 @@ impl<F: Fn(&str) -> bool> BackendNames for F {
 /// [`Foreign`](KeywordRole::Foreign) is the distinction the table could not previously make:
 /// `use` and `if` were both "no colon, no `build`", so nothing could tell a directive this
 /// grammar has from a word it deliberately refuses. Anything quantifying over the language —
-/// the spec ratchet in `tests/grammar_table_matches_the_spec_tests.rs` above all — would then
+/// the spec ratchet in `tests/review/grammar_table_matches_the_spec_tests.rs` above all — would then
 /// have to re-derive the split from a second list, which is how the three copies this table
 /// replaced went out of step in the first place.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

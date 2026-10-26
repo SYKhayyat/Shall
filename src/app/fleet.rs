@@ -67,7 +67,7 @@ async fn ssh_capture(host: &str, remote_cmd: &str) -> Result<String> {
 /// answered "unrecognized subcommand" with exit 2, every row read ERROR, and `shall fleet`
 /// could not report a correctly installed machine as in sync. Nothing caught it, because the
 /// gate that compares invocations to the clap surface was drawn around `args.rs`;
-/// `tests/named_commands_exist_tests.rs` is drawn around the property instead.
+/// `tests/review/named_commands_exist_tests.rs` is drawn around the property instead.
 pub const REMOTE_CHECK: &str = "shall check --json";
 
 /// What the remote runs to converge. Named beside its twin so the two cannot drift apart.

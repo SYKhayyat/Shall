@@ -69,7 +69,7 @@ fn assert_reads(label: &str, result: ParseResult, floor: usize, expect_name: &st
 
 #[test]
 fn apt_reads_its_own_dpkg_query_output() {
-    const F: &str = include_str!("fixtures/apt/dpkg-query-installed.txt");
+    const F: &str = include_str!("../fixtures/apt/dpkg-query-installed.txt");
     assert_reads("apt (dpkg-query -W)", apt::parse_list(F), 90, "apt");
     // Versions are the point of this argv — `dpkg-query -W -f='${db:Status-Status} ${Package}
     // ${Version}'` exists so the planner can compare one. A read that dropped them would still
@@ -99,7 +99,7 @@ fn apt_reads_its_own_dpkg_query_output() {
 /// which is why routing it through the `name version` parser silently returned nothing.
 #[test]
 fn apt_reads_its_own_showmanual_output() {
-    const F: &str = include_str!("fixtures/apt/apt-mark-showmanual.txt");
+    const F: &str = include_str!("../fixtures/apt/apt-mark-showmanual.txt");
     let pkgs = shall::parsers::parse_bare_names(F, "apt").expect("captured output");
     assert!(pkgs.len() >= 50, "read {} manual package(s)", pkgs.len());
     assert!(pkgs.iter().any(|p| p.name == "apt"));
@@ -111,13 +111,13 @@ fn apt_reads_its_own_showmanual_output() {
 
 #[test]
 fn dnf_reads_its_own_rpm_qa_output() {
-    const F: &str = include_str!("fixtures/dnf/rpm-qa-installed.txt");
+    const F: &str = include_str!("../fixtures/dnf/rpm-qa-installed.txt");
     assert_reads("dnf (rpm -qa)", dnf::parse_rpm_qa(F, "dnf"), 100, "libgcc");
 }
 
 #[test]
 fn pacman_reads_its_own_query_output() {
-    const F: &str = include_str!("fixtures/pacman/pacman-q-installed.txt");
+    const F: &str = include_str!("../fixtures/pacman/pacman-q-installed.txt");
     assert_reads("pacman (-Q)", pacman::parse_list(F), 120, "acl");
 }
 
@@ -129,7 +129,7 @@ fn pacman_reads_its_own_query_output() {
 /// `---` rule — the `skip_while` bug this parser's own comment records — would have passed it.
 #[test]
 fn zypper_reads_its_own_table_out_of_a_page_of_repository_noise() {
-    const F: &str = include_str!("fixtures/zypper/search-installed.txt");
+    const F: &str = include_str!("../fixtures/zypper/search-installed.txt");
     assert_reads(
         "zypper (search -i)",
         dnf::parse_zypper_search(F),
@@ -154,7 +154,7 @@ fn zypper_reads_its_own_table_out_of_a_page_of_repository_noise() {
 
 #[test]
 fn apk_reads_its_own_info_output() {
-    const F: &str = include_str!("fixtures/apk/info-v-installed.txt");
+    const F: &str = include_str!("../fixtures/apk/info-v-installed.txt");
     assert_reads(
         "apk (info -v)",
         common::parse_dash_version_list(F, "apk"),
@@ -186,7 +186,7 @@ fn apk_reads_its_own_info_output() {
 #[test]
 fn opam_reads_its_own_short_listing() {
     use shall::parsers::ecosystem;
-    const F: &str = include_str!("fixtures/opam/list-installed-short.txt");
+    const F: &str = include_str!("../fixtures/opam/list-installed-short.txt");
     let pkgs = ecosystem::names_only(F, "opam").expect("captured `opam list --installed --short`");
     assert_eq!(pkgs.len(), 10, "{pkgs:?}");
     assert!(pkgs.iter().any(|p| p.name == "ocaml-base-compiler"));
@@ -215,7 +215,7 @@ fn the_fixture_check_can_fail() {
     // And the shared reader must not be satisfied by another tool's output — the exact rule
     // `ecosystem.rs` states, applied to itself. apk's output is `name-version` with no space;
     // apt's parser needs a space, so it reads nothing and now says so.
-    const APK: &str = include_str!("fixtures/apk/info-v-installed.txt");
+    const APK: &str = include_str!("../fixtures/apk/info-v-installed.txt");
     assert!(
         apt::parse_list(APK).is_err(),
         "apk's listing fed to apt's parser must not read as an apt machine"
@@ -223,7 +223,7 @@ fn the_fixture_check_can_fail() {
     // The reverse, which is the direction that used to be silent: apt's output through apk's
     // parser produces junk rather than nothing, so this asserts the junk rather than pretending
     // the check caught it.
-    const APT: &str = include_str!("fixtures/apt/dpkg-query-installed.txt");
+    const APT: &str = include_str!("../fixtures/apt/dpkg-query-installed.txt");
     let crossed = common::parse_dash_version_list(APT, "apk").expect("it parses, wrongly");
     assert!(
         crossed

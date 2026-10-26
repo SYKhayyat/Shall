@@ -1,6 +1,6 @@
 //! GRADER, 2026-07-28 — RED. Four more commands that `--dry-run` performs for real.
 //!
-//! `tests/dry_run_tests.rs` fixed the reported case (`uninstall`) and its nearest neighbours
+//! `tests/e2e/dry_run_tests.rs` fixed the reported case (`uninstall`) and its nearest neighbours
 //! (`unmanage`, `module create`, `schedule add`). The flag is still consulted per-verb, so the
 //! question was never "is uninstall fixed" but "which verbs remembered". Measured against the
 //! real binary on a fresh config, these four did not:

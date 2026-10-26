@@ -57,25 +57,17 @@ and the guard no longer ships even a `cfg(test)` mint.
 
 `cargo build --all-targets`, clippy at `-D warnings --all-features`, `cargo fmt -- --check`,
 and the Windows cross-check are green after the current batch. The library target reports
-**0 tests**; the latest full suite run reported **3,030 passed, 2 failed** on this host with a
-competing cargo build running, and both failures pass unloaded — the known load-sensitive pair:
-`startup_budget_tests` (issue #123, the registry budget) and
-`core::timing::a_run_is_gathered_per_label_slowest_first_and_off_by_default` (a wall-clock race).
-The former host-dependent `argv_drift_tests` failure did **not** appear this run. The suite runs
-**3,032 tests**. The suite wiring audit and both converter self-tests pass.
+**0 tests**; the latest full suite run reported **3,047 passed, 0 failed** — the fresh-process
+`startup_budget_tests` (`#123`), the five `#117` sync-engine subjects, the inline-test
+exception gate, and the flat-file sweep are all in. The suite runs **3,047 tests**. The suite
+wiring audit and both converter self-tests pass. The Windows cross-check and
+`scripts/unix-check.sh` did **not** run this batch: no Docker and no MSVC toolchain on this
+host — a said-so skip.
 
-**Next session, in this order:**
+**Next session, in this order:** nothing left from the sweep. The remaining work is what
+`docs/spec/plan.md` calls Tier 0c and the open decisions register names; re-derive there.
 
-1. **#123** — `startup_budget_tests` measures the registry in a *fresh process*: it is the
-   known flake and the only failure reason left in the suite. The mutation gate's retry
-   (#116) papers over it on the board; the honest fix is the fresh process.
-2. **#117** — the five sync-engine subjects (`prune_snapshots_after_sync`,
-   `execute_transaction`'s counters, `heal`, `rebuild_kernel_modules`, `sync`'s
-   `PurgeUndeclared` arm). The fixture exists: `tests/a_machine_converges_tests.rs`.
-3. The exception table + its two-way gate (small; starts empty).
-4. The flat-file assignment (mechanical; will not fight anything else).
-
-The tree is committed and pushed (`fe3f2ab8`).
+The sweep commit is this tree's HEAD; the hash is in the push record.
 
 ---
 

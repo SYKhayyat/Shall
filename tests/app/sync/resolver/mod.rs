@@ -186,3 +186,5 @@ mod an_unreached_broken_module_is_never_parsed;
 mod nothing_found_past_a_silent_manager_says_so;
 mod the_chain_answers_in_the_chains_order_however_the_answers_arrive;
 mod the_seam_carries_what_the_active_profiles_reach;
+
+mod lock_default_tests;

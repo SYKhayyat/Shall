@@ -1143,7 +1143,7 @@ impl SyncEngine {
     /// **This existed as a name before it existed as a function, which is the reason it is one.**
     /// `Reaped::for_reason`'s escape hatch used to be justified here by the sentence "each
     /// interrupted removal is enforced individually in `heal_interrupted_removals`", and two
-    /// ledger entries in `tests/removal_guard_enumeration_tests.rs` cited the same name. Grep
+    /// ledger entries in `tests/review/removal_guard_enumeration_tests.rs` cited the same name. Grep
     /// found it in exactly those three strings and nowhere else — so the name pointed at a list of
     /// places that did not ask, and the list was this one. The mechanism was real and correct,
     /// inline in the loop above, which is why the fix is a real ask in `heal_interrupted_removals`
@@ -1183,6 +1183,20 @@ impl SyncEngine {
             let _ = j.record_success(id);
         }
         true
+    }
+
+    /// The transaction policy recovery runs under.
+    ///
+    /// Recovery carries on past every failure and never rolls a successful recovery back.
+    /// `pub` for the tests' sake: a test crate links the library without `cfg(test)`, so a
+    /// private item is invisible there.
+    pub fn heal_transaction_config(&self) -> TransactionConfig {
+        TransactionConfig {
+            max_concurrent: self.config.max_parallel.max(1),
+            auto_rollback: false,
+            continue_past: crate::core::ContinuePast::AnyFailure,
+            ..TransactionConfig::patient()
+        }
     }
 
     pub async fn heal(&self, declared: &[PackageSpec]) -> Result<()> {
@@ -1437,12 +1451,7 @@ impl SyncEngine {
                 self.journal.clone(),
                 self.diagnostics.clone(),
                 self.config.clone(),
-                TransactionConfig {
-                    max_concurrent: self.config.max_parallel.max(1),
-                    auto_rollback: false,
-                    continue_past: crate::core::ContinuePast::AnyFailure,
-                    ..TransactionConfig::patient()
-                },
+                self.heal_transaction_config(),
             )
             .guarded_by(heal_reaped);
             let results = tx.execute_with_telemetry().await?;

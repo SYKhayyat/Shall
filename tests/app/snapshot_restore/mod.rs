@@ -24,3 +24,5 @@ fn reg(pkgs: &[(&str, &str, &str)]) -> StateRegistry {
 }
 mod diff_reports_added_removed_and_version_changed;
 mod identical_states_produce_an_empty_diff;
+
+mod snapshot_restore_reaches_every_provider_tests;

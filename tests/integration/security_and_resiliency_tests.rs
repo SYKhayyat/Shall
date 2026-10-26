@@ -1,4 +1,4 @@
-// tests/security_and_resiliency_tests.rs
+// tests/integration/security_and_resiliency_tests.rs
 
 use shall::app::sync::guard::GuardScope;
 use shall::app::sync::planner::{ChangePlanner, HostBackends, PlanScope};

@@ -42,3 +42,5 @@ mod the_first_claim_on_a_name_wins_and_a_second_is_dropped;
 mod the_first_row_this_machine_has_is_the_one_chosen;
 mod the_floor_drops_a_nameless_row_and_says_which_field;
 mod usable_keeps_two_rows_that_share_a_name;
+
+mod adapter_tables_share_one_mechanism_tests;

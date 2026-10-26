@@ -15,3 +15,7 @@ mod nimble_does_not_terminate_because_its_dash_dash_reaches_the_compiler;
 mod no_binary_is_listed_twice;
 mod no_names_means_no_terminator;
 mod the_unasked_rows_may_only_become_fewer;
+
+mod argv_drift_tests;
+mod grade2_flag_drift_blindspot_tests;
+mod terminator_probe_tests;

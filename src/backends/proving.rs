@@ -5,7 +5,7 @@
 //! claim nothing has ever checked. That is the whole of this module: the claim is still made,
 //! and it is now made *with its standing attached*.
 //!
-//! This table used to live in `tests/lifecycle_coverage_union_tests.rs`, which is the only place
+//! This table used to live in `tests/review/lifecycle_coverage_union_tests.rs`, which is the only place
 //! that sees both harnesses at once. Keeping it there meant the repository knew the answer and
 //! the program could not say it — and a fact known only to a test is a fact no user gets. The
 //! test now reads **this** table rather than a copy of it, which is `F7`'s lesson applied rather
@@ -198,7 +198,7 @@ pub const UNPROVEN: &[(&str, &str)] = &[
 /// **Data, not a derivation, because the harnesses are shell and this is a binary.** Each name
 /// is a `case` label in `docker/integration/run-in-container.sh`'s `canary()` or
 /// `dependent_lifecycle()`, or in a `primary_manager_image()` row, or a row of
-/// `scripts/integration-windows.sh`. `tests/lifecycle_coverage_union_tests.rs` reads those scripts
+/// `scripts/integration-windows.sh`. `tests/review/lifecycle_coverage_union_tests.rs` reads those scripts
 /// and holds this list to them in both directions, so a row added here without a harness to back
 /// it fails the suite, and a canary added there without a row here fails it too.
 ///

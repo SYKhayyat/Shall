@@ -288,7 +288,7 @@ impl Class {
 /// Every subcommand this table names, with its class.
 ///
 /// **Data rather than a `match`, and that is the whole point of the shape.** The gate that keeps
-/// these names honest — `tests/latency_budget_tests.rs` — asserts them against `--help`, and a
+/// these names honest — `tests/core/latency/latency_budget_tests.rs` — asserts them against `--help`, and a
 /// `match` gives it nothing to iterate, so it read a hand-typed array of twenty-four strings
 /// beside it instead. The copy omitted two entries, and one of them was `outdated`: a name
 /// classified here that is not a subcommand at all (`shall list --outdated` is a flag), so the
@@ -530,7 +530,7 @@ pub fn scheduling_violation(packages: usize, depth: usize, waves: usize) -> Opti
 ///
 /// Only on a run that asked for `--timings`, because that is the only run that records spans.
 /// That is a real limit and it is stated rather than papered over: the *gate* is
-/// `tests/latency_budget_tests.rs`, which drives the fan-out commands with `--timings` on
+/// `tests/core/latency/latency_budget_tests.rs`, which drives the fan-out commands with `--timings` on
 /// purpose. This is what puts the same sentence in front of a user who asked.
 /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
 /// crate links the library without `cfg(test)`, so a private item is invisible there.
@@ -575,8 +575,8 @@ pub fn report_shape(subcommand: &str, class: Class) {
     // **What this gives up is stated rather than buried.** A fan-out that uses two slots where
     // it had sixteen is no longer reported by the ratio, because the ratio cannot tell that run
     // from one on a host with two slots. The gates carry it instead and always did: the ratio
-    // and the wave ceiling are asserted directly for `list` by `tests/latency_budget_tests.rs`,
-    // and the width for these two by `tests/the_other_fan_outs_fan_out_too_tests.rs`.
+    // and the wave ceiling are asserted directly for `list` by `tests/core/latency/latency_budget_tests.rs`,
+    // and the width for these two by `tests/core/latency/the_other_fan_outs_fan_out_too_tests.rs`.
     if width >= 2 {
         unmeasured(
             subcommand,

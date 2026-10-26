@@ -15,3 +15,7 @@ mod pkgsrc;
 mod root;
 mod utils;
 mod windows;
+
+mod a_parser_can_say_it_did_not_understand_tests;
+mod installed_listing_fixture_tests;
+mod parser_fixture_tests;

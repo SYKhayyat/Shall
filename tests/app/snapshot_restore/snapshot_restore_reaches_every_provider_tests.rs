@@ -116,7 +116,7 @@ async fn a_provider_with_no_readable_snapshot_tree_yields_no_summary_rather_than
 #[test]
 fn every_shipped_row_that_declares_a_live_restore_names_a_restore_command() {
     let file: shall::core::snapshot::SnapshotProviderFile =
-        toml::from_str(include_str!("../src/core/snapshot_builtins.toml"))
+        toml::from_str(include_str!("../../../src/core/snapshot_builtins.toml"))
             .expect("the shipped provider rows parse");
     let mut live = 0;
     for def in &file.snapshot {
