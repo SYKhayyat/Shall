@@ -175,6 +175,12 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   - **Still open behind it:** *why* those registries answer 0 and serve nothing. This makes it one
     visible class rather than five half-vacuous checks, and deliberately does not guess. — ISSUE #100)
 
+- [x] #125 CI: `Advisories and licences` is red on `main` — two published advisories in
+  dependencies Shall ships. (High — **BUILT**: `ctutils 0.4.2 → 0.4.4` (RUSTSEC-2026-0385, the
+  constant-time mask generation behind `zip`'s password handling) and `tokio 1.53.1 → 1.53.3`
+  (RUSTSEC-2026-0386, `AsyncFd`'s safe constructors). Two `cargo update --precise` lines; the
+  gate is the resolving check, and the suite stays green over the new versions.)
+
 ## Phase 3 — Correctness Mediums
 - [x] **Gate names cited anywhere are not checked for resolving, while `V.n` citations are.**
   (Low — **BUILT, and it found NINE the day it was written**, which is the answer to "would
