@@ -559,6 +559,25 @@ soft() { SOFTC=$((SOFTC + 1)); _record_soft "$1"; echo "  soft  $1"; }
 # A missing class line is a defect too: every failing command emits one, so its absence means
 # the binary under test is not the tree that was built.
 # $5 runs between the two attempts, to clear a declaration the failed attempt left behind.
+#
+# The install that failed may not be the install that was asked for. `shall install go:…`
+# converges the whole configuration, so a *different* declaration — one whose package name
+# exists nowhere — fails the command, and Shall already says which:
+#     while applying `slackpkg:clucene` (/tmp/shall-it-config/modules/adopted.txt:107).
+# The verdict must name that line, not the subject this leg happened to be driving: the
+# slackware nightly spent runs blaming `go` for a `slackpkg:clucene` name that matches
+# nothing (#113).
+culprit_of() { # logfile -> the key in its `while applying` line, or nothing
+    sed -n 's/.*while applying `\([^`]*\)`.*/\1/p' "$1" | tail -1
+}
+_ci_defect() { # base  rc-text  logfile
+    _cd_culprit="$(culprit_of "$3")"
+    if [ -n "$_cd_culprit" ]; then
+        hard "$_ci_be: $1 (rc=$2; Shall names the failing declaration: $_cd_culprit, not $_ci_spec)"
+    else
+        hard "$_ci_be: $1 (rc=$2)"
+    fi
+}
 classify_install() { # be  install-spec  rc  logfile  [cleanup]
     _ci_be="$1"; _ci_spec="$2"; _ci_rc="$3"; _ci_log="$4"; _ci_clear="${5:-:}"
     # **Which log the rest of the lifecycle may believe.** A retry that cleared writes its own
@@ -581,12 +600,12 @@ classify_install() { # be  install-spec  rc  logfile  [cleanup]
     fi
     _ci_class="$(sed -n 's/^shall-failure-class: //p' "$_ci_log" | tail -1)"
     if [ -z "$_ci_class" ]; then
-        hard "$_ci_be: install of $_ci_spec failed and printed no failure class (rc=$_ci_rc)"
+        _ci_defect "install of $_ci_spec failed and printed no failure class" "$_ci_rc" "$_ci_log"
         excerpt "$_ci_log" 6
         CLASS=defect; return 0
     fi
     if [ "$_ci_class" = permanent ]; then
-        hard "$_ci_be: install of $_ci_spec failed permanently — a defect, not ecosystem variance (rc=$_ci_rc)"
+        _ci_defect "install of $_ci_spec failed permanently — a defect, not ecosystem variance" "$_ci_rc" "$_ci_log"
         excerpt "$_ci_log" 6
         CLASS=defect; return 0
     fi
@@ -607,7 +626,7 @@ classify_install() { # be  install-spec  rc  logfile  [cleanup]
         echo "$_ci_be" >> "$LEDGER/be-life-unmeasured"
         CLASS=exhausted; return 0
     fi
-    hard "$_ci_be: install of $_ci_spec failed twice, unclassified — a defect, not ecosystem variance (rc=$_ci_rc, $_ci_rc2)"
+    _ci_defect "install of $_ci_spec failed twice, unclassified — a defect, not ecosystem variance" "$_ci_rc, $_ci_rc2" /tmp/life2.out
     excerpt /tmp/life2.out 6
     CLASS=defect
 }

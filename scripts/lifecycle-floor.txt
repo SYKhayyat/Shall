@@ -141,7 +141,14 @@ container-linux-slackware-local 7
 # Added 2026-08-14 from that image's first clean run (pass=340 fail=0). Three and not more
 # because a guix profile starts empty and this image carries almost nothing else — the number is
 # small, honest, and the only one that can rise as canaries land.
-container-linux-guix-local 3
+# Raised 3 -> 4 on 2026-10-26, measured on a run with no failures (pass=332 fail=0, local
+# podman against the rebuilt image). The gain is the fixture fix (#113): the entrypoint had
+# installed `git bash` as one guix command, whose profile derivation failed as a unit, so no
+# install on the leg delivered and every section that depends on one went short. Splitting the
+# entrypoint brought `check health`, the guard, the rollback/rebuild/lock sections and the
+# coverage audit all back to their floors — the number below is not a flaky manager to wait
+# on, it is the image fixed.
+container-linux-guix-local 4
 container-linux-void-local 9
 # Added 2026-07-31, read off that image's own first green run rather than estimated. The
 # `storage` image is the only one that needs `--privileged` and the host's /lib/modules.
