@@ -10,11 +10,10 @@ State of the tree, what is verified, what is not, and how to continue. Read `CLA
   - `99540c13` — `#112`: native sweep delivery gate, health gate, evidence (verified, issue
     commented, closed).
   - `432dd20e` — `#128`: `zstd` 0.13 → 0.14, `zstd-safe` 8.2.0. **Verified**: build, clippy
-    `--all-features -D warnings`, `cargo deny check advisories` → `advisories ok`.
-    `cargo test --no-fail-fast` was re-run at HEAD; see "Background jobs" — check
-    `/tmp/opencode/suite-128.log` before closing the issue. One earlier full run tripped the
-    known load-sensitive `startup_budget_tests` at load average 25 (issue `#123`'s class); it
-    passes in isolation at the 120 ms ceiling.
+    `--all-features -D warnings`, `cargo deny check advisories` → `advisories ok`, and
+    `cargo test --no-fail-fast` → 3046 passed. The one red both runs was
+    `startup_budget_tests`' 120 ms ceiling under load average 25 (two container builds); it
+    passes in isolation (0.49 s) and is #123's recorded load-sensitivity. **Issue closed.**
   - `74dd8cc4` — `#113`: guix fixture fix (image gets apt `git`; entrypoint installs `bash`
     alone, one package at a time, keeps the log; guard FAIL prints both lists it compared).
     **Not verified by a container run yet** — see below.
@@ -66,7 +65,7 @@ Open, in order of what unblocks most:
 
 | # | Subject | State |
 |---|---|---|
-| `#128` | `Advisories and licences` red: three `zstd`-chain advisories | **Fixed** in `432dd20e`; close after the suite log is green |
+| `#128` | `Advisories and licences` red: three `zstd`-chain advisories | **Closed** — `432dd20e`, verified |
 | `#113` | guix section floor + guix/slackware `go` | **Root cause measured, fix committed, harness run pending** (below) |
 | `#129` | Four legs red on `check health (rc=2)`, no backend named | Filed 2026-10-26; evidence now printed by `99540c13`, cause still unknown |
 | `#109` | apt legs install off baked lists | Open; reproduction now possible with podman |
@@ -151,15 +150,14 @@ before concluding anything about the native family.
 
 ## Background jobs left running at handoff
 
-- `/tmp/opencode/suite-128.log` — `cargo test --no-fail-fast` at `432dd20e`. Check the tail for
-  `rc=0` and `test result: FAILED`. The `startup_budget_tests` flake is load, not code.
+- `/tmp/opencode/suite-128.log` — finished: 3046 passed, the `startup_budget_tests` load flake
+  only (see `#123`). Nothing to chase.
 - `/tmp/opencode/podman-build-full.log` — full guix image build. `rc=` line at the end is the
   verdict; failures in the builder stage are usually network/crates.
 - `/tmp/opencode/deny-128.log` — already green (`advisories ok`).
 
 ## Suggested order from here
 
-1. Confirm the suite log; if green, `gh issue close 128` with a one-line note.
 2. Finish `#113`: full image build → harness run → fix whatever the floor sections still show →
    close with the numbers.
 3. `classify_install` naming the real culprit (slackware `go`), then re-run slackware.
