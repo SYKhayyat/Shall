@@ -105,7 +105,7 @@ zstd = "0.13"
 
 # Versioning Logic
 semver = "1.0"
-version-compare = "0.1"
+version-compare = "0.2"
 
 # Logging & Monitoring
 tracing = "0.1"
