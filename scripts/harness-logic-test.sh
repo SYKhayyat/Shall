@@ -463,6 +463,25 @@ for _src in $SOURCES; do
         BAD=$((BAD + 1))
         continue
     fi
+    # **The helpers `classify_install` calls, lifted with it.** `culprit_of` and `_ci_defect`
+    # are separate functions, so lifting the classifier alone leaves them undefined in the
+    # subshell below: every call to them fails, the counters never move, and the predicates
+    # read "the harness is broken" for what is really "the gate did not bring the whole thing
+    # with it". A harness that loses a helper the classifier needs is a harness whose verdicts
+    # are the shell's defaults, so a missing helper is a BAD here too.
+    _missing=""
+    for _fn in culprit_of _ci_defect; do
+        _helper="$(lift "$_fn" "$_src")"
+        if [ -z "$_helper" ]; then
+            echo "  BAD   $(basename "$_src") has no $_fn(): classify_install calls it"
+            BAD=$((BAD + 1))
+            _missing=1
+            break
+        fi
+        _body="$_helper
+$_body"
+    done
+    [ -n "$_missing" ] && continue
     (
         PASS=0; FAILC=0; SOFTC=0
         # The environment the lifted body runs in, not this script's own variables — both are
@@ -478,7 +497,11 @@ for _src in $SOURCES; do
         # shellcheck disable=SC2034
         TO_LONG="timeout 900"
         soft() { SOFTC=$((SOFTC + 1)); }
-        hard() { FAILC=$((FAILC + 1)); }
+        # The verdict's WORDS are part of what this gate measures: a failure names the
+        # declaration that actually failed, and the test below reads that name. The stub counts
+        # the failure and keeps the sentence it was given.
+        hard() { FAILC=$((FAILC + 1)); VERDICT="$1"; }
+        VERDICT=""
         refused() { PASS=$((PASS + 1)); }
         eval "$_body"
         _log="$(mktemp)"; : > "$_log"
@@ -545,6 +568,32 @@ for _src in $SOURCES; do
         : > "$_log"
         classify_install be spec 1 "$_log" >/dev/null 2>&1
         [ "$CLASS" = defect ] && [ "$FAILC" -eq 1 ] || { echo "  BAD   a failure with no class line was not scored a defect (got '$CLASS')"; _bad=1; }
+
+        # **The verdict names the declaration that actually failed.** `shall install` converges the
+        # whole configuration, so a DIFFERENT line — one whose package name exists nowhere — is
+        # what fails the command, and Shall says so in its own output:
+        #     while applying `slackpkg:clucene` (/tmp/…/adopted.txt:107).
+        # The harness titled its FAIL after the subject it happened to be driving, so the slackware
+        # nightly blamed `go` for `slackpkg:clucene` for a run (#113). The class of the verdict
+        # does not change — it is still a defect — but the NAME in it must be the real one, and a
+        # log with no such line must not grow one.
+        FAILC=0; PASS=0; SOFTC=0
+        printf 'shall-failure-class: permanent\nError: `slackpkg` failed (exit 20): No packages match the pattern for install.\n    while applying `slackpkg:clucene` (/tmp/shall-it-config/modules/adopted.txt:107).\n' > "$_log"
+        VERDICT=""
+        classify_install be spec 1 "$_log" >/dev/null 2>&1
+        [ "$CLASS" = defect ] || { echo "  BAD   a failure with a culprit in it is not a defect (got '$CLASS')"; _bad=1; }
+        case "$VERDICT" in
+            *slackpkg:clucene*) : ;;
+            *) echo "  BAD   the verdict does not name the declaration that failed: '$VERDICT'"; _bad=1 ;;
+        esac
+        FAILC=0; PASS=0; SOFTC=0
+        printf 'shall-failure-class: permanent\nError: 404\n' > "$_log"
+        VERDICT=""
+        classify_install be spec 1 "$_log" >/dev/null 2>&1
+        case "$VERDICT" in
+            *"Shall names the failing declaration"*) echo "  BAD   a failure with no culprit in its log grew one anyway: '$VERDICT'"; _bad=1 ;;
+            *) : ;;
+        esac
 
         rm -rf "$LEDGER"
         rm -f "$_log"

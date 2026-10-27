@@ -939,6 +939,32 @@ section "[5] Install"
 if [ -n "$SMOKE" ]; then
     skip_smoke "install $PKG, and the list/PATH checks that read its result"
 else
+    # **The metadata the image baked, refreshed before the first install that needs a package
+    # the base did not ship.** The image ran `apt-get update` at build time and kept the lists,
+    # and the archive drops superseded point revisions of the current suite from the pool.
+    # Measured 2026-10-26 against this image, over HTTP, at the URLs a stale list resolves to:
+    # `curl_8.5.0-2ubuntu10.16` (current) is 206, `…10.14` and `…10.11` (superseded) are 404,
+    # and every older RELEASE revision is still 206 — so a list that names a dropped revision
+    # fails on the FETCH, for the mirror's reason and not Shall's (#109).
+    #
+    # **It is best-effort on purpose, and the softness is the whole design.** A refresh that
+    # fails because the mirror is down must not red the leg for a precondition — that is the
+    # complaint #109 makes about the fetch failing for the mirror's reason, arriving through
+    # the fix. So a failed refresh is a `soft`, and the leg says out loud that it is running on
+    # the image's baked lists. The verb itself is asserted in [16]; what is new here is WHEN it
+    # runs.
+    #
+    # The apt legs only: this is the one manager whose metadata the image bakes AND whose pool
+    # drops superseded revisions of the current suite, and the one the measurement was taken on.
+    # `shall update` refreshes every usable backend in the image (9s measured here), so the
+    # language managers on the same image are refreshed too, at no extra cost.
+    if [ "$BACKEND" = apt ]; then
+        if lx update >/tmp/it-update.log 2>&1; then
+            echo "        apt metadata refreshed before the first install"
+        else
+            soft "the apt metadata refresh failed — this leg continues on the image's baked lists: $(tail -n 1 /tmp/it-update.log)"
+        fi
+    fi
     # Where the name resolved BEFORE the install, which is what tells a binary this install
     # put there from one that was already on PATH under the same name (G-3).
     PKG_PREPATH="$(path_of "$PKG")"
