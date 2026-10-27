@@ -1274,6 +1274,14 @@ no_lifecycle_reason() {
         link)       echo "a dependent statement (link:SRC), not a package name — smoked in 13" ;;
         service)    echo "a dependent statement (service:NAME), and starting one mutates the host" ;;
         setting)    echo "a dependent statement (setting:K @value=), and it writes a live desktop setting" ;;
+        # `dir` was in NEITHER table here, and the coverage audit failed it by name on every
+        # native sweep once the ceiling reached 0 (#112's third family). The container harness
+        # drives it for real — declared, created, mode-asserted, torn down — in its own 14b, on
+        # every image. This sweep could too, but the container canary is `dir:PATH @mode=0700`
+        # and `@mode=` is refused on Windows (`dir.rs`: "mode ownership permissions are not
+        # supported on this platform"), so the shared script would fork the canary per host to
+        # drive it. The container's lifecycle is the coverage until that fork is worth having.
+        dir)        echo "a dependent statement (dir:PATH), driven with its mode in section 14b of the container harness on every image" ;;
         vscode)     disposable_host || echo "installs an extension into the developer's real editor profile" ;;
         emacs)      disposable_host || echo "installs a package into the developer's real Emacs profile" ;;
         mise|asdf)  disposable_host || echo "rewrites the host's tool-version shims" ;;

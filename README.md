@@ -286,7 +286,7 @@ worse than its host class has done before fails. The recorded floors:
 | `fedora`, `void` images | 9 |
 | native macOS runner | 8 |
 | `alpine`, `opensuse`, `slackware` images | 7 |
-| `guix` image | 3 |
+| `guix` image | 4 |
 | `storage` image (btrfs/LVM/ZFS on loopback) | 8 |
 
 No single host runs them all, because no single host *has* them all — the Windows managers do
