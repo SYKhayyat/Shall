@@ -37,8 +37,9 @@ pub fn parse_installed(backend: &str, output: &str) -> ParseResult {
         // silently returned nothing, which broke list AND made `info`/`remove`
         // no-ops (remove is gated on `info`), leaving stale manifest entries.
         "bun" => {
-            // The header carries the truth about zero: `/root/.bun/… node_modules (0)` with
-            // no rows under it is an EMPTY machine, and without reading that count the
+            // The header carries the truth about zero: `/root/.bun/… node_modules (0)` — or
+            // `(0 installed)`, the shape newer bun prints (#129) — with no rows under it is an
+            // EMPTY machine, and without reading that count the
             // candidate list (the header itself) outnumbers zero rows and `or_unrecognised`
             // refuses — every empty bun machine read as unreadable instead of empty.
             if bun_header_count_is_zero(&clean) {
@@ -341,14 +342,24 @@ pub fn parse_yarn_list(output: &str) -> Vec<Package> {
 /// The `(N)` at the end of bun's header path line, when the line is there at all.
 ///
 /// `/root/.bun/install/global node_modules (2)` — npm-style count of what the listing holds.
+/// Newer bun appends the word — `/home/…/global node_modules (0 installed)`, captured on the
+/// arch image 2026-10-26 (#129) — so a trailing ` installed` is stripped before the number is
+/// read; without it every empty bun machine read as unreadable and four legs went red.
 fn bun_header_count_is_zero(output: &str) -> bool {
     output
         .lines()
         .filter_map(|l| l.trim_end().rsplit_once('('))
         .any(|(before, tail)| {
             before.trim_end().ends_with("node_modules")
-                && match tail.strip_suffix(')') {
-                    Some(n) => n.trim().parse::<u64>().ok() == Some(0),
+                && match tail.strip_suffix(')').map(str::trim) {
+                    Some(n) => {
+                        n.strip_suffix(" installed")
+                            .unwrap_or(n)
+                            .trim()
+                            .parse::<u64>()
+                            .ok()
+                            == Some(0)
+                    }
                     None => false,
                 }
         })
