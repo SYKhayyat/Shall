@@ -1,22 +1,19 @@
-# Handoff — 2026-10-26
+# Handoff — 2026-10-27
 
 State of the tree, what is verified, what is not, and how to continue. Read `CLAUDE.md` and
 `docs/SPEC.md` first; they still govern everything below.
 
 ## Where the tree is
 
-- Branch `main`, HEAD `74dd8cc4`, pushed to `origin`.
-- Last three commits:
-  - `99540c13` — `#112`: native sweep delivery gate, health gate, evidence (verified, issue
-    commented, closed).
-  - `432dd20e` — `#128`: `zstd` 0.13 → 0.14, `zstd-safe` 8.2.0. **Verified**: build, clippy
-    `--all-features -D warnings`, `cargo deny check advisories` → `advisories ok`, and
-    `cargo test --no-fail-fast` → 3046 passed. The one red both runs was
-    `startup_budget_tests`' 120 ms ceiling under load average 25 (two container builds); it
-    passes in isolation (0.49 s) and is #123's recorded load-sensitivity. **Issue closed.**
-  - `74dd8cc4` — `#113`: guix fixture fix (image gets apt `git`; entrypoint installs `bash`
-    alone, one package at a time, keeps the log; guard FAIL prints both lists it compared).
-    **Not verified by a container run yet** — see below.
+- Branch `main`, HEAD `5bf94cfc`, pushed to `origin`.
+- This session's commits, in order:
+  - `aa970f12` — **#113** closed: `classify_install` names the real culprit; guix ratchet 3 → 4.
+  - `cee823ae` — **#129** closed: bun's `(0 installed)` header is an empty machine, not an
+    unreadable one.
+  - `ac797219` — **#112**: `dir` named in the native sweep's refusal table; README follows the
+    guix ratchet.
+  - `5bf94cfc` — **#109**: the apt legs refresh the metadata the image baked, before the first
+    install.
 - Working tree: only untracked `scripts/__pycache__/` and `scripts/widen-for-tests.py`
   (deliberately never committed) plus this file until it is committed.
 
@@ -59,6 +56,15 @@ at once (11 GB RAM, load spikes to 25 with two cargo builds).
 Never claim a step you did not run. The suite is one target, `suite`, built from `tests/main.rs`
 (`autotests = false`); a new test file is invisible until it is a `mod` there.
 
+**The suite is ~90 seconds, not twenty minutes.** `3049 passed; 0 failed` in 81.71s. The
+twenty-minute figure is the container matrix, not the Rust suite.
+
+**`scripts/lifecycle-floor.txt` is read by a Rust test** (`the_stated_lifecycle_coverage_matches_
+the_ratchet_tests`), which checks README.md's coverage table against it. A "shell-only" diff that
+touches that file is not shell-only, and the suite is owed. It caught exactly this on
+2026-10-26: `aa970f12` raised the guix floor and called the diff shell-only; the next suite run
+was red on the README table lagging it. Fixed in `ac797219`.
+
 ## Issues — all of them exist and are posted
 
 Open, in order of what unblocks most:
@@ -66,106 +72,95 @@ Open, in order of what unblocks most:
 | # | Subject | State |
 |---|---|---|
 | `#128` | `Advisories and licences` red: three `zstd`-chain advisories | **Closed** — `432dd20e`, verified |
-| `#113` | guix section floor + guix/slackware `go` | **Root cause measured, fix committed, harness run pending** (below) |
-| `#129` | Four legs red on `check health (rc=2)`, no backend named | Filed 2026-10-26; evidence now printed by `99540c13`, cause still unknown |
-| `#109` | apt legs install off baked lists | Open; reproduction now possible with podman |
+| `#113` | guix section floor + guix/slackware `go` | **Closed** — `aa970f12` |
+| `#129` | Four legs red on `check health (rc=2)`, no backend named | **Closed** — `cee823ae` (the backend was `bun`) |
+| `#109` | apt legs install off baked lists | **Fix landed** (`5bf94cfc`), live ubuntu leg running |
+| `#112` | native sweep family: installed packages missing from `list` and PATH | Open — evidence commented; the next step is the artifact |
 | `#100` | void leg's uv/yarn/gem/github listing failures | Open; `#112`'s delivery evidence lands on the next run |
-| `#112` | native sweep family | **Done** (`99540c13`), commented |
 | `#25` | stale umbrella | Open, untouched |
 | `#111` | fan-out bounded by core count | Open, untouched |
 | `#124`, `#94` | auto-declare on use | Open, untouched |
-
-Closed this session: `#125`, `#126`, `#127`, `#112` (commented, stays open until its evidence
-run lands — read the issue before acting).
 
 Decision register: **0 OPEN, 0 BUILT NEVER RULED**, 238 ANSWERED, 2 PARKED (D15, D16), 1
 DEFERRED (Q26), 2 HALF RULED (Q29, J4). None gate this work. Any ruling ships in the same commit
 (`docs/spec/decisions.md`, plus `target-state.md`/`why.md` if it is a rule) and
 `scripts/decision-count.sh --check` is the gate.
 
-## `#113` — measured root cause, and what is left
+## What was measured this session
 
-Measured with podman on 2026-10-26:
+### `#113` — the guix leg, verified by a local podman run
 
-1. The entrypoint ran `guix install git bash` as **one** command. Guix's `git` chain fails on
-   this image at `glib-2.86.5` — **with a C toolchain present**, so the compiler was not the
-   missing piece. A profile derivation is one unit, so the failure took **`bash` down too**.
-2. Consequence chain: no `bash` → the removal guard has no victim (`The guard` 3→2); no `git` →
-   section 11's `lx -y install "$PKG"` never runs → the rebuild proof, the three lock proofs and
-   the rollback audit all report the package still removed (that is most of the six-section
-   floor breach).
-3. Control: an image with **no** apt packages does `guix install bash` fine (`bash 5.2.37` in
-   `/root/.guix-profile`). The toolchain was never needed.
+The full image built (rc=0) and the harness ran green: `pass=332 fail=0 soft=9`. Every section
+the issue quoted as breached is back at or above floor — `The guard` 3 (was 2), `Git history +
+rollback` 8 (was 3), `rebuild` 6 (was 3), `Chains and the per-host lock` 17 (was 15), `Command
+surface` 70 (was 68), `Coverage audit` 5 (was 4) — and the real-lifecycle ratchet measured 4,
+recorded with the reason.
 
-Fix committed in `74dd8cc4`. **To confirm it**, build the full image and drive the harness:
+**The slackware half was the harness, not Shall.** Shall's own WARN already said the `go` line
+was not what failed and named `slackpkg:clucene`; the harness titled its FAIL after the subject
+it happened to be driving. `classify_install` now extracts Shall's `` while applying `X` `` line
+and names the real culprit in all three defect verdicts, in the container harness and its
+Windows twin. **The next slackware nightly is the live proof** — nothing in that half was
+verified against a real manager run.
 
-```bash
-cd /home/shaul/shall
-setsid nohup bash -c 'nix-shell -p podman --run "podman build -f docker/integration/Dockerfile.guix -t shall-it-guix ."' \
-  >/tmp/opencode/podman-build-full.log 2>&1 </dev/null & disown
-# then
-nix-shell -p podman --run 'podman run --rm --security-opt seccomp=unconfined \
-  -e GITHUB_TOKEN -v "$PWD/docker/integration/run-in-container.sh:/src/docker/integration/run-in-container.sh:ro" \
-  -v "$PWD/scripts/lifecycle-floor.txt:/src/scripts/lifecycle-floor.txt:ro" \
-  -v "$PWD/scripts/section-floor.txt:/src/scripts/section-floor.txt:ro" \
-  shall-it-guix guix hello'
+### `#129` — the four legs' sick backend was `bun`
+
+The harness's evidence half (`99540c13`) named it on the first post-fix run: `bun — answered with
+1 line(s) this parser does not recognise, the first being /home/shall/.bun/install/global
+node_modules (0 installed)`. Newer bun appends the word to its npm-style count;
+`bun_header_count_is_zero` read only a bare `(0)`, so every empty-bun machine read as unreadable
+and the psresource-class promotion made it CRITICAL. Fixed by stripping a trailing ` installed`.
+Test written first against the arch log's bytes, watched it fail as
+`Unrecognised { data_lines: 1, sample: … }`, then pass. The empty-listing module had no bun row
+at all; it has one now.
+
+### `#109` — the apt mechanism, measured
+
+Over HTTP, at the URLs a stale list resolves to, inside a locally built ubuntu image:
+
+```
+206  curl_8.5.0-2ubuntu10.16_amd64.deb   <- the current candidate
+404  curl_8.5.0-2ubuntu10.14_amd64.deb   <- superseded, GONE from the pool
+404  curl_8.5.0-2ubuntu10.11_amd64.deb   <- superseded, GONE from the pool
+206  curl_7.81.0-1ubuntu1.30_amd64.deb    <- an older RELEASE, kept
 ```
 
-Read: `check health`, `The guard`, `Git history + rollback`, `rebuild`, `Chains and the per-host
-lock`, `Coverage audit`, and the section-floor verdict. A green `git --version` alone is not the
-proof — the floor sections are.
+The premise holds for the current suite's point revisions; every version the image's own baked
+lists resolved fetched cleanly (15/15). CI builds the image fresh and the lists are fetched at
+the top of it: on the ubuntu leg of `40353618389`, `apt-get update` at 15:53:05 and the first
+install at 15:59:07 — six minutes old, leg running 34 minutes after. **No failing run has ever
+been attached to this issue, and none is attached now.**
 
-Local probe Dockerfiles used for the control experiment are in `/tmp/opencode/` (`Dockerfile.guix-fixtures`,
-`Dockerfile.guix-control`); logs `/tmp/opencode/{guix-fixtures,guix-control,podman-build-full}.log`.
-Do not commit them.
+The fix (`5bf94cfc`) refreshes before the FIRST install — not before the service install the
+issue's candidate named — and is best-effort: a refresh that fails because the mirror is down
+must not red the leg for a precondition, which is this issue's own complaint arriving through the
+fix. A failed refresh is a soft and the leg says it is running on the image's baked lists.
 
-**Slackware's `go` line is the same family's sibling and is not fixed.** The log
-(`/tmp/opencode/slackware.log`, job `121476681205`) shows the real failure is the whole-model
-sync hitting `slackpkg:clucene` (`modules/adopted.txt:107`, "No packages match the pattern for
-install"). Shall already says so (`kept_line_advice`/`WhyKept::NameAbsentElsewhere`,
-`src/verbs/packages.rs:383-406`) — the **harness** blames `go`. Planned fix: `classify_install`
-in `docker/integration/run-in-container.sh:562` should extract ``while applying `X` `` from
-`src/core/error.rs` and name the real culprit.
+### `#112` — the native sweeps, evidence commented
 
-## Red legs on the last push run, by job
-
-`40353618389` at `99540c13`:
-
-- `Integration (arch)` `121680058061` — `check health (rc=2)`, `go: list shows hello`,
-  `go: not on PATH`, `pipx: install of pipx:pycowsay failed twice, unclassified`,
-  lifecycle ratchet 11 vs 12, section floor. `pass=385 fail=6 soft=8`.
-- `Integration (ubuntu)` `121680058151` — `check health`, section floor. `pass=395 fail=2 soft=4`.
-- `Integration (fedora)` `121680058263` — same two. `pass=374 fail=2 soft=7`.
-- `Integration (opensuse)` `121680058267` — same two. `pass=375 fail=2 soft=5`.
-- `Integration (void)` `121680058489` — gem/github/uv/yarn listing + PATH failures (`#100`).
-  `pass=331 fail=7 soft=15`.
-- `Advisories and licences` — the zstd advisories (`#128`).
-
-Logs downloaded to `/tmp/opencode/leg-<job>.log`; fetch fresh ones with
-`gh run view <run> --job <job> --log` (only after the run completes).
-
-Dispatch run `40353656991` (head `99540c13`) was still running when this was written; it exists
-to produce native-sweep evidence (`native-sweep-evidence-{macos,windows}` artifacts). Read it
-before concluding anything about the native family.
-
-## Background jobs left running at handoff
-
-- `/tmp/opencode/suite-128.log` — finished: 3046 passed, the `startup_budget_tests` load flake
-  only (see `#123`). Nothing to chase.
-- `/tmp/opencode/podman-build-full.log` — full guix image build. `rc=` line at the end is the
-  verdict; failures in the builder stage are usually network/crates.
-- `/tmp/opencode/deny-128.log` — already green (`advisories ok`).
+The dispatch run `40353656991` (macOS job `121680207727`, `pass=257 fail=15 soft=25`) put the
+install excerpts in the log for the first time, and they are the shape of the family: `cargo`'s
+canary install reports `Status: SUCCESS` with `backends: brew` and `✓ [brew] rustup`, then the
+listing says the manager is not installed at all. Two hypotheses the uploaded artifact
+(`native-sweep-evidence-macos`) can separate: the bootstrap did not deliver (a `brew install
+rustup` formula provisions nothing until `rustup default` runs), or the harness read the wrong
+page. `gem`'s listing shows the system ruby's gem set without the canary, which reads as the
+toolchain mismatch. The `dir` coverage failure is fixed (`ac797219`).
 
 ## Suggested order from here
 
-2. Finish `#113`: full image build → harness run → fix whatever the floor sections still show →
-   close with the numbers.
-3. `classify_install` naming the real culprit (slackware `go`), then re-run slackware.
-4. `#129`: the next run names the sick backend — read it, then fix the actual promotion/lister.
-5. `#109` with podman: build `Dockerfile.ubuntu`, show the apt install against stale lists,
-   refresh, close.
-6. `#100`'s void leg should now carry `#112`'s evidence (listing + install log) — read the next
-   run before changing anything.
+1. **`#112`: read the artifact.** `gh run download 40353656991 -n native-sweep-evidence-macos`,
+   then read ONE backend's own log before theorising further — that is what the issue asks, and
+   it is the only way to tell the two hypotheses apart.
+2. **Read the ubuntu leg's result** (`/tmp/opencode/harness-ubuntu.log`, a local podman run of
+   the whole leg with the refresh in place) and close `#109` with it.
+3. **Slackware's live proof** for `classify_install`: the next nightly, or a local podman run of
+   `Dockerfile.slackware`.
+4. `#100`: read the next void run — `#112`'s delivery evidence lands there.
+5. The macOS ratchet measured **10 ≥ 8** and printed the ratchet-up `sed`; it is NOT recorded,
+   on the two-run caution the windows row carries. Decide it with the next macOS run.
+6. `#109`'s sibling worth checking, not yet measured: dnf's metadata expires in 48h, so a fedora
+   image's baked metadata is the same class one day older.
 
 Anything you find that is not already an issue must get one, with file:symbol evidence, a
 reproduction or the test gap, and a proposed resolving test — that is the rule the owner set
