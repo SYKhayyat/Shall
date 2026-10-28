@@ -3428,11 +3428,15 @@ about.
 ---
 
 **V.136 — Why a failure names the declaration and not just the command.** *(Owner ruling,
-2026-08-05 — `Q34`. Rule in II.19.)*
+2026-08-05 — `Q34`. Rule in II.19. Its converge half was reversed on 2026-10-27 by `C7` — see
+V.220; this entry's naming half stands.)*
 
-`install X` converges the whole configuration. That is not a bug to be fixed — it is what
-declarative means, and the alternative (converge only X) turns Shall into a package manager that
-happens to keep notes, where your files and your machine can disagree with no command noticing.
+`install X` converged the whole configuration when this was written. That premise is now
+reversed — `install` converges what it names (II.70), and the reason is in V.220. What survives
+from this entry is the naming, and it survives for a wider reason than the one it was written
+for: every caller of the engine that converges more than one line (`sync`, `heal`, a rollback's
+undo) needs a failure to name the declaration, or the error is a manager talking about a command
+the user never asked for.
 
 The consequence is real all the same: a line nobody has looked at can stop the install somebody
 just typed. Measured:
@@ -8063,3 +8067,45 @@ file's behaviour is still end-to-end — the folder says how it drives, the file
 is about, and the two are orthogonal. Confusing them is how `tests/e2e/` becomes a drawer, and
 how a review test ends up filed as an end-to-end one because the end-to-end folder was where
 somebody put it.
+
+---
+
+**V.220 — Why `install` converges what it names, not the machine.** *(Owner ruling, 2026-10-27 —
+`C7`. Rule in II.70. Supersedes the converge half of `Q34`/V.136.)*
+
+The 2026-10-26 native sweeps measured the cost of the whole-machine converge that rode along on
+`install`. The harness's `shall -y install cargo:hexyl` produced a plan whose one change was
+`brew:rustup` — a package `adopt` had recorded, not the crate the command named — and on Windows
+the same command installed `winget:ImageMagick.ImageMagick`:
+
+```
+Planned changes:
+  install 1   remove 0   (total 1 change(s))
+  backends: brew
+=== Transaction Summary ===
+Status:       SUCCESS
+  ✓ [brew    ] rustup               (5305ms)
+```
+
+The canary was absent from its own install's plan, the harness read exit 0 as "installed for
+real", and ten backends per host were then failed for a package that was never installed (#112).
+The same machinery produced the apology: `say_if_the_failure_was_not_yours` existed only because
+a failure anywhere in the config could stop the install somebody typed, and its whole job was to
+say "that failure is not about what you asked for". A verb that needs a paragraph explaining it
+might do something else is a verb doing too much.
+
+**V.136's objection, answered.** "Converge only X turns Shall into a package manager that happens
+to keep notes, where your files and your machine can disagree with no command noticing." The
+disagreement is not silent — `check drift` and `plan` are the commands that notice, and they
+already exist. What the whole-machine converge bought was an undocumented coupling: every
+`install` was also a `sync`, so a config the user was not ready to converge got converged anyway.
+The deferral is now named where it is created — `install` says the rest of the config is pending
+and names the verb that converges it.
+
+**Why no flag and no second verb.** A flag means every call site forever picks a mode, and the
+nightly demonstrated the default mode was the footgun. A second verb is two paths for one word.
+The codebase's own shape for "a verb that does what you named" is the arguments — `upgrade`
+narrows when you name a package, `adopt` takes the backends you name, `rebuild` takes the
+packages you name — and `install`'s own signature always demanded package names. The siblings
+narrow with it (`uninstall`, `uninstall --absent`, `retarget`), because a twin left full-sync
+would be the same surprise under a different word.

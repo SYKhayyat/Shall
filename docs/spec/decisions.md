@@ -1,4 +1,4 @@
-﻿# The decision register — 243 entries, none open
+﻿# The decision register — 244 entries, none open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **238** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **239** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 243 are accounted
-for: **238 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 244 are accounted
+for: **239 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -513,7 +513,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29 and 2026-10-21 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, and where a test lives) — 6
+### C — the round of 2026-09-28/29, 2026-10-21 and 2026-10-27 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, and what install converges) — 7
 
 | | question | answered |
 |---|---|---|
@@ -523,6 +523,7 @@ deliberately no longer has.*
 | **C4** | Two instruments reported without ever asserting. `MockExecutor`'s `unstubbed` ledger recorded every command that ran with no registered response and was read by nothing — the test double kept a complete record of every question the suite failed to answer and nothing ever asked for it. And all four skip paths in `core/latency.rs` were bare `return`s, so "the rule ran and passed" and "nobody checked" were the same silence. What should gate them, and where should the marker go? — RULED 2026-09-29: `unstubbed_registrations()` reads the ledger and `deny_unstubbed()` fails a fall-through at drop, **per-test opt-in** — measured, 172 of 699 suite tests carry one, 106 of them only existence probes whose `true` default is deliberate, **66 with an unanswered `execute()`**; a global check would redden 172 tests for having no opinion and no check would leave 66 assertions resting on a string nobody wrote. The two flags are independent and neither allowance switches off the other's check. The latency marker is **one token, `shall-latency-unmeasured:`**, emitted at **`info` — below the default `warn`, owner ruling, because it fires on most commands and a user who typed a package name must not be shown a line about a budget that does not exist** — and **enforced by a gate that drives each skip path, not by the grep**. A pass emits nothing. The `--timings` arm is asserted through `is_measurable` rather than driven, because `core::timing::enable()` is a one-way global. (II.23, V.215) | 2026-09-29 |
 | **C5** | The mutation gate read `cargo mutants`' "the test command exited non-zero" as "the mutant was caught", so a test that failed because the host was busy was a catch — and a flaky *baseline* printed "cargo test failed in an unmutated tree", a shard that answers nothing. What may the gate claim? — RULED 2026-10-21: the gate asks the runner, and the runner is **nextest with `--retries 2`** — a test that fails and then passes on the retry is `flaky`, the run exits 0, and **the mutant is not credited**: it survives, reaches the survivor list, and the gap is visible to whoever reads the list. Only the failing test is re-run, so a genuine catch pays one test twice rather than a second run of three thousand. The isolation of one test per process also closes the `#121` family for the gate. The job's command, the retry, the runner and its log are asserted by `tests/review/the_mutation_gate_retries_a_failed_test.rs`, and the test was watched failing without the retry. (II.68, V.218) | 2026-10-21 |
 | **C6** | Tests lived wherever they had been written — 2,129 of them inside `src/`, in files of their own — so "the library carries no tests" and "the library's tests are in the library" were the same tree, and a test that needed a private item could not be moved at all. Where does a test live? — RULED 2026-10-21: **`src/a/b/c.rs` owns `tests/a/b/c/`, `src/a/b/mod.rs` owns `tests/a/b/`**, the tree mirrors `src/`, and **a src file with no tests gets no folder**. The folder says how the test drives the product — `tests/e2e/` spawns the binary or the `Fixture` harness, `tests/review/` reads the `src/` tree and asserts a property of the code — and the filename says what it is about; the two are orthogonal. A test that needs `cfg(test)` cannot live in a test crate, so it stays inline **on an exception table audited in both directions** — **now empty**, with `cargo test --lib` reporting zero tests. A relocated test sees the crate's public API, so an item it needs is made visible and says so in its own doc comment. (II.69, V.219) | 2026-10-21 |
+| **C7** | `install X` wrote X's line and then converged the whole configuration — and the 2026-10-26 native sweeps measured what that costs: the harness's `install cargo:hexyl` ran a plan whose one change was `brew:rustup`, an adopted package that was never asked for, and the canary was absent from its own install's plan (#112). What do `install` and `uninstall` converge? — RULED 2026-10-27: **exactly what they name** — the named specs and their `@requires` chains, nothing else; the line is still written first (S15, Q1's withdrawal intact); the whole-machine converge stays `sync`'s; after `install` the rest of the config is pending, named in one line; chaining is the shell's; a narrowed run reaps nothing; the Q34 apology machinery is deleted. Supersedes the converge half of `Q34`/V.136. (II.70, V.220) | 2026-10-27 |
 
 ---
 
@@ -10189,3 +10190,14 @@ change.
 not a claim that inline tests are wrong — a `#[cfg(test)]` module that needs private access is
 the right answer for that case; the issue is that there was no *other* answer, so the two cases
 were indistinguishable.
+
+## C7
+
+**Status: ANSWERED 2026-10-27, built.** What `install` and `uninstall` converge.
+Rule in **II.70**, rationale in **V.220**. Supersedes the converge half of `Q34` (V.136); that entry's failure-naming half stands.
+
+**The question.** `install X` wrote X's line and then converged the whole configuration, and the 2026-10-26 native sweeps measured what that costs: the harness's `shall -y install cargo:hexyl` ran a plan whose one change was `brew:rustup` — an adopted package, not the canary — and on Windows the same command installed `winget:ImageMagick.ImageMagick` (#112). The canary was absent from its own install's plan, the harness read exit 0 as "installed for real", and ten backends per host were then failed for a package that was never installed. `V.136` had ruled the converge deliberately ("that is what declarative means"), but the same ruling's own machinery (`say_if_the_failure_was_not_yours`) existed only to apologise for it, and a verb whose signature is the packages you named acting on 103 packages you did not is the surprise, not the shape.
+
+**The ruling.** `install` and `uninstall` converge **exactly what they name** — the named specs and their `@requires` chains, and nothing else. The line is still written first (S15 stands: the write is refused before anything is installed, and a failed install withdraws a line that can never succeed). The whole-machine converge stays `sync`, unchanged, and is the verb that honours the rest of the config; after `install` that rest is pending — a first-class state `check drift` and `plan` already see — and `install` names it in one line rather than converging it. Chaining is the shell's (`shall install jq && shall sync`); the comma keeps its one meaning, a backend fallback inside a spec. A narrowed run reaps nothing and removes nothing that was not named. The Q34 apology machinery is deleted, not kept beside the change that makes it unreachable.
+
+**What was not chosen.** A scope flag means every call site forever picks a mode, and the nightly demonstrated the default mode was the footgun. A second verb keeps two paths for one word. `rollback` keeps its whole-machine converge — its subject is the whole config, not a package — and `retarget` narrows to the one package it moves.

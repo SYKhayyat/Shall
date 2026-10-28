@@ -2590,13 +2590,12 @@ names it, says the next sync will run it again from the top, and resolves the en
 — not completed, because it did not complete, and not left open, because an entry that can never
 be recovered but stays `InProgress` keeps `needs_recovery` true for ever. **V.140.**
 
-**A failure names the declaration it happened for** (2026-08-05, `Q34`). Not the manager, not
-the command — the `backend:name` and the file and line it was written on. `install X` converges
-the whole configuration, which is the model working and stays; the consequence is that a line
-nobody has looked at can stop the install someone just typed, and until this the error was that
-line's manager talking about a command the user never asked for. `install` also says outright
-when the failure is not about what was asked for, and never advises taking back the line that
-was: the one thing worse than keeping a wedged line is deleting a good one. **V.136.**
+**A failure names the declaration it happened for** (2026-08-05, `Q34`; converge half superseded
+by `C7`, 2026-10-27). Not the manager, not the command — the `backend:name` and the file and line
+it was written on. The sentence survives the ruling that removed its premise: `install` no longer
+converges the whole configuration (II.70), so a failure inside an install is about what was asked
+for — and the naming stays, because `heal`, `sync` and every other caller of the engine converge
+more than one line and a failure that names only the command sends the reader to the wrong file.
 
 **Nothing is fetched for a decision already made** (2026-08-05, `Q37`). A refusal that reads only
 the destination is asked before the first byte, not after the artifact is on disk and unpacked.
@@ -4315,3 +4314,28 @@ repository, audited in both directions, so a row that is earned back is deleted.
 crate's public API, so a test that needed a private item needs that item to be visible — and the
 repository's rule is that a `pub fn` reached only from tests is not a defect to be policed but a
 cost to be paid, with the reason written down where the item is declared.
+
+## II.70 `install` and `uninstall` converge exactly what they name (`C7`, V.220)
+
+*(Owner ruling, 2026-10-27 — `C7`. Supersedes the converge half of `Q34`/V.136.)*
+
+**`install X` writes X's line and applies exactly X** — the named specs and their `@requires`
+chains, and nothing else. **`uninstall X` removes X** — the declaration and the package — and
+nothing else. Neither reaps: a package the config no longer declares is `sync`'s finding, not
+theirs, and a narrowed run that scheduled removals would make `install` the mass-removal verb.
+
+- **S15's order stands.** The write comes first, so every refusal on the write lands before
+  anything is installed, and Q1's withdrawal still takes back a line that can never succeed.
+- **The whole-machine converge is `sync`'s, unchanged.** After `install`, the rest of the config
+  is pending — a first-class state `check drift` and `plan` already see — and `install` says so
+  in one line rather than converging it.
+- **Chaining is the shell's**: `shall install jq && shall sync`. The comma keeps its one meaning
+  (a backend fallback chain inside a spec) and nothing reuses it for verbs.
+- **The siblings narrow with the verb.** `retarget` moves one package — install under the new
+  backend, remove the old copy — and converges that move and nothing else. `uninstall --absent`
+  enforces the named absences and nothing else. `rollback` keeps its whole-machine converge: its
+  subject is the whole config, not a package.
+- **The guard applies as always.** The scoped changes still go through the sync engine under
+  `GuardScope::Sync`; narrowing the plan narrows nothing the guard checks.
+- **V.136's apology machinery is deleted.** A failure inside a narrowed run is about what was
+  asked for, so "that failure is not about X" cannot fire and its code does not stay to prove it.
