@@ -1,11 +1,11 @@
-# Handoff — 2026-10-27
+# Handoff — 2026-10-27 (second half: `C7`)
 
 State of the tree, what is verified, what is not, and how to continue. Read `CLAUDE.md` and
 `docs/SPEC.md` first; they still govern everything below.
 
 ## Where the tree is
 
-- Branch `main`, HEAD `5bf94cfc`, pushed to `origin`.
+- Branch `main`, HEAD `cf8eaafd`, pushed to `origin`.
 - This session's commits, in order:
   - `aa970f12` — **#113** closed: `classify_install` names the real culprit; guix ratchet 3 → 4.
   - `cee823ae` — **#129** closed: bun's `(0 installed)` header is an empty machine, not an
@@ -14,8 +14,31 @@ State of the tree, what is verified, what is not, and how to continue. Read `CLA
     guix ratchet.
   - `5bf94cfc` — **#109**: the apt legs refresh the metadata the image baked, before the first
     install.
-- Working tree: only untracked `scripts/__pycache__/` and `scripts/widen-for-tests.py`
-  (deliberately never committed) plus this file until it is committed.
+  - **`cf8eaafd` — `C7` (2026-10-27): install and uninstall converge exactly what they name.
+    Ruling landed (register + II.70 + V.220); the code is NOT landed. Next session builds it.**
+
+## The one thing to pick up: build `C7`
+
+The owner ruled it after the #112 diagnosis (the comment on #112: *the dispatch run's evidence is
+in*). The full work order — mechanism, call sites, acceptance criteria, and the tests — is the
+third comment on #112, **`issuecomment-6475969648`**. In short:
+
+`Reconcile` gains `named: Option<HashSet<String>>`; `PlanScope` gains `Named(keys)`
+(`filter() → None`, `reaps() → None`, plus a `named() → Option<&HashSet<String>>`); the planner
+filters the install side and the drift/absent loops to the named keys; narrowed runs skip repos,
+the non-package phases and maintenance; `say_if_the_failure_was_not_yours` is deleted. Four call
+sites: `handle_install`, `handle_uninstall`, `uninstall_as_absent`, `handle_teleport`.
+
+**The tests exist and were watched failing in the previous session's design** — written, then
+taken back out of the tree so `cf8eaafd` lands green. Copies on the author's box at
+`/tmp/opencode/c7-tests/` and reproduced verbatim in the #112 comment. Re-create them, register
+them in `tests/app/sync/planner/mod.rs` (after `a_plan_reaps_only_what_it_was_asked_about_tests`)
+and `tests/e2e/mod.rs`, **watch them fail against the unmodified code**, then implement.
+
+## Working tree
+
+Only untracked `scripts/__pycache__/` and `scripts/widen-for-tests.py` (deliberately never
+committed).
 
 ## Environment — no boundaries, and how
 
@@ -75,16 +98,19 @@ Open, in order of what unblocks most:
 | `#113` | guix section floor + guix/slackware `go` | **Closed** — `aa970f12` |
 | `#129` | Four legs red on `check health (rc=2)`, no backend named | **Closed** — `cee823ae` (the backend was `bun`) |
 | `#109` | apt legs install off baked lists | **Fix landed** (`5bf94cfc`), live ubuntu leg running |
-| `#112` | native sweep family: installed packages missing from `list` and PATH | Open — evidence commented; the next step is the artifact |
+| `#112` | native sweep family: installed packages missing from `list` and PATH | Open — **diagnosis commented, ruling `C7` landed, work order posted** (`issuecomment-6475969648`); the code is the next session's first move |
+| `#130` | `handle_schedule` edits a line then converges the whole machine (the `C7` class on the sibling verb) | Open, untouched — filed this session; needs its own ruling (resource-scoping, not package keys) |
 | `#100` | void leg's uv/yarn/gem/github listing failures | Open; `#112`'s delivery evidence lands on the next run |
 | `#25` | stale umbrella | Open, untouched |
 | `#111` | fan-out bounded by core count | Open, untouched |
 | `#124`, `#94` | auto-declare on use | Open, untouched |
 
-Decision register: **0 OPEN, 0 BUILT NEVER RULED**, 238 ANSWERED, 2 PARKED (D15, D16), 1
-DEFERRED (Q26), 2 HALF RULED (Q29, J4). None gate this work. Any ruling ships in the same commit
-(`docs/spec/decisions.md`, plus `target-state.md`/`why.md` if it is a rule) and
-`scripts/decision-count.sh --check` is the gate.
+Decision register: **0 OPEN, 0 BUILT NEVER RULED**, **239 ANSWERED**, 2 PARKED (D15, D16), 1
+DEFERRED (Q26), 2 HALF RULED (Q29, J4). `C7` (2026-10-27) is the new ANSWERED entry: *install and
+uninstall converge exactly what they name* — rule in II.70, rationale in V.220, supersedes the
+converge half of Q34/V.136 (the failure-naming half of that entry survives). None gate this work
+other than `C7`'s build. Any ruling ships in the same commit (`docs/spec/decisions.md`, plus
+`target-state.md`/`why.md` if it is a rule) and `scripts/decision-count.sh --check` is the gate.
 
 ## What was measured this session
 
@@ -113,6 +139,42 @@ and the psresource-class promotion made it CRITICAL. Fixed by stripping a traili
 Test written first against the arch log's bytes, watched it fail as
 `Unrecognised { data_lines: 1, sample: … }`, then pass. The empty-listing module had no bun row
 at all; it has one now.
+
+### `#112` — the native family has ONE cause, and the artifact proved it
+
+**Read the artifact first** (that was the issue's own instruction, and it is what settled it):
+
+```bash
+mkdir -p /tmp/opencode/ev112 && cd /tmp/opencode/ev112
+# `gh run download` needs a git repo for the repo context, and it is NOT the run's repo — pull
+# the artifact zips through the API instead (the macOS one is only 3.7 KB):
+A=$(gh api repos/SYKhayyat/Shall/actions/runs/40353656991/artifacts -q \
+    '.artifacts[] | select(.name=="native-sweep-evidence-macos") | .id')
+gh api /repos/SYKhayyat/Shall/actions/artifacts/$A/zip > macos.zip && unzip -q macos.zip
+# …and the per-job logs (slow — 1.7k and 2.7k lines; run them detached):
+gh run view --job 121680207727 --log > macos-job.log      # macOS
+gh run view --job 121680208082 --log > windows-job.log    # Windows
+```
+
+**What the logs say.** `shall -y install cargo:hexyl` produced a plan of **one change, and it
+was not the canary** — macOS ran `backends: brew` + `✓ [brew] rustup (5305ms)`; Windows ran
+`backends: winget` + `✓ [winget] ImageMagick.ImageMagick (10588ms)`. Across the family, every
+canary install converged the adopted model instead: dotnet → `brew pkgconf` / `choco sbt`, web →
+`brew maven` / `choco wixtoolset`, yarn → `brew perl`, pip → `winget LLVM.LLVM`, npm →
+`winget Microsoft.AzureCLI`, helm → `winget Amazon.SessionManagerPlugin`, choco → `winget
+Microsoft.PowerShell`, go → `winget Microsoft.PowerShell`.
+
+**Why.** `shall install X` is "write the line, then converge the whole configuration"
+(`src/verbs/packages.rs:52`, P1/S15). By section 12 the sweep's own `adopt` has made the config
+*be* the machine — 43 adopted packages on macOS, 103 on Windows — so the install's plan was a
+whole-machine converge, and the canary never reached it: on macOS cargo was reported not
+installed by the lister, on Windows cargo's listing came back empty. The harness read that run's
+exit 0 as "installed for real" and then failed the listing and PATH checks against a package
+that was never installed.
+
+**So it is one bug, not ten lister bugs** — and the lister question the issue was filed to ask
+was never asked, because the install never installed. That is what `C7` builds, and the next
+native run answers the real question with no harness change.
 
 ### `#109` — the apt mechanism, measured
 
@@ -149,17 +211,23 @@ toolchain mismatch. The `dir` coverage failure is fixed (`ac797219`).
 
 ## Suggested order from here
 
-1. **`#112`: read the artifact.** `gh run download 40353656991 -n native-sweep-evidence-macos`,
-   then read ONE backend's own log before theorising further — that is what the issue asks, and
-   it is the only way to tell the two hypotheses apart.
-2. **Read the ubuntu leg's result** (`/tmp/opencode/harness-ubuntu.log`, a local podman run of
+1. **Build `C7`** — the work order is #112's `issuecomment-6475969648`, the tests are reproduced
+   in it. Tests first, watched failing against the unmodified code, then the mechanism, then the
+   deletions. The ruled shape (no flag, no second verb, shell chaining) was chosen against the
+   codebase's own shapes (`upgrade` narrows by what you name, `adopt` takes the backends you
+   name) — do not re-litigate it without the owner.
+2. **`#130`** (the `handle_schedule` sibling): needs its own ruling before any code, because
+   resource-scoping is a design choice, not a flag reuse. Not a blocker for `C7`.
+3. **Read the ubuntu leg's result** (`/tmp/opencode/harness-ubuntu.log`, a local podman run of
    the whole leg with the refresh in place) and close `#109` with it.
-3. **Slackware's live proof** for `classify_install`: the next nightly, or a local podman run of
+4. **Slackware's live proof** for `classify_install`: the next nightly, or a local podman run of
    `Dockerfile.slackware`.
-4. `#100`: read the next void run — `#112`'s delivery evidence lands there.
-5. The macOS ratchet measured **10 ≥ 8** and printed the ratchet-up `sed`; it is NOT recorded,
+5. `#100`: read the next void run — `#112`'s delivery evidence lands there.
+6. **After `C7` lands, dispatch a native run** — `#112` closes on that evidence, either way: the
+   family goes green, or a narrowed install fails loudly and names the genuinely broken manager.
+7. The macOS ratchet measured **10 ≥ 8** and printed the ratchet-up `sed`; it is NOT recorded,
    on the two-run caution the windows row carries. Decide it with the next macOS run.
-6. `#109`'s sibling worth checking, not yet measured: dnf's metadata expires in 48h, so a fedora
+8. `#109`'s sibling worth checking, not yet measured: dnf's metadata expires in 48h, so a fedora
    image's baked metadata is the same class one day older.
 
 Anything you find that is not already an issue must get one, with file:symbol evidence, a
