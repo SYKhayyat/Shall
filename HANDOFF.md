@@ -35,6 +35,11 @@ taken back out of the tree so `cf8eaafd` lands green. Copies on the author's box
 them in `tests/app/sync/planner/mod.rs` (after `a_plan_reaps_only_what_it_was_asked_about_tests`)
 and `tests/e2e/mod.rs`, **watch them fail against the unmodified code**, then implement.
 
+**`docs/spec/plan.md` now carries the whole outline** — the numbered mechanism, the four call
+sites, what to skip in a narrowed run, the deletions, the sibling left alone (#130) and the exit
+condition — so the next session does not re-derive any of it. That entry, not the chat, is the
+build list.
+
 ## Working tree
 
 Only untracked `scripts/__pycache__/` and `scripts/widen-for-tests.py` (deliberately never
@@ -211,8 +216,9 @@ toolchain mismatch. The `dir` coverage failure is fixed (`ac797219`).
 
 ## Suggested order from here
 
-1. **Build `C7`** — the work order is #112's `issuecomment-6475969648`, the tests are reproduced
-   in it. Tests first, watched failing against the unmodified code, then the mechanism, then the
+1. **Build `C7`** — the work order is #112's `issuecomment-6475969648` and the outline is the
+   `### C7` section at the top of `docs/spec/plan.md`; the tests are reproduced in the #112
+   comment. Tests first, watched failing against the unmodified code, then the mechanism, then the
    deletions. The ruled shape (no flag, no second verb, shell chaining) was chosen against the
    codebase's own shapes (`upgrade` narrows by what you name, `adopt` takes the backends you
    name) — do not re-litigate it without the owner.

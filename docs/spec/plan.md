@@ -3119,6 +3119,78 @@ This layout work does not change the user-visible behavior; production edits are
 visibility/test seams required by the external mirror, plus the `Capped: Default` implementation
 required by the repository's clippy gate.
 
+### `C7` — what to build next (ruled 2026-10-27, not yet built)
+
+**Ruled, recorded, and not built.** `C7` in `decisions.md`, rule in **II.70**, rationale in
+**V.220**: `install` and `uninstall` converge exactly what they name — the named specs and their
+`@requires` chains, nothing else. The whole-machine converge stays `sync`'s. The register entry
+and the spec text landed (`cf8eaafd`); **the code is the next move, and this is the outline of
+it** so the next session does not re-derive it. The full work order — mechanism, call sites,
+acceptance criteria, and the tests verbatim — is the third comment on **#112**
+(`issuecomment-6475969648`).
+
+**Why it was ruled.** The 2026-10-26 native sweeps measured the cost of the old shape: the
+sweep's own `adopt` had put 43 packages (macOS)/103 (Windows) into the model, and `install` is
+"edit a line, then converge the whole configuration" (`src/verbs/packages.rs:52`, P1/S15). So
+`shall -y install cargo:hexyl` ran a plan whose one change was **not** hexyl — macOS
+`backends: brew` + `✓ [brew] rustup`, Windows `backends: winget` +
+`✓ [winget] ImageMagick.ImageMagick` — and the harness read exit 0 as "installed for real",
+then failed the listing and PATH checks against a package never installed (#112). One cause,
+not ten lister bugs.
+
+**The mechanism, settled against the code.** One mechanism, four call sites — a *filter over the
+planner's existing scopes*, not a second engine:
+
+1. `Reconcile` (`src/verbs/sync.rs:11`) gains `named: Option<HashSet<String>>`: the keys this run
+   may act on. `PlanScope` (`src/app/sync/planner.rs:85`) gains `Named(keys)` answering
+   `filter() → None`, `reaps() → None`, and a new `named() → Option<&HashSet<String>>` — the
+   two questions a scope answers become three, so a variant cannot compile until it answers
+   all three.
+2. **Install side** (`planner.rs:1051 identify_needed_actions`): filter the declared map to the
+   named keys *before* the fan-out, so a narrowed run asks only the named managers about the
+   named packages.
+3. **Removal side** (`planner.rs:811`): the `absent:` loop and the managed-drift loop are today
+   both gated behind `reaps()`. `Named` keeps that gate for the global loops and runs the same
+   two loops **filtered to the named keys**. Do not hand-build `Remove` graphs at the call
+   sites: that is four copies of a rule the planner already owns, and the `shell`'s
+   `cleanup_transient_env` hand-built graph is the shape being *avoided* here.
+4. **Narrowed runs in `reconcile`** (`sync.rs:120`): keep `heal` (recovery of Shall's own
+   unfinished business, not the model); keep `enforce_policy` on the narrowed desired set;
+   **skip** `repositories().apply`, `dotfiles().confirm_outside_home`,
+   `apply_non_package_phases`, `perform_maintenance`; narrow the bootstrap/prereq offers to the
+   named managers. A missing repo fails loudly and names `shall sync` — the honest reading of
+   "nothing else", and one line to revisit if it proves wrong.
+5. **Call sites:** `handle_install` (packages.rs:43) resolves with `resolve_spec` (it follows
+   `@requires`, the call the dry-run path already makes); `handle_uninstall` (packages.rs:567)
+   passes the undeclared targets; `uninstall_as_absent` (packages.rs:641) the absent targets;
+   `handle_teleport` (packages.rs:40) names **both** keys, so one plan installs the new copy and
+   removes the old one. `sync`, `rollback`, `upgrade`, `heal`, `purge-undeclared` keep `Whole`.
+6. **The pending line:** `Reconciled` gains `declared_total` (`total_present()` — the config's
+   count, never a manager question); `handle_install` prints one line naming `sync` when it is
+   smaller than what was applied.
+7. **Deletions, in the same commit:** `say_if_the_failure_was_not_yours` and `why_kept` if
+   nothing else reads it — `grep -rn` both quiet. A failure inside a narrowed run is about what
+   was asked for, so keeping the apology beside the change that makes it unreachable is keeping
+   a second answer to a settled question.
+
+**Tests first, watched failing.** Five planner tests
+(`tests/app/sync/planner/a_named_scope_plans_its_keys_and_nothing_else_tests.rs`) over
+`RecordingBackend`, each with a control that removes the filter — a "nothing else was planned"
+test passes just as well when nothing was planned at all; and seven e2e tests in
+`tests/e2e/` driving `dir:` (no root, no network, no manager) for the install and uninstall
+families. All twelve are reproduced verbatim in the #112 comment; they were taken back out of
+the tree so the ruling commit lands green, and re-creating them is the first move.
+
+**Siblings left alone deliberately, and why:** `handle_schedule` (`src/verbs/declare.rs:627`)
+edits a line then full-syncs — same class, but a `schedule:` is a *resource* and `Named` is
+keyed on packages, so narrowing it needs resource-scoping the ruling did not describe. Filed as
+**#130**, needs its own ruling. `rollback`'s whole-machine converge is correct and unchanged:
+its subject is the whole config.
+
+**Exit condition:** the nine acceptance criteria in the #112 comment, all met, and
+`shall -y install cargo:hexyl` on a native host applying exactly hexyl. That is also what closes
+#112 — the next native run answers the lister question with no harness change, either way.
+
 ## IV.1 What a check has to be (V.57)
 
 **Every proof above is a proof against a machine, not against a mock.** Each of the four named
