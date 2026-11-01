@@ -8123,3 +8123,64 @@ refusals kept their place: `--absent` is about a *name* a manager could put back
 line — which has no second source — is refused rather than written as a line nothing reads. The
 saved-plan executor, which had the name first, became `execute`: a frozen plan is the whole
 configuration, and `apply` is one line of it.
+
+**V.221 — Why a child is given the terminal or given none, and never a handle it can only freeze on.**
+
+`83b06c11` (2026-08-24) put every child Shall starts in its own process group, so a timeout or an
+abort could signal a whole tree — `sudo`, the manager, the wrapper between them. That was right
+and it is still right. What it did not come with is the other half of job control: **a process
+group is not a foreground group.** A group that is not the terminal's foreground group is
+`SIGTTIN`-stopped by the kernel the moment it reads that terminal — not failed, stopped, with its
+work done and nothing on screen saying so.
+
+So for two months, every path the code's own comments call *"the terminal-handoff door"* was dead
+for any program that reads a keypress:
+
+```
+$ printf 'hi\n' | script -qec './target/debug/shall run -- sh -c "read -r x; echo GOT:$x"' /dev/null
+hi
+<never returns>
+
+  PID    PPID    PGID    TPGID STAT TTY   COMMAND
+ 694494  694483  694494  694482 T    pts/5 sh -c read -r x; echo GOT:$x
+ 694483  694482      -       -  Sl+  pts/5 ./target/debug/shall run -- sh ...
+```
+
+The child is `T` — stopped — its `PGID` is its own, and the pty's foreground group belongs to
+somebody else. `shall run`, the ephemeral `shall shell`, `$EDITOR` from `setup` and `cargo install`
+from `self-upgrade` all failed the same way.
+
+**The manager half was worse, and it is what the container found first.** A mutation's child had
+`Stdio::inherit()` for stdin under a comment explaining that a mutation must be able to ask — a
+comment `S88` had already falsified by putting `-n` on every escalated command, so no manager could
+ask anything. The handle it kept instead was one it could only freeze on: `apt`, `pip` and `pacman`
+sat stopped at their own question, Shall waited on them for `command_idle_timeout_secs` (900s, not
+the five minutes the harness's own `timeout` reported), and then told the user the command had
+*gone quiet* — when in fact it was stopped, holding its lock, with its work already done.
+
+**Why nothing caught it.** Three reasons, all of them "nobody ran it": every harness check of
+`shall run` runs something like `true`, which never reads; the Rust suite gives children **pipes**,
+and a read on a pipe is an EOF where a read on a terminal is a stop, so the suite could not have
+produced the state even in principle; and the interactive paths are the ones only a person
+exercises by hand. The Windows sweep had already hit the manager half and answered it by taking
+the terminal away from *every* call — in the sweep, not in the product.
+
+**The ruling (`U72`).** One rule with two halves: a child that is given the terminal becomes its
+foreground group for as long as it runs, and a child that is not given the terminal is given none.
+The doors that exist to be typed into hand it over — `tcsetpgrp` under a blocked `SIGTTOU`, held
+across the wait, given back by a `Drop` — and a mutation's stdin is closed, where the same read is
+an EOF the manager can report in its own words at once. The `sudo` prompt stays the one child in
+Shall's own group, which is why it is the one prompt that still works.
+
+**Two details that are the difference between a fix and a demo.** The handover races the child's
+first read: a child that read a microsecond before it owned the terminal is *stopped*, and would
+have stayed that way for ever, so the child is sent `SIGCONT` after the terminal changes hands —
+a no-op on one that never stopped and a resume on one that did. And `tcsetpgrp` raises `SIGTTOU`
+when the caller is not the foreground group, which is exactly the state the *restore* runs in, so
+the signal is blocked on that thread for the length of each call and restored immediately — a
+process-wide `SIG_IGN` would silence the same stop for whatever runs on that worker next.
+
+**What would have caught it, and now does.** `tests/e2e/pty_tests.rs` drives the built binary under
+`script -qec` and *types at it*: one test for `shall run -- sh -c 'read -r x'`, which needs the
+handover, and one for a mutation whose stub manager reads its own stdin, which needs the handle to
+be no terminal at all. Both hung before this change and both pass after it.

@@ -93,6 +93,12 @@ fi
 # terminal on stdin and 21.9s with one, where 21.9s is the whole `command_idle_timeout_secs`
 # bound elapsing. At the shipped default of 900 that is a fifteen-minute silence.
 #
+# **This is the host class where the child really can read it.** On Unix the terminal handed to
+# a mutation was a handle it could only freeze on — it leads its own process group, so a read
+# there is `SIGTTIN` — and the product no longer hands it one at all (`II.71`, `#132`). Windows
+# has no process groups, so the console genuinely works and the answer is `exec < /dev/null`
+# here rather than in the spawn.
+#
 # `exec` rather than a redirect on each call, because the per-call form has to be remembered
 # at ~200 sites and the three background holders are not call sites at all. An explicit pipe
 # still wins over this, so `printf … | lx repl` is unaffected.

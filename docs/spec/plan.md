@@ -3283,6 +3283,25 @@ dead for anything that reads a keypress since `83b06c11` (2026-08-24) put all th
 in their own group for tree-kill. The suite never saw it because no test gives a child a
 controlling terminal and makes it read; a pipe read is an EOF.
 
+**Fixed 2026-11-01 as `U72`** — rule in `II.71`, reason in `V.221`, register entry and sibling
+sweep in `decisions.md`. One rule with two halves, because the open question above was really
+"does the child own the terminal or not", and the two families answer it differently for a
+reason: a child that *is given* the terminal becomes its **foreground group** for as long as it
+runs (`tcsetpgrp` under a blocked `SIGTTOU`, `SIGCONT` after the handover to close the race with
+the child's first read, restored by a `Drop`, all in `supervise.rs` beside `Stopping`), and a
+child that is *not* given the terminal is given none — a mutation's stdin is closed, where the
+same read is an EOF instead of 900 seconds of silence reported as a command that went quiet.
+`sudo -v` stays the one prompt and the one child in Shall's own group, with a comment saying
+why, because grouping it is the tidy-up that would re-break it. `Sandbox::run` was checked and
+left alone: it inherits stdio and leads no group, so a confined `shall run` was never affected.
+
+**The tests, watched failing first.** `tests/e2e/pty_tests.rs` already drove the built binary
+under `script -qec`; it had never *typed at it*. Two checks added there: `shall run -- sh -c
+'read -r x; echo GOT:$x'` with a line written to the pty (before: exit 124 after the 20s bound,
+no `GOT:hello`; after: the line arrives), and a mutation on a stub `cargo:` — chosen because it
+needs no privilege, so the check is about the terminal and not about the host's sudo rules —
+whose stub logs whether its stdin is a terminal (before: `TTY`; after: `NOTTY` and an EOF).
+
 ## IV.1 What a check has to be (V.57)
 
 **Every proof above is a proof against a machine, not against a mock.** Each of the four named

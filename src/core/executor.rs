@@ -120,8 +120,10 @@ pub trait ExecutionLayer: Send + Sync {
     fn check_command(&self, cmd: &str) -> bool;
     async fn symlink(&self, src: &Path, dst: &Path) -> Result<()>;
 
-    /// Whether a child spawned by this layer may read Shall's own stdin. Only the raw layer
-    /// behind mutations may; a layer that spawns nothing answers false.
+    /// Whether this layer's commands are the kind a person may have to answer — which is what
+    /// makes a password prompt possible at all. **Not** whether the child is handed Shall's
+    /// stdin: no manager's child is (`#132`), and the prompt belongs to
+    /// `ensure_sudo_credentials`'s own spawn, which stays in Shall's process group.
     fn shares_stdin(&self) -> bool {
         false
     }
@@ -137,8 +139,9 @@ pub enum ChildStdin {
     /// Reads and existence probes. There is nothing to type at them, and a read that consumed
     /// the terminal could not be answered anyway.
     Closed,
-    /// Mutations. `sudo` asks for a password on the terminal it was started from, and a
-    /// mutation that cannot ask for one cannot run.
+    /// Mutations. A person is at the terminal for them, so exactly one prompt is possible —
+    /// `sudo -v`, primed once per run. The child is still given no terminal of its own (`#132`),
+    /// and what it prints is mirrored to stderr as it arrives.
     Interactive,
 }
 
@@ -282,13 +285,12 @@ impl RawExecutor {
 
     /// The layer behind `run`/`run_exclusive`.
     ///
-    /// U40 lets a mutation — and only a mutation — share stdin, because `sudo` asks for a
-    /// password on the terminal it was started from. `run_on` never inserts `sudo` on Windows
-    /// (`if sudo && !cfg!(windows)`), so no Windows mutation has that question to ask, while
-    /// the shared terminal stayed and cost the full `command_idle_timeout_secs` any time a
-    /// manager asked something else. Measured on one install: 48ms with stdin closed, 21.9s
-    /// with a real console — at the shipped bound, a fifteen-minute silence ending in failure
-    /// anyway. Closing it means the manager's own prompt is captured and reported instead.
+    /// **`Interactive` is a statement about the person, not about the child's handles.** It
+    /// means a mutation may have to prime `sudo` once and its output is worth mirroring to the
+    /// terminal as it arrives; what the child itself is given is `execute`'s decision, and on
+    /// Unix that is no terminal at all (`#132`). The measurement that closed Windows' half
+    /// still stands: 48ms with stdin closed, 21.9s with a real console — at the shipped bound, a
+    /// fifteen-minute silence ending in failure anyway.
     pub fn mutator() -> Self {
         Self {
             stdin: if cfg!(windows) {
@@ -531,11 +533,27 @@ impl ExecutionLayer for RawExecutor {
 
         command.stdout(Stdio::piped()).stderr(Stdio::piped());
         let interactive = self.stdin == ChildStdin::Interactive;
+        // **No terminal for a mutation's child, and that is the whole of `#132`.** It leads its
+        // own process group (above, so `Stopping` can signal the tree), so it is never the
+        // terminal's foreground group — and a group that is not the foreground group is stopped
+        // by the kernel at its first read (`SIGTTIN`) rather than told there is nothing there.
+        // `Stdio::inherit()` was therefore a handle no manager could ever successfully read:
+        // `apt`, `pip` and `pacman` each sat stopped at their own question until
+        // `command_idle_timeout_secs` (900s) expired, and were then reported as commands that
+        // had gone quiet. Closed, the same read is an EOF — a failure the manager reports in its
+        // own words, immediately.
+        //
+        // Nothing is given up by it: `S88` puts `-n` on every escalated command, so `sudo` cannot
+        // ask here either, and the one prompt Shall allows itself is `sudo -v` — spawned by
+        // `ensure_sudo_credentials` in Shall's own group, where it is the foreground group and
+        // can read. Windows has no process groups, so there `inherit` is a console the child
+        // really can read.
+        #[cfg(unix)]
+        command.stdin(Stdio::null());
+        #[cfg(windows)]
         command.stdin(if interactive && std::io::stdin().is_terminal() {
             Stdio::inherit()
         } else {
-            // Not `inherit` when Shall's own stdin is a pipe: a child that reads it would eat
-            // input meant for Shall, and one that blocks on it would never return.
             Stdio::null()
         });
 
@@ -1868,6 +1886,12 @@ impl CommandExecutor {
         }
 
         let ask = Command::new("sudo")
+            // **The one child that must stay in Shall's own process group.** Every other child
+            // leads its own so `Stopping` can signal the tree, and such a child is stopped at
+            // its first read of a terminal it does not own (`#132`, see `supervise::Foreground`).
+            // This spawn *is* the read — it exists to put a password prompt on the terminal — so
+            // grouping it would turn the one prompt Shall allows itself into that same silent
+            // stop. Its bound is `sudo_password_timeout_secs`, not a process group.
             .arg("-v")
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())

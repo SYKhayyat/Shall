@@ -197,6 +197,105 @@ pub async fn supervised_output_fed(
     supervise(command, what, mirror, Some(feed)).await
 }
 
+/// The terminal belongs to the child for as long as it runs.
+///
+/// **A foreground group is not the same thing as a process group.** Every child Shall starts
+/// leads its own group, so `Stopping` can signal the whole tree — and a group that is not the
+/// terminal's **foreground** group is stopped by the kernel at its first *read* of that terminal
+/// (`SIGTTIN`). Passing a child the terminal's handles is therefore not passing it the keyboard:
+/// `shall run`, the ephemeral `shall shell`, `$EDITOR` and `cargo install` were all frozen at the
+/// first keypress and could not be typed into at all (`#132`).
+///
+/// Given back by `Drop`, so a caller cannot forget, and a no-op where there is nothing to hand
+/// over: no terminal, a terminal this process is not the foreground group of (a `shall sync &`
+/// must not steal it from the shell that owns it), or a `tcsetpgrp` that refuses.
+#[cfg(unix)]
+struct Foreground {
+    /// The group to give it back to, or `None` when it was never taken.
+    ours: Option<libc::pid_t>,
+}
+
+/// Windows has no foreground group: a console child reads the console it shares, and there is
+/// nothing to hand over.
+#[cfg(not(unix))]
+struct Foreground;
+
+#[cfg(unix)]
+impl Foreground {
+    fn give(pid: u32) -> Self {
+        // Nothing to hand over: no terminal, so there is no keyboard to give and no group that
+        // could own one.
+        if !std::io::stdin().is_terminal() {
+            return Self { ours: None };
+        }
+        // SAFETY: neither call has a failure mode that matters here — `getpgrp` cannot fail, and
+        // a `tcgetpgrp` that fails (-1) simply compares unequal to our group and does nothing.
+        let ours = unsafe { libc::getpgrp() };
+        if unsafe { libc::tcgetpgrp(libc::STDIN_FILENO) } != ours {
+            return Self { ours: None };
+        }
+        let taken = unsafe {
+            without_sigttou(|| libc::tcsetpgrp(libc::STDIN_FILENO, pid as libc::pid_t) == 0)
+        };
+        if !taken {
+            return Self { ours: None };
+        }
+        // **The handover races the child's first read.** A child that read a moment before it
+        // was the foreground group is *stopped*, not failed, and would sit that way for ever —
+        // the exact defect this guard exists to prevent, reintroduced by a microsecond. SIGCONT
+        // is a no-op on a child that never stopped, and resumes one that did, where the
+        // restarted read now succeeds because its group is the foreground one.
+        // SAFETY: signal 0's sibling, SIGCONT — no memory is touched, and a pid that has already
+        // gone answers ESRCH, which is the same outcome as a child that never stopped.
+        unsafe { libc::kill(pid as libc::pid_t, libc::SIGCONT) };
+        Self { ours: Some(ours) }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for Foreground {
+    fn drop(&mut self) {
+        if let Some(ours) = self.ours {
+            // The child is gone, so this process should already be the foreground group again —
+            // and `tcsetpgrp` still raises `SIGTTOU` if it somehow is not, which is why the call
+            // is made the same way it was in `give`.
+            unsafe {
+                without_sigttou(|| libc::tcsetpgrp(libc::STDIN_FILENO, ours));
+            }
+        }
+    }
+}
+
+#[cfg(not(unix))]
+impl Foreground {
+    fn give(_pid: u32) -> Self {
+        Self
+    }
+}
+
+/// `tcsetpgrp` raises `SIGTTOU` when the caller is not the foreground group — which is exactly
+/// the state the restore runs in, since the child holds the terminal until that line.
+///
+/// Blocked for the length of the call and on **this thread only**, so a runtime worker carries
+/// the mask into the next task unchanged; blocking it process-wide would silence a stop for
+/// whoever was scheduled here next.
+#[cfg(unix)]
+fn without_sigttou<T>(call: impl FnOnce() -> T) -> T {
+    // SAFETY: two `sigset_t`s this function owns, filled by `sigemptyset`/`sigaddset` before they
+    // are read, and a `pthread_sigmask` pair whose second call only restores what the first
+    // reported.
+    unsafe {
+        let mut block = std::mem::MaybeUninit::<libc::sigset_t>::uninit();
+        let mut was = std::mem::MaybeUninit::<libc::sigset_t>::uninit();
+        libc::sigemptyset(block.as_mut_ptr());
+        libc::sigaddset(block.as_mut_ptr(), libc::SIGTTOU);
+        libc::pthread_sigmask(libc::SIG_BLOCK, block.as_ptr(), was.as_mut_ptr());
+        let answer = call();
+        libc::pthread_sigmask(libc::SIG_SETMASK, was.as_ptr(), std::ptr::null_mut());
+        answer
+    }
+}
+
 /// The other door: a child that **takes the terminal**, run to completion and owned all the same.
 ///
 /// `shall run`, the ephemeral shell, an interpreter a user is watching. Its streams are inherited
@@ -221,6 +320,10 @@ pub async fn supervised_status(
         .spawn()
         .map_err(|e| Error::command_failed(format!("could not start {what}: {e}")))?;
     let mut child = Stopping::new(child);
+    // Taken **before** the wait and held across it: this is the door for a program the person is
+    // typing into, and a child that leads its own process group is stopped at its first read of a
+    // terminal it does not own (`#132`).
+    let _keyboard = child.child.id().map(Foreground::give);
     child
         .child
         .wait()

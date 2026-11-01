@@ -2176,16 +2176,17 @@ call; it is never decided by what Shall's own handles happen to be, because a pa
 in CI and not on a person's machine is worse than one that never works — only one of those two
 gets reported.
 
-**stdin is the one stream a child may share, only a mutating command may share it, and only
-where `sudo` can be inserted** (2026-08-05, `Q35`). `sudo` asks for a password on the terminal it
-was started from — and `sudo` is never inserted on Windows, so a Windows mutation gets a closed
-stdin like a read. The reason is what carries the rule; where the reason does not reach, the
-sharing buys nothing and costs the whole idle bound the first time a manager asks something
-(V.130). A read has nothing to ask and nobody to
-answer it, so a read never takes the terminal. **This binds every spawn in the tree, not only the
-executor's** (2026-08-02): a probe that captures both output streams and leaves stdin inherited
-asks its question where nobody can see it and then waits for an answer that cannot come. Ten
-sites outside the executor did exactly that, `git` among them.
+**stdin is not shared with a child that is not given the terminal** (2026-11-01, `U72` — this
+replaces `Q35`'s Unix half, and II.71 owns the other one). A child that is not handed the terminal
+gets none at all, because every child leads its own process group and a group that is not the
+terminal's foreground group is *stopped* at its first read rather than answered — an inherited
+stdin was a handle a manager could only freeze on (V.221). The one prompt Shall allows itself is
+`sudo -v`, primed once per run by a child that stays in Shall's own process group, and every
+escalated command carries `-n` (`S88`), so no manager can ask either way (V.130). A read has
+nothing to ask and nobody to answer it, so a read never takes the terminal. **This binds every
+spawn in the tree, not only the executor's** (2026-08-02): a probe that captures both output
+streams and leaves stdin inherited asks its question where nobody can see it and then waits for an
+answer that cannot come. Ten sites outside the executor did exactly that, `git` among them.
 
 **Captured is not hidden.** While a mutation runs with a terminal attached, its output is
 mirrored as it arrives — to stderr, never stdout, because stdout carries Shall's own answer.
@@ -4352,3 +4353,37 @@ would make `apply` the mass-removal verb.
   `GuardScope::Sync`; narrowing the plan narrows nothing the guard checks.
 - **V.136's apology machinery is deleted.** A failure inside a narrowed run is about what was
   asked for, so "that failure is not about X" cannot fire and its code does not stay to prove it.
+
+## II.71 A child given the terminal owns it; a child not given it gets none (`#132`, V.221)
+
+*(Owner ruling, 2026-11-01 — `U72`. The counterpart every `process_group(0)` needs.)*
+
+**Passing a child the terminal's handles is not passing it the keyboard.** Every child Shall
+starts leads its own process group, so `Stopping` can signal the whole tree — and a group that is
+not the terminal's **foreground** group is stopped by the kernel at its first *read* of that
+terminal (`SIGTTIN`), not failed. So the two halves are one rule:
+
+- **A child that is given the terminal becomes its foreground group for exactly as long as it
+  runs**, and gives it back when it is done. That is every caller of
+  `supervised::supervised_status` — `shall run`, the ephemeral `shall shell`, `$EDITOR` and
+  `cargo install` — because those are the doors that exist to be typed into.
+- **A child that is not given the terminal is given no terminal at all.** A mutation's child runs
+  with its stdin closed. It could never read a terminal it does not own, so `inherit` was a
+  handle it could only freeze on; closed, the same read is an EOF — a failure the manager reports
+  in its own words, immediately, instead of a command that appears to go quiet for the idle bound
+  and is then reported as one.
+- **`sudo -v` is the one prompt, and the one child left in Shall's own process group.** `S88`
+  puts `-n` on every escalated command, so no manager can ask; the password is read once, by a
+  child that is the foreground group because it never left it. Grouping that spawn would turn the
+  one prompt Shall allows itself into the same silent stop.
+- **No terminal, no handover.** A terminal this process is not the foreground group of (Shall
+  started with `&`), or a `tcsetpgrp` that refuses, means the child is left exactly as it was —
+  never half-handover.
+- **A read that arrived just before the handover is resumed, not lost.** The child is sent
+  `SIGCONT` once the terminal has changed hands: a child stopped by that race restarts its read
+  as the foreground group, and one that never stopped is unaffected.
+- **Given back by a `Drop`,** so a caller cannot forget and a path added later inherits it.
+- **Ctrl-C belongs to the child; Ctrl-Z has nowhere to go.** The foreground group is where
+  `^C` lands, which is the point — the person is looking at the child. `^Z` stops the child and
+  there is no job table here to resume it from, so it waits until it is signalled out; job control
+  is a shell's, and inside `shall shell` it is that shell's.

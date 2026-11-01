@@ -227,7 +227,7 @@ there). It is when the question stopped being open, not when the code landed.
 | **T6** | Must there be a way to opt out of `backup_once`, or bound how many pile up? | 2026-07-23 |
 | **T7** | Runtime injection of secrets into process memory — reopened. | 2026-07-24 |
 
-### U — the next round (Part XIII) — 44
+### U — the next round (Part XIII) — 45
 
 | | question | answered |
 |---|---|---|
@@ -275,6 +275,7 @@ there). It is when the question stopped being open, not when the code landed.
 | **U42** | Do the overlapping command clusters get consolidated? | 2026-07-27 |
 | **U43** | How much does an ordinary run say about itself? | 2026-07-27 |
 | **U71** | A per-user home layer: whose account does a declaration act for? | 2026-09-20 |
+| **U72** | Who owns the terminal while the child Shall started is running? | 2026-11-01 |
 
 ### Q — the production-readiness round and the grading rounds after it — 55
 
@@ -320,7 +321,7 @@ and that collision is exactly what this namespace exists to avoid.*
 | **Q32** | Q24's bound watched a child's **exit** and not the read of its output, so a manager that detaches left Shall on a pipe no clock covered — 64s against a 20s bound, **reported as SUCCESS**. — RULED: **the same silence bound runs over the readers**, and a command Shall stopped waiting on fails by name instead of reporting success. | 2026-08-05 |
 | **Q33** | `heal` acted on `Failed` entries as well as interrupted ones, and every failed attempt wrote a *new* operation — 22 for one package, all 22 reinstalled, serially. — RULED: **recovery finishes interrupted work only** (`InProgress`/`Abandoned`), one recovery per operation, and it runs on the transaction engine rather than a serial loop beside it. `Failed` becomes terminal and ages out. | 2026-08-05 |
 | **Q34** | `install X` converges the whole manifest, so one unresolvable declaration fails every later install, and the error named the innocent package. — RULED: **the model stays; the message changes.** A failure names the declaration and its file and line, and `install` says outright when what failed is not what you asked for — and never advises taking back the line that was. | 2026-08-05 |
-| **Q35** | U40 lets a mutation share stdin because `sudo` asks on the terminal; `sudo` is never inserted on Windows, where the sharing cost a 900s silence — 48ms vs 21.9s measured. — RULED: **no, the reason does not reach Windows.** Windows mutations get a closed stdin; Unix keeps U40 exactly as ruled. | 2026-08-05 |
+| **Q35** | U40 lets a mutation share stdin because `sudo` asks on the terminal; `sudo` is never inserted on Windows, where the sharing cost a 900s silence — 48ms vs 21.9s measured. — RULED: **no, the reason does not reach Windows.** Windows mutations get a closed stdin; Unix keeps U40 exactly as ruled. *(Unix half superseded 2026-11-01 by `U72`: no child that is not given the terminal is given its input either.)* | 2026-08-05 |
 | **Q36** | `adopt` wrote 186 winget declarations naming identifiers `winget install` refuses — every `ARP\`/`MSIX\` row, not only the version-bearing ones. **Ruled: adoption declares only what the manager can put back**; winget adopts from `winget export` (78, not 280). | 2026-08-05 |
 | **Q37** | `github:` downloaded the whole release artifact and *then* refused to deploy because the destination is not Shall's — a refusal that needs zero downloaded bytes. Measured 61s and 119s, silent. — RULED: **ask the destination before spending the network**, in `github:`, `web:` and `appimage:` alike. | 2026-08-05 |
 | **Q38** | `watch --once` printed `watch: reconcile failed` and **exited 0**. — RULED: **a failed reconcile is a non-zero exit**, on `watch --once` as everywhere. The looping form still warns and carries on. | 2026-08-05 |
@@ -10204,3 +10205,57 @@ Rule in **II.70**, rationale in **V.220**. Supersedes the converge half of `Q34`
 **What was not chosen.** A scope flag means every call site forever picks a mode, and the nightly demonstrated the default mode was the footgun. A second verb keeps two paths for one word. `rollback` keeps its whole-machine converge — its subject is the whole config, not a package — and `retarget` narrows to the one package it moves.
 
 **The extension, 2026-10-30 — one verb (owner).** `install` and `uninstall` were the same mechanism with the direction hidden in the word, and the narrowing above left the second half of the question open: `install` could only ever act on a package, so a `dir:`, a `link:` or a `service:` had no command that applied exactly it and no command that removed exactly it — only `sync`, which acts on everything. So the pair became one verb: **`apply <line>`** writes the line and makes exactly it true, **`apply <line> --delete`** takes the line out and undoes it. The grammar says which phase owns the line; that phase's own applier runs, so `apply` is not a package command with a resource arm bolted on. `--absent` remains a package idea — an `absent:` line keeps a *name* off against a manager that could put it back, and a resource line has no second source — so it is refused on a resource rather than written as something nothing reads. **The saved-plan executor was `apply <plan.json>` and is now `execute <plan.json>`**: the declaration verb owns the word, and a frozen plan is the whole configuration, not one line.
+
+## U72
+
+**Status: ANSWERED — ruled 2026-11-01, built the same day.** Who owns the terminal while the child
+Shall started is running. Rule in **II.71**, reason in **V.221**. Filed as `#132`.
+
+**The question.** `83b06c11` gave every child its own process group so `Stopping` could signal a
+whole tree. That made `SIGTTIN` reachable from both directions the spawn arranges, and the spawn
+was measured doing it: `apt install` in state `T` with its work already done, `pgid` its own,
+`tpgid` somebody else's. Which of the two arrangements produced it — a mutation's inherited stdin,
+or a handoff door's inherited terminal — was left open in `plan.md` on purpose, because every
+candidate changes what a user sees and that is the owner's call.
+
+**The measurement that settled it.** Without sudo, without a container and without a manager:
+`shall run -- sh -c 'read -r x; echo GOT:$x'` under a pty never returns. The child is stopped with
+nothing on the screen, and *every* path the comments call "the terminal-handoff door" is dead for
+any program that reads a keypress: `shall run`, the ephemeral `shall shell`, `$EDITOR` from
+`setup`, `cargo install` from `self-upgrade`. Broken since 2026-08-24 and invisible because the
+suite gives children pipes — a pipe read is an EOF where a terminal read is a stop.
+
+**Ruled: one rule, two halves.** A child that is given the terminal **becomes that terminal's
+foreground group** for as long as it runs and gives it back when it is done; a child that is not
+given the terminal is given **no terminal at all**. The doors that exist to be typed into hand it
+over; a mutation's child runs with its stdin closed, so a manager that reads gets an EOF and fails
+in its own words at once instead of freezing for the idle bound and being reported as a command
+that went quiet.
+
+**What was not chosen, and why.** Handing the terminal to a mutation too — so a manager could ask
+— is coherent under the same rule and was rejected: the child would hold the foreground group for
+the whole transaction, so `Ctrl-C` would reach the manager rather than Shall, and the abort path
+that kills the tree (`Stopping`) would be unreachable exactly when a user wants it. Nobody can
+answer a manager at that point anyway (`S88`'s `-n`), so the terminal buys a prompt nobody can
+read in exchange for the one signal that works. Detecting the freeze and reporting it (waking the
+child, or failing with a message) leaves the doors dead; it is a better error message for a bug
+that no longer needs one.
+
+**What the ruling binds.**
+
+- **The handover is structural, not remembered.** It is a `Drop`, so a caller cannot forget it and
+  a path added later inherits it, and it lives beside `Stopping` — the other half of the same
+  spawn.
+- **The race is closed, not narrowed.** A child that reads a moment before the handover is
+  stopped, so the child is sent `SIGCONT` once the terminal has changed hands: a no-op on one that
+  never stopped, a resume on one that did, where the restarted read now succeeds.
+- **`SIGTTOU` is blocked per call, never process-wide.** `tcsetpgrp` raises it whenever the caller
+  is not the foreground group — which is exactly the state the *restore* runs in.
+- **No terminal, no handover.** Shall started in the background (`shall sync &`) does not own the
+  terminal and must not take it; its child is stopped until the shell says `fg`, like any other
+  job.
+- **`sudo -v` stays in Shall's own process group.** It is the one prompt Shall allows itself, and
+  it works *because* it never left the group. It carries a comment saying so, because grouping it
+  would be the obvious-looking tidy-up that re-breaks it.
+- **The sibling that was already right is named, not changed.** `Sandbox::run`'s command inherits
+  stdio and leads no group, so a confined `shall run` was never affected; it stays as it is.

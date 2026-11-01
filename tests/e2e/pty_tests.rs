@@ -8,8 +8,9 @@
 //!
 //! The manager is a stub on `PATH`, so this proves the plumbing without needing a real apt.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 const CANARY: &str = "shall-pty-canary";
 
@@ -108,6 +109,152 @@ fn shall_under_pty(root: &Path, args: &str) -> String {
         .output()
         .expect("script(1) should run");
     String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+/// A run under a pty that can be **typed at**, and its exit code.
+///
+/// `script(1)` copies its own stdin to the terminal, so a child sees a keypress where a pipe
+/// would have given it an EOF — which is the entire difference `#132` lived in.
+fn shall_typed_at(root: &Path, args: &str, typed: &str, bound: u32) -> (String, i32) {
+    let bin = env!("CARGO_BIN_EXE_shall");
+    let line = format!("timeout {bound} '{}' {}", bin, args);
+    let mut child = Command::new("script")
+        .args(["-qec", &line, "/dev/null"])
+        .env(
+            "PATH",
+            format!(
+                "{}:{}",
+                root.join("bin").display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        )
+        .env("SHALL_CONFIG_DIR", root.join("cfg"))
+        .env("SHALL_DATA_DIR", root.join("data"))
+        .env("HOME", root)
+        .env("SHALL_PTY_LOG", root.join("log"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("script(1) should run");
+    // Held open for the whole run. Closing this end is an EOF at the terminal, and an EOF is
+    // how a reader gets an answer with nobody typing — the false pass this test exists to make
+    // impossible.
+    let mut keys = child.stdin.take().expect("script(1)'s own stdin");
+    let _ = keys.write_all(typed.as_bytes());
+    let _ = keys.flush();
+    let out = child.wait_with_output().expect("script(1) should finish");
+    (
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        ),
+        out.status.code().unwrap_or(-1),
+    )
+}
+
+/// What a failure message can usefully show: the run's own lines, without the progress spinner.
+///
+/// A spinner frame is one very long `\r`-separated line, so a length filter drops the animation
+/// and keeps every message — and a failing assertion here is read by a person, not by a terminal.
+fn readable(out: &str) -> String {
+    out.lines()
+        .filter(|line| line.len() < 200)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// A mutation on a manager that needs **no privilege**, so the check is about the terminal
+/// rather than about this host's sudo rules.
+///
+/// `cargo:` installs as the user. The stub records, per call, whether its own stdin is **a
+/// terminal** — the question this check is about, and one it can answer deterministically where
+/// the stop itself depends on how the pty was set up — and then reads it, which is what a manager
+/// does when it wants to know something.
+fn fake_cargo(tag: &str) -> PathBuf {
+    let root = skeleton(tag);
+    std::fs::write(root.join("cfg/priority"), "cargo\n").unwrap();
+    std::fs::write(root.join("cfg/active"), "Main\n").unwrap();
+    stub(
+        &root.join("bin"),
+        "cargo",
+        // **The planning call exits before it reads, and prints nothing on stdout.** Its output
+        // is parsed as the installed list, so a line there is read as an unparseable row. The
+        // first version of this stub did exactly that: the mutation it was meant to watch never
+        // ran, and the check went green on a message the stub had printed into a parser.
+        r#"printf '%s stdin=%s\n' "$*" "$([ -t 0 ] && echo TTY || echo NOTTY)" >> "$SHALL_PTY_LOG"
+case "$*" in *--list*) exit 0 ;; esac
+read -r line || echo STDIO-IS-NOT-A-TERMINAL >&2
+exit 0"#,
+    );
+    root
+}
+
+/// The door itself: `shall run`, and a program that reads a line.
+///
+/// This is `#132` in one command. Every child Shall starts leads its own process group so
+/// `Stopping` can signal the whole tree — and a group that is not the terminal's **foreground**
+/// group is `SIGTTIN`-stopped by the kernel at its first read. So `sh` sat frozen, Shall waited
+/// on it, and nothing was ever printed. `timeout` is the bound; the child's own line is the
+/// assertion.
+#[test]
+fn a_child_that_reads_the_terminal_gets_what_was_typed() {
+    if !have("script") || !have("timeout") {
+        panic!("this check needs script(1) and timeout(1); both ship with util-linux/coreutils");
+    }
+    let root = fake_apt("typed-run");
+    let (out, code) = shall_typed_at(
+        &root,
+        "run -- sh -c 'read -r x; echo GOT:$x'",
+        "hello\n",
+        20,
+    );
+    assert!(
+        out.contains("GOT:hello"),
+        "the child never received the line typed at the terminal, so it is not that terminal's \
+         foreground process group (exit {code}):\n{}",
+        readable(&out)
+    );
+}
+/// The other half of the same rule: a mutation's child is given no terminal at all.
+///
+/// Nobody can answer a manager mid-transaction — `S88` puts `-n` on every escalated command, so
+/// `sudo` cannot ask either — and the child leads its own process group, so an inherited stdin is
+/// a handle it can **only** freeze on. The stub answers the question deterministically (`[ -t 0 ]`)
+/// because that is the rule; the read beside it is what a manager does with the answer, and the
+/// run has to finish rather than sit out the 900-second idle bound.
+#[test]
+fn a_mutation_child_is_given_no_terminal_at_all() {
+    if !have("script") || !have("timeout") {
+        panic!("this check needs script(1) and timeout(1)");
+    }
+    let root = fake_cargo("mutation-stdin");
+    let (out, code) = shall_typed_at(&root, "-y apply cargo:shall-pty-canary", "", 20);
+    assert_eq!(
+        code,
+        0,
+        "the run did not finish: a manager that reads stdin was stopped instead of answered \
+         (exit {code}):\n{}",
+        readable(&out)
+    );
+    let asked = std::fs::read_to_string(root.join("log")).unwrap_or_default();
+    assert!(
+        asked.lines().any(|line| !line.contains("--list")),
+        "the mutation never reached the manager, so this proves nothing:\n{asked}\n{}",
+        readable(&out)
+    );
+    assert!(
+        !asked.contains("stdin=TTY"),
+        "a mutation's child was handed the terminal, which it can never read: it leads its own \
+         process group, so a read there is a stop or an error, never an answer.\nwhat the manager \
+         saw:\n{asked}"
+    );
+    assert!(
+        out.contains("STDIO-IS-NOT-A-TERMINAL"),
+        "the manager's read did not come back as an EOF:\n{}",
+        readable(&out)
+    );
 }
 
 /// Rows Shall *parsed*, counted in a form only Shall can emit.
