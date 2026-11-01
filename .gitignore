@@ -13,6 +13,10 @@ dump_files.ps1
 shall-plan.json
 scratch_*.sh
 
+# Python bytecode from running `scripts/*.py` in place.
+__pycache__/
+*.pyc
+
 # `cargo mutants` scratch. The nightly mutation job uploads it as an artifact; a local run
 # leaves a copy of the whole tree per mutant here, and this session opened with a mutated
 # `guard.rs` sitting in the working tree from an interrupted run.
