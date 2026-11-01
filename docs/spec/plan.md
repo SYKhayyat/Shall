@@ -3255,8 +3255,11 @@ names its verbs instead of deriving them. The re-run is green on the ratchet: 26
 above the floor, `SIGKILL mid-transaction` the only short one and excused to its recorded 22.
 
 **A defect this run found that is not `C7`'s to fix, recorded here rather than fixed quietly.**
-Section 16f went from seconds to five-minute stalls per manager call on this sandbox. The
-observation is a job-control stop, and it is measured rather than inferred: `apt install` sat in
+Section 16f went from seconds to five-minute stalls per manager call on this sandbox. **Five
+minutes is the harness cutting it** (`TO="timeout 300"` in `run-in-container.sh`) and not a bound
+Shall chose; Shall's own is `DEFAULT_COMMAND_IDLE_TIMEOUT_SECS = 900`, so the same freeze with the
+shipped default is a fifteen-minute silence that then reports the command as one that went quiet.
+The observation is a job-control stop, and it is measured rather than inferred: `apt install` sat in
 state `T` with its work already done, `ps` reporting `pgid 10677 / tpgid 10676` — a group that
 is **not** the foreground group of its controlling terminal — and a three-line probe that reads
 `/dev/tty` from its own process group stops identically, while one that only *writes* does not
