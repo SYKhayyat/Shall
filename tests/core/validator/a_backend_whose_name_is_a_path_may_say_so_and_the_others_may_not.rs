@@ -6,7 +6,7 @@ use super::*;
 /// and no declaration of it could be written:
 ///
 /// ```text
-/// $ shall -y install btrfs:/mnt/data/vol
+/// $ shall -y apply btrfs:/mnt/data/vol
 /// Error: Validation error: Path traversal detected in name: /mnt/data/vol
 /// ```
 ///

@@ -297,12 +297,16 @@ async fn uninstalling_a_package_shall_does_not_own_says_so_instead_of_succeeding
     brew_holds(&kernel, &["orphan-pkg"]);
     assert!(!manages(&kernel, "orphan-pkg").await);
 
-    let err = shall::verbs::packages::handle_uninstall(
+    let err = shall::verbs::apply::handle_apply(
         &kernel.app,
-        &["brew:orphan-pkg".to_string()],
-        shall::core::Output::Human,
-        None,
-        false,
+        shall::verbs::apply::ApplyArgs {
+            declarations: &["brew:orphan-pkg".to_string()],
+            delete: true,
+            absent: false,
+            into: None,
+            temp: None,
+            out: shall::core::Output::Human,
+        },
     )
     .await
     .expect_err("uninstall reported success over a package it did not remove");
@@ -346,12 +350,16 @@ async fn absent_removes_a_package_shall_does_not_own_and_declares_it_gone() {
     );
     assert!(!manages(&kernel, "orphan-pkg").await);
 
-    let err = shall::verbs::packages::handle_uninstall(
+    let err = shall::verbs::apply::handle_apply(
         &confirming(&kernel),
-        &["brew:orphan-pkg".to_string()],
-        shall::core::Output::Human,
-        None,
-        true,
+        shall::verbs::apply::ApplyArgs {
+            declarations: &["brew:orphan-pkg".to_string()],
+            delete: true,
+            absent: true,
+            into: None,
+            temp: None,
+            out: shall::core::Output::Human,
+        },
     )
     .await
     .expect_err("the mock manager never drops the package, so this cannot report success");
@@ -394,12 +402,16 @@ async fn absent_names_the_manager_that_actually_holds_a_bare_name() {
         Ok(DryRunOutput::default().into()),
     );
 
-    let _ = shall::verbs::packages::handle_uninstall(
+    let _ = shall::verbs::apply::handle_apply(
         &confirming(&kernel),
-        &["orphan-pkg".to_string()],
-        shall::core::Output::Human,
-        None,
-        true,
+        shall::verbs::apply::ApplyArgs {
+            declarations: &["orphan-pkg".to_string()],
+            delete: true,
+            absent: true,
+            into: None,
+            temp: None,
+            out: shall::core::Output::Human,
+        },
     )
     .await;
 
@@ -418,12 +430,16 @@ async fn absent_refuses_a_bare_name_no_manager_holds() {
     let kernel = TestKernel::new().await;
     brew_holds(&kernel, &[]);
 
-    let err = shall::verbs::packages::handle_uninstall(
+    let err = shall::verbs::apply::handle_apply(
         &confirming(&kernel),
-        &["ghost-pkg".to_string()],
-        shall::core::Output::Human,
-        None,
-        true,
+        shall::verbs::apply::ApplyArgs {
+            declarations: &["ghost-pkg".to_string()],
+            delete: true,
+            absent: true,
+            into: None,
+            temp: None,
+            out: shall::core::Output::Human,
+        },
     )
     .await
     .expect_err("`--absent` invented a manager for a package nothing holds");
@@ -479,12 +495,16 @@ async fn uninstalling_a_package_shall_owns_is_unaffected() {
         Ok(DryRunOutput::default().into()),
     );
 
-    shall::verbs::packages::handle_uninstall(
+    shall::verbs::apply::handle_apply(
         &confirming(&kernel),
-        &["brew:owned-pkg".to_string()],
-        shall::core::Output::Human,
-        None,
-        false,
+        shall::verbs::apply::ApplyArgs {
+            declarations: &["brew:owned-pkg".to_string()],
+            delete: true,
+            absent: false,
+            into: None,
+            temp: None,
+            out: shall::core::Output::Human,
+        },
     )
     .await
     .expect("removing a package Shall owns failed");
@@ -502,7 +522,7 @@ async fn uninstalling_a_package_shall_owns_is_unaffected() {
 
 /// The same, written the other way a user writes it. A bare name means *the one I have*, so one
 /// manager owning it settles the question — widening it to every manager would turn an ordinary
-/// `shall uninstall jq` into a listing from every package manager on the box.
+/// `shall apply --delete jq` into a listing from every package manager on the box.
 #[tokio::test]
 async fn a_bare_name_shall_owns_costs_no_listing_either() {
     let kernel = TestKernel::new().await;
@@ -516,12 +536,16 @@ async fn a_bare_name_shall_owns_costs_no_listing_either() {
         Ok(DryRunOutput::default().into()),
     );
 
-    shall::verbs::packages::handle_uninstall(
+    shall::verbs::apply::handle_apply(
         &confirming(&kernel),
-        &["owned-pkg".to_string()],
-        shall::core::Output::Human,
-        None,
-        false,
+        shall::verbs::apply::ApplyArgs {
+            declarations: &["owned-pkg".to_string()],
+            delete: true,
+            absent: false,
+            into: None,
+            temp: None,
+            out: shall::core::Output::Human,
+        },
     )
     .await
     .expect("removing a package Shall owns, named without its manager, failed");

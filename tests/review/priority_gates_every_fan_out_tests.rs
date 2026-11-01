@@ -168,7 +168,7 @@ fn the_method_that_answered_both_questions_at_once_stays_deleted() {
 /// sorts low" branch, which is meant for backends the *onboarder* added and nobody has vetted.
 ///
 /// Measured on the slackware image: `init` wrote `appimage, cargo, gem, github, go, setting,
-/// slackpkg`, so a bare `shall install bc` became `cargo install bc` — a crates.io library with
+/// slackpkg`, so a bare `shall apply bc` became `cargo install bc` — a crates.io library with
 /// no binaries — while slackpkg had the package sitting in its own list.
 ///
 /// The source of truth is `run.sh`'s own `backend_for()`: the backend a distro image is driven

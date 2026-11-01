@@ -3,9 +3,33 @@
 State of the tree, what is verified, what is not, and how to continue. Read `CLAUDE.md` and
 `docs/SPEC.md` first; they still govern everything below.
 
+**Update, 2026-10-31: `C7` is built, and the pair became one verb.** `install` and `uninstall`
+are gone — `apply <line>` and `apply <line> --delete` are the whole surface, `src/verbs/packages.rs`
+is `src/verbs/apply.rs`, and the saved-plan executor is `execute`. The section below is the
+work order as it was handed over; `docs/spec/plan.md`'s `C7` entry records where the build
+differed from it, and `docs/spec/decisions.md`'s `C7` carries the ruling.
+
 ## Where the tree is
 
-- Branch `main`, HEAD `cf8eaafd`, pushed to `origin`.
+- Branch `main`, HEAD `cf8eaafd`, pushed to `origin`. **`C7` and the harness family it dragged
+  with it are in the working tree, uncommitted** — `git status` is the list: 40 tracked files
+  across `src/`, `tests/`, `scripts/`, `docker/` and the spec, three new test files, and the
+  `packages.rs` → `apply.rs` rename (`tests/verbs/packages/` → `tests/verbs/apply/` with it).
+- **Verified on this tree, 2026-10-31/11-01**, all after the last edit: `cargo build
+  --all-targets`, `cargo test --no-fail-fast` (3062 passed, 0 failed), `cargo clippy
+  --all-targets --all-features --locked -- -D warnings`, `rustfmt --check` over every crate
+  target, `shellcheck -S warning`, `cargo check --target x86_64-pc-windows-gnu --all-targets`
+  with `-D warnings`, `scripts/harness-logic-test.sh` (79/79), `scripts/decision-count.sh
+  --check`, and the container harness on **ubuntu (391/0/5), arch (402/0/6) and tools
+  (470/0/8)**, all `PASS`. Those numbers and the two defects the run produced are in
+  `docs/spec/plan.md`'s `C7` entry; the second one — the `SIGTTIN` stop on a manager that reads
+  a terminal it does not own the foreground of — is **recorded, not fixed**: it changes
+  interactive behaviour, so it is the owner's call.
+- What that leaves unverified is the same list as before: the native macOS/Windows sweeps (so
+  `#112` itself still closes only on a dispatch), the container legs not run here (fedora,
+  alpine, opensuse, void, gentoo, guix, slackware), and the behaviours only a real manager
+  answers — the guard's OS-essential protection, crash/fault injection, real lifecycles outside
+  the three images, and argv as installed.
 - This session's commits, in order:
   - `aa970f12` — **#113** closed: `classify_install` names the real culprit; guix ratchet 3 → 4.
   - `cee823ae` — **#129** closed: bun's `(0 installed)` header is an empty machine, not an
@@ -14,10 +38,10 @@ State of the tree, what is verified, what is not, and how to continue. Read `CLA
     guix ratchet.
   - `5bf94cfc` — **#109**: the apt legs refresh the metadata the image baked, before the first
     install.
-  - **`cf8eaafd` — `C7` (2026-10-27): install and uninstall converge exactly what they name.
-    Ruling landed (register + II.70 + V.220); the code is NOT landed. Next session builds it.**
+  - `cf8eaafd` — **`C7` (2026-10-27): the ruling lands** (register + II.70 + V.220). The code
+    followed on 2026-10-30/31 as one verb — `apply` / `apply --delete`.
 
-## The one thing to pick up: build `C7`
+## `C7` — the work order it was built from
 
 The owner ruled it after the #112 diagnosis (the comment on #112: *the dispatch run's evidence is
 in*). The full work order — mechanism, call sites, acceptance criteria, and the tests — is the
@@ -42,8 +66,9 @@ build list.
 
 ## Working tree
 
-Only untracked `scripts/__pycache__/` and `scripts/widen-for-tests.py` (deliberately never
-committed).
+Forty tracked files modified, the `apply` rename, and three new test files (see *Where the tree
+is*). Untracked and deliberately never committed: `scripts/__pycache__/` and
+`scripts/widen-for-tests.py`.
 
 ## Environment — no boundaries, and how
 
@@ -103,7 +128,7 @@ Open, in order of what unblocks most:
 | `#113` | guix section floor + guix/slackware `go` | **Closed** — `aa970f12` |
 | `#129` | Four legs red on `check health (rc=2)`, no backend named | **Closed** — `cee823ae` (the backend was `bun`) |
 | `#109` | apt legs install off baked lists | **Fix landed** (`5bf94cfc`), live ubuntu leg running |
-| `#112` | native sweep family: installed packages missing from `list` and PATH | Open — **diagnosis commented, ruling `C7` landed, work order posted** (`issuecomment-6475969648`); the code is the next session's first move |
+| `#112` | native sweep family: installed packages missing from `list` and PATH | **`C7` built (2026-10-31)** — the install that converged the machine can no longer happen; the next native run answers the lister question with no harness change |
 | `#130` | `handle_schedule` edits a line then converges the whole machine (the `C7` class on the sibling verb) | Open, untouched — filed this session; needs its own ruling (resource-scoping, not package keys) |
 | `#100` | void leg's uv/yarn/gem/github listing failures | Open; `#112`'s delivery evidence lands on the next run |
 | `#25` | stale umbrella | Open, untouched |

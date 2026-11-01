@@ -8070,8 +8070,9 @@ somebody put it.
 
 ---
 
-**V.220 — Why `install` converges what it names, not the machine.** *(Owner ruling, 2026-10-27 —
-`C7`. Rule in II.70. Supersedes the converge half of `Q34`/V.136.)*
+**V.220 — Why `apply` makes exactly what it names true, and why there is one verb for it.**
+*(Owner ruling, 2026-10-27, extended 2026-10-30 — `C7`. Rule in II.70. Supersedes the converge
+half of `Q34`/V.136, and `install`/`uninstall` as separate verbs.)*
 
 The 2026-10-26 native sweeps measured the cost of the whole-machine converge that rode along on
 `install`. The harness's `shall -y install cargo:hexyl` produced a plan whose one change was
@@ -8089,7 +8090,7 @@ Status:       SUCCESS
 
 The canary was absent from its own install's plan, the harness read exit 0 as "installed for
 real", and ten backends per host were then failed for a package that was never installed (#112).
-The same machinery produced the apology: `say_if_the_failure_was_not_yours` existed only because
+The same machinery produced the apology: a function existed only because
 a failure anywhere in the config could stop the install somebody typed, and its whole job was to
 say "that failure is not about what you asked for". A verb that needs a paragraph explaining it
 might do something else is a verb doing too much.
@@ -8109,3 +8110,16 @@ narrows when you name a package, `adopt` takes the backends you name, `rebuild` 
 packages you name — and `install`'s own signature always demanded package names. The siblings
 narrow with it (`uninstall`, `uninstall --absent`, `retarget`), because a twin left full-sync
 would be the same surprise under a different word.
+
+**And then the pair itself went, for the reason this entry already gives about flags.** `.42`
+narrowed `install` and `uninstall` to what they name but left them as two verbs — and the
+narrowing is what exposed how arbitrary the split was: `install` could name a package and nothing
+else. A `dir:`, a `link:`, a `service:` had no command that applied exactly it and none that
+removed exactly it, so the only way to act on one was `sync`, which acts on everything — the
+converge this entry exists to stop. The direction was never a separate mechanism; it was a flag's
+worth of meaning hiding in the word. So `apply <line>` and `apply <line> --delete` are the whole
+surface, the grammar says which phase owns the line, and each phase's own applier runs. The
+refusals kept their place: `--absent` is about a *name* a manager could put back, so a resource
+line — which has no second source — is refused rather than written as a line nothing reads. The
+saved-plan executor, which had the name first, became `execute`: a frozen plan is the whole
+configuration, and `apply` is one line of it.

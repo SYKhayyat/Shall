@@ -204,7 +204,7 @@ impl Queryable for VscodeQueryable {
     ///
     /// It used to POST to `marketplace.visualstudio.com` and answer `Some` for anything that
     /// *exists* there, carrying the marketplace's *latest* version. Three consequences, all
-    /// silent: `shall install vscode:x` reported success and installed nothing, a `@version=`
+    /// silent: `shall apply vscode:x` reported success and installed nothing, a `@version=`
     /// pin re-installed for ever the moment upstream published a newer build, and every plan
     /// made one rate-limited HTTPS POST per declared extension. Same bug as `mise:`, whose
     /// obituary is at `mise.rs`.

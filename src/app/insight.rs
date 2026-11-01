@@ -662,7 +662,7 @@ async fn introduced_in_git(
 /// with the fallback and nothing says so.
 pub fn provenance(source: &str) -> String {
     match source {
-        "imperative" => "installed by `shall install`".to_string(),
+        "imperative" => "installed by `shall apply`".to_string(),
         "adopt" => "adopted from this machine".to_string(),
         s => match s.strip_prefix("hook:") {
             Some(manager) => format!(

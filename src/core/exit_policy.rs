@@ -140,7 +140,7 @@ impl ExitPolicy {
 
     /// Whether this manager said the name it was given does not exist.
     ///
-    /// The fact `install` reads to take a line back out of the manifest. It is answered from
+    /// The fact `apply` reads to take a line back out of the manifest. It is answered from
     /// the manager's own declared phrasings rather than from the shape of an error value:
     /// reading `CommandFailed { retry: Permanent }` recognised the two managers whose failure
     /// happened to be classified and left the config wedged on every other one (N-1).
@@ -505,7 +505,7 @@ pub fn spack() -> ExitPolicy {
 ///   absent versn -> `No matching distribution found for black==99.99.99`,
 ///                   above it `(from versions: 18.3a0, 18.3a1, ... 26.5.1)`
 ///
-/// Identical summaries. So `shall install pipx:black@version=99.99.99` withdrew the declaration
+/// Identical summaries. So `shall apply pipx:black@version=99.99.99` withdrew the declaration
 /// for `black` — a real package, on a machine that has it — over a version pin the user could
 /// have corrected. The line that tells the two apart is the one listing what pip DID find, and
 /// `none` is the whole discriminator.
@@ -961,7 +961,7 @@ pub fn go() -> ExitPolicy {
 ///
 /// pixi wraps that line at the terminal width and will break it *inside* the package name,
 /// which is why the name is never recovered from this text — see
-/// `absent_name_in_message` in `verbs/packages.rs`.
+/// `absent_name_in_message` in `verbs/apply.rs`.
 pub fn pixi() -> ExitPolicy {
     ExitPolicy {
         absent_markers: vec!["no candidates were found for"],

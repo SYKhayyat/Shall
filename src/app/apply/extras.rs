@@ -338,6 +338,118 @@ impl Extras<'_> {
         Ok(drift_count)
     }
 
+    /// Undo one named resource and forget it in the ledger — `apply --delete`, one line at a
+    /// time.
+    ///
+    /// **Not `reconcile` over a one-line state.** `reconcile` diffs the *ledger* against what the
+    /// model declares, so a state holding one statement would read every other applied resource
+    /// as drift and tear the machine down. This asks about one key, under the same guard the
+    /// reconcile path uses, and moves the ledger by one row.
+    ///
+    /// **Only what Shall placed.** The ledger is the record of what this machine had done to it,
+    /// so a key with no row is a declaration that was never applied here (or applied before the
+    /// ledger existed) — and undoing it would delete a `link:` destination or a `dir:` that the
+    /// user made. The line still comes out; nothing on the machine is touched, and the warning
+    /// says which. `reconcile` draws the same line for its own teardown, one arm over.
+    pub async fn undo_one(&self, stmt: &Statement, scope: guard::GuardScope) -> Result<()> {
+        let Some(key) = crate::core::extras_lock::extra_key(stmt)? else {
+            return Ok(());
+        };
+        let wire = key.to_string();
+        let path =
+            crate::core::extras_lock::ExtrasLedger::path_in(&self.config.layout().locks_dir());
+        let ledger = crate::core::extras_lock::ExtrasLedger::load(&path)?;
+        let placed_by_shall = ledger
+            .record_for(&key)
+            .map(|record| record.owns_removal())
+            .unwrap_or(false);
+        if !placed_by_shall {
+            warn!(
+                "`{}` is no longer declared, and Shall has no record of placing it here — the \
+                 declaration is removed and nothing on this machine is touched.",
+                wire
+            );
+            self.forget(&path, &key)?;
+            return Ok(());
+        }
+        let reaped = guard::enforce_extras(
+            self.config,
+            self.registry,
+            &guard::extra_removal_pairs(std::slice::from_ref(&wire)),
+            self.reaping,
+            scope,
+        )
+        .await?;
+
+        if self.config.dry_run {
+            crate::would_warn!("`{}` would be undone.", wire);
+            return Ok(());
+        }
+        warn!("`{}` is no longer declared — undoing it.", wire);
+        // The row goes only after the teardown works: a failed undo keeps it, so the next `sync`
+        // tries again instead of forgetting a service or a timer still in effect.
+        self.undo_extra(&key, reaped).await?;
+        self.forget(&path, &key)
+    }
+
+    /// Record one resource as placed — the other half of [`undo_one`](Self::undo_one), and the
+    /// reason a narrowed apply is indistinguishable from a `sync` afterwards.
+    ///
+    /// A placed resource with no row would be a line `apply` cannot undo: the teardown asks the
+    /// ledger what Shall put here, and a missing row reads as "nothing". The row carries
+    /// `created` for a `dir:`, which is what lets the teardown tell a directory Shall made from
+    /// one the user already had.
+    pub fn record_one(&self, stmt: &Statement) -> Result<()> {
+        let Some(key) = crate::core::extras_lock::extra_key(stmt)? else {
+            return Ok(());
+        };
+        let path =
+            crate::core::extras_lock::ExtrasLedger::path_in(&self.config.layout().locks_dir());
+        let made_here = self.created_dirs();
+        crate::core::LockFile::update(
+            &path,
+            |ledger: &mut crate::core::extras_lock::ExtrasLedger| {
+                let created = if key.kind == crate::config::grammar::ResourceKind::Dir {
+                    Some(Self::dir_origin(ledger, &key, &made_here))
+                } else {
+                    None
+                };
+                let record =
+                    crate::core::extras_lock::ExtraRecord::new(&key).with_created(created)?;
+                let mut records: Vec<_> = ledger
+                    .records()
+                    .iter()
+                    .filter(|r| r.key().map(|k| k != key).unwrap_or(true))
+                    .cloned()
+                    .collect();
+                records.push(record);
+                ledger.record(records);
+                Ok::<(), crate::core::Error>(())
+            },
+        )
+    }
+
+    /// Drop one row from the extras ledger, holding one lock across the read and the write.
+    fn forget(
+        &self,
+        path: &std::path::Path,
+        key: &crate::core::extras_lock::ExtraKey,
+    ) -> Result<()> {
+        crate::core::LockFile::update(
+            path,
+            |ledger: &mut crate::core::extras_lock::ExtrasLedger| {
+                let kept: Vec<_> = ledger
+                    .records()
+                    .iter()
+                    .filter(|r| r.key().map(|k| k != *key).unwrap_or(true))
+                    .cloned()
+                    .collect();
+                ledger.record(kept);
+                Ok::<(), crate::core::Error>(())
+            },
+        )
+    }
+
     fn created_dirs(&self) -> std::collections::BTreeSet<std::path::PathBuf> {
         let Some(backend) = self.registry.get("dir") else {
             return Default::default();

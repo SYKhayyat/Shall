@@ -365,6 +365,7 @@ mod the_report_is_sorted_for_a_stable_plan;
 
 mod a_config_travels_between_machines_tests;
 mod a_drifted_ecosystem_does_not_strand_the_config_tests;
+mod a_named_scope_plans_its_keys_and_nothing_else_tests;
 mod a_plan_reaps_only_what_it_was_asked_about_tests;
 mod declared_options_converge_tests;
 mod time_travel_tests;

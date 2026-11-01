@@ -248,7 +248,7 @@ impl Queryable for MiseQueryable {
     ///
     /// It used to ask `mise plugins ls --all`, which lists every plugin mise has ever heard
     /// of — so `info` answered `Some` for anything in the catalogue, the planner read that as
-    /// "already installed", and `shall install mise:jq` reported *already up to date* while
+    /// "already installed", and `shall apply mise:jq` reported *already up to date* while
     /// installing nothing. Found by the `tools` container image, which is the only place a
     /// real mise runs (2026-07-24).
     ///

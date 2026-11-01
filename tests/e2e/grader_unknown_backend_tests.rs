@@ -2,7 +2,7 @@
 //!
 //! Principle I is "fail loud, never silent", and `install` obeys it perfectly:
 //!
-//!     $ shall install nosuchbackend:foo -y
+//!     $ shall apply nosuchbackend:foo -y
 //!     Error: Configuration error: <argument>: `nosuchbackend` is not a backend Shall uses
 //!       add `nosuchbackend` to your `priority` file, or check the spelling.
 //!     rc=1
@@ -67,7 +67,7 @@ fn listing_a_backend_that_does_not_exist_says_so() {
 
     // The control: `install` is asked the same question and refuses loudly, so "Shall cannot
     // tell" is not the explanation.
-    let (ctl, ctl_rc) = run(&dir, &["install", "nosuchbackend:foo", "-y"]);
+    let (ctl, ctl_rc) = run(&dir, &["apply", "nosuchbackend:foo", "-y"]);
     assert_ne!(
         ctl_rc, 0,
         "the control failed: `install nosuchbackend:foo` was expected to refuse, got:\n{ctl}"

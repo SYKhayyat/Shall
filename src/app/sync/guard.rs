@@ -132,7 +132,7 @@ impl GuardScope {
     ///   the same package cannot race in one graph. Its removal phase is the first half of a
     ///   reinstall of *declared* packages; leaving one of those removals in place is not
     ///   convergence, it is a machine missing software it still declares.
-    /// - `Remove` is a person typing `shall uninstall`. The removal was ordered by hand rather
+    /// - `Remove` is a person typing `shall apply --delete`. The removal was ordered by hand rather
     ///   than derived from a manifest, so a transaction that failed around it should give the
     ///   package back.
     ///

@@ -6,7 +6,7 @@ pub use shall::cli::{Cli, Commands};
 pub use shall::config::Config;
 pub use shall::core::Output;
 pub use shall::verbs::{
-    check::*, cleanup::*, declare::*, ephemeral::*, history::*, inventory::*, packages::*, plan::*,
+    apply::*, check::*, cleanup::*, declare::*, ephemeral::*, history::*, inventory::*, plan::*,
     portable::*, setup::*, sync::*, upgrade::*,
 };
 use std::collections::HashMap;

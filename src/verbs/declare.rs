@@ -23,7 +23,7 @@ pub async fn handle_repo(app: &App, cmd: &RepoCommand) -> Result<()> {
 
     // Q9: `repo` takes its backend positionally, so a typo landed on `Backend not found` —
     // true, but it named neither the file to edit nor the spelling to check, and the same
-    // question has one good answer already written for `install`.
+    // question has one good answer already written for `apply`.
     app.resolver().await.require_known_backend(Some(&b_name))?;
     let b = app.registry.get(&b_name).context("Backend not found")?;
     let mgr = b
@@ -97,7 +97,7 @@ pub async fn handle_module(
             let names = loader.available();
             if names.is_empty() {
                 println!(
-                    "No modules yet. `shall module create <name>`, or `shall install` writes \
+                    "No modules yet. `shall module create <name>`, or `shall apply` writes \
                      one for you."
                 );
             }
@@ -790,7 +790,7 @@ pub async fn handle_adopt(app: &App, backends: Vec<String>, enabled_only: bool) 
     // adopt srvice` answering "Adopted 0 declaration(s)" is byte-identical to a correct name
     // with nothing to take, so a typo cannot be told from a no-op (Q9).
     //
-    // Through `require_known_backend` and not a message of its own: `install`'s wording is the
+    // Through `require_known_backend` and not a message of its own: `apply`'s wording is the
     // one refusal, and a second spelling of it is how E18's family started.
     for name in &backends {
         app.resolver().await.require_known_backend(Some(name))?;

@@ -1064,7 +1064,7 @@ pub async fn interactive_init(app: &App, force: bool) -> Result<()> {
 
     scaffold_repo(&app.config, app.backends().await, force).await?;
 
-    // Starter packages go through the same door as `shall install`: one writer, so what a
+    // Starter packages go through the same door as `shall apply`: one writer, so what a
     // wizard produces and what a command produces cannot be different shapes.
     for pkg in &answers.starter_packages {
         app.declarations()
@@ -1197,6 +1197,6 @@ pub async fn scaffold_repo(config: &Config, backends: &Backends, force: bool) ->
         println!("  created  {:<10} {}", "active", active.display());
     }
 
-    println!("\nReady. `shall install jq` writes a line you own; `shall sync` makes it so.");
+    println!("\nReady. `shall apply apt:jq` writes a line you own; `shall sync` makes it so.");
     Ok(())
 }

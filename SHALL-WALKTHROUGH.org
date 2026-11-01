@@ -112,8 +112,8 @@ Read in dependency order — data first, then things that write it, then shared 
 | 7 | =src/verbs/mod.rs= | Shared verb utilities: =write_unless_previewing=, =perform_maintenance=, the shrunken prelude |
 | 8 | =src/verbs/sync.rs= | =handle_sync= — the main entry point for =shall sync= |
 | 9 | =src/verbs/upgrade.rs= | =handle_upgrade= — update packages to latest versions |
-| 10 | =src/verbs/packages.rs= | =handle_install=, =handle_uninstall=, =handle_list=, =handle_search=, =handle_info= |
-| 11 | =src/verbs/plan.rs= | =handle_plan=, =handle_apply= — preview and apply saved plans |
+| 10 | =src/verbs/apply.rs= | =handle_apply= — one declaration made true (or =--delete=d), =handle_list=, =handle_search=, =handle_info= |
+| 11 | =src/verbs/plan.rs= | =handle_plan=, =handle_execute= — preview and run saved plans |
 | 12 | =src/verbs/declare.rs= | =handle_edit=, =handle_add= — edit manifest modules by hand |
 | 13 | =src/verbs/cleanup.rs= | =handle_clean_cache=, =handle_remove_orphans=, =handle_heal= |
 | 14 | =src/verbs/history.rs= | =handle_history=, =handle_snapshot=, =handle_rollback=, =handle_diff= |
@@ -551,18 +551,19 @@ Flow: resolve desired state → plan changes → if dry-run, print plan → else
 
 Differs from sync: it asks each backend for the latest version of each managed package, then plans installs for those that have updates. Supports =--security= (only security updates), =--canary= (test one package first), =--test= (run test command after each upgrade), and =--profile= =/= =--module= (limit scope).
 
-** *src/verbs/packages.rs* — handle_install, handle_uninstall, handle_list, handle_search, handle_info
+** *src/verbs/apply.rs* — handle_apply, handle_teleport, handle_list, handle_search, handle_info
 
-Direct package operations bypassing the manifest:
-- =install= — installs named packages, records them as source=install (not managed by manifest)
-- =uninstall= — removes packages, with =--absent= to also add =absent:= to manifest
+Acting on one declaration, and reading what is there:
+- =apply <line>= — writes the line, then makes exactly it true; the rest of the config stays pending
+- =apply <line> --delete= — takes the line out and undoes it, with =--absent= to keep a package off
+- =teleport= — moves a declared package to another manager, naming both keys
 - =list= — lists installed packages from inventory
 - =search= — searches backends for packages
 - =info= — shows package metadata
 
-** *src/verbs/plan.rs* — handle_plan, handle_apply: saved plans
+** *src/verbs/plan.rs* — handle_plan, handle_execute: saved plans
 
-=shall plan= computes the sync plan and saves it to a file (JSON, schema versioned). =shall apply= reads a plan file and executes it. This enables: plan on machine A, copy file to machine B, apply on machine B — same result, no manifest needed on B.
+=shall plan= computes the sync plan and saves it to a file (JSON, schema versioned). =shall execute= reads a plan file and executes it. This enables: plan on machine A, copy file to machine B, apply on machine B — same result, no manifest needed on B.
 
 ** *src/verbs/declare.rs* — handle_edit, handle_add: editing manifest modules
 

@@ -2,7 +2,7 @@ use super::*;
 
 /// `info` asked `marketplace.visualstudio.com` and returned `Some` for anything that
 /// *exists* there, at the marketplace's *latest* version. Three silent consequences:
-/// `shall install vscode:x` reported success and installed nothing, a `@version=` pin
+/// `shall apply vscode:x` reported success and installed nothing, a `@version=` pin
 /// re-installed for ever the moment upstream published, and every plan made one
 /// rate-limited HTTPS POST per declared extension.
 ///

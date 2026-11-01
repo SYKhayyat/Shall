@@ -21,6 +21,12 @@ pub struct Reconcile {
     /// Whether to ask before applying. `watch` is unattended by definition and never asks;
     /// `sync` asks unless `--yes`.
     confirm: bool,
+    /// The keys this run may act on, when the command named them (II.70).
+    ///
+    /// `None` is the whole-machine converge and stays `sync`'s. `Some` is `install X` and its
+    /// twins: the plan touches these keys and nothing else, the non-package phases do not run,
+    /// and nothing is reaped. What it does *not* narrow is the guard or the safety rails.
+    named: Option<std::collections::HashSet<String>>,
 }
 
 /// What one reconcile pass did — and what it decided not to do.
@@ -43,6 +49,15 @@ pub struct Reconciled {
     /// asked for and did not happen, which is the difference between a run that converged and
     /// one that only reported it had.
     pub not_installed: usize,
+    /// How many declarations the configuration holds — the model's number, never a manager's
+    /// answer. Packages, resources and dated lines alike, because a narrowed run's pending
+    /// count is about lines.
+    ///
+    /// What it is for: a narrowed `install` applied what you named and left the rest pending, and
+    /// the difference between this and the keys it was given is what is still owed to `sync`.
+    /// Read from the manager side it would be a second, slower question with a different answer
+    /// on a host whose listing is broken — the exact failure #112 is about.
+    pub declared_total: usize,
 }
 
 pub(crate) fn bare_install_names(changes: &crate::app::sync::planner::SyncChanges) -> Vec<String> {
@@ -139,7 +154,13 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
     // The whole desired state, extras included — repos must be applied before packages
     // (II.7), so this needs more than the package map.
     let state = resolver.resolve_model().await?;
-    let desired = state.packages.clone();
+    let declared_total = state.total_declarations();
+    let named = opts.named.clone();
+    // **Narrowed at the source, not only inside the planner.** `install X` leaves the rest of the
+    // config pending (II.70), and every phase below that reads `desired` — the policy enforcer,
+    // the bootstrap and prereq offers — has to read the same set or a narrowed run still acts on
+    // a hundred lines it was not asked about.
+    let desired = narrowed_to(&state, named.as_ref());
 
     // After the resolution and before the plan, and both halves of that are load-bearing.
     // After, because ownership is read from what this machine declares and the resolver is
@@ -165,22 +186,37 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
     // SEC3, before the first repo is added and before any package is touched: a `link:` line
     // whose `@target` lands outside the home directory is asked about once. A confirmation
     // offered after the file is placed is a notification.
-    app.dotfiles().confirm_outside_home(&state)?;
+    //
+    // Skipped on a narrowed run, with everything else in this block that is not about packages:
+    // the question is about a `link:` line the command did not name.
+    if named.is_none() {
+        app.dotfiles().confirm_outside_home(&state)?;
+    }
 
     // Ordering phase 0 (7c): a manager the configuration declares and this machine lacks is
     // offered before anything is planned — a package cannot install through a manager that is
     // not there, and finding that out per-package is a pile of identical failures.
-    app.bootstrap().offer(&state).await?;
+    //
+    // Narrowed to the managers this run may use. An offer to install `brew` because a file 103
+    // lines away declares it is the same surprise as installing `brew:rustup` was.
+    let offered = offered_managers(&state, &desired, named.as_ref());
+    app.bootstrap().offer(offered.as_ref()).await?;
 
     // And the half after it: a manager that IS here and cannot install anything until
     // something is set up — Hex for `mix`, a plugin for `asdf`, a switch for `opam` (Q10, Q11,
     // Q13). After the bootstrap, because probing a manager this machine does not have would
     // ask a question with no answer.
-    app.prereqs().offer(&state).await?;
+    app.prereqs().offer(offered.as_ref()).await?;
 
     // Ordering phase 1: repos → refresh indexes. A package from a PPA cannot install until
     // the PPA is added, so this runs before the package plan (not inside it).
-    app.repositories().apply(&state).await?;
+    //
+    // Skipped on a narrowed run: a repo is a precondition the config declares, not part of what
+    // you named. The consequence is a package that fails to install naming `shall sync`, which is
+    // the line the pending notice already points at.
+    if named.is_none() {
+        app.repositories().apply(&state).await?;
+    }
 
     // Drift is scoped to the backends this host lists in `priority`: a full sync must not
     // reap a backend you have simply stopped listing.
@@ -192,7 +228,16 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
             &state_guard,
             &app.config,
         );
-        planner.plan(&desired, PlanScope::Whole(hosts)).await?
+        // Two calls and not one scope bound above them: a scope the review gate cannot read off
+        // the call is a scope it reports as clean, which is how `upgrade --canary` hid.
+        match &named {
+            Some(keys) => {
+                planner
+                    .plan(&desired, PlanScope::Named(keys.clone()))
+                    .await?
+            }
+            None => planner.plan(&desired, PlanScope::Whole(hosts)).await?,
+        }
     };
 
     // Before the "nothing to do" exit, never inside it: a plan can be empty of ACTIONS and
@@ -224,6 +269,7 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
     // A config can be all dependents/schedules and no package changes (just a `service:` or a
     // `schedule:` line). That is still work, so the "nothing to do" exit has to account for
     // every phase after the package plan — which it now asks `Phase` for rather than listing.
+    //
     if changes.is_empty() && !state.has_non_package_work() {
         // Nothing is declared and nothing is in place, so the only work left is the teardown of
         // what *was*: deleting the last `link:`, `service:` or `exec:` line is a real change
@@ -232,11 +278,28 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
         // and `exec:` while skipping `dependents:`, `dotfiles:`, `firewall:` and `schedule:`, and
         // how it came to skip the list the next statement kind would be added to. A converged
         // `--dry-run` previewed the same partial list for the same reason.
-        let applied = apply_non_package_phases(app, &state, opts.scope).await?;
+        let applied = match &named {
+            Some(_) => 0,
+            None => apply_non_package_phases(app, &state, opts.scope).await?,
+        };
         return Ok(Reconciled {
             applied,
             left_in_place: changes.skipped.len(),
             not_installed: not_installed_of(&changes.skipped),
+            declared_total,
+        });
+    }
+
+    // A narrowed run has no phase-after-packages work, by definition: those phases are the
+    // configuration's, and this run was given a key. Without this branch, a narrowed run whose
+    // plan is empty but whose config holds a `dir:` or a `service:` would fall through and apply
+    // every extra the files declare — the whole-machine converge II.70 forbids.
+    if changes.is_empty() && named.is_some() {
+        return Ok(Reconciled {
+            applied: 0,
+            left_in_place: changes.skipped.len(),
+            not_installed: not_installed_of(&changes.skipped),
+            declared_total,
         });
     }
 
@@ -271,9 +334,17 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
         //
         // It reports and does not refuse: what a dry-run should *exit* with is `U21`'s and the
         // owner's, and answering it here would be answering it in code.
-        let resources = app.extras().changes(&state).await?;
+        // The extras this run would touch: none on a narrowed run, which does not run their
+        // phases at all. Previewing a teardown it will not perform would report a refusal for a
+        // removal the command was never going to make.
+        let extra_pairs = match &named {
+            Some(_) => Vec::new(),
+            None => {
+                let resources = app.extras().changes(&state).await?;
+                crate::app::sync::guard::extra_removal_pairs(&resources.undo)
+            }
+        };
         let package_pairs = crate::app::sync::guard::removal_pairs(&changes);
-        let extra_pairs = crate::app::sync::guard::extra_removal_pairs(&resources.undo);
         let refusals = crate::app::sync::guard::preview_refusals(
             &app.config,
             &app.registry,
@@ -292,11 +363,15 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
 
         // The same phases a real run would perform, in the same order, from the same list —
         // each honours `dry_run` itself and previews instead of acting.
-        let extras_undone = apply_non_package_phases(app, &state, opts.scope).await?;
+        let extras_undone = match &named {
+            Some(_) => 0,
+            None => apply_non_package_phases(app, &state, opts.scope).await?,
+        };
         return Ok(Reconciled {
             applied: applied + extras_undone,
             left_in_place: changes.skipped.len(),
             not_installed: not_installed_of(&changes.skipped),
+            declared_total,
         });
     }
 
@@ -306,6 +381,7 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
             applied: 0,
             left_in_place: 0,
             not_installed: bare_install_names(&changes).len(),
+            declared_total,
         });
     }
 
@@ -333,6 +409,7 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
                     applied: 0,
                     left_in_place: changes.skipped.len(),
                     not_installed: not_installed_of(&changes.skipped),
+                    declared_total,
                 });
             }
             changes = preview.get_filtered_changes();
@@ -351,12 +428,67 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
         warn_about_unreachable_binaries(&app.config, &app.executor, &installed_by).await;
     }
 
-    let extras_undone = apply_non_package_phases(app, &state, opts.scope).await?;
-    perform_maintenance(app).await?;
+    let extras_undone = match &named {
+        Some(_) => 0,
+        None => apply_non_package_phases(app, &state, opts.scope).await?,
+    };
+    // Housekeeping is the machine's, not the key's: a narrowed run cleans up nothing it did not
+    // create, and its subject is a package that is already installed or already gone.
+    if named.is_none() {
+        perform_maintenance(app).await?;
+    }
     Ok(Reconciled {
         applied: applied + extras_undone,
         left_in_place,
         not_installed,
+        declared_total,
+    })
+}
+
+/// The declarations a narrowed run may act on: the named keys and nothing else.
+///
+/// The `backend:name` spelling is the planner's, from the one function that owns it — a second
+/// `format!` here would be a second answer to "which key is this".
+fn narrowed_to(
+    state: &crate::model::DesiredState,
+    named: Option<&std::collections::HashSet<String>>,
+) -> HashMap<String, Vec<crate::core::PackageSpec>> {
+    let Some(named) = named else {
+        return state.packages.clone();
+    };
+    state
+        .packages
+        .iter()
+        .filter_map(|(backend, specs)| {
+            let kept: Vec<_> = specs
+                .iter()
+                .filter(|s| named.contains(&crate::app::sync::planner::key(backend, &s.name)))
+                .cloned()
+                .collect();
+            (!kept.is_empty()).then(|| (backend.clone(), kept))
+        })
+        .collect()
+}
+
+/// The state the bootstrap and prereq offers read: the packages this run may act on, and no
+/// extras.
+///
+/// A `DesiredState` rather than the map because those two offers ask it for `packages` and
+/// nothing else, and a narrowed run has no business handing them a whole machine's extras to
+/// ignore.
+fn offered_managers<'a>(
+    state: &'a crate::model::DesiredState,
+    desired: &HashMap<String, Vec<crate::core::PackageSpec>>,
+    named: Option<&std::collections::HashSet<String>>,
+) -> std::borrow::Cow<'a, crate::model::DesiredState> {
+    if named.is_none() {
+        return std::borrow::Cow::Borrowed(state);
+    }
+    std::borrow::Cow::Owned(crate::model::DesiredState {
+        packages: desired.clone(),
+        extras: Vec::new(),
+        lapsed: Vec::new(),
+        vars: state.vars.clone(),
     })
 }
 
@@ -770,6 +902,29 @@ pub struct SyncMode {
     pub upgrade: bool,
 }
 
+/// `sync`, narrowed to the keys a command named (II.70).
+///
+/// The same pass, the same guard, the same planner — the difference is one scope. `apply` and its
+/// twins go through here rather than a second converge written for them.
+pub async fn handle_named(
+    app: &App,
+    out: Output,
+    keys: std::collections::HashSet<String>,
+) -> Result<Reconciled> {
+    reconcile(
+        app,
+        Reconcile {
+            locked: false,
+            upgrade: false,
+            out,
+            scope: crate::app::sync::guard::GuardScope::Sync,
+            confirm: true,
+            named: Some(keys),
+        },
+    )
+    .await
+}
+
 pub async fn handle_sync(app: &App, mode: SyncMode, out: Output) -> Result<()> {
     let SyncMode { locked, upgrade } = mode;
     let done = reconcile(
@@ -780,6 +935,7 @@ pub async fn handle_sync(app: &App, mode: SyncMode, out: Output) -> Result<()> {
             out,
             scope: crate::app::sync::guard::GuardScope::Sync,
             confirm: true,
+            named: None,
         },
     )
     .await?;
@@ -796,8 +952,8 @@ pub async fn handle_sync(app: &App, mode: SyncMode, out: Output) -> Result<()> {
     }
     // Never over a skip. `already up to date` is a claim about the machine, and the machine
     // holds a package this run decided not to remove — which the lines above have just named
-    // (AU1). The claim was made, in that exact state, three times: here, in `uninstall`, and
-    // in `check`.
+    // (AU1). The claim was made, in that exact state, three times: here, in the removal verb
+    // (now `apply --delete`), and in `check`.
     // Not under `--json`: the answer there is the document, and a sentence after it is a second
     // answer in a second language that no consumer can read.
     if done.applied == 0 && done.left_in_place == 0 && done.not_installed == 0 && out.is_human() {
@@ -863,6 +1019,7 @@ pub async fn watch_reconcile(app: &App) -> Result<Reconciled> {
             out: Output::Human,
             scope: crate::app::sync::guard::GuardScope::Watch,
             confirm: false,
+            named: None,
         },
     )
     .await

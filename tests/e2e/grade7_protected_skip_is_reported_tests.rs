@@ -154,7 +154,7 @@ fn uninstall_says_what_it_did_not_do() {
     std::fs::write(sandbox.cfg().join("profiles/Main"), "use dev\n").unwrap();
     std::fs::write(sandbox.cfg().join("active"), "Main\n").unwrap();
 
-    let (out, _) = sandbox.run(&["-y", "uninstall", "cargo:hello"]);
+    let (out, _) = sandbox.run(&["-y", "apply", "--delete", "cargo:hello"]);
 
     assert!(
         !out.trim().ends_with("already up to date"),

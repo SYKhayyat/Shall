@@ -1453,7 +1453,7 @@ not be wired to a setting about removals.
 
 | module | arrived via |
 |---|---|
-| `imperative` | `shall install` |
+| `imperative` | `shall apply` |
 | `hooks` | `apt install`, caught by the hook |
 | `adopted` | `shall adopt` |
 
@@ -2042,7 +2042,7 @@ and deleting a module line means *"stop installing this"*, which is not the same
 
 | how | scope |
 |---|---|
-| `shall uninstall --purge NAME` | this removal only |
+| `shall apply --delete --purge NAME` | this removal only |
 | `[remove] purge = true` in `preferences.toml` | this machine, every removal |
 
 Drift removal has only the second, and that is the constraint that shapes this: by the time a
@@ -2489,8 +2489,10 @@ real work and must stay.
 
 ## II.17 Deleted
 
-**Commands:** `prune` · `orphans` · `clone` · `migrate` (→ `adopt`) · `remove` (→
-`uninstall`) · `clean` (split in two: `remove-orphans` for what the machine no longer needs,
+**Commands:** `prune` · `orphans` · `clone` · `migrate` (→ `adopt`) · `remove`, `install`,
+`uninstall` (→ `apply`, and `apply --delete` for removal; ruled 2026-10-30 under `C7` — V.220) ·
+`apply <plan.json>` (→ `execute`, same ruling: the declaration verb owns the word and a frozen
+plan is the whole config, not one line) · `clean` (split in two: `remove-orphans` for what the machine no longer needs,
 `clean-cache` for the downloads it kept — V.36) · `status` · `doctor` · `unmanaged` · `absent` ·
 `conflicts` · `audit` (all six → `check <section>`, ruled 2026-07-24) · `undo` (→ `snapshot
 restore` for the filesystem, `rollback` for the manifests) · `shim` (→ the line
@@ -4315,26 +4317,37 @@ crate's public API, so a test that needed a private item needs that item to be v
 repository's rule is that a `pub fn` reached only from tests is not a defect to be policed but a
 cost to be paid, with the reason written down where the item is declared.
 
-## II.70 `install` and `uninstall` converge exactly what they name (`C7`, V.220)
+## II.70 `apply` makes exactly the declaration it names true (`C7`, V.220)
 
-*(Owner ruling, 2026-10-27 — `C7`. Supersedes the converge half of `Q34`/V.136.)*
+*(Owner ruling, 2026-10-27 — `C7`, extended 2026-10-30 to one verb. Supersedes the converge
+half of `Q34`/V.136, and `install`/`uninstall` as separate verbs.)*
 
-**`install X` writes X's line and applies exactly X** — the named specs and their `@requires`
-chains, and nothing else. **`uninstall X` removes X** — the declaration and the package — and
-nothing else. Neither reaps: a package the config no longer declares is `sync`'s finding, not
-theirs, and a narrowed run that scheduled removals would make `install` the mass-removal verb.
+**`apply X` writes X's line and applies exactly X** — the named specs and their `@requires`
+chains, or the one resource the line declares — and nothing else. **`apply X --delete`** removes
+the declaration and the thing it declared, and nothing else. Neither reaps: a package the config
+no longer declares is `sync`'s finding, not theirs, and a narrowed run that scheduled removals
+would make `apply` the mass-removal verb.
 
+- **One verb, two directions.** There is no `install` and no `uninstall`: they were `apply` with
+  the direction hidden in the word, and the direction is what `--delete` says. A second verb for
+  the same mechanism is two paths for one word.
+- **A line is a line.** `apt:jq`, `absent:apt:nano`, `dir:~/scratch`, `link:~/.vimrc @target=…`,
+  `service:nginx`, `firewall:22/tcp` — the grammar says which phase owns it, and that phase's own
+  applier does the work. `apply` is not a package command that grew a resource arm.
 - **S15's order stands.** The write comes first, so every refusal on the write lands before
-  anything is installed, and Q1's withdrawal still takes back a line that can never succeed.
-- **The whole-machine converge is `sync`'s, unchanged.** After `install`, the rest of the config
-  is pending — a first-class state `check drift` and `plan` already see — and `install` says so
-  in one line rather than converging it.
-- **Chaining is the shell's**: `shall install jq && shall sync`. The comma keeps its one meaning
-  (a backend fallback chain inside a spec) and nothing reuses it for verbs.
-- **The siblings narrow with the verb.** `retarget` moves one package — install under the new
-  backend, remove the old copy — and converges that move and nothing else. `uninstall --absent`
-  enforces the named absences and nothing else. `rollback` keeps its whole-machine converge: its
-  subject is the whole config, not a package.
+  anything is applied, and Q1's withdrawal still takes back a line that can never succeed.
+- **The whole-machine converge is `sync`'s, unchanged.** After `apply`, the rest of the config
+  is pending — a first-class state `check drift` and `plan` already see — and `apply` says so in
+  one line rather than converging it.
+- **Chaining is the shell's**: `shall apply apt:jq && shall sync`. The comma keeps its one
+  meaning (a backend fallback chain inside a spec) and nothing reuses it for verbs.
+- **The siblings narrow with the verb.** `retarget` moves one package — apply under the new
+  backend, remove the old copy — and converges that move and nothing else. `apply --absent`
+  enforces the one absence it wrote. `rollback` keeps its whole-machine converge: its subject is
+  the whole config, not a package, and the saved-plan executor is `execute`, not `apply`.
+- **`absent:` is a package declaration.** It keeps a *name* off against a manager that could put
+  it back; a resource line has no second source, so `--absent` on one is refused rather than
+  written as a line nothing reads.
 - **The guard applies as always.** The scoped changes still go through the sync engine under
   `GuardScope::Sync`; narrowing the plan narrows nothing the guard checks.
 - **V.136's apology machinery is deleted.** A failure inside a narrowed run is about what was

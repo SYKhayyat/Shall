@@ -9,7 +9,7 @@
 //! **H-2 — an unknown backend prefix costs 83 seconds and gets the wrong answer.** Measured on
 //! Windows, back to back, same config:
 //!
-//!     $ shall install nosuchbackend:foo -y
+//!     $ shall apply nosuchbackend:foo -y
 //!     Error: Configuration error: `nosuchbackend` is not a backend Shall uses
 //!       add `nosuchbackend` to your `priority` file, or check the spelling.
 //!     rc=1                                                             215 ms
@@ -60,7 +60,7 @@ fn info_refuses_an_unknown_backend_prefix_the_way_install_does() {
     let f = Fixture::new("grade2-info-typo");
 
     // Control: the verb that gets it right, so a red `info` cannot be blamed on the fixture.
-    let ((out, code), install_ms) = f.timed(&["install", "nosuchbackend:foo", "-y"]);
+    let ((out, code), install_ms) = f.timed(&["apply", "nosuchbackend:foo", "-y"]);
     assert_eq!(
         code, 1,
         "the control failed — `install` no longer refuses an unknown backend:\n{out}"

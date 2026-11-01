@@ -176,7 +176,7 @@ pub fn starter_order(available: &[String]) -> Vec<String> {
     // function exists to make.
     //
     // Measured on the slackware image: `init` wrote `appimage, cargo, gem, github, go, setting,
-    // slackpkg, …`, so a bare `shall install bc` resolved to `cargo:bc` — a crates.io library
+    // slackpkg, …`, so a bare `shall apply bc` resolved to `cargo:bc` — a crates.io library
     // with no binaries — while slackpkg had `bc-1.07.1-x86_64-5` sitting uninstalled in its own
     // package list. On a Slackware, Gentoo, Solus, Guix, MacPorts or BSD machine, every bare
     // name went to a language manager before the distro's own.

@@ -72,7 +72,7 @@ impl Landing {
     fn header(self) -> &'static str {
         match self {
             Landing::Imperative => {
-                "# Packages that arrived via `shall install`.\n\
+                "# Packages that arrived via `shall apply`.\n\
                  #\n\
                  # This is an ordinary module: read it, edit it, delete a line to uninstall.\n\
                  # Shall writes here so an imperative command still ends up as a file you own.\n\n"
@@ -230,7 +230,7 @@ impl<'a> Editor<'a> {
     /// **The grammar goes out of its way to accept a BOM because that is what Notepad writes,
     /// and then every rewrite converted the file to LF, which is the other thing Notepad
     /// writes.** `str::lines()` drops the carriage return along with the newline, so rejoining
-    /// with a bare newline turns a CRLF module into an LF one in full: one `shall install`
+    /// with a bare newline turns a CRLF module into an LF one in full: one `shall apply`
     /// becomes a whole-file diff, and every later `git blame` points at the run that touched
     /// the line endings instead of at the change. Two halves of one courtesy, one delivered.
     ///
@@ -516,7 +516,7 @@ impl<'a> Editor<'a> {
 
     /// Remove every declaration of `target_pkg` from `files`, returning what was removed.
     ///
-    /// The match is on the package, never on the raw prefix: `uninstall apt` must remove a
+    /// The match is on the package, never on the raw prefix: `apply --delete apt` must remove a
     /// package named `apt`, not every line whose backend is apt (S9).
     pub fn remove_from(&self, files: &[PathBuf], target_pkg: &str) -> Result<Vec<Edit>> {
         let wanted = self.match_key(target_pkg);
@@ -647,7 +647,7 @@ impl<'a> Editor<'a> {
     }
 }
 
-/// What `uninstall`/`disable` was asked to find.
+/// What `apply --delete`/`disable` was asked to find.
 ///
 /// A package is matched on backend and name, because a bare name means "under whatever
 /// backend has it". Everything else is matched whole: `service:nginx` names one thing.
@@ -718,7 +718,7 @@ fn landing_of(module: &ModuleName) -> Option<Landing> {
     }
 }
 
-/// Every module file the active profiles reach — what `uninstall` edits (II.8).
+/// Every module file the active profiles reach — what `apply --delete` edits (II.8).
 pub fn active_module_files(
     layout: &Layout,
     backends: &dyn BackendNames,
@@ -739,7 +739,7 @@ pub fn active_module_files(
         let Ok(r) = profiles.resolve(name, &asked, facts, &mut Vec::new(), &Vec::new()) else {
             continue;
         };
-        // A profile may hold package lines directly (II.4), so it is a file `uninstall`
+        // A profile may hold package lines directly (II.4), so it is a file `apply --delete`
         // must edit too.
         let pf = layout.profile_file(name);
         if !out.contains(&pf) {
@@ -768,7 +768,7 @@ pub fn active_module_files(
 
 /// Modules that declare `target_pkg` but that no active profile reaches (II.8).
 ///
-/// What `uninstall` warns about: *"jq is still declared in module `gaming`, which isn't
+/// What `apply --delete` warns about: *"jq is still declared in module `gaming`, which isn't
 /// active. It will come back if you activate Gaming."* Deleting the line you can see, while
 /// an identical line waits in a module you forgot about, is a package that returns from the
 /// dead the next time you switch profiles — and nothing said so.

@@ -173,7 +173,7 @@ impl<'a> StateResolver<'a> {
     /// `try_exists`, a whole-file read, a `serde_json` parse and a map built from every entry —
     /// and it was done afresh at each of 34 call sites, three of them inside loops: once per
     /// manifest line in `verbs::packages`, once per named backend in `verbs::declare`, once per
-    /// named manager in `verbs::plan`. On a machine with hundreds of pins, `shall install` over
+    /// named manager in `verbs::plan`. On a machine with hundreds of pins, `shall apply` over
     /// a multi-line input re-read and re-parsed the entire pin file for every line. Sharing the
     /// parsed map also shares the gate, which is the whole of R5.
     pub fn with_shared(
@@ -1372,22 +1372,34 @@ impl<'a> StateResolver<'a> {
     /// write. A bare name has no backend to check and passes; a `repo:` names one the same
     /// way a package does, and `collect` refuses it in the file, so it is refused here too.
     pub async fn validate_line(&self, line: &str) -> Result<()> {
+        self.parse_declaration(line).await.map(|_| ())
+    }
+
+    /// One declaration line, parsed and asked about, exactly as a file's line would be.
+    ///
+    /// `apply` has to know *what* the line is — a package to converge or a resource whose own
+    /// phase does the work — and asking the one grammar for that is the difference between one
+    /// reader and a second dialect. The priority check lives here rather than at each caller for
+    /// the same reason `validate_line` had it: a line naming a manager this host does not use is
+    /// refused before anything is written.
+    pub async fn parse_declaration(&self, line: &str) -> Result<Statement> {
         let facts = self.facts_for_host().await?;
         let priority = self.priority(&facts).await?;
         let known = self.vocab(&priority);
 
         let origin = Origin::argument();
-        let named = match statement::parse(&origin, line.trim(), &known)? {
-            Statement::Package(d) | Statement::Absent(d) => d.backend,
-            Statement::Repo { backend, .. } => Some(backend),
+        let stmt = statement::parse(&origin, line.trim(), &known)?;
+        let named = match &stmt {
+            Statement::Package(d) | Statement::Absent(d) => d.backend.clone(),
+            Statement::Repo { backend, .. } => Some(backend.clone()),
             _ => None,
         };
-        let Some(b) = named else { return Ok(()) };
+        let Some(b) = named else { return Ok(stmt) };
         let b = self.config.aliases.get(&b).cloned().unwrap_or(b);
         if !priority.allows(&b) {
             return Err(Error::from(priority.reject(&b, &origin)));
         }
-        Ok(())
+        Ok(stmt)
     }
 
     /// The `(backend, name)` a query string denotes when it is a typed resource statement whose
@@ -1540,7 +1552,7 @@ impl<'a> StateResolver<'a> {
                     .probe_bare_names(&stmts, &priority, Coverage::OneLine)
                     .await?;
                 // The same rename `collect` makes, on the path a typed command takes: one
-                // `shall install jq` on Portage plans `emerge:app-misc/jq`, because that is
+                // `shall apply jq` on Portage plans `emerge:app-misc/jq`, because that is
                 // what has to reach emerge's argv and what its listing reports back (`J8`).
                 match answers.get(decl.selector.as_str()).cloned() {
                     Some(answer) => {

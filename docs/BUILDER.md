@@ -108,7 +108,7 @@ These break `sync` itself. Do them first.
 
 ### B1 · `E1` — a permanently-failed install wedges the config
 
-**Symptom.** `shall install scoop:<typo>` fails, the line is written to
+**Symptom.** `shall apply scoop:<typo>` fails, the line is written to
 `modules/imperative.txt` anyway, and every later command that parses the model then fails. The
 only escape is hand-editing a file nothing names.
 
@@ -138,10 +138,10 @@ marks the failure permanent; assert the manifest is unchanged **and** that a sec
 parses the model. Then the transient case: assert the line *is* kept.
 
 **Siblings.** `shall add`, `adopt`, `activate` also write manifest lines — `READINESS` §3.1 clears
-all three with reasons; re-verify rather than trust. Check `handle_uninstall` still removes
+all three with reasons; re-verify rather than trust. Check `apply … --delete` still removes
 correctly.
 
-**Acceptance.** From a clean config: `shall install scoop:definitely-not-real-xyz123 -y` then
+**Acceptance.** From a clean config: `shall apply scoop:definitely-not-real-xyz123 -y` then
 `shall check` — `check` must succeed.
 
 ### B2 · `E6` — `go`'s `list` is blind to a package that is installed
@@ -165,7 +165,7 @@ assert the installed module is reported under the name `sync` will look for.
 **Siblings.** Every backend whose install name ≠ binary name: `go`, `github` (`owner/repo`),
 `pub`, `krew`, `cargo` (crate vs bin). `cargo` passes today — use it as the reference.
 
-**Acceptance.** `shall install go:golang.org/x/example/hello -y && shall list -b go | grep hello`.
+**Acceptance.** `shall apply go:golang.org/x/example/hello -y && shall list -b go | grep hello`.
 
 ### B3 · `E6b` — `nimble` install produces no binary and `list` cannot see it
 
@@ -189,7 +189,7 @@ naming the directory and the shell line to add. One warning, not a refusal.
 **Siblings.** Every per-user-bin ecosystem: `pub`, `nimble`, `go`, `cargo`, `gem`, `luarocks`,
 `mix`, `stack`, `krew`, `pipx`, `composer`. Implement once on the shared path, not per backend.
 
-**Acceptance.** With `~/.pub-cache/bin` off `PATH`, `shall install pub:sass` warns by name.
+**Acceptance.** With `~/.pub-cache/bin` off `PATH`, `shall apply pub:sass` warns by name.
 
 ---
 
@@ -274,7 +274,7 @@ produce one real failure outside the existing markers and assert Shall reports i
 message: `` `scoop` failed (exit 0) `` is incoherent — when the verdict comes from output rather
 than status, say so.
 
-**Acceptance.** `shall uninstall scoop:<not-installed>` reports failure, not success.
+**Acceptance.** `shall apply scoop:<not-installed> --delete` reports failure, not success.
 
 ### B11 · `E10` — `psresource` reports healthy and cannot run
 
@@ -495,8 +495,8 @@ Tiers 1–5 reach **A**. A+ needs test *kinds* this repo does not have. Specifie
   `--dry-run` that performed the removal.
 - **Guard enumerated from the code**, not from a list, with a refusal test per removal path —
   recovery paths especially, since nobody is watching when they run.
-- **Property and model-based tests**: `sync`∘`sync` = `sync`; `install`∘`uninstall` = identity on
-  the manifest; `bundle`∘`restore` = identity; a reference model of desired state compared against
+- **Property and model-based tests**: `sync`∘`sync` = `sync`; `apply`∘`apply --delete` = identity
+  on the manifest; `bundle`∘`restore` = identity; a reference model of desired state compared against
   `eval` after random command sequences.
 - **Grammar fuzzing** — nothing panics, everything is a named refusal.
 - **Latency budgets** enforced per command class (B14).
@@ -577,7 +577,7 @@ a protected name.
 **Symptom.**
 
 ```
-$ shall install 'web:http://example.com/tool.tar.gz' -y
+$ shall apply 'web:http://example.com/tool.tar.gz' -y
 Error: Validation error: refusing to download … over plain HTTP
 EXIT=1                                    # readme.md:708 says 3 means refused
 $ shall reset </dev/null
@@ -700,7 +700,7 @@ helm 4's (with it); assert Shall builds a different argv against each.
 
 **Siblings.** Every conditional flag Shall emits from a capability table, not just `VERIFIES_ITSELF`.
 
-**Acceptance.** `shall install 'helm:secrets@url=…,unverified'` succeeds in the `tools` container.
+**Acceptance.** `shall apply 'helm:secrets@url=…,unverified'` succeeds in the `tools` container.
 
 ### B25 · `G-9` — four backends fail a real install, found the first time anyone ran them
 

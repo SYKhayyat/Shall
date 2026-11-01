@@ -394,7 +394,7 @@ pub fn saved_plan_to_changes(
     changes
 }
 
-pub async fn handle_apply(app: &App, plan_path: &str, yes: bool) -> Result<()> {
+pub async fn handle_execute(app: &App, plan_path: &str, yes: bool) -> Result<()> {
     let raw = tokio::fs::read_to_string(plan_path)
         .await
         .with_context(|| format!("reading plan file {}", plan_path))?;
@@ -405,7 +405,7 @@ pub async fn handle_apply(app: &App, plan_path: &str, yes: bool) -> Result<()> {
         anyhow::bail!(
             "this plan was written in schema {} and this shall speaks schema {}. It is not \
              read, because a plan that cannot say what it would write is not a plan this \
-             command may apply. Re-capture it: `shall plan --out {}`, then `shall apply {}`.",
+             command may apply. Re-capture it: `shall plan --out {}`, then `shall execute {}`.",
             plan.schema,
             crate::app::sync::PLAN_SCHEMA,
             plan_path,

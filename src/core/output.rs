@@ -3,7 +3,8 @@
 //! `--json` reached the verbs as a bare `bool` threaded through twenty signatures, and three of
 //! those signatures took more than one bool: `handle_sync(app, locked, upgrade, json)` is three
 //! positional booleans in a row, where transposing any two compiles and changes what the command
-//! does. `handle_install(app, packages, json, temp, into)` is the same shape one argument along.
+//! does. `handle_install(app, packages, json, temp, into)` was the same shape one argument along,
+//! and its five arguments are one `ApplyArgs` now.
 //!
 //! The second cost is that every site re-derived *human* by negating *machine*. `!json` appears
 //! wherever a sentence is printed, which reads as "not machine-readable" rather than "there is a

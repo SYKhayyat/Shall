@@ -1,7 +1,7 @@
 //! GRADER round 3, 2026-07-29 — RED. E1's family. A name a backend can never install is taken
 //! back out of the manifest for two backends and left in for three, and the three wedge `sync`.
 //!
-//! E1 was the headline blocker of `READINESS-2026-07-27.md`: `shall install <typo>` left a line
+//! E1 was the headline blocker of `READINESS-2026-07-27.md`: `shall apply <typo>` left a line
 //! nothing could satisfy in `modules/imperative.txt`, and every later command failed on it.
 //! Round 1 closed it and I confirmed the closure on scoop. It was fixed at the instance.
 //!
@@ -15,7 +15,7 @@
 //! | `github:shall-zzz-nope/nope`       |  1   | no                   |
 //! | `luarocks:luafilesystem` (no Lua 5.5 rock here) | 1 | no        |
 //!
-//! `withdraw_what_can_never_succeed` (`src/verbs/packages.rs`) recognises exactly two
+//! `withdraw_what_can_never_succeed` (`src/verbs/apply.rs`) recognises exactly two
 //! shapes: `Error::Unresolvable`, and `Error::CommandFailed { retry: Permanent }` **whose
 //! message quotes the package name**. github raises neither — its own words are `Package
 //! 'shall-zzz-nope/nope: the repo has no published release' was not found in the target
@@ -34,7 +34,7 @@
 //!     WARN `github:shall-zzz-nope/nope` is still declared in …/imperative.txt, so `sync` will
 //!          try it again.
 //!
-//! `packages.rs` says, of a kept line: *"it must not be described as a transient failure.
+//! `apply.rs` says, of a kept line: *"it must not be described as a transient failure.
 //! '`sync` will try it again' over a … refusal promises a retry that fails identically forever,
 //! which is the sentence…"*. The rule is written down, and three of the five backends sampled
 //! break it.
@@ -64,7 +64,7 @@ fn probe(fixture_name: &str, backend: &str, decl: &str) -> Option<(String, Strin
     if !f.backend_is_ready(backend) {
         return None;
     }
-    let (out, code) = f.run(&["install", decl, "-y"]);
+    let (out, code) = f.run(&["apply", decl, "-y"]);
     Some((out, f.imperative(), code))
 }
 
@@ -175,7 +175,7 @@ fn a_name_no_backend_can_install_is_never_left_in_the_manifest() {
 /// the product rather than the weather.
 ///
 /// The classification half of the same invariant is enumerated over every reason a line can
-/// stay in `src/verbs/packages.rs`'s `only_an_unclassified_failure_may_suggest_that_a_retry_
+/// stay in `src/verbs/apply.rs`'s `only_an_unclassified_failure_may_suggest_that_a_retry_
 /// could_work`, and that enumeration was mutation-checked: swapping one branch's sentence for
 /// the forbidden one turns it red.
 #[test]
@@ -192,7 +192,7 @@ fn a_kept_line_is_not_described_as_something_sync_will_retry() {
 
     for (label, decl) in cases {
         let f = Fixture::new(&format!("grade2-wedge-wording-{}", label.replace(' ', "-")));
-        let (out, code) = f.run(&["install", decl, "-y"]);
+        let (out, code) = f.run(&["apply", decl, "-y"]);
         assert_ne!(code, 0, "`install {decl}` ({label}) succeeded:\n{out}");
 
         // Control: the line really is kept, so there is something to describe. Without this a
@@ -208,7 +208,7 @@ fn a_kept_line_is_not_described_as_something_sync_will_retry() {
             !out.contains("`sync` will try it again"),
             "`{decl}` ({label}) is refused for what the line says, so re-running `sync` \
              unchanged refuses identically — and Shall tells the user `sync` will try it \
-             again. `src/verbs/packages.rs` writes the rule itself: a kept line must not be \
+             again. `src/verbs/apply.rs` writes the rule itself: a kept line must not be \
              described as a transient failure, because that promises a retry which fails \
              identically forever.\n{out}"
         );

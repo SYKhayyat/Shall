@@ -24,7 +24,7 @@ use tracing_subscriber::EnvFilter;
 // nothing to do with history, so it became `history`, `ephemeral`, `inventory` and `portable`,
 // and `adopt` went to `declare` where the other declaration-writing verbs are.
 use shall::verbs::{
-    check::*, cleanup::*, declare::*, ephemeral::*, history::*, inventory::*, packages::*, plan::*,
+    apply::*, check::*, cleanup::*, declare::*, ephemeral::*, history::*, inventory::*, plan::*,
     portable::*, setup::*, sync::*, upgrade::*,
 };
 
@@ -60,7 +60,7 @@ async fn main() -> Result<()> {
     // to be running before the shim hijack a few lines down — and reading it after clap is
     // exactly why `--verbose` used to do nothing at all.
     // A default run prints neither a timestamp nor a module path. `WARN
-    // shall::verbs::packages` and an RFC3339 stamp are addressed to whoever is debugging
+    // shall::verbs::apply` and an RFC3339 stamp are addressed to whoever is debugging
     // Shall, and the person reading them typed a package name — the sentence is for them, the
     // provenance is not. Both come back at `-v`, where somebody has asked for the internals.
     let argv: Vec<String> = std::env::args().collect();
@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
     let filter = || EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level));
     let verbose = level.contains("debug") || level.contains("trace");
     // Asked, rather than left to `tracing-subscriber`'s default, which is colour-always. Without
-    // this line `shall install nosuchpkg 2>&1 | grep` came back carrying escape codes and a run
+    // this line `shall apply nosuchpkg 2>&1 | grep` came back carrying escape codes and a run
     // redirected into a log file wrote them to disk. The question is about *stderr*, which is
     // where this writes — `utils::style::color_enabled` answers it for stdout, and a pipe on
     // stdout with a terminal on stderr is the ordinary arrangement, not an odd one.
@@ -341,8 +341,7 @@ fn print_failure_class(e: &anyhow::Error) {
 fn refuse_json_without_dry_run(cli: &Cli) -> Result<()> {
     let verb = match &cli.command {
         Commands::Sync { json: true, .. } => "sync",
-        Commands::Install { json: true, .. } => "install",
-        Commands::Uninstall { json: true, .. } => "uninstall",
+        Commands::Apply { json: true, .. } => "apply",
         _ => return Ok(()),
     };
     if cli.dry_run {
@@ -421,34 +420,28 @@ pub(crate) async fn dispatch(app: &App, cli: &Cli) -> Result<()> {
             )
             .await
         }
-        Commands::Install {
-            packages,
-            json,
-            temp,
-            into,
-        } => {
-            handle_install(
-                app,
-                packages,
-                Output::from_json_flag(*json),
-                temp.as_deref(),
-                into.as_deref(),
-            )
-            .await
-        }
-        Commands::Uninstall {
-            packages,
-            json,
-            temp,
+        Commands::Apply {
+            declarations,
+            delete,
             absent,
             purge: _,
+            temp,
+            into,
+            json,
         } => {
-            handle_uninstall(
+            // `Option<Option<String>>` collapses to one string here and stays distinguishable:
+            // `Some("")` is the bare `--temp` whose restore is a `shall shell` session's.
+            let temp = temp.clone().map(|t| t.unwrap_or_default());
+            handle_apply(
                 app,
-                packages,
-                Output::from_json_flag(*json),
-                temp.as_ref(),
-                *absent,
+                ApplyArgs {
+                    declarations,
+                    delete: *delete,
+                    absent: *absent,
+                    into: into.as_deref(),
+                    temp: temp.as_deref(),
+                    out: Output::from_json_flag(*json),
+                },
             )
             .await
         }
@@ -562,7 +555,7 @@ pub(crate) async fn dispatch(app: &App, cli: &Cli) -> Result<()> {
             .await
         }
         Commands::Plan { out } => handle_plan(app, out).await,
-        Commands::Apply { plan, yes } => handle_apply(app, plan, *yes).await,
+        Commands::Execute { plan, yes } => handle_execute(app, plan, *yes).await,
         Commands::Update => handle_update(&app.managers().await).await,
         Commands::Reset { force } => handle_reset(&app.config, &app.state, *force).await,
         Commands::Check { section, json } => {
@@ -1036,7 +1029,7 @@ pub(crate) async fn load_and_merge_config(cli: &Cli) -> Result<shall::config::Co
     }
     // `uninstall --purge` is a `[remove] purge` for this run only. Read here, where CLI flags
     // become config, because `config` is shared read-only by the time a command runs.
-    if let Commands::Uninstall { purge: true, .. } = cli.command {
+    if let Commands::Apply { purge: true, .. } = cli.command {
         config.purge_this_run = true;
     }
     // `--keep-going` is per-run by construction: there is no file key to read it from.

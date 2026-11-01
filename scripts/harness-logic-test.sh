@@ -569,9 +569,9 @@ $_body"
         classify_install be spec 1 "$_log" >/dev/null 2>&1
         [ "$CLASS" = defect ] && [ "$FAILC" -eq 1 ] || { echo "  BAD   a failure with no class line was not scored a defect (got '$CLASS')"; _bad=1; }
 
-        # **The verdict names the declaration that actually failed.** `shall install` converges the
-        # whole configuration, so a DIFFERENT line — one whose package name exists nowhere — is
-        # what fails the command, and Shall says so in its own output:
+        # **The verdict names the declaration that actually failed.** Under the pre-`C7` shape the
+        # install converged the whole configuration, so a DIFFERENT line — one whose package name
+        # exists nowhere — is what failed the command, and Shall says so in its own output:
         #     while applying `slackpkg:clucene` (/tmp/…/adopted.txt:107).
         # The harness titled its FAIL after the subject it happened to be driving, so the slackware
         # nightly blamed `go` for `slackpkg:clucene` for a run (#113). The class of the verdict

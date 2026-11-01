@@ -60,7 +60,7 @@ fn a_failure_called_transient_can_actually_differ_on_a_second_attempt() {
     let (out, code) = shall(&["init"], &dir);
     assert_eq!(code, 0, "the fixture's own `init` failed:\n{out}");
 
-    let (first, rc1) = shall(&["install", "luarocks:luafilesystem", "-y"], &dir);
+    let (first, rc1) = shall(&["apply", "luarocks:luafilesystem", "-y"], &dir);
     if rc1 == 0 {
         eprintln!("luarocks works on this host; there is no failure to classify");
         return;
@@ -93,7 +93,7 @@ fn a_failure_called_transient_can_actually_differ_on_a_second_attempt() {
         return;
     }
 
-    let (second, rc2) = shall(&["install", "luarocks:luafilesystem", "-y"], &dir);
+    let (second, rc2) = shall(&["apply", "luarocks:luafilesystem", "-y"], &dir);
 
     assert!(
         rc2 == 0,

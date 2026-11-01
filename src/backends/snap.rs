@@ -338,7 +338,7 @@ impl Queryable for SnapQueryable {
         // **`snap info` answers from the store.** It prints publisher, summary and channels for
         // any snap that exists, installed or not, and the `installed:` line is the only part of
         // that report that is about this machine. Returning `Some` for the whole report told the
-        // planner every declared snap was already present, so `shall install snap:x` reported
+        // planner every declared snap was already present, so `shall apply snap:x` reported
         // success and installed nothing. `snap find` is the command that answers *does this
         // exist*, and `Searchable` is where it is asked.
         let Some(state) = installed_state(&output) else {

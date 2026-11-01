@@ -1,7 +1,7 @@
 pub use shall::app::sync::resolver::StateResolver;
 pub use shall::core::{exit_policy, Error, Retryability};
 pub use shall::model::Edit;
-pub use shall::verbs::packages::*;
+pub use shall::verbs::apply::*;
 pub use shall::verbs::prelude::*;
 pub use shall::verbs::sync::{handle_sync, SyncMode};
 

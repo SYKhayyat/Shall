@@ -269,7 +269,7 @@ fn list_operand(rest: &str, facts: &HostFacts) -> Result<Vec<Value>> {
 /// stripped from the name. `is_known_backend` decides whether a `prefix:` is a backend
 /// (so package names that legitimately contain a colon aren't misread as `backend:name`).
 ///
-/// This is the parsing `remove` must use to match how `install` reads its arguments —
+/// This is the parsing `remove` must use to match how `apply` reads its arguments —
 /// passing the whole `backend:name` string to a backend's `info()`/`remove()` (which
 /// expect the *bare* name) silently makes `remove backend:pkg` a no-op.
 ///

@@ -1,13 +1,13 @@
 //! One module per verb family. `main.rs` is the entry point and the argv it is
 //! handed; everything a subcommand actually does lives here.
 
+pub mod apply;
 pub mod check;
 pub mod cleanup;
 pub mod declare;
 pub mod ephemeral;
 pub mod history;
 pub mod inventory;
-pub mod packages;
 pub mod plan;
 pub mod portable;
 pub mod setup;

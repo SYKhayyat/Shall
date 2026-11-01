@@ -52,6 +52,17 @@ impl DesiredState {
         self.present().count()
     }
 
+    /// Every line this configuration asks the machine to hold — present packages, resources,
+    /// and the dated lines that have not lapsed.
+    ///
+    /// **Declarations, not packages.** A narrowed `apply` tells the user how much of the config
+    /// is still pending (`II.70`), and a config of `dir:` and `link:` lines plus one package has
+    /// three declarations; counting only the package map said one, and the pending line never
+    /// printed for a resource run at all.
+    pub fn total_declarations(&self) -> usize {
+        self.total_present() + self.extras.len() + self.lapsed.len()
+    }
+
     /// Each `re:` pattern in force and how many packages it expanded to (II.15).
     ///
     /// A pattern is the one line whose meaning you cannot read off the line — `apt:re:^lib`
@@ -1238,7 +1249,7 @@ pub struct Provenance<'a> {
 }
 
 /// Build the seam's `PackageSpec` from one declaration. The only place this conversion
-/// happens: an imperative `shall install jq` and a line in a module must produce the same
+/// happens: an imperative `shall apply jq` and a line in a module must produce the same
 /// spec, or the two paths drift (P4).
 pub fn to_spec(
     backend: &str,

@@ -3,6 +3,8 @@ mod a_reader_writes_nothing_tests;
 mod a_rehearsal_asks_the_guard_the_act_asks_tests;
 mod a_skip_does_not_erase_the_rest_of_the_drift_tests;
 mod a_skipped_install_is_not_an_undeclared_leftover_tests;
+mod an_apply_delete_removes_what_it_names_and_nothing_else_tests;
+mod an_apply_makes_what_it_names_true_and_nothing_else_tests;
 mod an_option_after_a_value_is_not_swallowed_tests;
 mod ansi_is_for_terminals_tests;
 mod byte_order_mark_tests;

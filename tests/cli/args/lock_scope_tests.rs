@@ -15,7 +15,7 @@
 //! | `run`   | the length of an arbitrary user command |
 //!
 //! `watch` is the sharp one. It is the GitOps daemon and the documented deployment is to leave
-//! it running — so `shall install`, `shall sync` and the `hook-reconcile` a hand-typed `apt
+//! it running — so `shall apply`, `shall sync` and the `hook-reconcile` a hand-typed `apt
 //! install` fires all waited 120 seconds and then failed, for as long as the daemon was up. A
 //! user who followed the documentation disabled their own CLI.
 //!

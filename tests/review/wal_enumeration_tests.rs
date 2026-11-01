@@ -109,7 +109,7 @@ const LEDGER: &[Accounted] = &[
     // landing rather than the scan breaking. The journalling is counted under
     // `core/transaction.rs` now, with everything else the engine carries out.
     Accounted {
-        file: "src/verbs/packages.rs",
+        file: "src/verbs/apply.rs",
         calls: 1,
         recovery: Recovery::Journalled,
         how: "journalled() around the suspend removal",

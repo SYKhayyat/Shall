@@ -1,6 +1,6 @@
 use super::*;
 
-/// The bug: `shall uninstall choco:bat` sat 76 minutes on a `Checkpoint-Computer` that had
+/// The bug: `shall apply --delete choco:bat` sat 76 minutes on a `Checkpoint-Computer` that had
 /// already written its restore point, because nothing outside the DAG bounded a child at
 /// all. Two earlier hangs were killed by hand and recorded as undiagnosed.
 #[tokio::test]

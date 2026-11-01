@@ -954,7 +954,7 @@ impl SyncEngine {
     ///
     /// Measured on the `void` leg, 2026-08-11, killing a sync once the log recorded its first
     /// `Completed`: 3 of 3 canaries on disk, registry empty, `heal` recovered only the one
-    /// operation still open, and `shall -y uninstall xbps:pv` then answered `already up to
+    /// operation still open, and `shall -y apply --delete xbps:pv` then answered `already up to
     /// date` at exit 0 over an installed `pv`. Killing the same sync a tenth of a second later
     /// — after the final write — left all three removable, which is the whole of the
     /// intermittency.
@@ -1492,7 +1492,7 @@ impl SyncEngine {
                         // package `heal` put back was on the machine and under nobody's
                         // management. Measured, with a control:
                         //
-                        //   no crash:  shall -y uninstall apt:pv   -> remove 1, gone
+                        //   no crash:  shall -y apply --delete apt:pv   -> remove 1, gone
                         //   SIGKILL + heal, then the same command  -> "already up to date", still there
                         //   shall why apt:dos2unix -> 'apt:dos2unix' is not under Shall management.
                         //

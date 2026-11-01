@@ -6,7 +6,7 @@ use super::*;
 #[test]
 fn why_names_each_writer_by_the_string_that_writer_stores() {
     // `app/shell/mod.rs`, `app/leases.rs`, `app/snapshot_restore.rs`.
-    assert_eq!(provenance("imperative"), "installed by `shall install`");
+    assert_eq!(provenance("imperative"), "installed by `shall apply`");
     // `app/adopt.rs`.
     assert_eq!(provenance("adopt"), "adopted from this machine");
     // `verbs/declare.rs` — `hook:<manager>`, one arm per manager it can be. Matching a

@@ -153,7 +153,7 @@ impl Inventory<'_> {
         // CLAUDE.md names, and C13 records six parsers that had it.
         let resolver = self.resolver().await;
         // Does the string name a manager, and is it one? Asked first, and refused with the
-        // sentence `install` and `list --backend` already use — from the same function, so
+        // sentence `apply` and `list --backend` already use — from the same function, so
         // there is one answer to one question. `info nosuchbackend:foo` used to reach the
         // fan-out below and ask every manager on the machine for a package literally named
         // `nosuchbackend:foo`: the wrong answer ("not installed" — the *manager* does not

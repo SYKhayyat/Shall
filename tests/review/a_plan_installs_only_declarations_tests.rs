@@ -46,7 +46,7 @@ const REPORTING: &[(&str, &str)] = &[
          installs nothing.",
     ),
     (
-        "src/verbs/packages.rs",
+        "src/verbs/apply.rs",
         "`shall info <name>` — prints a `Dependencies:` line. Reads them; installs nothing.",
     ),
 ];

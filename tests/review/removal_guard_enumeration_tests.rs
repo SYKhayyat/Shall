@@ -98,10 +98,12 @@ const LEDGER: &[Accounted] = &[
                      imperative twin of the `repo:` teardown",
     },
     Accounted {
-        file: "src/verbs/packages.rs",
-        guarded_by: "guard::enforce in `uninstall`, GuardScope::Remove — and the token it \
-                     returns is what `inst.remove` takes, so the comment above that call \
-                     is now the compiler's to keep",
+        file: "src/verbs/apply.rs",
+        guarded_by: "guard::enforce in `delete_packages` and `suspend_for_session`, \
+                     GuardScope::Remove — and the token it returns is what `inst.remove` \
+                     takes, so the comment above that call is now the compiler's to keep. \
+                     A narrowed plan's removals go through the engine's own guard \
+                     (GuardScope::Sync), which is the same function",
     },
     // The three new entries below are the `Reaped` change itself, and none of them is a
     // removal *site*: they are where the type is declared and where it travels.

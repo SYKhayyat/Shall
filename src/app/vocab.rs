@@ -8,7 +8,7 @@ use std::collections::HashSet;
 ///
 /// One vocabulary, owned rather than borrowed, because every path that reads a line must
 /// agree with every path that writes one: if `apt:jq` parses as a backend when resolving and
-/// as a package name when editing, `uninstall` silently fails to find the line `install`
+/// as a package name when editing, `apply --delete` silently fails to find the line `apply`
 /// wrote.
 ///
 /// Three sources feed it. The registry knows what is compiled in and what the onboarder

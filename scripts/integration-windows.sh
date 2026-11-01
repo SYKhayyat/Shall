@@ -461,9 +461,10 @@ stays_ok() { # stays_ok "desc" <tag> cmd... — cmd must SUCCEED now, having bee
 # $5 runs between the two attempts, for a caller that must clear a declaration the failed
 # attempt left behind. Pass `:` when there is nothing to undo.
 #
-# The install that failed may not be the install that was asked for. `shall install go:…`
-# converges the whole configuration, so a *different* declaration — one whose package name
-# exists nowhere — fails the command, and Shall already says which:
+# The install that failed may not be the install that was asked for. That was the shape before
+# `C7`: an install converged the whole configuration, so a *different* declaration — one whose
+# package name exists nowhere — failed the command, and Shall already says which. The classifier
+# stays until a native run confirms a narrowed `apply` never names another line:
 #     while applying `slackpkg:clucene` (/tmp/shall-it-config/modules/adopted.txt:107).
 # The verdict must name that line, not the subject this leg happened to be driving: the
 # slackware nightly spent runs blaming `go` for a `slackpkg:clucene` name that matches
@@ -512,7 +513,7 @@ classify_install() { # be  install-spec  rc  logfile  [cleanup]
     fi
     echo "        (first attempt failed, class=$_ci_class; retrying once)"
     $_ci_clear
-    lx -y install "$_ci_spec" >/tmp/itw-retry.out 2>&1
+    lx -y apply "$_ci_spec" >/tmp/itw-retry.out 2>&1
     _ci_rc2=$?
     if [ "$_ci_rc2" -eq 0 ]; then
         LIFELOG=/tmp/itw-retry.out
@@ -829,7 +830,7 @@ ok "plan --dry-run" lx --dry-run plan
 # --- 3. Dry-run safety -----------------------------------------------------
 echo "[3] Dry-run safety"
 ok "sync --dry-run" lx --dry-run sync
-ok "install --dry-run shows a plan" lx --dry-run install "$BACKEND:$PKG"
+ok "install --dry-run shows a plan" lx --dry-run apply "$BACKEND:$PKG"
 
 # --- 4. The guard's ratio rule, on an UNADOPTED machine -------------------
 # IV.1: the only state in which this tests anything. After `adopt` the machine is
@@ -862,7 +863,7 @@ on_path "$PKG" && PKG_WAS_HERE=1
 PKG_PREPATH=""
 [ -z "$PKG_WAS_HERE" ] && PKG_PREPATH="$(path_of "$PKG")"
 
-lx -y install "$BACKEND:$PKG" >/tmp/itw-life0.out 2>&1
+lx -y apply "$BACKEND:$PKG" >/tmp/itw-life0.out 2>&1
 IRC=$?
 CLASS=installed
 [ "$IRC" -ne 0 ] && classify_install "$BACKEND" "$BACKEND:$PKG" "$IRC" /tmp/itw-life0.out
@@ -899,8 +900,8 @@ if [ "$CLASS" = installed ] || [ "$CLASS" = transient ]; then
         stays_ok "$PKG is still installed after unmanage" pkg-binary \
             binary_present "$BACKEND" "$PKG" /tmp/itw-life0.out
     fi
-    ok "declaring it again takes it back" lx -y install "$BACKEND:$PKG"
-    ok "uninstall $BACKEND:$PKG" lx -y uninstall "$BACKEND:$PKG"
+    ok "declaring it again takes it back" lx -y apply "$BACKEND:$PKG"
+    ok "uninstall $BACKEND:$PKG" lx -y apply "$BACKEND:$PKG" --delete
     # S36 again, on the package the run did not install. When the host already owned
     # $PKG, absence is not this harness's to demand: the manager may legitimately keep a
     # formula another one depends on, and a second copy may live outside its prefix. The
@@ -917,7 +918,7 @@ if [ "$CLASS" = installed ] || [ "$CLASS" = transient ]; then
             binary_present "$BACKEND" "$PKG" /tmp/itw-life0.out
     fi
     if [ -n "$PKG_WAS_HERE" ]; then
-        if lx -y install "$BACKEND:$PKG" >/dev/null 2>&1; then
+        if lx -y apply "$BACKEND:$PKG" >/dev/null 2>&1; then
             soft "$PKG was on this host before the run — put back, so the sweep leaves nothing missing"
         else
             soft "$PKG was on this host before the run and could NOT be put back — reinstall it by hand"
@@ -932,7 +933,7 @@ fi
 
 # --- 6. Negative path ------------------------------------------------------
 echo "[6] Negative path"
-nok "installing a nonexistent package fails" lx -y install "$BACKEND:shall-no-such-pkg-zzz"
+nok "installing a nonexistent package fails" lx -y apply "$BACKEND:shall-no-such-pkg-zzz"
 answers "a failed install leaves the model parseable" lx check
 # This asserts the PRODUCT withdrew the line. It used to `grep -v` the name out and then
 # assert it was gone, which tested its own `grep -v` and printed PASS on every run while the
@@ -966,7 +967,7 @@ ok "adopt recorded at least one package" test "$ADOPTED" -ge 1
 echo "[8] The guard"
 # `lx` is a shell function, so `sh -c "lx …"` ran nothing at all and this asserted
 # only that the binary still exists — which it would whatever Shall did.
-$TO "$SHALL" -y uninstall shall >/dev/null 2>&1 || true
+$TO "$SHALL" -y apply shall --delete >/dev/null 2>&1 || true
 ok "Shall survives an uninstall attempt" on_path "$SHALL"
 # **This establishes its premise instead of assuming the host's package census supplies
 # one.** It used to assert only that `purge-undeclared` refuses after adopt, and what did
@@ -1050,16 +1051,16 @@ fi
 echo "[11] Chains and the per-host lock"
 LOCKFILE=$(ls "$SHALL_CONFIG_DIR"/locks/bare.*.toml 2>/dev/null | head -1)
 echo "        lock file: ${LOCKFILE:-<none>}"
-ok  "a chain is legal"           lx --dry-run install "$BACKEND,cargo:$PKG"
-ok  "a chain may end in list"    lx --dry-run install "$BACKEND,list:$PKG"
-ok  "list alone is legal"        lx --dry-run install "list:$PKG"
-nok_saying "an empty slot is refused" "has an empty backend"   lx --dry-run install "$BACKEND,,cargo:$PKG"
-nok_saying "an unknown link is refused" "is not a backend Shall uses" lx --dry-run install "$BACKEND,nope:$PKG"
-nok_saying "list must come last" "must come last"        lx --dry-run install "list,$BACKEND:$PKG"
-nok_saying "a name repeated is refused" "is named twice" lx --dry-run install "$BACKEND,$BACKEND:$PKG"
-nok_saying "a pattern cannot span one" "must match in exactly one backend"  lx --dry-run install "$BACKEND,cargo:re:^$PKG"
+ok  "a chain is legal"           lx --dry-run apply "$BACKEND,cargo:$PKG"
+ok  "a chain may end in list"    lx --dry-run apply "$BACKEND,list:$PKG"
+ok  "list alone is legal"        lx --dry-run apply "list:$PKG"
+nok_saying "an empty slot is refused" "has an empty backend"   lx --dry-run apply "$BACKEND,,cargo:$PKG"
+nok_saying "an unknown link is refused" "is not a backend Shall uses" lx --dry-run apply "$BACKEND,nope:$PKG"
+nok_saying "list must come last" "must come last"        lx --dry-run apply "list,$BACKEND:$PKG"
+nok_saying "a name repeated is refused" "is named twice" lx --dry-run apply "$BACKEND,$BACKEND:$PKG"
+nok_saying "a pattern cannot span one" "must match in exactly one backend"  lx --dry-run apply "$BACKEND,cargo:re:^$PKG"
 # A manager no Windows host has: a pin to it must say so rather than no-op.
-nok "a pin to a manager this host lacks is not silent" lx -y install "apt:$PKG"
+nok "a pin to a manager this host lacks is not silent" lx -y apply "apt:$PKG"
 ok  "unlock backends --list runs"  lx unlock backends --list
 ok  "unlocking an unfrozen name is not an error" lx unlock backends shall-never-frozen-zzz
 # Z2: the scope is not optional in the sense that matters — a bare name is not one.
@@ -1463,7 +1464,7 @@ READY_LIST=$(lx check health 2>/dev/null | grep '^\[READY\]' | awk '{print $2}' 
 
 # And the backends Shall reports as degraded ONLY because a setup step it offers to run has not
 # been run (Q10/Q11/Q13). They belong in the lifecycle for the same reason they are degraded:
-# `lx -y install` performs that setup, so leaving them out tests the offer nowhere — which is
+# `lx -y apply` performs that setup, so leaving them out tests the offer nowhere — which is
 # what happened the first night the health check shipped, when `mix` dropped from a real
 # lifecycle to a plan-smoke and the run still said PASS.
 #
@@ -1517,7 +1518,7 @@ lifecycle() {
         fi
     }
 
-    lx -y install "$be:$cpkg$copts" >/tmp/itw-life.out 2>&1
+    lx -y apply "$be:$cpkg$copts" >/tmp/itw-life.out 2>&1
     lrc=$?
     # **Set here and not only inside `classify_install`, which runs ONLY when the install
     # failed.** Every assertion below reads this to learn where the binary went, and under
@@ -1564,12 +1565,12 @@ lifecycle() {
     if [ "$cmode" = "unsupported" ]; then
         grep_ok "$be: removal reports a graceful unsupported" \
             "not support\|unsupport\|cannot remove\|no remove" \
-            lx -y uninstall "$be:$cpkg"
+            lx -y apply "$be:$cpkg" --delete
         # That refusal is correct AND it leaves the line, so take it out by hand.
         undeclare_canary "$be:$cpkg"
         return 0
     fi
-    ok "$be: uninstall $cpkg" lx -y uninstall "$be:$cpkg"
+    ok "$be: uninstall $cpkg" lx -y apply "$be:$cpkg" --delete
     [ -n "$_nolist" ] || nok "$be: $ctok is gone from list" sh -c \
         "$SHALL list --backend '$be' 2>/dev/null | grep -q '$ctok'"
     [ -n "$cbin" ] && assert_binary_gone "$be" "$cbin" "$_prepath" "$LIFELOG"
@@ -1752,7 +1753,7 @@ for be in $ALL_BACKENDS; do
     # The plan names the package; its options are not part of that name.
     sp_tok="${sp%%@*}"
     if grep_ok "$be: a dry-run install plans $be:$sp" "$be:$sp_tok" \
-            smoke_lx --dry-run install "$be:$sp"; then
+            smoke_lx --dry-run apply "$be:$sp"; then
         echo "$be" >> "$LEDGER/be-smoke"
     fi
 done
@@ -1941,7 +1942,7 @@ ok "run executes inside an ephemeral environment" lx run -p "$BACKEND:$PKG" true
 # an answer, 1 and 3 are not.
 answers "plan freezes a reviewable file" lx plan --out "${TMPDIR:-/tmp}/shall-it-win-plan.json"
 ok "the plan file exists" test -f "${TMPDIR:-/tmp}/shall-it-win-plan.json"
-ok "apply reads a saved plan" lx --dry-run apply "${TMPDIR:-/tmp}/shall-it-win-plan.json"
+ok "execute reads a saved plan" lx --dry-run execute "${TMPDIR:-/tmp}/shall-it-win-plan.json"
 
 # `edit` shells out to $VISUAL/$EDITOR; `true` is an editor that exits 0.
 record_argv edit priority
@@ -2073,7 +2074,7 @@ crash_undeclare() {
 }
 crash_installed() { _n=0; for _p in $CRASH_PKGS; do on_path "$_p" && _n=$((_n + 1)); done; echo "$_n"; }
 crash_missing()   { _m=""; for _p in $CRASH_PKGS; do on_path "$_p" || _m="$_m $_p"; done; echo "$_m"; }
-# UNINSTALL FIRST, undeclare second. `shall uninstall` refuses a package no active file
+# UNINSTALL FIRST, undeclare second. `shall apply --delete` refuses a package no active file
 # declares — *"nothing was uninstalled: it is not declared in any active file"* — so taking the
 # line out first makes every cleanup refuse. Measured on the container twin, where it cost two
 # thirds of the section's coverage before anyone noticed.
@@ -2085,7 +2086,7 @@ crash_wipe() {
             echo "--- uninstall $BACKEND:$_p"
             echo "    declared in imperative.txt: $(grep -cx "$BACKEND:$_p" "$IMPERATIVE" 2>/dev/null || echo 0)"
         } >> /tmp/crash-wipe-win.out
-        $TO "$SHALL" -y uninstall "$BACKEND:$_p" >> /tmp/crash-wipe-win.out 2>&1
+        $TO "$SHALL" -y apply "$BACKEND:$_p" --delete >> /tmp/crash-wipe-win.out 2>&1
         echo "    rc=$? and $_p is now $(on_path "$_p" && echo 'STILL on PATH' || echo 'gone')" >> /tmp/crash-wipe-win.out
     done
     crash_undeclare

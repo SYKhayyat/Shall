@@ -59,7 +59,7 @@ fn a_failing_command_names_its_failure_class() {
 
     // A crate that does not exist: cargo says so, the policy calls it permanent, and no retry
     // anywhere can change that answer.
-    let (out, code) = run(&dir, &["install", "cargo:shall-no-such-crate-zzz", "-y"]);
+    let (out, code) = run(&dir, &["apply", "cargo:shall-no-such-crate-zzz", "-y"]);
     assert_ne!(
         code, 0,
         "the fixture succeeded, so nothing was classified:\n{out}"

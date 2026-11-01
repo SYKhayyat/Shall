@@ -85,13 +85,13 @@ cp target/release/shall ~/.local/bin/
 ## Start
 
 ```bash
-shall init          # scaffold ~/.config/shall, with one profile (Main) already active
-shall install jq    # writes a line you own, then syncs
-shall check         # what needs you: drift, unmanaged, health — read-only
-shall sync          # make the machine match the files
+shall init              # scaffold ~/.config/shall, with one profile (Main) already active
+shall apply apt:jq      # writes a line you own, then applies exactly it
+shall check             # what needs you: drift, unmanaged, health — read-only
+shall sync              # make the machine match the files
 ```
 
-`shall install` is not a separate mechanism — it writes `jq` into a module that the active profile already reaches, then syncs. Anything it can do, editing the file does too.
+`shall apply` is not a separate mechanism — it writes the declaration into a module the active profile already reaches, then applies **that one declaration and nothing else**: `apt:jq`, `dir:~/scratch`, `link:~/.vimrc @target=…`. Anything it can do, editing the file does too. It is also the removal: `shall apply apt:jq --delete` takes the line out and undoes the thing. The whole-machine converge is `sync`, and `apply` says how many declarations are still pending.
 
 Writing a module by hand takes one extra step, because a module is inert until something uses it:
 
@@ -204,11 +204,12 @@ ships, so a line that no longer works fails the build rather than misleading you
 |---|---|
 | `sync` | Install, remove and update until the machine matches your files |
 | `check` | Read-only: drift, unmanaged software, backend health — what needs you |
-| `install` / `uninstall` | Edit the file and sync |
+| `apply` / `apply --delete` | Write the line and apply exactly it; `--delete` takes it out and undoes it |
 | `list` / `search` / `info` | What is installed, what exists, what a package is |
 | `update` / `upgrade` | Refresh metadata; upgrade managed packages |
 | `hold` / `unhold` | Stop a package from being upgraded |
 | `rebuild` | Remove and reinstall what is declared, to repair what `sync` cannot see |
+| `execute` | Run a plan file `plan` froze, applying exactly the captured changes |
 
 **Understanding the machine**
 

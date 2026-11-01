@@ -5,7 +5,7 @@
 //! points. Measured:
 //!
 //! ```text
-//! $ shall install nosuchpkg-zzz 2>&1 | grep -c $'\033'   → 1   (piped, still coloured)
+//! $ shall apply nosuchpkg-zzz 2>&1 | grep -c $'\033'   → 1   (piped, still coloured)
 //! $ NO_COLOR=1 …                                          → 0   (respected)
 //! $ TERM=dumb  …                                          → 1   (ignored)
 //! ```
@@ -26,7 +26,7 @@ const ESC: char = '\u{1b}';
 /// Commands that are *meant* to say something on stderr. A command that prints nothing cannot
 /// fail this test, so the point is to pick ones that warn or refuse.
 const NOISY: &[&[&str]] = &[
-    &["install", "nosuchpkg-zzz-does-not-exist", "-y"],
+    &["apply", "nosuchpkg-zzz-does-not-exist", "-y"],
     &["sync", "-y"],
     &["info", "nosuchbackend-zzz:foo"],
     &["list"],
@@ -100,7 +100,7 @@ fn the_environment_can_switch_colour_off_by_either_convention() {
         vec![("TERM", "dumb")],
         vec![("NO_COLOR", "1"), ("TERM", "xterm-256color")],
     ] {
-        let out = run(&["install", "nosuchpkg-zzz-does-not-exist", "-y"], &env);
+        let out = run(&["apply", "nosuchpkg-zzz-does-not-exist", "-y"], &env);
         assert!(
             !out.contains(ESC),
             "with {env:?} set, Shall still wrote escape sequences:\n{out}"

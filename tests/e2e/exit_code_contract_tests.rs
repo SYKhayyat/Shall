@@ -57,8 +57,8 @@ fn a_usage_error_is_a_failure_and_never_a_finding() {
         vec!["nosuchcommand"],
         vec!["--nosuchflag"],
         vec!["sync", "--badflag"],
-        vec!["install", "--into"], // a flag whose value is missing
-        vec![],                    // no subcommand at all
+        vec!["apply", "--into"], // a flag whose value is missing
+        vec![],                  // no subcommand at all
     ] {
         let code = exit_code(&args);
         assert_ne!(

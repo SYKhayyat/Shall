@@ -343,7 +343,7 @@ The declarative core deserves property-based and model-based testing, which it c
 of.
 
 - **Round-trip properties.** For any manifest `M`: `sync(M)` then `sync(M)` again ⇒ the second is
-  a no-op. `install(p)` then `uninstall(p)` ⇒ the manifest is byte-identical to before. `bundle`
+  a no-op. `apply(p)` then `apply(p) --delete` ⇒ the manifest is byte-identical to before. `bundle`
   then `restore` ⇒ identical resolved state. `export` then re-import ⇒ same package set.
 - **Fuzz the grammar** (`config/grammar/`). Generate manifests: absurd nesting of `when`, unicode
   and RTL package names, 10k-line modules, cyclic `use`, a module that uses itself, CRLF, a BOM,
@@ -408,7 +408,7 @@ Script a **new user's first hour** and assert on it, because none of it is cover
 2. `shall init` — does it create everything its `--help` promises? *(Today: no starter module.)*
 3. `shall check health` on a normal machine — does it call 23 absent managers *critical*?
    *(Today: yes.)* Does the rollup agree with the detail view? *(Today: no.)*
-4. `shall install <typo>` — is the config still usable afterwards? *(Today: no.)*
+4. `shall apply apt:<typo>` — is the config still usable afterwards? *(Today: no.)*
 5. `shall info <a real package>` — how long, and is it right? *(Today: 98 seconds, and wrong.)*
 6. Every error message: does it name a file or a command the user can act on?
 

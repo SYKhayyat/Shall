@@ -132,8 +132,8 @@ pub async fn handle_remove_orphans(app: &App) -> Result<()> {
 /// Hand a set of `(backend, name)` removals to `SyncEngine` rather than removing them here.
 ///
 /// **`LX-5`: four commands removed or installed outside the planner.** Sugar that routes through
-/// `sync` is the model working, and `install`/`uninstall`/`teleport`/`rollback`/`activate` all do
-/// — `packages.rs` states the rule outright. `remove-orphans` and `purge-undeclared` did not:
+/// `sync` is the model working, and `apply`/`apply --delete`/`teleport`/`rollback`/`activate` all
+/// do — `apply.rs` states the rule outright. `remove-orphans` and `purge-undeclared` did not:
 /// each had its own preview, its own confirm, its own journalling loop, and neither ever saw
 /// `ChangePlanner` or `SyncEngine`. What they lost by that is not abstract — no transaction, no
 /// write-ahead recovery, no rollback, and one manager invocation per package where `Y1` measured

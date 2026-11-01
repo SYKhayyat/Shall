@@ -4,7 +4,7 @@ use super::*;
 /// any snap that exists, installed or not — the fixture above already says so, and
 /// `installed_state` already returns `None` for it. `info` was the caller that did not ask:
 /// it returned `Some` for the whole report, so the planner read every declared snap as
-/// already present and `shall install snap:x` reported success having installed nothing.
+/// already present and `shall apply snap:x` reported success having installed nothing.
 #[tokio::test]
 async fn info_answers_installed_here_not_present_in_the_store() {
     let store_only = "name:      code\n\

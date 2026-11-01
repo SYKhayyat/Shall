@@ -7,7 +7,7 @@ use super::*;
 /// readers is over, and `out_task.await` has no clock on it at all. There is no child left
 /// to kill and nothing in the tree that can end the wait.
 ///
-/// Found by capturing a wedged sweep instead of killing it: `shall -y install
+/// Found by capturing a wedged sweep instead of killing it: `shall -y apply
 /// nimble:nimjson` at zero CPU with **no children**, while three orphaned `nim.exe` ran
 /// outside its process tree. Then reproduced to a number — a 20s bound and a child that
 /// detached for 60s took 64s and reported SUCCESS.

@@ -21,7 +21,7 @@ The map (every command above, by what you are doing):
     sync · watch · plan · apply · check · rebuild · heal · try · run · shell
 
   Change what you declare
-    install · uninstall · add · remove-orphans · unmanage · adopt · hold · unhold
+    apply [--delete] · add · execute <plan> · remove-orphans · unmanage · adopt · hold · unhold
     update · upgrade · repo · service
 
   Look at things
@@ -351,7 +351,8 @@ pub enum Commands {
     },
 
     /// Compute what `sync` would do and freeze it to a reviewable file, so the exact plan you
-    /// inspect is the one you later `apply` (Terraform-style plan/apply).
+    /// inspect is the one `execute` later runs (Terraform-style plan/execute; the declaration
+    /// verb owns `apply`).
     Plan {
         /// Where to write the plan (default: shall-plan.json)
         #[arg(long, default_value = "shall-plan.json")]
@@ -360,7 +361,11 @@ pub enum Commands {
 
     /// Execute a previously saved plan file, applying exactly the captured changes. Warns if
     /// the system/manifests have drifted since the plan was frozen.
-    Apply {
+    ///
+    /// Not `apply`: that verb is the declaration one (`shall apply apt:jq`), and the saved plan
+    /// is the whole configuration frozen on disk — a different object with a different owner,
+    /// which is what the name now says.
+    Execute {
         /// Path to a plan file produced by `shall plan`
         plan: String,
 
@@ -435,7 +440,7 @@ pub enum Commands {
     /// `teleport ripgrep apt` rewrites wherever `ripgrep` is declared to `apt:ripgrep`, in the
     /// module it already lives in. The sync that follows installs it from `apt` and removes the
     /// old copy as drift — no second copy is left behind. It is edit-the-line-then-sync like
-    /// `install`; to bring in a package that is not declared yet, use `install BACKEND:NAME`.
+    /// `apply`; to bring in a package that is not declared yet, use `apply BACKEND:NAME`.
     Teleport {
         /// The package to move (bare name, or `oldbackend:name` to disambiguate).
         package: String,
@@ -570,36 +575,44 @@ pub enum Commands {
         package: String,
     },
 
-    /// Install one or more packages
-    Install {
-        /// Package strings (e.g. "apt:curl", "cargo:exa")
-        packages: Vec<String>,
+    /// Make one declaration true — a package or a resource — and record it in your files.
+    ///
+    /// The line goes into your files first, so the next `sync` keeps it, and only that
+    /// declaration is applied: the rest of the config stays pending, and `sync` is the verb that
+    /// converges it. `--delete` is the mirror — the line leaves your files and the declaration is
+    /// undone. That is the whole command surface for acting on one thing, which is why there is
+    /// no separate `install` and `uninstall`.
+    Apply {
+        /// Declaration lines, exactly as they would be written in a module:
+        /// `apt:jq`, `dir:~/scratch @mode=700`, `link:~/.vimrc @content=…`
+        declarations: Vec<String>,
 
-        /// Output the resulting changes as JSON (requires --dry-run)
-        //
-        // Enforced by `dispatch`, not by `requires = "dry_run"`. Clap resolves `requires`
-        // against the subcommand's own arguments and `--dry-run` is global, so the constraint
-        // compiles, never fires, and takes the flag's whole document with it when it does —
-        // measured: it turned `sync --dry-run --json` into a usage error. See
-        // `refuse_json_without_dry_run` (B7).
+        /// Take the declaration out instead: remove its line from your files and undo it
         #[arg(long)]
-        json: bool,
+        delete: bool,
 
-        /// Temporary install: uninstall itself after this duration (e.g. "2h", "30d").
-        /// Written as a dated line — `@expires=<absolute time>` (II.16) — not a lease.
-        #[arg(long, value_name = "DURATION")]
-        temp: Option<String>,
+        /// With --delete, keep the package off by declaring it `absent:` — the one declaration
+        /// that reaches outside what Shall manages. The line stays, so the package stays gone.
+        #[arg(long, requires = "delete", conflicts_with = "temp")]
+        absent: bool,
+
+        /// With --delete, also destroy the package's configuration (Debian's `purge`), for this
+        /// run only. The machine-wide form is `[remove] purge` in preferences.toml.
+        #[arg(long, requires = "delete")]
+        purge: bool,
+
+        /// Temporary: without --delete the line expires after DURATION (e.g. "2h", "30d");
+        /// with --delete the package comes back then. Written as a dated line —
+        /// `@expires=` / `@until=` (II.16) — not a lease. Bare `--temp` inside a `shall shell`
+        /// restores on that session's exit; the duration must be attached with `=` so it is
+        /// never confused with a declaration.
+        #[arg(long, value_name = "DURATION", num_args = 0..=1, require_equals = true)]
+        temp: Option<Option<String>>,
 
         /// Which file the line goes in: a module (lowercase) or a profile (Capitalized).
         /// Without it, the line lands in the `imperative` module.
         #[arg(long, value_name = "NAME")]
         into: Option<String>,
-    },
-
-    /// Uninstall one or more packages
-    Uninstall {
-        /// Names of packages to uninstall
-        packages: Vec<String>,
 
         /// Output the resulting changes as JSON (requires --dry-run)
         //
@@ -610,24 +623,6 @@ pub enum Commands {
         // `refuse_json_without_dry_run` (B7).
         #[arg(long)]
         json: bool,
-
-        /// Also destroy the package's configuration (Debian's `purge`), for this run only.
-        /// The machine-wide form is `[remove] purge` in preferences.toml.
-        #[arg(long)]
-        purge: bool,
-
-        /// Temporary uninstall: reinstall the package(s) later. With a DURATION
-        /// (e.g. `--temp=2h`) they return when it elapses; bare `--temp` inside a
-        /// `shall shell` restores them when that ephemeral session ends. The duration must
-        /// be attached with `=` so it is never confused with a package name.
-        #[arg(long, value_name = "DURATION", num_args = 0..=1, require_equals = true)]
-        temp: Option<Option<String>>,
-
-        /// Remove it even when Shall has no record of installing it, by declaring it
-        /// `absent:` — the one declaration that reaches outside what Shall manages.
-        /// The line stays, so the package stays gone.
-        #[arg(long, conflicts_with = "temp")]
-        absent: bool,
     },
 
     /// Manage source repositories (PPA, Taps, Buckets, etc.)
@@ -1099,13 +1094,12 @@ impl Commands {
             | Self::PurgeUndeclared { .. }
             | Self::Unmanage { .. }
             | Self::Apply { .. }
+            | Self::Execute { .. }
             | Self::Lock { .. }
             | Self::Unlock { .. }
             | Self::Teleport { .. }
             | Self::Update { .. }
             | Self::Upgrade { .. }
-            | Self::Install { .. }
-            | Self::Uninstall { .. }
             | Self::Repo { .. }
             | Self::Adopt { .. }
             | Self::Add { .. }

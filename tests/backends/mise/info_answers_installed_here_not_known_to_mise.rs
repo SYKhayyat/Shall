@@ -2,7 +2,7 @@ use super::*;
 
 /// The fail-silent bug the `tools` image caught: `info` asked mise's plugin CATALOGUE, so
 /// it answered "yes" for anything mise had heard of. The planner read that as "already
-/// installed" and `shall install mise:jq` reported *already up to date* while installing
+/// installed" and `shall apply mise:jq` reported *already up to date* while installing
 /// nothing at all.
 #[tokio::test]
 async fn info_answers_installed_here_not_known_to_mise() {

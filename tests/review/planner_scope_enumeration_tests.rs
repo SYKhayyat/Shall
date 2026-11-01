@@ -74,8 +74,10 @@ const LEDGER: &[Accounted] = &[
     },
     Accounted {
         file: "src/verbs/sync.rs",
-        variants: &["Whole"],
-        why: "the reconcile itself — the site every other one is measured against",
+        variants: &["Whole", "Named"],
+        why: "the reconcile itself — the site every other one is measured against. `Named` is \
+              the same pass given the keys a command named (II.70): it installs those and \
+              removes those, and reaps nothing",
     },
     Accounted {
         file: "src/verbs/upgrade.rs",
@@ -201,7 +203,7 @@ fn plan_sites() -> Vec<Site> {
 
 /// The variant a site names, or the whole argument if it names none.
 fn variant_of(scope: &str) -> &str {
-    for v in ["Whole", "Narrowed", "JustThese"] {
+    for v in ["Whole", "Narrowed", "JustThese", "Named"] {
         if scope.starts_with(&format!("PlanScope::{}", v)) {
             return v;
         }

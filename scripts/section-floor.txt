@@ -112,8 +112,17 @@
 # ratchet-up `sed` the run prints is the edit. **Never lower a line to get green** — that is
 # the one edit this file exists to make visible in a diff, and it is the edit that turns a
 # ratchet into a comment.
+#
+# ONE LINE WAS LOWERED, 61 -> 60 on `--help across the surface` for every class, and it is the
+# only shape in which that is legitimate: this section's count IS the verb list, read out of
+# `shall --help`, so it moves when the surface moves rather than when the harness stops
+# checking. `install` and `uninstall` collapsed into `apply --delete` and `execute` took the
+# saved-plan half of `apply`: 61 - 2 + 1 = 60, and the arithmetic is the whole justification. A
+# verb that disappears on its own is still caught, by `Command surface, executed` (70 in every
+# class, unchanged), which names its verbs instead of deriving them — so the derived tally was
+# never the only instrument over the surface, and lowering it removes no detector.
 # container-linux-alpine-local
-container-linux-alpine-local  --help across the surface  61
+container-linux-alpine-local  --help across the surface  60
 container-linux-alpine-local  A dependent statement driven for real: link:  12
 container-linux-alpine-local  Adopt  2
 container-linux-alpine-local  Bootstrap  4
@@ -141,7 +150,7 @@ container-linux-alpine-local  shim:, dotfiles: and exec: driven for real  26
 container-linux-alpine-local  sudo with a real password, on a pty  0
 
 # container-linux-arch-local
-container-linux-arch-local  --help across the surface  61
+container-linux-arch-local  --help across the surface  60
 container-linux-arch-local  A dependent statement driven for real: link:  12
 container-linux-arch-local  Adopt  8
 container-linux-arch-local  Bootstrap  4
@@ -169,7 +178,7 @@ container-linux-arch-local  shim:, dotfiles: and exec: driven for real  26
 container-linux-arch-local  sudo with a real password, on a pty  0
 
 # container-linux-fedora-local
-container-linux-fedora-local  --help across the surface  61
+container-linux-fedora-local  --help across the surface  60
 container-linux-fedora-local  A dependent statement driven for real: link:  12
 container-linux-fedora-local  Adopt  7
 container-linux-fedora-local  Bootstrap  4
@@ -197,7 +206,7 @@ container-linux-fedora-local  shim:, dotfiles: and exec: driven for real  26
 container-linux-fedora-local  sudo with a real password, on a pty  0
 
 # container-linux-gentoo-local
-container-linux-gentoo-local  --help across the surface  61
+container-linux-gentoo-local  --help across the surface  60
 container-linux-gentoo-local  A dependent statement driven for real: link:  0
 container-linux-gentoo-local  Adopt  2
 container-linux-gentoo-local  Bootstrap  4
@@ -225,7 +234,7 @@ container-linux-gentoo-local  shim:, dotfiles: and exec: driven for real  0
 container-linux-gentoo-local  sudo with a real password, on a pty  0
 
 # container-linux-guix-local
-container-linux-guix-local  --help across the surface  61
+container-linux-guix-local  --help across the surface  60
 container-linux-guix-local  A dependent statement driven for real: link:  12
 container-linux-guix-local  Adopt  2
 container-linux-guix-local  Bootstrap  4
@@ -253,7 +262,7 @@ container-linux-guix-local  shim:, dotfiles: and exec: driven for real  26
 container-linux-guix-local  sudo with a real password, on a pty  0
 
 # container-linux-opensuse-local
-container-linux-opensuse-local  --help across the surface  61
+container-linux-opensuse-local  --help across the surface  60
 container-linux-opensuse-local  A dependent statement driven for real: link:  12
 container-linux-opensuse-local  Adopt  2
 container-linux-opensuse-local  Bootstrap  4
@@ -281,7 +290,7 @@ container-linux-opensuse-local  shim:, dotfiles: and exec: driven for real  26
 container-linux-opensuse-local  sudo with a real password, on a pty  0
 
 # container-linux-slackware-local
-container-linux-slackware-local  --help across the surface  61
+container-linux-slackware-local  --help across the surface  60
 container-linux-slackware-local  A dependent statement driven for real: link:  12
 container-linux-slackware-local  Adopt  2
 container-linux-slackware-local  Bootstrap  4
@@ -309,7 +318,7 @@ container-linux-slackware-local  shim:, dotfiles: and exec: driven for real  26
 container-linux-slackware-local  sudo with a real password, on a pty  0
 
 # container-linux-storage-local
-container-linux-storage-local  --help across the surface  61
+container-linux-storage-local  --help across the surface  60
 container-linux-storage-local  A dependent statement driven for real: link:  12
 container-linux-storage-local  Adopt  7
 container-linux-storage-local  Bootstrap  4
@@ -337,7 +346,7 @@ container-linux-storage-local  shim:, dotfiles: and exec: driven for real  35
 container-linux-storage-local  sudo with a real password, on a pty  8
 
 # container-linux-tools-local
-container-linux-tools-local  --help across the surface  61
+container-linux-tools-local  --help across the surface  60
 container-linux-tools-local  A dependent statement driven for real: link:  12
 container-linux-tools-local  Adopt  7
 container-linux-tools-local  Bootstrap  4
@@ -365,7 +374,7 @@ container-linux-tools-local  shim:, dotfiles: and exec: driven for real  35
 container-linux-tools-local  sudo with a real password, on a pty  8
 
 # container-linux-ubuntu-local
-container-linux-ubuntu-local  --help across the surface  61
+container-linux-ubuntu-local  --help across the surface  60
 container-linux-ubuntu-local  A dependent statement driven for real: link:  12
 container-linux-ubuntu-local  Adopt  7
 container-linux-ubuntu-local  Bootstrap  4
@@ -393,7 +402,7 @@ container-linux-ubuntu-local  shim:, dotfiles: and exec: driven for real  35
 container-linux-ubuntu-local  sudo with a real password, on a pty  8
 
 # container-linux-void-local
-container-linux-void-local  --help across the surface  61
+container-linux-void-local  --help across the surface  60
 container-linux-void-local  A dependent statement driven for real: link:  12
 container-linux-void-local  Adopt  2
 container-linux-void-local  Bootstrap  4

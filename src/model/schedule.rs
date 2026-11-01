@@ -222,7 +222,7 @@ pub fn validate_cron(cron: &str) -> std::result::Result<(), String> {
 
 /// Write a `schedule:` block into the `schedules` file body.
 ///
-/// `schedule add` is a shortcut for editing this file, the way `install` is a shortcut for
+/// `schedule add` is a shortcut for editing this file, the way `apply` is a shortcut for
 /// editing a module (P1): the file is the state, so the edit IS the command and `sync`
 /// provisions it. There is no second store — a `[schedules]` table in preferences was one,
 /// and the two could disagree about what this machine runs.

@@ -13,7 +13,7 @@
 //!     Wrote plan to shall-plan.json — system already matches desired state (no changes).
 //!     $ cat shall-plan.json
 //!     { … "installs": [], "removals": [], … }
-//!     $ shall apply shall-plan.json -y
+//!     $ shall execute shall-plan.json -y
 //!     Plan is empty — nothing to apply.
 //!     $ ls dest/
 //!     (empty)
@@ -111,7 +111,7 @@ fn plan_names_the_extras_it_would_place() {
     );
 
     // `apply` executes the frozen plan, so an empty plan is an apply that does nothing.
-    let (out, code) = f.run(&["apply", "shall-plan.json", "-y"]);
+    let (out, code) = f.run(&["execute", "shall-plan.json", "-y"]);
     assert_eq!(code, 0, "`apply` failed:\n{out}");
     for t in &targets {
         assert!(

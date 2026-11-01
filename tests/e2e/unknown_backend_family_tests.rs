@@ -47,7 +47,7 @@ const NOT_A_PACKAGE_SPEC: &[(&str, &str)] = &[
         "adapters",
         "an extension surface — one of the eight `adapters/*.toml` files",
     ),
-    ("apply", "a saved plan file"),
+    ("execute", "a saved plan file"),
     ("check", "a section of `check`"),
     ("completions", "a shell name"),
     ("diff", "a git commit"),
@@ -144,8 +144,8 @@ fn every_verb_taking_a_package_spec_refuses_an_unknown_backend() {
 
     let verbs = spec_taking_verbs(&f);
     assert!(
-        verbs.contains("install"),
-        "`install` is the verb Q9's message comes from; if it is not in the derived set, the \
+        verbs.contains("apply"),
+        "`apply` is the verb Q9's message comes from; if it is not in the derived set, the \
          derivation is wrong: {verbs:?}"
     );
 

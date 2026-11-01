@@ -144,7 +144,7 @@ fn a_previewed_schedule_add_schedules_nothing() {
 
 /// The reported case, end to end: a preview of `uninstall` leaves the declaration alone.
 ///
-/// The line is written by a real `shall install` rather than by hand — a hand-written module
+/// The line is written by a real `shall apply` rather than by hand — a hand-written module
 /// no active profile reaches is a setup where `undeclare` finds no files and the assertion
 /// passes without ever reaching the code it is about.
 #[test]
@@ -153,7 +153,7 @@ fn a_previewed_uninstall_undeclares_nothing() {
 
     // `link:` needs no package manager on the runner, and its target need not exist for the
     // declaration to be written: `install` writes the line first and converges second (P1).
-    let (out, _) = fresh.run(&["install", "link:none/at/all", "-y"]);
+    let (out, _) = fresh.run(&["apply", "link:none/at/all", "-y"]);
     let manifest = fresh.config("modules/imperative.txt");
     let Ok(before) = std::fs::read_to_string(&manifest) else {
         panic!("the fixture never wrote a manifest:\n{out}");
@@ -163,7 +163,7 @@ fn a_previewed_uninstall_undeclares_nothing() {
         "the fixture declared nothing, so there is nothing to preview removing:\n{out}"
     );
 
-    let (out, _) = fresh.run(&["--dry-run", "uninstall", "link:none/at/all"]);
+    let (out, _) = fresh.run(&["--dry-run", "apply", "--delete", "link:none/at/all"]);
     assert_eq!(
         std::fs::read_to_string(&manifest).unwrap(),
         before,
@@ -175,7 +175,7 @@ fn a_previewed_uninstall_undeclares_nothing() {
     );
 
     // The control.
-    let (out, _) = fresh.run(&["uninstall", "link:none/at/all", "-y"]);
+    let (out, _) = fresh.run(&["apply", "--delete", "link:none/at/all", "-y"]);
     assert!(
         !std::fs::read_to_string(&manifest)
             .unwrap()
@@ -190,7 +190,7 @@ fn a_previewed_uninstall_undeclares_nothing() {
 fn a_previewed_unmanage_forgets_nothing() {
     let fresh = Fresh::new("dry-run-unmanage");
 
-    let (out, _) = fresh.run(&["install", "link:none/at/all", "-y"]);
+    let (out, _) = fresh.run(&["apply", "link:none/at/all", "-y"]);
     let manifest = fresh.config("modules/imperative.txt");
     let Ok(before) = std::fs::read_to_string(&manifest) else {
         panic!("the fixture never wrote a manifest:\n{out}");

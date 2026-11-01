@@ -3119,15 +3119,39 @@ This layout work does not change the user-visible behavior; production edits are
 visibility/test seams required by the external mirror, plus the `Capped: Default` implementation
 required by the repository's clippy gate.
 
-### `C7` — what to build next (ruled 2026-10-27, not yet built)
+### `C7` — ruled 2026-10-27, built 2026-10-30
 
-**Ruled, recorded, and not built.** `C7` in `decisions.md`, rule in **II.70**, rationale in
-**V.220**: `install` and `uninstall` converge exactly what they name — the named specs and their
-`@requires` chains, nothing else. The whole-machine converge stays `sync`'s. The register entry
-and the spec text landed (`cf8eaafd`); **the code is the next move, and this is the outline of
-it** so the next session does not re-derive it. The full work order — mechanism, call sites,
-acceptance criteria, and the tests verbatim — is the third comment on **#112**
+**Built.** `C7` in `decisions.md`, rule in **II.70**, rationale in **V.220**. The register entry
+and the spec text landed earlier (`cf8eaafd`); the code landed 2026-10-30/31, and the owner
+widened the ruling in the same change: **one verb — `apply <line>` / `apply <line> --delete` —
+replaces `install` and `uninstall`**, and any declaration line is in scope rather than packages
+only. The work order that shaped the narrowing is the third comment on **#112**
 (`issuecomment-6475969648`).
+
+**What actually shipped, where it differs from the work order below.** `src/verbs/packages.rs`
+became `src/verbs/apply.rs` and holds both directions: `handle_apply` parses every argument
+through the grammar, `create` writes the lines then converges the package keys through
+`handle_named`, and `delete` removes the lines then narrows the same way — `remove_one` per
+resource line, through the phase's own applier. `handle_teleport` names both keys of its move;
+`uninstall_as_absent` names the targets its `absent:` lines just declared; a plain
+`apply --delete` names each package's ledger row (`removal_keys`), never its `priority`
+resolution — *the one I have* is a ledger question, not an install one. That last one is the
+difference the first draft got wrong: `delete_packages` still ended in `handle_sync`, so one
+removal was a whole-machine converge, which `a_delete_does_not_reap_the_rest_of_the_machine`
+caught. Thirteen tests now cover the family (5 planner, 5 `apply`, 3 `apply --delete`), and
+`tests/review/planner_scope_enumeration_tests.rs` makes `PlanScope::Named` answer the scope
+questions in the same table as the others.
+
+**What differs from that work order, and why.** The package-plan call sites stayed in
+`src/verbs/sync.rs` rather than moving to four files: `install`, `uninstall`, `--absent` and
+`teleport` all reach the one `reconcile` through `handle_named`, so a second planning site would
+be a second converge. `PlanScope::Named` carries the key set and **not** the host's backend list,
+so a named removal skips the `priority` question — the key reached the plan because the user
+named it, which is a statement about that manager; `runs_here` and the protection rules still
+apply, because narrowing a plan never narrows a safety rail. The pending line counts the model's
+`total_present()` minus the lines this run named, which is why it is right for a run that applied
+nothing (an already-converged key) as well as for one that applied one. And the saved-plan
+executor, which had the name `apply` first, is now `execute` — see II.70.
 
 **Why it was ruled.** The 2026-10-26 native sweeps measured the cost of the old shape: the
 sweep's own `adopt` had put 43 packages (macOS)/103 (Windows) into the model, and `install` is
@@ -3168,7 +3192,7 @@ planner's existing scopes*, not a second engine:
 6. **The pending line:** `Reconciled` gains `declared_total` (`total_present()` — the config's
    count, never a manager question); `handle_install` prints one line naming `sync` when it is
    smaller than what was applied.
-7. **Deletions, in the same commit:** `say_if_the_failure_was_not_yours` and `why_kept` if
+7. **Deletions, in the same commit:** the Q34 apology function and `why_kept` if
    nothing else reads it — `grep -rn` both quiet. A failure inside a narrowed run is about what
    was asked for, so keeping the apology beside the change that makes it unreachable is keeping
    a second answer to a settled question.
@@ -3188,8 +3212,63 @@ keyed on packages, so narrowing it needs resource-scoping the ruling did not des
 its subject is the whole config.
 
 **Exit condition:** the nine acceptance criteria in the #112 comment, all met, and
-`shall -y install cargo:hexyl` on a native host applying exactly hexyl. That is also what closes
+`shall apply cargo:hexyl` on a native host applying exactly hexyl. That is also what closes
 #112 — the next native run answers the lister question with no harness change, either way.
+
+**Verified, 2026-10-31.** `cargo build --all-targets`, `cargo test --no-fail-fast` (3062
+passed, 0 failed), `cargo clippy --all-targets --all-features --locked -- -D warnings`,
+`rustfmt --check` and `shellcheck -S warning` are all clean, and
+`cargo check --target x86_64-pc-windows-gnu --all-targets` with `-D warnings` compiles the
+Windows half — the `cfg(windows)` code the local chain cannot otherwise see. Two host facts
+were needed to get there, and both are environment rather than code: rustfmt lives in
+`~/.rustup/toolchains/stable` but needs `LD_LIBRARY_PATH` pointing at zlib, and the suite needs
+`NPM_CONFIG_PREFIX` set, because npm's built-in prefix on this host is a read-only nix store
+path, so npm fails with `ENOENT` before it ever looks at the package name.
+
+**The container harness, run 2026-10-31/11-01, and what it found.** `podman` was built from
+nixpkgs and put behind a `docker` shim, so `docker/integration/run.sh` runs unchanged — this host
+has no container runtime of its own, which is the one thing that had made the matrix unavailable.
+`DISTROS=ubuntu`: **391 pass, 0 fail, 5 soft**, `ubuntu (apt): PASS`. `DISTROS=arch`: **402
+pass, 0 fail, 6 soft**, `arch (pacman): PASS`. `DISTROS=tools`: **470 pass, 0 fail, 8 soft**,
+`tools (apt): PASS` — the image whose whole reason to exist is a real install → list → remove
+for the ecosystem managers, so its green is the widest lifecycle coverage of the three.
+
+The softs are the known self-declining ones — `appimage` without FUSE, the multi-GB `flatpak`,
+the PEP 668 `pip`, the source-built `stack`, the URL-only `web`, the volume-group restore on an
+image that has no volume group, a crash kill outside its transaction window, and on arch a
+fixture whose unprivileged user cannot sudo even outside Shall — each printing why. Two are
+worth naming: a `go` canary already resolved to a baked toolchain's `PATH`, so the removal check
+compared against that rather than absence; and the `tools` image's own bake list wanted `code`
+and the store no longer carries it, which the image reports as a soft instead of hiding.
+
+**Two things the run changed beyond the verb.** First, the harness's own call sites: `install`
+and `uninstall` appear inside `sh -c` strings and heredocs as well as as `lx` words, and three
+of those survived the first sweep — section 16f's one-run-two-operations check and the sudo
+cleanup among them. They are `apply … --delete` now, found by grepping the *inside* of quoted
+strings rather than the call sites, which is the shape of miss a verb rename keeps producing.
+Second, `--help across the surface` fell 61 → 60 in all eleven host classes, and that is the
+section's count being *derived* from `shall --help` rather than a check going missing:
+`install` + `uninstall` → `apply`, and the saved-plan `apply` → `execute`, so 61 − 2 + 1. The
+floor line is lowered with that arithmetic in a comment beside it; the detector for a verb
+disappearing on its own is `Command surface, executed` (70 in every class, unchanged), which
+names its verbs instead of deriving them. The re-run is green on the ratchet: 26 sections at or
+above the floor, `SIGKILL mid-transaction` the only short one and excused to its recorded 22.
+
+**A defect this run found that is not `C7`'s to fix, recorded here rather than fixed quietly.**
+Section 16f went from seconds to five-minute stalls per manager call on this sandbox. The
+observation is a job-control stop, and it is measured rather than inferred: `apt install` sat in
+state `T` with its work already done, `ps` reporting `pgid 10677 / tpgid 10676` — a group that
+is **not** the foreground group of its controlling terminal — and a three-line probe that reads
+`/dev/tty` from its own process group stops identically, while one that only *writes* does not
+(`TOSTOP` is off by default). SIGTTIN on a background read is the mechanism, then, and it is
+reachable from both directions the code arranges: `RawExecutor` sets `command.process_group(0)`
+so `Stopping` can signal the tree, and it hands an interactive run Shall's terminal as stdin; on
+this image sudo's `Defaults use_pty` interposes a second pty with its own foreground group. **Which
+of the two produced the mismatch is not settled** — both would, they are one line each in the
+same spawn — and that is why the fix is the owner's call rather than this change's: every
+candidate changes what a user sees, either by not inheriting the terminal for a mutation or by
+making the child the foreground group it reads from. It is rare because most manager reads never
+touch the tty, which is why both earlier full runs passed straight through the section.
 
 ## IV.1 What a check has to be (V.57)
 

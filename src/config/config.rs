@@ -946,7 +946,7 @@ pub struct Config {
     #[serde(default)]
     pub sync: SyncSettings,
 
-    /// A `uninstall --purge` for this run only. Never serialized — the file form is
+    /// An `apply --delete --purge` for this run only. Never serialized — the file form is
     /// `[remove] purge`, and this is its per-invocation sibling.
     #[serde(skip)]
     pub purge_this_run: bool,

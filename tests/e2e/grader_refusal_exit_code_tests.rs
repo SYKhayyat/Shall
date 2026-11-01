@@ -6,11 +6,11 @@
 //!
 //! Measured against the release binary:
 //!
-//!     $ shall install 'web:http://example.com/tool.tar.gz' -y
+//!     $ shall apply 'web:http://example.com/tool.tar.gz' -y
 //!     Error: Validation error: refusing to download … over plain HTTP
 //!     EXIT=1                                            <-- contract says 3
 //!
-//!     $ shall install github:sharkdp/fd -y              # ~/.local/bin/fd.exe already exists
+//!     $ shall apply github:sharkdp/fd -y              # ~/.local/bin/fd.exe already exists
 //!     Error: Validation error: refusing to deploy `fd.exe`: … Shall did not create it.
 //!     EXIT=1                                            <-- contract says 3
 //!
@@ -95,10 +95,7 @@ fn a_security_refusal_exits_with_the_documented_refusal_code() {
         "the control failed: `reset` with no terminal should refuse with 3"
     );
 
-    let (out, code) = run(
-        &dir,
-        &["install", "web:http://example.com/tool.tar.gz", "-y"],
-    );
+    let (out, code) = run(&dir, &["apply", "web:http://example.com/tool.tar.gz", "-y"]);
     assert!(
         out.to_lowercase().contains("refusing to download"),
         "the fixture did not reach the plain-HTTP refusal; got:\n{out}"
@@ -149,10 +146,7 @@ fn a_security_refusal_fires_the_refusal_hook() {
         "the marker existed before anything refused; the test cannot tell a fire from a leftover"
     );
 
-    let (out, code) = run(
-        &dir,
-        &["install", "web:http://example.com/tool.tar.gz", "-y"],
-    );
+    let (out, code) = run(&dir, &["apply", "web:http://example.com/tool.tar.gz", "-y"]);
     assert_eq!(code, 3, "the refusal did not reach the Refused arm:\n{out}");
 
     assert!(

@@ -6,8 +6,8 @@ use super::*;
 fn the_commands_that_write_take_the_lock() {
     for argv in [
         vec!["shall", "sync"],
-        vec!["shall", "install", "apt:jq"],
-        vec!["shall", "uninstall", "apt:jq"],
+        vec!["shall", "apply", "apt:jq"],
+        vec!["shall", "apply", "--delete", "apt:jq"],
         vec!["shall", "adopt"],
         vec!["shall", "heal"],
         vec!["shall", "rollback", "HEAD"],

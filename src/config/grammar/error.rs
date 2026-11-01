@@ -18,7 +18,7 @@ impl Origin {
         }
     }
 
-    /// For input that never came from a file (a `shall install` argument).
+    /// For input that never came from a file (a `shall apply` argument).
     pub fn argument() -> Self {
         Self {
             file: PathBuf::from("<argument>"),

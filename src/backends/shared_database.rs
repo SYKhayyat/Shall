@@ -52,7 +52,7 @@ pub fn owns_its_database(backend: &str) -> bool {
 /// Collapse a list of backends that all hold the *same* package down to one per database,
 /// preferring the backend that keeps each.
 ///
-/// `shall uninstall jq --absent` asks which managers hold jq and writes an `absent:` line per
+/// `shall apply --delete jq --absent` asks which managers hold jq and writes an `absent:` line per
 /// holder. On Arch all three pacman clients say yes, so three lines get written and the next
 /// sync schedules three removals of one package: the first takes jq and the other two are told
 /// `error: target not found: jq`. An `absent:` line is permanent, so that failure is permanent

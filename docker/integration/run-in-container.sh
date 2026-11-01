@@ -560,9 +560,10 @@ soft() { SOFTC=$((SOFTC + 1)); _record_soft "$1"; echo "  soft  $1"; }
 # the binary under test is not the tree that was built.
 # $5 runs between the two attempts, to clear a declaration the failed attempt left behind.
 #
-# The install that failed may not be the install that was asked for. `shall install go:…`
-# converges the whole configuration, so a *different* declaration — one whose package name
-# exists nowhere — fails the command, and Shall already says which:
+# The install that failed may not be the install that was asked for. That was the shape before
+# `C7`: an install converged the whole configuration, so a *different* declaration — one whose
+# package name exists nowhere — failed the command, and Shall already says which. The classifier
+# stays until a native run confirms a narrowed `apply` never names another line:
 #     while applying `slackpkg:clucene` (/tmp/shall-it-config/modules/adopted.txt:107).
 # The verdict must name that line, not the subject this leg happened to be driving: the
 # slackware nightly spent runs blaming `go` for a `slackpkg:clucene` name that matches
@@ -611,7 +612,7 @@ classify_install() { # be  install-spec  rc  logfile  [cleanup]
     fi
     echo "        (first attempt failed, class=$_ci_class; retrying once)"
     $_ci_clear
-    lx_slow -y install "$_ci_spec" >/tmp/life2.out 2>&1
+    lx_slow -y apply "$_ci_spec" >/tmp/life2.out 2>&1
     _ci_rc2=$?
     if [ "$_ci_rc2" -eq 0 ]; then
         LIFELOG=/tmp/life2.out
@@ -916,7 +917,7 @@ grep_ok "protected includes a system essential" "libc\|systemd\|kernel\|bash\|co
 # --- 3. Dry-run is preview-only -------------------------------------------
 section "[3] Dry-run safety"
 ok "sync --dry-run does not error" lx --dry-run sync
-ok "a dry-run install shows a plan" lx --dry-run install "$PKG"
+ok "a dry-run install shows a plan" lx --dry-run apply "$PKG"
 # Asked of the machine, not of PATH: a preview that installed into a directory the host has
 # not wired up is exactly as much of a defect, and `on_path` would report it as clean.
 cp /tmp/it.out /tmp/it-dryrun.out 2>/dev/null || true
@@ -968,7 +969,7 @@ else
     # Where the name resolved BEFORE the install, which is what tells a binary this install
     # put there from one that was already on PATH under the same name (G-3).
     PKG_PREPATH="$(path_of "$PKG")"
-    ok "install $PKG" lx -y install "$PKG"
+    ok "install $PKG" lx -y apply "$PKG"
     # `ok` leaves the install's output in /tmp/it.out and the next check overwrites it; the
     # reachability assertion reads what the install SAID, so it gets its own copy.
     cp /tmp/it.out /tmp/it-life0.out 2>/dev/null || true
@@ -1008,7 +1009,7 @@ section "[7] Negative path"
 # arguments and every real refusal names what it refused, so asserting the subject appears
 # is both the tighter check and the one a user needs (V.42: a refusal that teaches).
 nok_saying "installing a nonexistent package fails" "shall-no-such-pkg-zzz" \
-    lx -y install "shall-no-such-pkg-zzz"
+    lx -y apply "shall-no-such-pkg-zzz"
 # The failure must not be left in the manifest. Every later command parses the
 # model, so one unresolvable line wedges the config until someone hand-edits it.
 ok "a failed install leaves the model parseable" lx check drift
@@ -1167,7 +1168,7 @@ if [ -z "$GUARD_VICTIM" ]; then
     echo "        installed under $BACKEND: $(printf '%s\n' "$_have" | head -20 | tr '\n' ' ')"
 else
     echo "        guard victim: $GUARD_VICTIM (from \`shall protected\`, and installed here)"
-    lx -y uninstall "$GUARD_VICTIM" >/dev/null 2>&1 || true
+    lx -y apply "$GUARD_VICTIM" --delete >/dev/null 2>&1 || true
     ok "$GUARD_VICTIM survives an uninstall attempt" \
         sh -c "$SHALL list --backend '$BACKEND' 2>/dev/null | awk '{print \$2}' | grep -qx '$GUARD_VICTIM'"
 fi
@@ -1192,7 +1193,7 @@ else
     # of its own, on presence rather than on an arrival — so on a host that already had the
     # package it witnessed the host's copy and the absence below then read as proof. One tag,
     # one meaning, recorded once, at the only place that can see an arrival.
-    ok "uninstall $PKG" lx -y uninstall "$PKG"
+    ok "uninstall $PKG" lx -y apply "$PKG" --delete
     gone_ok "$PKG binary gone after uninstall" pkg-installed \
         binary_present "$BACKEND" "$PKG" /tmp/it-life0.out
 fi
@@ -1219,7 +1220,7 @@ if [ -n "$SMOKE" ]; then
     skip_smoke "the install that would leave a commit behind"
     ok "git log runs on an empty history" lx git log --limit 10
 else
-ok "an install after git init succeeds" lx -y install "$PKG"
+ok "an install after git init succeeds" lx -y apply "$PKG"
 ok "the install left a commit behind" git -C "$SHALL_CONFIG_DIR" rev-parse HEAD
 # Subjects are deliberately generic (II.13 puts the detail in the diff), so the
 # package name is not in the log — match the subject prefix Shall actually writes.
@@ -1311,14 +1312,14 @@ rm -f "$SHALL_CONFIG_DIR/locks/bare.some-other-box.toml"
 fi
 
 # The chain grammar. `list` is the priority file; a comma separates candidates.
-ok  "a chain is legal"            lx --dry-run install "$BACKEND,cargo:$PKG"
-ok  "a chain may end in list"     lx --dry-run install "$BACKEND,list:$PKG"
-ok  "list alone is legal"         lx --dry-run install "list:$PKG"
-nok_saying "an empty slot is refused" "has an empty backend"    lx --dry-run install "$BACKEND,,cargo:$PKG"
-nok_saying "an unknown link is refused" "is not a backend Shall uses"  lx --dry-run install "$BACKEND,nope:$PKG"
-nok_saying "list must come last" "must come last"         lx --dry-run install "list,$BACKEND:$PKG"
-nok_saying "a name repeated is refused" "is named twice"  lx --dry-run install "$BACKEND,$BACKEND:$PKG"
-nok_saying "a pattern cannot span one" "must match in exactly one backend"   lx --dry-run install "$BACKEND,cargo:re:^$PKG"
+ok  "a chain is legal"            lx --dry-run apply "$BACKEND,cargo:$PKG"
+ok  "a chain may end in list"     lx --dry-run apply "$BACKEND,list:$PKG"
+ok  "list alone is legal"         lx --dry-run apply "list:$PKG"
+nok_saying "an empty slot is refused" "has an empty backend"    lx --dry-run apply "$BACKEND,,cargo:$PKG"
+nok_saying "an unknown link is refused" "is not a backend Shall uses"  lx --dry-run apply "$BACKEND,nope:$PKG"
+nok_saying "list must come last" "must come last"         lx --dry-run apply "list,$BACKEND:$PKG"
+nok_saying "a name repeated is refused" "is named twice"  lx --dry-run apply "$BACKEND,$BACKEND:$PKG"
+nok_saying "a pattern cannot span one" "must match in exactly one backend"   lx --dry-run apply "$BACKEND,cargo:re:^$PKG"
 
 # A pin naming a manager this host does not have must fail out loud, not quietly
 # decide there is nothing to do — that silence is the bug chains exist to end.
@@ -1326,7 +1327,7 @@ FOREIGN=dnf; [ "$BACKEND" = "dnf" ] && FOREIGN=apt
 command -v "$FOREIGN" >/dev/null 2>&1 \
     && soft "$FOREIGN exists on this image — cannot test a pin to a missing manager" \
     || nok_saying "a pin to a manager this host lacks is not silent" "$FOREIGN" \
-        lx -y install "$FOREIGN:$PKG"
+        lx -y apply "$FOREIGN:$PKG"
 
 if [ -z "$SMOKE" ]; then
 grep_ok "unlock backends --list names the frozen package" "$PKG" lx unlock backends --list
@@ -1945,7 +1946,7 @@ READY_LIST=$(lx check health 2>/dev/null | grep '^\[READY\]' | awk '{print $2}' 
 
 # And the backends Shall reports as degraded ONLY because a setup step it offers to run has not
 # been run (Q10/Q11/Q13). They belong in the lifecycle for the same reason they are degraded:
-# `lx -y install` performs that setup, so leaving them out tests the offer nowhere — which is
+# `lx -y apply` performs that setup, so leaving them out tests the offer nowhere — which is
 # what happened the first night the health check shipped, when `mix` dropped from a real
 # lifecycle to a plan-smoke and the run still said PASS.
 #
@@ -2060,7 +2061,7 @@ lifecycle() {
     _prepath="$(path_of "$cbin")"
     [ -n "$_prepath" ] && soft "$be: $cbin already resolves to $_prepath — the removal check compares against that, not against absence"
 
-    lx_slow -y install "$be:$cpkg$copts" >/tmp/life.out 2>&1
+    lx_slow -y apply "$be:$cpkg$copts" >/tmp/life.out 2>&1
     lrc=$?
     # **Set here and not only inside `classify_install`, which runs ONLY when the install
     # failed.** Every assertion below reads this to learn where the binary went, and under
@@ -2119,13 +2120,13 @@ lifecycle() {
         # leave the package installed and the model claiming it is gone.
         grep_ok "$be: removal reports a graceful unsupported" \
             "not support\|unsupport\|cannot remove\|no remove" \
-            lx -y uninstall "$be:$cpkg"
+            lx -y apply "$be:$cpkg" --delete
         # That refusal is correct AND it leaves the line, so take it out by hand.
         undeclare_canary "$be:$cpkg"
         return 0
     fi
 
-    ok "$be: uninstall $cpkg" lx_slow -y uninstall "$be:$cpkg"
+    ok "$be: uninstall $cpkg" lx_slow -y apply "$be:$cpkg" --delete
     [ -n "$_nolist" ] || nok "$be: $ctok is gone from list" sh -c \
         "$SHALL list --backend '$be' 2>/dev/null | grep -q '$ctok'"
     [ -n "$cbin" ] && assert_binary_gone "$be" "$cbin" "$_prepath" "$LIFELOG"
@@ -2202,7 +2203,7 @@ storage_resize_lifecycle() {
 
     grep -qx lvm "$SHALL_CONFIG_DIR/priority" 2>/dev/null || echo lvm >> "$SHALL_CONFIG_DIR/priority"
 
-    if ! lx_slow -y install "lvm:$_vol@size=64M" >/tmp/resize.out 2>&1; then
+    if ! lx_slow -y apply "lvm:$_vol@size=64M" >/tmp/resize.out 2>&1; then
         soft "lvm: could not create the resize canary — $(tr '\n' ' ' < /tmp/resize.out)"
         _cleanup_resizer
         return 0
@@ -2306,7 +2307,7 @@ storage_resize_lifecycle() {
         fi
     fi
 
-    ok "lvm: the resize canary uninstalls" lx_slow -y uninstall "lvm:$_vol"
+    ok "lvm: the resize canary uninstalls" lx_slow -y apply "lvm:$_vol" --delete
     _cleanup_resizer
 }
 
@@ -2346,12 +2347,12 @@ else
     # past between checks that still reported PASS. The sections looked live and were not.
     #
     # Created only when missing, so a real run keeps exactly the file `shall init` made and
-    # `shall install` has been appending to. And created BEFORE the first append, not after:
+    # `shall apply` has been appending to. And created BEFORE the first append, not after:
     # the order is the whole point, since the failure it removes is an append that silently did
     # nothing.
     mkdir -p "$SHALL_CONFIG_DIR/modules"
     [ -f "$_limp" ] || : > "$_limp"
-    # The imperative module is already reached by the active profile — `shall install` writes
+    # The imperative module is already reached by the active profile — `shall apply` writes
     # here — so appending needs no profile wiring, which would be a second way to do it.
     printf 'link:./%s @target=%s
 ' "$LINK_SRC_NAME" "$LINK_DST" >> "$_limp"
@@ -2432,7 +2433,7 @@ else
     #
     # `@source=` is what keeps this from provisioning: without it a bare `$PKG` resolves through
     # the priority list, and the shim's job here is to dispatch, not to install.
-    ok "the package the shim wraps is installed" lx_slow -y install "$BACKEND:$PKG"
+    ok "the package the shim wraps is installed" lx_slow -y apply "$BACKEND:$PKG"
     printf 'shim:%s @source=%s:%s\n' "$PKG" "$BACKEND" "$PKG" >> "$_c14"
     ok "no shim exists before the sync that deploys it" test ! -e "$_bindir/$PKG"
     ok "sync deploys a declared shim" lx -y sync
@@ -2472,7 +2473,7 @@ else
     mv "$_c14.tmp" "$_c14"
     ok "sync removes a shim whose declaration is gone" lx -y sync
     gone_ok "the shim is gone from disk" shim test -e "$_bindir/$PKG"
-    ok "the wrapped package uninstalls" lx_slow -y uninstall "$BACKEND:$PKG"
+    ok "the wrapped package uninstalls" lx_slow -y apply "$BACKEND:$PKG" --delete
 
     # ---- dotfiles: ----------------------------------------------------------
     # One line standing for as many `link:` lines as the tree holds (U22), and the nested file is
@@ -2563,7 +2564,7 @@ else
        && [ "$BACKEND" = apt ]; then
         _svc=cron
         _svc_f0=$FAILC
-        ok "a service with an init script is installed" lx_slow -y install "$BACKEND:$_svc"
+        ok "a service with an init script is installed" lx_slow -y apply "$BACKEND:$_svc"
         # The control: `cron`'s package enables it on install, so a check that only asserted
         # "enabled after sync" would pass over a sync that did nothing at all.
         service "$_svc" stop >/dev/null 2>&1
@@ -2594,7 +2595,7 @@ else
             sh -c 'service cron status >/dev/null 2>&1'
         grep -v -F "service:$_svc " "$_c14" > "$_c14.tmp" 2>/dev/null
         mv "$_c14.tmp" "$_c14"
-        ok "the service's package uninstalls" lx_slow -y uninstall "$BACKEND:$_svc"
+        ok "the service's package uninstalls" lx_slow -y apply "$BACKEND:$_svc" --delete
         [ "$FAILC" = "$_svc_f0" ] && echo service >> "$LEDGER/be-life"
     else
         soft "service: no SysVinit here (update-rc.d + service on a Debian-family image) — plan-smoked in 15"
@@ -2691,7 +2692,7 @@ for be in $ALL_BACKENDS; do
     # The plan names the package; its options are not part of that name.
     sp_tok="${sp%%@*}"
     if grep_ok "$be: a dry-run install plans $be:$sp" "$be:$sp_tok" \
-            smoke_lx --dry-run install "$be:$sp"; then
+            smoke_lx --dry-run apply "$be:$sp"; then
         echo "$be" >> "$LEDGER/be-smoke"
     fi
 done
@@ -2908,7 +2909,7 @@ fi
 rm -f /tmp/shall-it-plan.json
 answers "plan freezes a reviewable file" lx plan --out /tmp/shall-it-plan.json
 ok "the plan file exists" test -f /tmp/shall-it-plan.json
-ok "apply reads a saved plan" lx --dry-run apply /tmp/shall-it-plan.json
+ok "execute reads a saved plan" lx --dry-run execute /tmp/shall-it-plan.json
 
 # `edit` shells out to $VISUAL/$EDITOR; `true` is an editor that exits 0.
 record_argv edit priority
@@ -3050,7 +3051,7 @@ crash_installed() { _n=0; for _p in $CRASH_PKGS; do on_path "$_p" && _n=$((_n + 
 crash_missing()   { _m=""; for _p in $CRASH_PKGS; do on_path "$_p" || _m="$_m $_p"; done; echo "$_m"; }
 # UNINSTALL FIRST, undeclare second — and the order is not cosmetic.
 #
-# `shall uninstall` refuses a package no active file declares: *"nothing was uninstalled:
+# `shall apply --delete` refuses a package no active file declares: *"nothing was uninstalled:
 # `apt:ncdu` is not declared in any active file."* That is the product being careful, and the
 # first version of this function took the line out first and then asked for the removal, so
 # every cleanup refused, three packages stayed installed, and the two crash iterations after it
@@ -3084,7 +3085,7 @@ crash_wipe() {
             echo "    declared in imperative.txt: $(grep -cx "$BACKEND:$_p" "$IMPERATIVE" 2>/dev/null || echo 0)"
             echo "    active modules: $(tr '\n' ' ' < "$SHALL_CONFIG_DIR/active" 2>/dev/null)"
         } >> /tmp/crash-wipe.out
-        $TO "$SHALL" -y uninstall "$BACKEND:$_p" >> /tmp/crash-wipe.out 2>&1
+        $TO "$SHALL" -y apply "$BACKEND:$_p" --delete >> /tmp/crash-wipe.out 2>&1
         echo "    rc=$? and $_p is now $(on_path "$_p" && echo 'STILL on PATH' || echo 'gone')" >> /tmp/crash-wipe.out
     done
     crash_undeclare
@@ -3899,7 +3900,7 @@ EOF
             soft "sudo: fewer than two canaries free on this host, so no single run performs both an install and a removal"
         else
             su "$SUDO_USER_NAME" -c "sudo -k" >/dev/null 2>&1
-            run_as_sudoer "-y install $BACKEND:$_a" "$SUDO_PW" /tmp/sudo-seed.out
+            run_as_sudoer "-y apply $BACKEND:$_a" "$SUDO_PW" /tmp/sudo-seed.out
             _mine_add "$_a"
             su "$SUDO_USER_NAME" -c "sudo -k" >/dev/null 2>&1
             # One run, two manager invocations: $_a comes out, $_b goes in.
@@ -3929,7 +3930,7 @@ EOF
             soft "sudo: every crash canary is installed on this host, so the privileged install had nothing to install"
         else
             su "$SUDO_USER_NAME" -c "sudo -k" >/dev/null 2>&1
-            run_as_sudoer "-y install $BACKEND:$_sudo_pkg" "$SUDO_PW" /tmp/sudo-install.out
+            run_as_sudoer "-y apply $BACKEND:$_sudo_pkg" "$SUDO_PW" /tmp/sudo-install.out
             _rc=$?
             _sudo_installed=""
             if [ "$_rc" -eq 0 ] && on_path "$_sudo_pkg"; then
@@ -3950,7 +3951,7 @@ EOF
                 soft "sudo: the privileged removal was not driven, because the install it would undo did not happen"
             else
                 su "$SUDO_USER_NAME" -c "sudo -k" >/dev/null 2>&1
-                run_as_sudoer "-y uninstall $BACKEND:$_sudo_pkg" "$SUDO_PW" /tmp/sudo-remove.out
+                run_as_sudoer "-y apply $BACKEND:$_sudo_pkg --delete" "$SUDO_PW" /tmp/sudo-remove.out
                 _mine_drop "$_sudo_pkg"
                 if on_path "$_sudo_pkg"; then
                     hard "sudo: the privileged uninstall of $BACKEND:$_sudo_pkg left the binary on PATH"

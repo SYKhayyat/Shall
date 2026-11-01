@@ -92,6 +92,12 @@ pub enum PlanScope {
     /// A set of packages that is not the config: a transient shell's requests. Installs only,
     /// and no filter, because the set is already exactly what was asked for.
     JustThese,
+    /// The named keys this run may act on — `install X`, `uninstall X`, `teleport X api` (II.70).
+    ///
+    /// Neither the whole machine's drift nor a scope's subset: exactly these `backend:name`
+    /// strings, and both halves of the answer follow. A key not named is outside the question, so
+    /// it is neither installed nor removed, whether or not `desired` still mentions it.
+    Named(std::collections::HashSet<String>),
 }
 
 impl PlanScope {
@@ -99,20 +105,48 @@ impl PlanScope {
     fn filter(&self) -> Option<&Scope> {
         match self {
             PlanScope::Narrowed(s) => Some(s),
-            PlanScope::Whole(_) | PlanScope::JustThese => None,
+            PlanScope::Whole(_) | PlanScope::JustThese | PlanScope::Named(_) => None,
         }
     }
 
     /// The host's backends when this plan may reap, `None` when it may not.
     ///
-    /// The two questions are one match, so a variant added later has to answer both before it
+    /// The questions are one match, so a variant added later has to answer every one before it
     /// compiles — which is what the old `Option<Scope>` could not make anyone do.
     fn reaps(&self) -> Option<&HostBackends> {
         match self {
             PlanScope::Whole(hosts) => Some(hosts),
-            PlanScope::Narrowed(_) | PlanScope::JustThese => None,
+            PlanScope::Narrowed(_) | PlanScope::JustThese | PlanScope::Named(_) => None,
         }
     }
+
+    /// The keys this plan may act on, if it is narrowed to names rather than to a scope.
+    ///
+    /// A named plan still removes — `uninstall X` is a removal — but only where `X` is the key.
+    /// That is why this is a third question and not a fourth scope: `reaps()` answers "may this
+    /// plan touch what nothing declares", and the answer stays no.
+    fn named(&self) -> Option<&std::collections::HashSet<String>> {
+        match self {
+            PlanScope::Named(keys) => Some(keys),
+            PlanScope::Whole(_) | PlanScope::Narrowed(_) | PlanScope::JustThese => None,
+        }
+    }
+
+    /// Whether one key is this plan's business.
+    ///
+    /// One predicate, read by the declaration filter and by both removal loops — a second copy
+    /// of `backend:name` is how two halves of one plan come to disagree about which package the
+    /// user named.
+    fn names(&self, backend: &str, name: &str) -> bool {
+        self.named()
+            .is_none_or(|keys| keys.contains(&key(backend, name)))
+    }
+}
+
+/// The `backend:name` string a plan is keyed by — one spelling, so the command that narrows a
+/// plan and the plan that acts on it cannot disagree about which package the user named.
+pub fn key(backend: &str, name: &str) -> String {
+    format!("{}:{}", backend, name)
 }
 
 /// Split a desired-state map into what must exist and what must not.
@@ -644,18 +678,18 @@ impl<'a> ChangePlanner<'a> {
     fn declined(
         &self,
         pkg: &crate::core::ManagedPackage,
-        hosts: &HostBackends,
+        hosts: Option<&HostBackends>,
         scheduled: &HashSet<String>,
         desired_keys: &HashSet<String>,
     ) -> Option<Declined> {
-        let key = format!("{}:{}", pkg.backend, pkg.name);
+        let key = key(&pkg.backend, &pkg.name);
         if scheduled.contains(&key) {
             return Some(Declined::AlreadyScheduled);
         }
         if desired_keys.contains(&key) {
             return Some(Declined::StillDeclared);
         }
-        if !hosts.allows(&pkg.backend) {
+        if hosts.is_some_and(|hosts| !hosts.allows(&pkg.backend)) {
             return Some(Declined::BackendNotInPriority(pkg.backend.clone()));
         }
         // II.7c. Not the same question as `installed_sets`' "could not be asked", and the two
@@ -770,7 +804,7 @@ impl<'a> ChangePlanner<'a> {
         // says. Partitioning at the top means no later branch can misread one.
         let (wanted, unwanted) = partition_by_presence(desired);
 
-        let filtered_desired = self.apply_scope_filtering(&wanted, scope.filter());
+        let filtered_desired = self.apply_scope_filtering(&wanted, &scope);
         let declared = self.drop_what_this_machine_cannot_run(
             Self::declared_specs(&filtered_desired),
             &mut changes,
@@ -808,92 +842,16 @@ impl<'a> ChangePlanner<'a> {
         // caller's scope. `PlanScope::reaps` is where that decision is made, once, and it is
         // the only way in here: the four callers that reached this block by passing `None` for
         // a scope they did not have are the reason it is a value and not a bare `Option`.
+        //
+        // A `Named` plan runs the same two loops over one key set instead of over the machine.
+        // `uninstall X` needs the drift machinery for exactly X, and hand-building `Remove`
+        // nodes at the four call sites would be four copies of a rule this file owns.
         if let Some(hosts) = scope.reaps() {
-            // Removing something that is not there is not a change — it is a command that
-            // fails every time it runs. `absent:jq` on a machine that has never had jq made
-            // every sync fail, permanently, with an error from the package manager about a
-            // package it does not have.
-            // `absent:` — the one thing Shall removes that it does not manage, because
-            // you named it (V.7). Scheduled whether or not Shall *installed* it, which is
-            // the point of the rule; not scheduled when it is not there, which is not a
-            // removal at all. The guard still decides whether it may actually go (Phase 3).
-            for (backend, specs) in &unwanted {
-                for spec in specs {
-                    let key = format!("{}:{}", backend, spec.name);
-                    if changes.removal_tracker.contains(&key) {
-                        continue;
-                    }
-                    // A manager that is not on this machine has nothing installed through it,
-                    // so `absent:` through it is already satisfied (II.7c). Checked before
-                    // `is_installed`, whose "could not ask, so assume it is there" would
-                    // otherwise schedule a removal command that cannot exist.
-                    if !self.registry.runs_here(backend) {
-                        debug!("'{}' is absent because `{}` is not here.", key, backend);
-                        continue;
-                    }
-                    if !Self::is_installed(&installed, backend, &spec.name) {
-                        debug!("'{}' is declared absent and is already absent.", key);
-                        continue;
-                    }
-                    changes.add_removal(backend, &spec.name);
-                }
-            }
-
-            // Single pass over all managed packages to schedule removals
-            for pkg in self.state.managed() {
-                let key = format!("{}:{}", pkg.backend, pkg.name);
-
-                // **Every reason not to remove this is a value, not a `continue`.** Both of the
-                // reasons that leave the machine holding something were bare `continue`s with a
-                // `debug!` above them, and a plan that drops a package in silence reports
-                // success over a machine it did not change (AU1). As a returned `Declined` each
-                // one has to say whether the user hears about it, and `Declined::reported`
-                // matches exhaustively — so a reason added later does not compile until someone
-                // answers that question.
-                if let Some(declined) =
-                    self.declined(pkg, hosts, &changes.removal_tracker, &desired_keys)
-                {
-                    debug!("'{}' will not be removed: {:?}", key, declined);
-                    if let Some(reason) = declined.reported() {
-                        changes.skipped.push(Skipped {
-                            key,
-                            reason,
-                            kind: SkipKind::RemovalDeclined,
-                        });
-                    }
-                    continue;
-                }
-
-                // NOT gated on "is it still installed", deliberately — unlike the `absent:`
-                // loop above. A managed package that has vanished from the machine still has a
-                // registry entry, and the removal is what *drops* that entry: skipping it here
-                // would leave Shall permanently claiming to manage something that is gone,
-                // which is a quieter wrong state than the failed removal it would avoid.
-                // Reconciling a stale entry is `heal`'s job, not the planner's.
-
-                // Check for expired lease
-                let is_expired = pkg.expires_at.is_some_and(|exp| Self::now() >= exp);
-
-                if is_expired {
-                    info!(
-                        "Lease for '{}' expired, not in desired. Scheduling removal.",
-                        key
-                    );
-                    changes.add_removal(&pkg.backend, &pkg.name);
-                } else {
-                    // Drift: Shall manages it and nothing declares it any more. Removing
-                    // that is what sync IS (V.34) — not a mode, not a second command with
-                    // the install half amputated.
-                    //
-                    // `protect_imperative` used to guard this branch, because an imperative
-                    // install had no line and so read as drift the moment it was recorded.
-                    // It has a line now (`modules/imperative.txt`), so it is declared like
-                    // everything else and the setting protected against a bug that no
-                    // longer exists (II.17).
-                    debug!("Scheduling drift removal: {}", key);
-                    changes.add_removal(&pkg.backend, &pkg.name);
-                }
-            }
+            self.plan_absences(&unwanted, &installed, &scope, &mut changes);
+            self.plan_drift(Some(hosts), &desired_keys, &scope, &mut changes);
+        } else if scope.named().is_some() {
+            self.plan_absences(&unwanted, &installed, &scope, &mut changes);
+            self.plan_drift(None, &desired_keys, &scope, &mut changes);
         } else {
             debug!(
                 "{:?} plan — skipping all removal planning (non-destructive).",
@@ -1009,23 +967,32 @@ impl<'a> ChangePlanner<'a> {
     ///
     /// `Cow`, so the scoped case still owns its filtered map and the caller does not have to
     /// know which one it got.
+    ///
+    /// Both narrowings meet here: a profile or module is a *tag* on the line, a named key is the
+    /// line itself. A `Named` plan filters by key before the fan-out, so a narrowed install asks
+    /// the managers about the packages it was given and no others.
     fn apply_scope_filtering<'d>(
         &self,
         desired: &'d HashMap<String, Vec<PackageSpec>>,
-        scope: Option<&Scope>,
+        scope: &PlanScope,
     ) -> std::borrow::Cow<'d, HashMap<String, Vec<PackageSpec>>> {
-        let Some(scope) = scope else {
-            return std::borrow::Cow::Borrowed(desired);
-        };
-        let wanted = match scope {
+        let wanted = scope.filter().map(|scope| match scope {
             Scope::Profile(p) => format!("profile:{}", p),
             Scope::Module(m) => format!("module:{}", m.to_lowercase()),
-        };
+        });
+        if wanted.is_none() && scope.named().is_none() {
+            return std::borrow::Cow::Borrowed(desired);
+        }
         let mut filtered = HashMap::new();
         for (backend, specs) in desired {
             let matched: Vec<PackageSpec> = specs
                 .iter()
-                .filter(|s| Self::in_scope(s.options.all("__scopes"), &wanted))
+                .filter(|s| {
+                    wanted
+                        .as_deref()
+                        .is_none_or(|w| Self::in_scope(s.options.all("__scopes"), w))
+                        && scope.names(backend, &s.name)
+                })
                 .cloned()
                 .collect();
             if !matched.is_empty() {
@@ -1084,6 +1051,123 @@ impl<'a> ChangePlanner<'a> {
         Needed {
             needed,
             unanswerable,
+        }
+    }
+
+    /// The `absent:` half of removal planning: the one thing Shall removes that it does not
+    /// manage, because you named it (V.7).
+    ///
+    /// Removing something that is not there is not a change — it is a command that fails every
+    /// time it runs. `absent:jq` on a machine that has never had jq made every sync fail,
+    /// permanently, with an error from the package manager about a package it does not have.
+    /// Scheduled whether or not Shall *installed* it, which is the point of the rule; not
+    /// scheduled when it is not there, which is not a removal at all. The guard still decides
+    /// whether it may actually go (Phase 3).
+    fn plan_absences(
+        &self,
+        unwanted: &HashMap<String, Vec<PackageSpec>>,
+        installed: &HashMap<String, HashSet<String>>,
+        scope: &PlanScope,
+        changes: &mut SyncChanges,
+    ) {
+        for (backend, specs) in unwanted {
+            for spec in specs {
+                if !scope.names(backend, &spec.name) {
+                    continue;
+                }
+                let key = key(backend, &spec.name);
+                if changes.removal_tracker.contains(&key) {
+                    continue;
+                }
+                // A manager that is not on this machine has nothing installed through it, so
+                // `absent:` through it is already satisfied (II.7c). Checked before
+                // `is_installed`, whose "could not ask, so assume it is there" would otherwise
+                // schedule a removal command that cannot exist.
+                if !self.registry.runs_here(backend) {
+                    debug!("'{}' is absent because `{}` is not here.", key, backend);
+                    continue;
+                }
+                if !Self::is_installed(installed, backend, &spec.name) {
+                    debug!("'{}' is declared absent and is already absent.", key);
+                    continue;
+                }
+                changes.add_removal(backend, &spec.name);
+            }
+        }
+    }
+
+    /// The managed-drift half of removal planning: every package Shall manages that nothing
+    /// declares, an expired lease, or the named key of an `uninstall`.
+    ///
+    /// `hosts` is the priority list a whole-machine converge is bounded by. `None` on a named
+    /// plan, and then the priority question is not asked: a key reaches a named plan only because
+    /// the user typed it (`uninstall apt:jq`) or because the resolver produced it for one they
+    /// did (`install jq`), which is a statement about that manager and not about the host's
+    /// order. `runs_here` and the protection rules are still asked — those are facts about the
+    /// machine, and narrowing a plan never narrows a safety rail.
+    fn plan_drift(
+        &self,
+        hosts: Option<&HostBackends>,
+        desired_keys: &HashSet<String>,
+        scope: &PlanScope,
+        changes: &mut SyncChanges,
+    ) {
+        // Single pass over all managed packages to schedule removals
+        for pkg in self.state.managed() {
+            if !scope.names(&pkg.backend, &pkg.name) {
+                continue;
+            }
+            let key = key(&pkg.backend, &pkg.name);
+
+            // **Every reason not to remove this is a value, not a `continue`.** Both of the
+            // reasons that leave the machine holding something were bare `continue`s with a
+            // `debug!` above them, and a plan that drops a package in silence reports success
+            // over a machine it did not change (AU1). As a returned `Declined` each one has to
+            // say whether the user hears about it, and `Declined::reported` matches
+            // exhaustively — so a reason added later does not compile until someone answers
+            // that question.
+            if let Some(declined) =
+                self.declined(pkg, hosts, &changes.removal_tracker, desired_keys)
+            {
+                debug!("'{}' will not be removed: {:?}", key, declined);
+                if let Some(reason) = declined.reported() {
+                    changes.skipped.push(Skipped {
+                        key,
+                        reason,
+                        kind: SkipKind::RemovalDeclined,
+                    });
+                }
+                continue;
+            }
+
+            // NOT gated on "is it still installed", deliberately — unlike the `absent:` loop
+            // above. A managed package that has vanished from the machine still has a registry
+            // entry, and the removal is what *drops* that entry: skipping it here would leave
+            // Shall permanently claiming to manage something that is gone, which is a quieter
+            // wrong state than the failed removal it would avoid. Reconciling a stale entry is
+            // `heal`'s job, not the planner's.
+
+            // Check for expired lease
+            let is_expired = pkg.expires_at.is_some_and(|exp| Self::now() >= exp);
+
+            if is_expired {
+                info!(
+                    "Lease for '{}' expired, not in desired. Scheduling removal.",
+                    key
+                );
+                changes.add_removal(&pkg.backend, &pkg.name);
+            } else {
+                // Drift: Shall manages it and nothing declares it any more. Removing that is
+                // what sync IS (V.34) — not a mode, not a second command with the install half
+                // amputated.
+                //
+                // `protect_imperative` used to guard this branch, because an imperative install
+                // had no line and so read as drift the moment it was recorded. It has a line now
+                // (`modules/imperative.txt`), so it is declared like everything else and the
+                // setting protected against a bug that no longer exists (II.17).
+                debug!("Scheduling drift removal: {}", key);
+                changes.add_removal(&pkg.backend, &pkg.name);
+            }
         }
     }
 

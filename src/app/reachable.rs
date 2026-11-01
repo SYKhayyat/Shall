@@ -1,6 +1,6 @@
 //! A package that installed and cannot be run.
 //!
-//! `shall install pub:sass` succeeds, `shall list` agrees, and typing `sass` answers "command
+//! `shall apply pub:sass` succeeds, `shall list` agrees, and typing `sass` answers "command
 //! not found" — because `~/.pub-cache/bin` is not on `PATH` and nothing ever said so. Shall
 //! reported success for a package the user cannot invoke, which is the same event as a failed
 //! install everywhere it matters and is reported as the opposite.

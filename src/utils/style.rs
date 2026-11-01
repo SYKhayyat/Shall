@@ -36,7 +36,7 @@ pub fn color_enabled() -> bool {
 ///
 /// **Two streams, two answers, and one of them was never asked.** The tracing subscriber writes
 /// to stderr and was built with no `.with_ansi(…)` at all, so `tracing-subscriber`'s own default
-/// — colour on, always — decided it: `shall install nosuchpkg 2>&1 | grep` came back carrying
+/// — colour on, always — decided it: `shall apply nosuchpkg 2>&1 | grep` came back carrying
 /// escape codes, and a run redirected into a log file wrote them to disk. `color_enabled` was
 /// the right answer to the wrong stream, and stdout being a pipe while stderr is a terminal is
 /// the *usual* arrangement rather than an odd one.

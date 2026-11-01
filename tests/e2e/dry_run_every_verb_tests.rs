@@ -204,7 +204,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "its file IS the preview — a `--dry-run plan` that wrote nothing would produce no \
          output at all (Q15, ruled 2026-07-30)",
     ),
-    ("apply", "applies a saved plan through a real manager"),
+    (
+        "execute",
+        "applies a saved plan through a real manager — the declarative half is `apply`",
+    ),
     (
         "unlock",
         "covered by lock: the same three ledgers, all written through `persist`",
@@ -218,15 +221,17 @@ const EXEMPT: &[(&str, &str)] = &[
     ("upgrade", "needs a real manager"),
     ("list", "read-only — asks each manager what it has"),
     ("info", "read-only — describes one package"),
-    ("install", "covered by dry_run_tests; needs a real manager"),
-    ("uninstall", "covered by dry_run_tests"),
+    (
+        "apply",
+        "covered by dry_run_tests; one direction needs a real manager",
+    ),
     (
         "unmanage",
         "covered by dry_run_tests; measured — it needs the package in the state registry, \
          not merely declared, so it cannot be driven from a config fixture alone",
     ),
     ("repo", "needs a manager that manages repositories"),
-    ("add", "covered by install: the same declare path"),
+    ("add", "covered by apply: the same declare path"),
     ("shell", "starts an interactive session that ends on exit"),
     ("history", "read-only — reads the git log of the config"),
     ("snapshot", "needs a snapshot provider"),

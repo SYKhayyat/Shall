@@ -1,7 +1,465 @@
 use crate::app::sync::resolver::StateResolver;
+use crate::config::grammar::{Origin, Statement};
 use crate::model::Edit;
 use crate::verbs::prelude::*;
-use crate::verbs::sync::{handle_sync, SyncMode};
+use crate::verbs::sync::handle_named;
+
+/// What `shall apply` was asked for.
+pub struct ApplyArgs<'a> {
+    /// The declaration lines, exactly as they would be written in a module.
+    pub declarations: &'a [String],
+    /// Take the declaration out instead: the line leaves your files and the thing is undone.
+    pub delete: bool,
+    /// Keep it off — delete, and leave an `absent:` line so nothing puts it back.
+    pub absent: bool,
+    /// Which file the line goes in.
+    pub into: Option<&'a str>,
+    /// `None` — not asked. `Some("")` — bare `--temp`, restored when a `shall shell` ends.
+    /// `Some("2h")` — a dated line that comes back (or goes away, with `--delete`) then.
+    pub temp: Option<&'a str>,
+    pub out: Output,
+}
+
+/// `apply` — one declaration, made true, and recorded (II.70).
+///
+/// **The one verb for "do this one thing".** A package converges through the planner narrowed to
+/// its key; a resource goes through the phase that owns it. Either way the line goes into your
+/// files first, so the next `sync` keeps what you asked for — and `--delete` is the mirror: the
+/// line comes out of the files and the thing is undone, which is why there is no second verb for
+/// removal.
+///
+/// The alternative shapes were tried and measured. `install` converged the whole configuration
+/// because it was a shortcut for editing a file and syncing; on the 2026-10-26 native sweeps
+/// `install cargo:hexyl` installed `brew:rustup` instead, and the canary was absent from its own
+/// install's plan (#112). A flag for the old behaviour means every caller forever picks a mode,
+/// and a second verb for removal means two paths for one word.
+pub async fn handle_apply(app: &App, args: ApplyArgs<'_>) -> Result<()> {
+    if args.declarations.is_empty() {
+        anyhow::bail!(
+            "`apply` needs a declaration, e.g. `shall apply apt:jq` or `shall apply \
+             'dir:~/scratch'`. To converge everything your files declare, run `shall sync`."
+        );
+    }
+    // One read of what the arguments are, before anything is written: a line naming a manager
+    // this host does not use is refused while the files are still untouched (S15), and the
+    // grammar says which phase owns the line instead of a prefix test here.
+    let mut parsed: Vec<(String, Statement)> = Vec::with_capacity(args.declarations.len());
+    for line in args.declarations {
+        let stmt = app.resolver().await.parse_declaration(line).await?;
+        parsed.push((line.trim().to_string(), stmt));
+    }
+    if args.delete || args.absent {
+        delete(app, &parsed, &args).await
+    } else {
+        create(app, &parsed, &args).await
+    }
+}
+
+/// The forward direction: write the line, then make exactly that one declaration true.
+async fn create(app: &App, parsed: &[(String, Statement)], args: &ApplyArgs<'_>) -> Result<()> {
+    let duration = args.temp.filter(|t| !t.is_empty());
+    if args.temp == Some("") {
+        anyhow::bail!(
+            "Bare `--temp` restores on shell exit, so it is a `--delete` form: `shall apply \
+             <pkg> --delete --temp`. Give a duration (`--temp=2h`) to write a dated line."
+        );
+    }
+
+    // II.16: a lease is a dated line. `--temp 2h` is a fine thing to type and an impossible
+    // thing to store, so the duration is resolved against `now` here and the file gets the
+    // moment it runs out (V.38). Nothing sweeps it up later — the line simply stops counting.
+    let mut lines: Vec<String> = Vec::with_capacity(parsed.len());
+    for (line, _) in parsed {
+        lines.push(match duration {
+            Some(dur) => format!("{}@expires={}", line, dated(dur)?),
+            None => line.clone(),
+        });
+    }
+
+    if app.config.dry_run {
+        let mut planned = Vec::new();
+        let mut resources: Vec<&str> = Vec::new();
+        for (line, stmt, written) in parsed.iter().zip(&lines).map(|((l, s), w)| (l, s, w)) {
+            match stmt {
+                Statement::Package(_) | Statement::Absent(_) => {
+                    for spec in app.resolver().await.resolve_spec(line).await? {
+                        planned.push(serde_json::json!({
+                            "action": "apply", "backend": spec.backend, "name": spec.name,
+                            "temporary": duration.is_some(),
+                        }));
+                    }
+                }
+                _ => resources.push(written),
+            }
+        }
+        if args.out.is_json() {
+            println!("{}", serde_json::to_string_pretty(&planned)?);
+        } else {
+            crate::would_print!(
+                "would apply {} package spec(s) and {} resource line(s):",
+                planned.len(),
+                resources.len()
+            );
+            for p in &planned {
+                println!(
+                    "  + {}:{}",
+                    p["backend"].as_str().unwrap_or(""),
+                    p["name"].as_str().unwrap_or("")
+                );
+            }
+            for line in &resources {
+                println!("  + {}", line);
+            }
+        }
+        return Ok(());
+    }
+
+    // **Resolved before the write, and the order is a rule.** A name no manager here can
+    // supply fails this resolution; a line written first would then be a wedge, because every
+    // later command parses the model — measured on the arch container, 2026-10-31: the
+    // unresolvable line landed in `imperative.txt` and `check`, `uninstall` and the next
+    // `install` all failed on it with a message about a file the user had not written. S15's
+    // write-comes-first is about refusals *on the write*; a declaration that cannot resolve at
+    // all is refused here, while the files are untouched.
+    let resolver = app.resolver().await;
+    let mut keys: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut resources: Vec<Statement> = Vec::new();
+    for (line, stmt) in parsed {
+        match stmt {
+            // `resolve_spec` follows `@requires`, so a package's prerequisites are in the plan
+            // that installs it — the one thing "exactly what you named" still means.
+            Statement::Package(_) => {
+                for spec in resolver.resolve_spec(line).await? {
+                    keys.insert(crate::app::sync::planner::key(&spec.backend, &spec.name));
+                }
+            }
+            Statement::Absent(d) => {
+                // A written `absent:` line names its manager, because the line outlives the run
+                // and the next machine's lists are not this one's. A bare name has no manager to
+                // write, so the refusal names the line that does — `--delete --absent` resolves a
+                // bare name against the holders, which is the one place that answer exists.
+                let Some(backend) = d.backend.clone() else {
+                    anyhow::bail!(
+                        "`{}` names no manager, and an `absent:` line that outlives this run \
+                         has to name one — write `absent:<backend>:{}`, or run `shall apply {} \
+                         --delete --absent` to resolve it from what is installed.",
+                        line,
+                        d.selector.as_str(),
+                        d.selector.as_str()
+                    );
+                };
+                keys.insert(crate::app::sync::planner::key(
+                    &backend,
+                    d.selector.as_str(),
+                ));
+            }
+            other => resources.push(other.clone()),
+        }
+    }
+    drop(resolver);
+
+    // S15: the write comes next. Backwards, every refusal on the write (nothing active,
+    // several profiles active, an unwritable file) landed after the package was installed: on
+    // the machine, in no file, and drift by the next sync.
+    let mut edits: Vec<Edit> = Vec::with_capacity(lines.len());
+    for line in &lines {
+        edits.push(
+            app.declarations()
+                .declare(line, args.into, crate::model::Landing::Imperative)
+                .await?,
+        );
+    }
+
+    let ran = if keys.is_empty() {
+        None
+    } else {
+        match handle_named(app, args.out, keys.clone()).await {
+            Ok(done) => Some(done),
+            Err(e) => {
+                // Q1: a line that can never succeed is taken back, and the write is refused
+                // before anything is installed because the write came first.
+                withdraw_what_can_never_succeed(
+                    &app.declarations(),
+                    &app.resolver().await,
+                    &e,
+                    &edits,
+                )
+                .await;
+                return Err(e);
+            }
+        }
+    };
+
+    // The resources, each through the phase that owns it — packages first, because a `link:`
+    // or a `shim:` is a dependent of one (II.7).
+    for stmt in &resources {
+        if let Err(e) = apply_one(app, stmt, crate::app::sync::guard::GuardScope::Sync).await {
+            // The same withdrawal a failed package install gets: the line was written first, so
+            // a line that cannot be applied is a line that would make every later `sync` fail.
+            withdraw_what_can_never_succeed(&app.declarations(), &app.resolver().await, &e, &edits)
+                .await;
+            return Err(e);
+        }
+    }
+
+    // II.70: the rest of the config is pending, and saying so is what keeps a narrowed run from
+    // reading as a converged machine. The number is the files', never a manager's — asking a
+    // lister whether the rest is present is the failure #112 is about.
+    let declared_total = match ran {
+        Some(done) => done.declared_total,
+        // A resource-only run never reconciles, so the count comes from the model it did not
+        // touch. Still one resolution, and still no manager asked.
+        None => app
+            .resolver()
+            .await
+            .resolve_model()
+            .await?
+            .total_declarations(),
+    };
+    let pending = declared_total.saturating_sub(parsed.len());
+    if pending > 0 && args.out.is_human() {
+        println!(
+            "{} other declaration(s) in your files are pending — `shall sync` applies them.",
+            pending
+        );
+    }
+    Ok(())
+}
+
+/// The reverse direction: take the line out of your files, then undo exactly that declaration.
+async fn delete(app: &App, parsed: &[(String, Statement)], args: &ApplyArgs<'_>) -> Result<()> {
+    let packages: Vec<String> = parsed
+        .iter()
+        .filter(|(_, s)| matches!(s, Statement::Package(_)))
+        .map(|(line, _)| line.clone())
+        .collect();
+    let resources: Vec<(String, Statement)> = parsed
+        .iter()
+        .filter(|(_, s)| !matches!(s, Statement::Package(_)))
+        .cloned()
+        .collect();
+
+    if args.absent && !resources.is_empty() {
+        anyhow::bail!(
+            "`--absent` keeps a *package* off; `{}` is a resource declaration, and a resource \
+             line is removed rather than kept off.",
+            resources[0].0
+        );
+    }
+
+    // A bare `--temp` restores when a `shall shell` session ends. That is the ephemeral
+    // shell's business and it is outside the model by design (II.8), so it never touches a file.
+    if args.temp == Some("") {
+        if !resources.is_empty() {
+            anyhow::bail!(
+                "bare `--temp` restores packages when a `shall shell` session ends; it does not \
+                 apply to `{}`.",
+                resources[0].0
+            );
+        }
+        let has_session = app.state.lock().await.active_session_id.is_some();
+        if !has_session {
+            anyhow::bail!(
+                "Bare `--temp` restores on shell exit, but no `shall shell` session is active. \
+                 Give a duration (e.g. --temp=2h) to schedule a timed restore."
+            );
+        }
+        return suspend_for_session(app, &packages).await;
+    }
+
+    if !packages.is_empty() {
+        let temp = args.temp.map(|d| Some(d.to_string()));
+        delete_packages(app, &packages, args.out, temp.as_ref(), args.absent).await?;
+    }
+
+    for (line, stmt) in &resources {
+        remove_one(app, line, stmt, crate::app::sync::guard::GuardScope::Sync).await?;
+    }
+    Ok(())
+}
+
+/// One declaration line made true, through the phase that owns it.
+///
+/// **One applier per phase, no second engine.** Each of these is the same call `sync` makes, over
+/// a state holding this statement and nothing else — which is what "exactly what you named"
+/// means for a line that is not a package.
+async fn apply_one(
+    app: &App,
+    stmt: &Statement,
+    scope: crate::app::sync::guard::GuardScope,
+) -> Result<()> {
+    use crate::config::grammar::Phase;
+
+    let one = one_line_state(app, stmt).await?;
+    // `.map_err(anyhow::Error::from)` on each arm: the appliers speak `core::Result`, and a
+    // second error type threaded through by hand is how the two stop agreeing about what failed.
+    match stmt.phase() {
+        Phase::Repositories => app
+            .repositories()
+            .apply(&one)
+            .await
+            .map_err(anyhow::Error::from),
+        Phase::Dependents => {
+            // The same gate a sync passes through before it places anything.
+            crate::app::sync::guard::enforce_additions(&app.config, 1, &app.reaping, scope).await?;
+            app.dependents()
+                .apply(&one)
+                .await
+                .map_err(anyhow::Error::from)
+        }
+        Phase::Dotfiles => app
+            .dotfiles()
+            .apply(&one)
+            .await
+            .map_err(anyhow::Error::from),
+        // **The perimeter is reconciled as a whole, and it has to be.** `Firewall::apply` diffs
+        // what is declared against what is in force, so a state holding one port would close
+        // every other port the files declare. This is also how its teardown works (`N5`).
+        Phase::Firewall => {
+            let whole = app.resolver().await.resolve_model().await?;
+            let system = app.system_config();
+            if system.owns_extras() {
+                system.apply(&whole, scope).await
+            } else {
+                app.firewall().apply(&whole, scope).await
+            }
+            .map_err(anyhow::Error::from)
+        }
+        Phase::Schedules => app
+            .schedules()
+            .apply(&one)
+            .await
+            .map_err(anyhow::Error::from),
+        Phase::Execs => app
+            .execs()
+            .apply(&one, crate::model::exec::Verb::Sync, None)
+            .await
+            .map(|_| ())
+            .map_err(anyhow::Error::from),
+        // `generate:` prints declarations and is consumed before a state exists, and set math is
+        // not a thing on a machine. Neither can reach here: `parse_declaration` parsed the line
+        // as one statement, and a `generate:` that produced nothing would still have to be
+        // resolved to say so.
+        Phase::Resolution | Phase::Packages => Err(crate::core::Error::Validation(format!(
+            "`apply` cannot act on `{}`: it is resolved before there is a machine state to act \
+             on. Run `shall sync`, which performs resolution first.",
+            kind_of(stmt)
+        ))
+        .into()),
+    }?;
+
+    // What was just placed is recorded where a `sync` records it, so the two are the same fact
+    // about this machine: a resource in effect with no row is one the teardown cannot undo, and
+    // one the next `check` reads as never applied.
+    if !app.config.dry_run {
+        record_placed(app, stmt, &one)?;
+    }
+    Ok(())
+}
+
+/// The ledger row for a resource this run placed — one per line, or one per file for a tree.
+fn record_placed(app: &App, stmt: &Statement, one: &crate::model::DesiredState) -> Result<()> {
+    use crate::config::grammar::Phase;
+    match stmt.phase() {
+        Phase::Dotfiles => {
+            for (link, _) in app.dotfiles().links(one)? {
+                app.extras().record_one(&link)?;
+            }
+            Ok(())
+        }
+        // A verb has no ledger row (`XIII.3`), and a resolved line never reaches here.
+        Phase::Execs | Phase::Resolution | Phase::Packages => Ok(()),
+        Phase::Repositories | Phase::Dependents | Phase::Firewall | Phase::Schedules => {
+            app.extras().record_one(stmt).map_err(anyhow::Error::from)
+        }
+    }
+}
+
+/// A statement's keyword, for a refusal that has to name what it is refusing.
+fn kind_of(stmt: &Statement) -> &'static str {
+    stmt.kind().map(|k| k.as_str()).unwrap_or("this line")
+}
+
+/// Take one resource line out: the declaration from your files, the thing from the machine.
+///
+/// The line is removed first for the same reason it is written first: an edit that is refused
+/// (nothing active, several profiles active, an unwritable file) must not leave the machine
+/// changed and no record of why.
+async fn remove_one(
+    app: &App,
+    line: &str,
+    stmt: &Statement,
+    scope: crate::app::sync::guard::GuardScope,
+) -> Result<()> {
+    use crate::config::grammar::Phase;
+
+    let edits = app.declarations().undeclare(line).await?;
+    if edits.is_empty() {
+        warn!(
+            "`{}` is not declared in any active file, so there is no line to remove.",
+            line
+        );
+    }
+
+    match stmt.phase() {
+        // A tree's files are keyed in the extras ledger one row per placed file (U22), so the
+        // teardown is the tree's own: expand it and undo each link the ledger knows.
+        Phase::Dotfiles => {
+            let one = one_line_state(app, stmt).await?;
+            let links = app.dotfiles().links(&one)?;
+            for (link, _) in &links {
+                app.extras().undo_one(link, scope).await?;
+            }
+            Ok(())
+        }
+        // Reconciled as a whole, for the reason `apply_one` gives: one port removed is a diff
+        // of the whole perimeter, not a single close.
+        Phase::Firewall => {
+            let whole = app.resolver().await.resolve_model().await?;
+            let system = app.system_config();
+            if system.owns_extras() {
+                system.apply(&whole, scope).await
+            } else {
+                app.firewall().apply(&whole, scope).await
+            }
+            .map_err(anyhow::Error::from)
+        }
+        // A verb has no inverse: its lifecycle is `locks/exec.toml`, not the extras ledger.
+        Phase::Execs => Ok(()),
+        Phase::Repositories | Phase::Dependents | Phase::Schedules => app
+            .extras()
+            .undo_one(stmt, scope)
+            .await
+            .map_err(anyhow::Error::from),
+        Phase::Resolution | Phase::Packages => Err(crate::core::Error::Validation(format!(
+            "`apply --delete` cannot undo `{}`: it is resolved before there is a machine state \
+             to undo.",
+            kind_of(stmt)
+        ))
+        .into()),
+    }
+}
+
+/// A state holding one declaration and nothing else — the input each phase applier reads.
+async fn one_line_state(app: &App, stmt: &Statement) -> Result<crate::model::DesiredState> {
+    let whole = app.resolver().await.resolve_model().await?;
+    Ok(crate::model::DesiredState {
+        packages: std::collections::HashMap::new(),
+        extras: vec![(stmt.clone(), Origin::argument())],
+        lapsed: Vec::new(),
+        vars: whole.vars,
+    })
+}
+
+/// A `--temp` duration resolved against now, or the refusal naming the forms that work.
+fn dated(duration: &str) -> Result<String> {
+    crate::model::dated::absolute_after(chrono::Utc::now(), duration).with_context(|| {
+        format!(
+            "Invalid --temp duration '{}'. Use forms like 2h, 30m, 7d.",
+            duration
+        )
+    })
+}
 
 /// `teleport PKG BACKEND` — move a declared package to another manager, then sync (II.8).
 pub async fn handle_teleport(app: &App, package: &str, backend: &str) -> Result<()> {
@@ -27,7 +485,7 @@ pub async fn handle_teleport(app: &App, package: &str, backend: &str) -> Result<
     if edits.is_empty() {
         anyhow::bail!(
             "`{}` is not declared in any active file, so there is no line to move. \
-             To add it from `{}`, run `shall install {}:{}`.",
+             To add it from `{}`, run `shall apply {}:{}`.",
             package,
             backend,
             backend,
@@ -35,132 +493,15 @@ pub async fn handle_teleport(app: &App, package: &str, backend: &str) -> Result<
         );
     }
 
-    // The line now names the new manager; sync installs it there and removes the old copy as
-    // drift — the same convergence every other edit-then-sync command relies on.
-    handle_sync(app, SyncMode::default(), Output::Human).await
-}
-
-pub async fn handle_install(
-    app: &App,
-    packages: &[String],
-    out: Output,
-    temp: Option<&str>,
-    into: Option<&str>,
-) -> Result<()> {
-    // P1: this command IS a shortcut for editing a file and syncing. So the edit comes
-    // first and convergence follows — S15. Backwards, every refusal on the write (nothing
-    // active, several profiles active, an unwritable file) landed after the package was
-    // already installed: on the machine, in no file, and drift by the next sync.
-    let mut lines: Vec<String> = Vec::with_capacity(packages.len());
-    for pkg_str in packages {
-        lines.push(match temp {
-            // II.16: a lease is a dated line. `--temp 2h` is a fine thing to type and an
-            // impossible thing to store, so the duration is resolved against `now` here and
-            // the file gets the moment it runs out (V.38). Nothing sweeps it up later —
-            // the line simply stops counting, and sync removes what nothing declares.
-            Some(dur) => {
-                let at = crate::model::dated::absolute_after(chrono::Utc::now(), dur)
-                    .with_context(|| {
-                        format!(
-                            "Invalid --temp duration '{}'. Use forms like 2h, 30m, 7d.",
-                            dur
-                        )
-                    })?;
-                format!("{}@expires={}", pkg_str.trim(), at)
-            }
-            None => pkg_str.trim().to_string(),
-        });
+    // The line now names the new manager, so the plan must install the new copy and remove the
+    // old one — naming both keys is what makes `teleport` one move rather than a convergence of
+    // everything else in the files (II.70).
+    let mut keys: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for spec in app.resolver().await.resolve_spec(package).await? {
+        keys.insert(crate::app::sync::planner::key(&spec.backend, &spec.name));
     }
-
-    // Dry-run answers "what would this do" without touching your files or the machine.
-    if app.config.dry_run {
-        let mut planned = Vec::new();
-        for line in &lines {
-            for spec in app.resolver().await.resolve_spec(line).await? {
-                planned.push(serde_json::json!({
-                    "action": "install", "backend": spec.backend, "name": spec.name,
-                    "temporary": temp.is_some(),
-                }));
-            }
-        }
-        if out.is_json() {
-            println!("{}", serde_json::to_string_pretty(&planned)?);
-        } else {
-            crate::would_print!("would install {} package spec(s):", planned.len());
-            for p in &planned {
-                println!(
-                    "  + {}:{}",
-                    p["backend"].as_str().unwrap_or(""),
-                    p["name"].as_str().unwrap_or("")
-                );
-            }
-        }
-        return Ok(());
-    }
-
-    let mut edits: Vec<Edit> = Vec::with_capacity(lines.len());
-    for line in &lines {
-        edits.push(
-            app.declarations()
-                .declare(line, into, crate::model::Landing::Imperative)
-                .await?,
-        );
-    }
-
-    // And now the ordinary declarative pipeline makes it true — which is also what puts an
-    // imperative install behind the guard for the first time (II.10).
-    let synced = handle_sync(app, SyncMode::default(), out).await;
-
-    if let Err(e) = &synced {
-        withdraw_what_can_never_succeed(&app.declarations(), &app.resolver().await, e, &edits)
-            .await;
-        // Only where the advice above has not already said it. `NameAbsentElsewhere` names the
-        // other declaration in its own words; adding this after it is the same paragraph twice.
-        if why_kept(e) != WhyKept::NameAbsentElsewhere {
-            say_if_the_failure_was_not_yours(&app.resolver().await, e, &lines).await;
-        }
-    }
-    synced
-}
-
-/// When the sync that follows `install X` fails on something other than X, say so.
-///
-/// `install X` converges the **whole** configuration, and that is the model working — Shall is
-/// declarative and your files are the truth. The consequence is that a line you have never
-/// looked at can stop the install you just typed, and the error is then the failing line's
-/// manager talking about a command you did not ask for. Measured: `shall -y install
-/// bun:sort-package-json` on a machine with one unconvergeable `service:` line reported `` `sc`
-/// failed (exit 1056) `` and nothing at all about bun (`Q34`).
-///
-/// The transaction now names the declaration in the failure itself. This adds the half only the
-/// caller knows: whether that declaration is the one the user asked for.
-///
-/// **How it decides, stated because it is a heuristic and not a proof:** the failure's own text
-/// now carries `backend:name`, so this asks whether any spec the user named appears in it. A
-/// wrong guess costs one extra paragraph of explanation and never changes what happened — which
-/// is the only reason a substring test is acceptable here.
-async fn say_if_the_failure_was_not_yours(
-    resolver: &StateResolver<'_>,
-    e: &anyhow::Error,
-    lines: &[String],
-) {
-    let said = e.to_string();
-    let mut asked_for: Vec<String> = Vec::new();
-    for line in lines {
-        for spec in resolver.resolve_spec(line).await.unwrap_or_default() {
-            asked_for.push(format!("{}:{}", spec.backend, spec.name));
-        }
-    }
-    if asked_for.is_empty() || asked_for.iter().any(|k| said.contains(k)) {
-        return;
-    }
-    warn!(
-        "that failure is not about {}. `install` writes your line and then converges your \
-         whole configuration, so a declaration you never touched can stop it — the one that \
-         failed is named above, with the file it lives in. Your line was written and stays \
-         written. Fix or `shall unmanage` the declaration that failed, then re-run.",
-        asked_for.join(", ")
-    );
+    keys.insert(crate::app::sync::planner::key(backend, package));
+    handle_named(app, Output::Human, keys).await.map(|_| ())
 }
 
 /// Whether a failed sync says the name it was given does not exist.
@@ -431,12 +772,12 @@ pub fn kept_line_advice(why: WhyKept, line: &str, file: &std::path::Path) -> Str
     }
 }
 
-/// `uninstall PKG… [--temp]` — remove the line from every active module, sync (II.8).
+/// `apply --delete PKG… [--temp]` — remove the line from every active module, then undo it.
 ///
-/// P1, like `install`: the file edit IS the command, and convergence carries it out. So the
-/// removal goes through the guard, the plan and the counts, exactly as any other removal
-/// does — rather than reaching for the backend directly and asking the guard afterwards.
-pub async fn handle_uninstall(
+/// P1: the file edit IS the command, and convergence carries it out. So the removal goes through
+/// the guard, the plan and the counts, exactly as any other removal does — rather than reaching
+/// for the backend directly and asking the guard afterwards.
+async fn delete_packages(
     app: &App,
     packages: &[String],
     out: Output,
@@ -484,6 +825,9 @@ pub async fn handle_uninstall(
     // below could not tell a package that went from one that was never Shall's.
     let unmanaged_before =
         unmanaged_targets(app.backends().await, &app.registry, &app.state, packages).await?;
+    // The keys this removal may act on, read before the lines go: a bare name is resolved from
+    // the ledger, and the plan below removes by `backend:name`.
+    let mut keys = removal_keys(app, packages).await?;
 
     let mut never_declared: Vec<&str> = Vec::new();
     let requested = packages.len();
@@ -496,7 +840,7 @@ pub async fn handle_uninstall(
             if !declared {
                 anyhow::bail!(
                     "{} isn't declared, so there's nothing for it to come back to. \
-                     Did you mean a plain uninstall?",
+                     Did you mean a plain `apply --delete`?",
                     pkg
                 );
             }
@@ -521,6 +865,10 @@ pub async fn handle_uninstall(
                 .into_iter()
                 .next()
                 .with_context(|| format!("no package `{}` in any backend you use", pkg))?;
+            // The key the `absent:` line below is written under. A bare name may have no ledger
+            // row yet — a declaration that was never installed — and the line is still what this
+            // run is about, so the plan has to be told the key the resolve just produced.
+            keys.insert(crate::app::sync::planner::key(&spec.backend, &spec.name));
             app.declarations()
                 .declare(
                     &format!("absent:{}:{}@until={}", spec.backend, spec.name, at),
@@ -562,9 +910,10 @@ pub async fn handle_uninstall(
         );
     }
 
-    // And the ordinary pipeline removes it: the package is now drift, and removing drift is
-    // what sync is (V.34).
-    handle_sync(app, SyncMode::default(), out).await?;
+    // And the ordinary pipeline removes it, narrowed to the keys this command was given
+    // (II.70): the package is now drift, and the same drift machinery removes it — over exactly
+    // these names. A whole-machine converge here is what made one removal a mass removal.
+    handle_named(app, out, keys).await?;
 
     // The sync ran because at least one name WAS declared and owed its removal; the rest are
     // named here rather than silently absorbed into a success.
@@ -580,7 +929,7 @@ pub async fn handle_uninstall(
     // The line was there and was deleted, so the check above says nothing about it, and the
     // exit code says success. Measured on the `void` leg, 2026-08-11: a sync killed after the
     // log recorded an install `Completed` but before the run wrote the registry left `pv`
-    // installed and owned by nobody, and `shall -y uninstall xbps:pv` answered `already up to
+    // installed and owned by nobody, and `shall -y apply --delete xbps:pv` answered `already up to
     // date` at exit 0 three commands later.
     //
     // `heal` takes those packages back now (`reconcile_ownership`), which is where that bug
@@ -593,8 +942,8 @@ pub async fn handle_uninstall(
             "nothing was uninstalled: {} still installed, and Shall has no record of \
              installing {}. Removing drift is what `sync` does, and a package Shall did not \
              install is not drift — it is yours. `shall adopt` takes ownership of what is \
-             already on this machine, and `uninstall` then removes it; `--absent` removes it \
-             without taking ownership first, and keeps it off; or take it off with the \
+             already on this machine, and `apply --delete` then removes it; `--absent` removes \
+             it without taking ownership first, and keeps it off; or take it off with the \
              manager directly.",
             match survivors.as_slice() {
                 [one] => format!("`{}` is", one),
@@ -638,7 +987,17 @@ async fn uninstall_as_absent(app: &App, packages: &[String], out: Output) -> Res
             .await?;
     }
 
-    handle_sync(app, SyncMode::default(), out).await?;
+    // The same narrowed pass the plain path takes: the `absent:` lines written above are the
+    // keys, and nothing else on the machine is this command's business (II.70).
+    handle_named(
+        app,
+        out,
+        targets
+            .iter()
+            .map(|(backend, name)| crate::app::sync::planner::key(backend, name))
+            .collect(),
+    )
+    .await?;
 
     // The plain path asks this of names the registry did not carry, because those are the ones
     // it could not remove. Here it is asked of every target: `--absent` claims to remove them
@@ -659,8 +1018,9 @@ async fn uninstall_as_absent(app: &App, packages: &[String], out: Output) -> Res
 ///
 /// A scoped argument answers itself. A bare name is resolved by asking the managers which of
 /// them holds it — `--absent` is aimed at software that is on this machine, so resolving it
-/// the way `install` does would name a manager that *could* supply the package rather than
-/// the one that has it. Every holder is named, because `uninstall jq` means the jq I have.
+/// the way the forward direction does would name a manager that *could* supply the package
+/// rather than the one that has it. Every holder is named, because `apply jq --delete` means
+/// the jq I have.
 async fn absent_targets(
     backends: &crate::app::Backends,
     registry: &Arc<BackendRegistry>,
@@ -731,7 +1091,7 @@ async fn absent_targets(
             };
             anyhow::bail!(
                 "`{}` is not installed under any manager Shall can ask, so there is nothing \
-                 to declare absent. Name the manager — `shall uninstall <backend>:{} \
+                 to declare absent. Name the manager — `shall apply <backend>:{} \
                  --absent` — to write the line anyway.{}",
                 name,
                 name,
@@ -757,6 +1117,36 @@ async fn absent_targets(
 /// managers Shall may use, and a `priority` that will not resolve makes the expansion — and so
 /// the refusal built on it — unanswerable. Returning an empty list instead would report every
 /// name as managed and take `Q54`'s refusal off the table silently.
+/// The plan keys a removal command may act on: `backend:name` for every name it was given.
+///
+/// A scoped argument names its own key. A bare one means *the one I have*, and the ledger is
+/// where having is written down — the same rows the plan removes. Resolving a bare name through
+/// `priority` would answer an install's question (*who could supply this*) and then remove a
+/// package the user may not have.
+///
+async fn removal_keys(app: &App, packages: &[String]) -> Result<std::collections::HashSet<String>> {
+    use crate::app::sync::planner::key;
+
+    let state = app.state.lock().await;
+    let mut keys = std::collections::HashSet::new();
+    for pkg in packages {
+        let (scoped, name) =
+            crate::config::parser::split_removal_target(pkg, |b| app.registry.get(b).is_some());
+        match scoped {
+            Some(backend) => {
+                keys.insert(key(&backend, &name));
+            }
+            None => keys.extend(
+                state
+                    .managed()
+                    .filter(|row| row.name == name)
+                    .map(|row| key(&row.backend, &row.name)),
+            ),
+        }
+    }
+    Ok(keys)
+}
+
 async fn unmanaged_targets(
     backends: &crate::app::Backends,
     registry: &Arc<BackendRegistry>,
@@ -766,10 +1156,10 @@ async fn unmanaged_targets(
     let state = state.lock().await;
     let mut out: Vec<(String, String)> = Vec::new();
     // Probed once for the whole call, and still only when a bare name asks for it. It sat
-    // inside the loop, so `shall uninstall a b c d` ran the whole `priority()` fan-out four
+    // inside the loop, so `shall apply --delete a b c d` ran the whole `priority()` fan-out four
     // times for a value that cannot change between iterations. Lazily rather than hoisted
     // outright: `usable()` is fallible, and an unresolvable `priority` must not start refusing
-    // `shall uninstall apt:jq`, which never needs the answer.
+    // `shall apply --delete apt:jq`, which never needs the answer.
     let mut usable_once: Option<Vec<Arc<crate::core::BackendCapabilities>>> = None;
     for pkg in packages {
         let (scoped, name) =
@@ -783,7 +1173,7 @@ async fn unmanaged_targets(
             // A bare name means *the one I have*, so one manager owning it is an answer and
             // the question is settled without a subprocess. Only a name no manager owns at all
             // is worth asking every manager about — and asking them is what the check below
-            // does, so widening here on an ordinary `shall uninstall jq` would turn one
+            // does, so widening here on an ordinary `shall apply --delete jq` would turn one
             // removal into a listing from every package manager on the box.
             None => {
                 // What Shall uses, both times — and asked once rather than twice, which the
@@ -848,10 +1238,10 @@ async fn still_installed(
     survivors
 }
 
-/// What `uninstall` would do, without doing any of it.
+/// What `apply --delete` would do, without doing any of it.
 ///
 /// The editor is in [`Writes::Planned`](crate::model::Writes) for the whole run, so the calls
-/// below report their edits and write nothing — the same code path a real uninstall takes,
+/// below report their edits and write nothing — the same code path a real `--delete` takes,
 /// which is what keeps the preview and the act from drifting apart.
 async fn preview_uninstall(
     app: &App,
