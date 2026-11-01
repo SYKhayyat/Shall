@@ -3267,8 +3267,18 @@ this image sudo's `Defaults use_pty` interposes a second pty with its own foregr
 of the two produced the mismatch is not settled** — both would, they are one line each in the
 same spawn — and that is why the fix is the owner's call rather than this change's: every
 candidate changes what a user sees, either by not inheriting the terminal for a mutation or by
-making the child the foreground group it reads from. It is rare because most manager reads never
-touch the tty, which is why both earlier full runs passed straight through the section.
+making the child the foreground group it reads from. It is rare in the harness because most
+manager reads never touch the tty, which is why both earlier full runs passed straight through
+the section.
+
+**Filed as `#132`, and it is worse than the container showed.** `shall run -- sh -c 'read -r x; …'`
+fingered a line and never came back: the child sat in state `T` with its own `PGID` and the pty's
+foreground group somebody else's, which is the same stop with no sudo, no container and no
+manager in the way. So every path the comments call "the terminal-handoff door" — `shall run`, the
+ephemeral `shall shell`, `$EDITOR` from `setup`, `cargo install` from `self-upgrade` — has been
+dead for anything that reads a keypress since `83b06c11` (2026-08-24) put all three spawn sites
+in their own group for tree-kill. The suite never saw it because no test gives a child a
+controlling terminal and makes it read; a pipe read is an EOF.
 
 ## IV.1 What a check has to be (V.57)
 

@@ -23,8 +23,12 @@ differed from it, and `docs/spec/decisions.md`'s `C7` carries the ruling.
   --check`, and the container harness on **ubuntu (391/0/5), arch (402/0/6) and tools
   (470/0/8)**, all `PASS`. Those numbers and the two defects the run produced are in
   `docs/spec/plan.md`'s `C7` entry; the second one — the `SIGTTIN` stop on a manager that reads
-  a terminal it does not own the foreground of — is **recorded, not fixed**: it changes
-  interactive behaviour, so it is the owner's call.
+  a terminal it does not own the foreground of — is **filed as `#132`, not fixed**: reproduced
+  outside the container as `shall run -- sh -c 'read -r x; …'` never returning (child in state
+  `T`, own `PGID`, somebody else's `TPGID`), so it is every terminal-handoff door — `shall run`,
+  the ephemeral `shall shell`, `$EDITOR`, `self-upgrade`'s `cargo install` — and it has been
+  broken since `83b06c11` (2026-08-24). The fix changes interactive behaviour, so it is the
+  owner's call.
 - What that leaves unverified is the same list as before: the native macOS/Windows sweeps (so
   `#112` itself still closes only on a dispatch), the container legs not run here (fedora,
   alpine, opensuse, void, gentoo, guix, slackware), and the behaviours only a real manager
