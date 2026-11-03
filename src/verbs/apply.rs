@@ -216,13 +216,7 @@ async fn create(app: &App, parsed: &[(String, Statement)], args: &ApplyArgs<'_>)
             .await?
             .total_declarations(),
     };
-    let pending = declared_total.saturating_sub(parsed.len());
-    if pending > 0 && args.out.is_human() {
-        println!(
-            "{} other declaration(s) in your files are pending — `shall sync` applies them.",
-            pending
-        );
-    }
+    say_what_is_pending(declared_total, parsed.len(), args.out);
     Ok(())
 }
 
@@ -283,7 +277,7 @@ async fn delete(app: &App, parsed: &[(String, Statement)], args: &ApplyArgs<'_>)
 /// **One applier per phase, no second engine.** Each of these is the same call `sync` makes, over
 /// a state holding this statement and nothing else — which is what "exactly what you named"
 /// means for a line that is not a package.
-async fn apply_one(
+pub(crate) async fn apply_one(
     app: &App,
     stmt: &Statement,
     scope: crate::app::sync::guard::GuardScope,
@@ -391,8 +385,6 @@ async fn remove_one(
     stmt: &Statement,
     scope: crate::app::sync::guard::GuardScope,
 ) -> Result<()> {
-    use crate::config::grammar::Phase;
-
     let edits = app.declarations().undeclare(line).await?;
     if edits.is_empty() {
         warn!(
@@ -400,6 +392,22 @@ async fn remove_one(
             line
         );
     }
+
+    undo_statement(app, stmt, scope).await
+}
+
+/// Undo one declaration **on the machine**, leaving the files alone.
+///
+/// The split out of [`remove_one`]: a verb that removes its own line by its own means —
+/// `schedule remove` edits the `schedules` file, which is not a `declarations().undeclare` — still
+/// owes the machine the same teardown, through the same phase table. Two copies of that table is
+/// how the second one comes to disagree about a phase.
+pub(crate) async fn undo_statement(
+    app: &App,
+    stmt: &Statement,
+    scope: crate::app::sync::guard::GuardScope,
+) -> Result<()> {
+    use crate::config::grammar::Phase;
 
     match stmt.phase() {
         // A tree's files are keyed in the extras ledger one row per placed file (U22), so the
@@ -437,6 +445,21 @@ async fn remove_one(
             kind_of(stmt)
         ))
         .into()),
+    }
+}
+
+/// The one sentence a narrowed run owes the user (II.70): the rest of the files is pending, and
+/// saying so is what keeps a narrowed run from reading as a converged machine.
+///
+/// **The count is the files', never a manager's** — it is the model's own arithmetic, and asking
+/// a lister whether the rest is present is the shape #112 is about.
+pub(crate) fn say_what_is_pending(declared_total: usize, named: usize, out: Output) {
+    let pending = declared_total.saturating_sub(named);
+    if pending > 0 && out.is_human() {
+        println!(
+            "{} other declaration(s) in your files are pending — `shall sync` applies them.",
+            pending
+        );
     }
 }
 

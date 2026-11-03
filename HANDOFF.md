@@ -1,15 +1,70 @@
-# Handoff — 2026-10-27 (second half: `C7`)
+# Handoff — 2026-11-02 (`#133`, `#130`)
 
 State of the tree, what is verified, what is not, and how to continue. Read `CLAUDE.md` and
 `docs/SPEC.md` first; they still govern everything below.
 
-**Update, 2026-10-31: `C7` is built, and the pair became one verb.** `install` and `uninstall`
-are gone — `apply <line>` and `apply <line> --delete` are the whole surface, `src/verbs/packages.rs`
-is `src/verbs/apply.rs`, and the saved-plan executor is `execute`. The section below is the
-work order as it was handed over; `docs/spec/plan.md`'s `C7` entry records where the build
-differed from it, and `docs/spec/decisions.md`'s `C7` carries the ruling.
+## Where the tree is now (2026-11-02)
 
-## Where the tree is
+**Branch `main`, clean, pushed.** Two issues closed this session, each with a rule in the register
+and a test that was watched failing first:
+
+| # | Subject | Commit |
+|---|---|---|
+| `#133` | the Windows unconfined launch (`cmd /c start`, no `/wait`) returned before its child | `05ff7fa8` |
+| — | the decision register said 244 where it held 245 (drift left by `#132`) | `466bc4d2` |
+| — | `#133` measured under Wine 11.0, not just type-checked | `9d4af64d` |
+| `#130` | `schedule add`/`remove` converged the whole machine to edit one line | this session's last commit |
+
+- **`#133` is fixed and measured, not closed.** The flag is `/wait` and the argv is now data
+  (`Sandbox::windows_unconfined_argv`). A Windows-target build of a scratch crate linking
+  `libshall` was run under Wine 11.0: the shipped `Sandbox::wrap` on `Confinement::None` returns
+  `Some(7)` for a child that exits 7, where the pre-fix line returned `Some(0)`. Wine's `cmd` is a
+  reimplementation — the issue still closes on a host without Windows Sandbox, or on the stub
+  `cmd` it proposes. Recipe (mingw `-L` shim, `wine64`) is in `plan.md` Tier 37 and the issue.
+- **`#130` is ruled `C8` and built.** Rule **II.72**, reason **V.222**, register entry `C8`.
+  `handle_schedule` no longer ends in `handle_sync`; it calls the same `apply_one` /
+  `undo_statement` pair `apply` uses, so one phase table serves every one-line command. Tests in
+  `tests/e2e/a_schedule_edit_converges_only_its_own_line_tests.rs`.
+- **The harness now pins `XDG_CONFIG_HOME`.** Landing `#130` found that a real provisioning test
+  had written and *enabled* `shall-tidy.{service,timer}` in the developer's own
+  `~/.config/systemd/user`: `dirs::config_dir()` reads `XDG_CONFIG_HOME` before `HOME`, and the
+  fixture only overrode the latter. The units were removed by hand; `tests/harness/mod.rs` sets
+  the fifth variable, and `run_with_path` lets a test stand a program in (`systemctl`).
+- **Verified on this tree, after the last edit:** `cargo build --all-targets`, `cargo test
+  --no-fail-fast` (3068 passed, 0 failed), `cargo clippy --all-targets --all-features --locked --
+  -D warnings`, `cargo fmt -- --check`, `cargo check --target x86_64-pc-windows-gnu --all-targets`
+  with `-D warnings`, and `scripts/decision-count.sh --check` (0 OPEN, 241 ANSWERED, 246 entries).
+- **Not verified:** the container matrix has not been re-run since `C7`; the macOS `launchd` and
+  Windows Task Scheduler provisioners are not exercised by the `#130` tests (only the systemd arm,
+  through a stub); `#112`'s native sweeps still need a dispatch.
+
+### Environment, as it is on this host
+
+Everything in the 2026-10-31 section below still holds, with three additions:
+
+- **The rust toolchain needs `LD_LIBRARY_PATH`** pointing at a zlib in the store, and cargo strips
+  it for its children — so `RUSTC` (and `RUSTDOC`) must be a one-line wrapper that exports it, and
+  `cargo-clippy`/`cargo-fmt` need the same treatment on `PATH`. Without this, `cargo test` dies at
+  `rustc -vV` with `libz.so.1: cannot open shared object file`.
+- **A Windows link** needs mingw's gcc wrapper (in the store), plus `libpthread.a` and
+  `libmcfgthread.a` via `-L` from a linker shim: the wrapper swallows `LIBRARY_PATH` and
+  `NIX_LDFLAGS`. Recipe in `plan.md` Tier 37.
+- **Wine is available**: `nix-shell -p wine64 --run 'wine …'`, `WINEPREFIX=/tmp/win133`.
+
+### What to take next
+
+1. **`#112`** — dispatch a native sweep. `C7` and `#133` are both in, so the run answers the
+   lister question the issue was filed for, with no harness change.
+2. **`#111`** — the manager fan-out is bounded by the core count and no instrument reports the
+   degree it lost. No ruling needed.
+3. **`#100`** — the next `void` leg names uv/yarn. Needs a run.
+4. **`#130`'s unproven half** — a real `schtasks`/`launchd` provisioning after a `schedule` edit.
+   The narrowed path calls the same phase applier those platforms already use, but only systemd
+   has been driven.
+
+---
+
+## Where the tree was — 2026-10-31
 
 - Branch `main`, HEAD `cf8eaafd`, pushed to `origin`. **`C7` and the harness family it dragged
   with it are in the working tree, uncommitted** — `git status` is the list: 40 tracked files
@@ -243,7 +298,7 @@ rustup` formula provisions nothing until `rustup default` runs), or the harness 
 page. `gem`'s listing shows the system ruby's gem set without the canary, which reads as the
 toolchain mismatch. The `dir` coverage failure is fixed (`ac797219`).
 
-## Suggested order from here
+## Suggested order from 2026-10-27 (superseded above)
 
 1. **Build `C7`** — the work order is #112's `issuecomment-6475969648` and the outline is the
    `### C7` section at the top of `docs/spec/plan.md`; the tests are reproduced in the #112

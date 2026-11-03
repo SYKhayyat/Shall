@@ -230,6 +230,16 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   backend. **That is the evidence, not the fix** — the issue stays open until the cause is found.)
 
 ## Phase 3 — Correctness Mediums
+- [x] #130 the `schedule` verb edits a line then converges the whole machine — the C7 class, on the
+  sibling verb the ruling did not cover. (**High, BUILT 2026-11-02** — `handle_schedule` ended in
+  `handle_sync`, so `shall schedule remove tidy` created a pending `dir:` on its way past, and on a
+  real machine would have installed packages and reconciled the firewall at the moment the user
+  asked for one timer off. Ruled `C8`: the verb calls the same `apply_one` / `undo_statement` pair
+  `apply` uses, so one phase table serves every one-line command. Rule in II.72, reason in V.222.
+  Tests written first and watched failing on both directions
+  (`tests/e2e/a_schedule_edit_converges_only_its_own_line_tests.rs`); landing them found that the
+  fixture leaks `XDG_CONFIG_HOME`, so a real provisioning test had written and enabled a
+  `shall-tidy.timer` in the developer's own `~/.config/systemd/user` — the harness now sets it.)
 - [x] **Gate names cited anywhere are not checked for resolving, while `V.n` citations are.**
   (Low — **BUILT, and it found NINE the day it was written**, which is the answer to "would
   anything notice the next one". `tests/a_gate_name_cited_anywhere_resolves_tests.rs`, the twin of

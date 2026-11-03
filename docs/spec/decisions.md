@@ -1,4 +1,4 @@
-﻿# The decision register — 245 entries, none open
+﻿# The decision register — 246 entries, none open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **240** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **241** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 245 are accounted
-for: **240 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 246 are accounted
+for: **241 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21 and 2026-10-27 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, and what install converges) — 7
+### C — the round of 2026-09-28/29, 2026-10-21 and 2026-10-27 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, and what install converges, and what a schedule converges) — 8
 
 | | question | answered |
 |---|---|---|
@@ -525,6 +525,7 @@ deliberately no longer has.*
 | **C5** | The mutation gate read `cargo mutants`' "the test command exited non-zero" as "the mutant was caught", so a test that failed because the host was busy was a catch — and a flaky *baseline* printed "cargo test failed in an unmutated tree", a shard that answers nothing. What may the gate claim? — RULED 2026-10-21: the gate asks the runner, and the runner is **nextest with `--retries 2`** — a test that fails and then passes on the retry is `flaky`, the run exits 0, and **the mutant is not credited**: it survives, reaches the survivor list, and the gap is visible to whoever reads the list. Only the failing test is re-run, so a genuine catch pays one test twice rather than a second run of three thousand. The isolation of one test per process also closes the `#121` family for the gate. The job's command, the retry, the runner and its log are asserted by `tests/review/the_mutation_gate_retries_a_failed_test.rs`, and the test was watched failing without the retry. (II.68, V.218) | 2026-10-21 |
 | **C6** | Tests lived wherever they had been written — 2,129 of them inside `src/`, in files of their own — so "the library carries no tests" and "the library's tests are in the library" were the same tree, and a test that needed a private item could not be moved at all. Where does a test live? — RULED 2026-10-21: **`src/a/b/c.rs` owns `tests/a/b/c/`, `src/a/b/mod.rs` owns `tests/a/b/`**, the tree mirrors `src/`, and **a src file with no tests gets no folder**. The folder says how the test drives the product — `tests/e2e/` spawns the binary or the `Fixture` harness, `tests/review/` reads the `src/` tree and asserts a property of the code — and the filename says what it is about; the two are orthogonal. A test that needs `cfg(test)` cannot live in a test crate, so it stays inline **on an exception table audited in both directions** — **now empty**, with `cargo test --lib` reporting zero tests. A relocated test sees the crate's public API, so an item it needs is made visible and says so in its own doc comment. (II.69, V.219) | 2026-10-21 |
 | **C7** | `install X` wrote X's line and then converged the whole configuration — and the 2026-10-26 native sweeps measured what that costs: the harness's `install cargo:hexyl` ran a plan whose one change was `brew:rustup`, an adopted package that was never asked for, and the canary was absent from its own install's plan (#112). What do the commands that act on one thing converge? — RULED 2026-10-27: **exactly what they name** — the named specs and their `@requires` chains, nothing else; the line is still written first (S15, Q1's withdrawal intact); the whole-machine converge stays `sync`'s; after it the rest of the config is pending, named in one line; chaining is the shell's; a narrowed run reaps nothing; the Q34 apology machinery is deleted. **Extended 2026-10-30 (owner): one verb — `apply <line>` and `apply <line> --delete` replace `install`/`uninstall`**, and any declaration line is in scope, resource lines included, each through its own phase's applier; `--absent` stays a package idea and is refused on a resource line; the saved-plan executor moves to `execute`. Supersedes the converge half of `Q34`/V.136. (II.70, V.220) | 2026-10-27 |
+| **C8** | `handle_schedule` edited a `schedule:` line and ended in a whole-machine `handle_sync`, so `shall schedule remove tidy` — one block out of `schedules`, one timer off the machine — converged everything the configuration asked for, and on a real machine would have installed packages and reconciled the firewall at the moment the user asked for one timer off. `C7` narrowed the package verbs and left this one on purpose: its mechanism is keyed on package keys and a `schedule:` is a resource applied by a non-package phase, so the ruling was owed (#130). What does a `schedule` edit converge? — RULED 2026-11-02: **exactly the timer it named** — `add` provisions it, `remove` deprovisions it, and nothing else converges; the verb calls the same `apply_one`/`undo_statement` pair `apply` uses, so one phase table serves every one-line command; a `schedule:` whose `when` does not match this host is **named, not armed**; the write still comes first (S15) and a `schedules` file that no longer parses does not block a removal; the rest of the config is pending afterwards and the verb says so in II.70's sentence. The alternative — keeping the whole converge, the `rollback` reading — was declined. (II.72, V.222) | 2026-11-02 |
 
 ---
 
@@ -10259,3 +10260,46 @@ that no longer needs one.
   would be the obvious-looking tidy-up that re-breaks it.
 - **The sibling that was already right is named, not changed.** `Sandbox::run`'s command inherits
   stdio and leads no group, so a confined `shall run` was never affected; it stays as it is.
+
+## C8
+
+**Status: ANSWERED 2026-11-02, built the same day.** What a `schedule` edit converges. Rule in
+**II.72**, reason in **V.222**. Filed as `#130`, found while landing `C7`.
+
+**The question.** `handle_schedule` edited a `schedule:` line and ended in a whole-machine
+`handle_sync`, so `shall schedule remove tidy` — one line out of a file, one timer off the machine
+— converged everything the config asked for. `C7` narrowed the package verbs and left this one on
+purpose: the mechanism it ruled is keyed on *package* keys, and a `schedule:` is a resource
+applied by a non-package phase, so `PlanScope::Named` does not describe it. #130 named the two
+readings and left the choice to the owner — a resource-keyed twin of `Named`, or keeping the
+whole converge on the grounds that a schedule edit is a request to converge the machine now.
+
+**The ruling, on the owner's instruction to narrow the sibling.** `schedule add X` writes X's line
+and provisions X; `schedule remove X` removes the line and deprovisions X; **nothing else
+converges.** The rest of the config is pending afterwards, and the verb says so in II.70's
+sentence.
+
+**The mechanism is not new, and that is the point.** `C7`'s extension had already given
+`apply <line>` a resource arm — the owning phase's own applier over a one-line state — and
+`apply --delete` the mirror through `Extras::undo_one`. `apply_one` and `undo_statement` are now
+`pub(crate)`, `remove_one` calls the second, and `handle_schedule` calls both: one phase table for
+every one-line command, so the schedule verb cannot come to disagree with `apply` about a phase.
+
+**What was not chosen.** *Keeping the whole converge*, the `rollback` reading: coherent, and
+declined for `C7`'s reason — a verb that names one timer and acts on the machine is the surprise
+that cost #112, and `rollback`'s subject really is the whole config. *Reusing `PlanScope::Named`
+for resources*: `Named` means "these package keys", and a second meaning for one word is how two
+scopes come to disagree about what they filter.
+
+**What the ruling binds.**
+
+- **A line that is not this host's is said out loud**, not applied and not undone: `when` decides
+  which machine a declaration belongs to, and arming a timer on a machine the file says it is not
+  for is the same class of surprise one level down.
+- **The write still comes first** (S15), and a `schedules` file that no longer parses does not
+  block a removal: the line comes out, the machine half is skipped with a warning naming the file,
+  and the next `sync` reads the repaired file.
+- **The verb takes the writer lock as before** — it is a `Writer` in `lock_scope`, so `main` holds
+  it for the whole run; nothing about the narrowing moves that.
+- **A narrowed run does not reap.** Removing one timer leaves a drifted resource elsewhere on the
+  machine alone; finding drift is `sync`'s and `check`'s.

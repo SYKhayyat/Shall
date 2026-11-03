@@ -8184,3 +8184,41 @@ process-wide `SIG_IGN` would silence the same stop for whatever runs on that wor
 `script -qec` and *types at it*: one test for `shall run -- sh -c 'read -r x'`, which needs the
 handover, and one for a mutation whose stub manager reads its own stdin, which needs the handle to
 be no terminal at all. Both hung before this change and both pass after it.
+
+**V.222 — Why a `schedule` edit converges only its own timer, and why the fix reused `apply`'s phase table (`#130`, C8).**
+
+**The verb was `C7`'s defect one level down, and it was measured the same way.** `handle_schedule`
+ended in `handle_sync`, so `shall schedule remove tidy` — one line out of a file, one timer off the
+machine — converged everything the config asked for on the way past. In the fixture that landed
+this rule the cost is one line long: the config declares a `dir:` that has never been applied, and
+removing a schedule creates it. On a real machine the same line installs packages, applies
+dotfiles and reconciles the firewall, at a moment the user asked for the opposite of that.
+
+**Why the first `C7` pass left it alone.** The narrowing that shipped for `apply` is keyed on
+*package* keys: the planner filters the declared map, and the removal side filters the drift
+loops. A `schedule:` is a resource — it is applied by a non-package phase, and `PlanScope::Named`
+does not describe it. Reusing the key set would have been a second meaning for one word; the
+ruling was owed, and `#130` said so rather than guessing.
+
+**What the ruling is.** The mechanism already existed and was only not reachable from this verb:
+`apply <line>` has applied a resource through its own phase since `C7`'s extension, and
+`apply --delete` has undone one through `Extras::undo_one`. So the whole change is that
+`handle_schedule` stops ending in a sync and calls the same two functions `apply` calls, instead
+of a parallel path. That is the shape any future one-line verb should copy: **if the verb needs a
+converge the other one-liners do not already have, that is the moment to ask why.**
+
+**The alternative that was declined.** Keeping the whole-machine converge and saying so — a
+schedule edit is a request to converge the machine now — is coherent, and it is what `rollback`
+gets. It was declined for the reason `C7` was ruled at all: a verb whose name is one timer and
+whose effect is the machine is the surprise, and the same surprise cost the native sweeps ten
+backends' worth of false failures (#112). `rollback`'s subject really is the whole config; a
+schedule's is a timer.
+
+**What it cost to find the harness measuring the wrong machine, again.** The first version of the
+test provisioned a timer for real, and `dirs::config_dir()` reads `XDG_CONFIG_HOME` — set on this
+host — before `HOME`, which the fixture already overrides. So the test wrote
+`shall-tidy.{service,timer}` into the *developer's* `~/.config/systemd/user` and enabled them,
+while `HOME` pointed at the fixture. The units were disabled and removed by hand. The harness sets
+`XDG_CONFIG_HOME` now, and the test stands a `systemctl` in rather than reaching a session: the
+fifth fixture variable added for the same reason, which is why the next one should be added before
+a test needs it rather than after.

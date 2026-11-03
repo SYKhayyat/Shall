@@ -771,8 +771,8 @@ schedule:nightly {
 line is read, so a bad expression names the file and line rather than surfacing when the OS
 scheduler is handed the job.
 
-**`shall schedule add`/`remove` edit this file and then sync**, the way `install` edits a
-module and syncs (P1) — the file is the state, so the edit IS the command. `schedule list`
+**`shall schedule add`/`remove` edit this file and converge exactly that one timer** (II.72) —
+the file is the state, so the edit IS the command, and the whole-machine converge stays `sync`'s. `schedule list`
 reads it. **There is no second store**: the `[schedules]` config table these commands used to
 write is deleted (II.17), because two stores could disagree about what this machine runs.
 
@@ -4387,3 +4387,24 @@ terminal (`SIGTTIN`), not failed. So the two halves are one rule:
   `^C` lands, which is the point — the person is looking at the child. `^Z` stops the child and
   there is no job table here to resume it from, so it waits until it is signalled out; job control
   is a shell's, and inside `shall shell` it is that shell's.
+
+## II.72 A `schedule` edit converges the schedule it named (`#130`, V.222)
+
+*(Owner ruling, 2026-11-02 — `C8`. `C7`'s rule, applied to a resource instead of a package key.)*
+
+**`shall schedule add X` writes X's line and provisions X; `shall schedule remove X` takes X's line
+out and deprovisions X. Neither converges anything else.** The whole-machine converge is `sync`'s,
+unchanged, and after either verb the rest of the config is pending — the same state `apply` leaves,
+said in the same sentence.
+
+- **One phase table.** The verb calls the same `apply_one` / `undo_statement` pair `apply` calls
+  for a `schedule:` line: the schedules phase is asked about one timer, not about the machine.
+  A second converge written for this verb is how the two come to disagree about a phase.
+- **A line that is not this host's is named, not armed.** `when` decides which machine a
+  declaration belongs to; a `schedule:` inside a condition that does not match here has nothing to
+  provision and nothing to take off, and the verb says that rather than converging or failing.
+- **The file is still the state.** The write comes first (S15). A `schedules` file that no longer
+  parses does not block a removal — the line comes out, the machine half is skipped out loud, and
+  the next `sync` reads the repaired file.
+- **`schedule list` is unchanged** and asks no scheduler: it reads what this host's files declare
+  (`J6`).

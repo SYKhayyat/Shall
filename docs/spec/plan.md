@@ -428,6 +428,50 @@ The build is also the first time this tree has been *linked* as a Windows progra
 type-checked — the scratch binary links `libshall` and its whole dependency tree into a `.exe`,
 which `cargo check --target` cannot show because it stops at metadata.
 
+### Tier 38 — a verb that converged the machine to edit one line (`PLAN.md` #130): BUILT
+
+**`C7`'s defect on the sibling verb, one level down.** `handle_schedule`
+(`src/verbs/declare.rs`) ended in a whole-machine `handle_sync`, so
+`shall schedule remove tidy` — one block out of `schedules`, one timer off the machine — converged
+everything the configuration asked for on the way past. Filed rather than fixed while `C7` landed,
+because `PlanScope::Named` is keyed on package keys and a `schedule:` is a *resource*, applied by
+a non-package phase: narrowing it needed a ruling, not a flag reuse.
+
+**Ruled `C8` (2026-11-02).** Rule in **II.72**, reason in **V.222**. The mechanism was already in
+the tree: `C7`'s extension gave `apply <line>` a resource arm (the phase's own applier over a
+one-line state) and `apply --delete` its mirror through `Extras::undo_one`. So `apply_one` became
+`pub(crate)`, the removal half of `remove_one` became `undo_statement` (and `remove_one` calls
+it), and `handle_schedule` calls both instead of `handle_sync`. One phase table serves every
+one-line command. The pending sentence `apply` prints was lifted into
+`say_what_is_pending`, so the two verbs say the same thing about the rest of the config.
+
+Three things the ruling binds beyond the converge itself: a `schedule:` inside a `when` that does
+not match this host is **named, not armed**; a `schedules` file that no longer parses still lets
+the line out (the machine half is skipped with a warning) because removing a broken line is the
+repair; and `schedule remove` reads the statement *before* the write, since the line is what
+carries the key the teardown needs.
+
+**Tests first, watched failing, both directions**
+(`tests/e2e/a_schedule_edit_converges_only_its_own_line_tests.rs`). The witness is a pending
+`dir:` — no root, no manager, no network: both `schedule add` and `schedule remove` created it
+before the change and neither does after it. The addition is driven for real rather than in
+`-n`, with a stub `systemctl` on `PATH` (`run_with_path`) so the schedule phase runs — unit file
+written, `enable` issued — without reaching this machine's session.
+
+**What landing it found: the fixture was measuring the developer's machine.** The first version of
+the addition test provisioned for real, and `dirs::config_dir()` reads **`XDG_CONFIG_HOME`**, which
+is set on this host, before `HOME`, which the fixture already overrides. The test wrote and
+enabled `shall-tidy.{service,timer}` in `~/.config/systemd/user` while `HOME` pointed at the
+temporary root — the exact class of drift `tests/harness/mod.rs` was written to end, one variable
+further out. The units were disabled and removed by hand; the harness sets `XDG_CONFIG_HOME` now.
+
+**Verified, 2026-11-02.** `cargo build --all-targets`, `cargo test --no-fail-fast`,
+`cargo clippy --all-targets --all-features --locked -- -D warnings`, `cargo fmt -- --check`, and
+`scripts/decision-count.sh --check` (the register grew to 246 with `C8`). **Not verified:** the
+macOS `launchd` and Windows Task Scheduler provisioners are not exercised by these tests — the
+narrowed path calls the same `Schedules::apply` those platforms already use, but only the systemd
+arm has been run, and only through a stub.
+
 ### Tier 14 — two instruments that reported without asserting (`PLAN.md` #40): BUILT
 
 28. ~~**`MockExecutor`'s `unstubbed` ledger is written and never read, and all four of

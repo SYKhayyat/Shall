@@ -1,6 +1,7 @@
 use crate::app::sync::resolver::StateResolver;
+use crate::config::grammar::{Document, Statement};
+use crate::verbs::apply::{apply_one, say_what_is_pending, undo_statement};
 use crate::verbs::prelude::*;
-use crate::verbs::sync::{handle_sync, SyncMode};
 
 pub async fn handle_repo(app: &App, cmd: &RepoCommand) -> Result<()> {
     let explicit = match cmd {
@@ -643,7 +644,7 @@ pub async fn handle_schedule(app: &App, cmd: &ScheduleCommand) -> Result<()> {
                 .map_err(|e| anyhow::anyhow!(e))?;
             // Parse what was just written before it is written: a bad cron or an unknown key
             // must be refused at the door, naming the line, not discovered at provision time.
-            crate::config::grammar::parse_document(&file, &updated, &known)?;
+            let doc = crate::config::grammar::parse_document(&file, &updated, &known)?;
             let verb = crate::verbs::write_unless_previewing(
                 &app.config,
                 &file,
@@ -653,12 +654,16 @@ pub async fn handle_schedule(app: &App, cmd: &ScheduleCommand) -> Result<()> {
             )
             .await?;
             println!("{} `schedule:{}` to {}.", verb, name, file.display());
+            converge_one(app, name, &doc, Direction::Add).await?;
         }
         ScheduleCommand::Remove { name } => {
             let Some(updated) = remove_line(&body, name) else {
                 println!("No `schedule:{}` in {}.", name, file.display());
                 return Ok(());
             };
+            // Read the statement before the line is gone: the teardown needs the key the
+            // declaration carries, and the line that carried it is about to leave the file.
+            let parsed = crate::config::grammar::parse_document(&file, &body, &known).ok();
             let verb = crate::verbs::write_unless_previewing(
                 &app.config,
                 &file,
@@ -668,6 +673,19 @@ pub async fn handle_schedule(app: &App, cmd: &ScheduleCommand) -> Result<()> {
             )
             .await?;
             println!("{} `schedule:{}` from {}.", verb, name, file.display());
+            match parsed {
+                Some(doc) => converge_one(app, name, &doc, Direction::Remove).await?,
+                // A `schedules` file that does not parse is the one thing this verb can still
+                // repair — the line is already out — so the file comes out and the machine half
+                // is skipped out loud rather than refusing the removal.
+                None => warn!(
+                    "`schedule:{}` was removed from {} without undoing anything on this \
+                     machine: the file did not parse, so Shall could not read what to take off. \
+                     Run `shall sync` once it parses.",
+                    name,
+                    file.display()
+                ),
+            }
         }
         ScheduleCommand::List => {
             let doc = crate::config::grammar::parse_document(&file, &body, &known)?;
@@ -703,7 +721,102 @@ pub async fn handle_schedule(app: &App, cmd: &ScheduleCommand) -> Result<()> {
         }
     }
 
-    handle_sync(app, SyncMode::default(), Output::Human).await
+    Ok(())
+}
+
+/// Which way a `schedule` edit goes.
+#[derive(Clone, Copy)]
+enum Direction {
+    Add,
+    Remove,
+}
+
+/// Apply — or undo — **only the line the verb named** (#130, II.72).
+///
+/// `apply_one` and `undo_statement` are the same phase table `apply` uses, over a state holding
+/// this statement and nothing else, so the schedule phase is asked about one timer and the rest
+/// of the configuration stays pending where `sync` left it. That is `C7`'s mechanism applied to
+/// a resource instead of a package key — the thing #130 asked for a ruling on.
+///
+/// **A line that is not this host's is said out loud, not applied.** `when` decides which machine
+/// a declaration belongs to, and a `schedule:` written inside a condition that does not match here
+/// has nothing to provision and nothing to take off; converging it anyway would arm a timer on a
+/// machine the file says it is not for.
+async fn converge_one(app: &App, name: &str, doc: &Document, direction: Direction) -> Result<()> {
+    let Some((stmt, applies_here)) = find_schedule(doc, name) else {
+        anyhow::bail!(
+            "`schedule:{}` could not be read back out of the `schedules` file — nothing was {} \
+             on this machine. Run `shall check`, which reads the file the same way.",
+            name,
+            match direction {
+                Direction::Add => "applied",
+                Direction::Remove => "undone",
+            }
+        );
+    };
+    if !applies_here {
+        if app.config.dry_run {
+            return Ok(());
+        }
+        println!(
+            "`schedule:{}` is declared for another machine — its `when` does not match this one, \
+             so nothing was {}.",
+            name,
+            match direction {
+                Direction::Add => "applied",
+                Direction::Remove => "undone",
+            }
+        );
+        return Ok(());
+    }
+    if app.config.dry_run {
+        crate::would_print!(
+            "would {} `schedule:{}`; the rest of your files stay pending.",
+            match direction {
+                Direction::Add => "apply",
+                Direction::Remove => "undo",
+            },
+            name
+        );
+        return Ok(());
+    }
+    match direction {
+        Direction::Add => {
+            apply_one(app, &stmt, crate::app::sync::guard::GuardScope::Sync).await?;
+            // II.70's sentence, one declaration later: what this run applied is not the machine.
+            let total = app
+                .resolver()
+                .await
+                .resolve_model()
+                .await?
+                .total_declarations();
+            say_what_is_pending(total, 1, Output::Human);
+        }
+        Direction::Remove => {
+            undo_statement(app, &stmt, crate::app::sync::guard::GuardScope::Sync).await?;
+        }
+    }
+    Ok(())
+}
+
+/// The `schedule:NAME` statement in `doc`, and whether this host gets it.
+///
+/// Read through the grammar rather than rebuilt here: which options a `schedule:` carries is
+/// `model::schedule`'s business, and a second builder beside `add_line`'s would be a second
+/// answer to that question. The gating half is `when`'s — a name can be in the file and not
+/// belong to this machine.
+fn find_schedule(doc: &Document, name: &str) -> Option<(Statement, bool)> {
+    let is_named =
+        |stmt: &Statement| matches!(stmt, Statement::Schedule(found, _) if found == name);
+    if let Ok(applies) = doc.statements_for(&crate::config::parser::HostFacts::current()) {
+        if let Some((stmt, _)) = applies.into_iter().find(|(stmt, _)| is_named(stmt)) {
+            return Some((stmt, true));
+        }
+    }
+    doc.every_statement()
+        .into_iter()
+        .find(|(stmt, _, _)| is_named(stmt))
+        .map(|(stmt, _, _)| (stmt.clone(), false))
 }
 
 pub async fn handle_activate(

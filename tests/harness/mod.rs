@@ -76,7 +76,20 @@ impl Fixture {
     /// The two streams, kept apart — for the tests asserting that a document goes to stdout and
     /// its diagnostics do not.
     pub fn run_split(&self, args: &[&str]) -> (String, String, i32) {
-        let out = Command::new(env!("CARGO_BIN_EXE_shall"))
+        self.run_split_with(args, None)
+    }
+
+    /// `run`, with `dir` prepended to the child's `PATH` — for a test that has to stand in for a
+    /// program the verb will drive (`systemctl`), where the alternative is a test that reaches the
+    /// developer's session instead of the fixture.
+    pub fn run_with_path(&self, dir: &Path, args: &[&str]) -> (String, i32) {
+        let (out, err, code) = self.run_split_with(args, Some(dir));
+        (format!("{out}{err}"), code)
+    }
+
+    fn run_split_with(&self, args: &[&str], path_prefix: Option<&Path>) -> (String, String, i32) {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_shall"));
+        command
             .args(args)
             // Every one of these four is here because a test that omitted it was measuring the
             // developer's machine rather than the fixture.
@@ -85,10 +98,23 @@ impl Fixture {
             .env("SHALL_DATA_DIR", self.data())
             .env("HOME", &self.root)
             .env("USERPROFILE", &self.root)
+            // **`HOME` is not isolation on a host that exports the XDG variables.**
+            // `dirs::config_dir()` reads `XDG_CONFIG_HOME` first, and it is set on this machine,
+            // so a `schedule:` test provisioned `shall-tidy.timer` into the *developer's*
+            // `~/.config/systemd/user` while `HOME` pointed at the fixture (found 2026-11-02 while
+            // landing #130, and the units had to be disabled by hand). The fifth entry in this
+            // list, for the fifth time the same way.
+            .env("XDG_CONFIG_HOME", self.root.join(".config"))
             // A test that blocks on a prompt is a test that hangs CI rather than failing it.
-            .stdin(std::process::Stdio::null())
-            .output()
-            .expect("the binary should run");
+            .stdin(std::process::Stdio::null());
+        if let Some(dir) = path_prefix {
+            let inherited = std::env::var_os("PATH").unwrap_or_default();
+            let mut path = std::ffi::OsString::from(dir);
+            path.push(":");
+            path.push(inherited);
+            command.env("PATH", path);
+        }
+        let out = command.output().expect("the binary should run");
         (
             String::from_utf8_lossy(&out.stdout).to_string(),
             String::from_utf8_lossy(&out.stderr).to_string(),

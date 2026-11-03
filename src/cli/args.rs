@@ -1401,7 +1401,7 @@ pub struct ScheduleArgs {
 
 #[derive(Subcommand, Debug)]
 pub enum ScheduleCommand {
-    /// Write a `schedule:` block into the `schedules` file, then sync
+    /// Write a `schedule:` block into the `schedules` file and provision that one timer
     Add {
         /// Unique name for the scheduled task
         name: String,
@@ -1417,7 +1417,7 @@ pub enum ScheduleCommand {
     },
     /// List what the `schedules` file declares for this host
     List,
-    /// Take a `schedule:` block out of the `schedules` file, then sync
+    /// Take a `schedule:` block out of the `schedules` file and deprovision that one timer
     Remove { name: String },
 }
 
