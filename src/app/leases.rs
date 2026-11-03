@@ -40,7 +40,7 @@ impl Leases<'_> {
         let answers = crate::app::sync::guard::essential_names(
             self.registry,
             &backends,
-            self.config.max_parallel,
+            self.config.spawn_parallel,
             &mut Default::default(),
         )
         .await;

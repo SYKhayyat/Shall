@@ -176,7 +176,7 @@ async fn probe_all_health(app: &App) -> Vec<(String, crate::core::HealthReport)>
                 };
                 (b.name().to_string(), report)
             })
-            .buffered(config.max_parallel.max(1))
+            .buffered(config.spawn_parallel.max(1))
             .collect()
             .await;
 
@@ -268,7 +268,7 @@ async fn probe_all_health(app: &App) -> Vec<(String, crate::core::HealthReport)>
                 (name, complaint)
             }
         })
-        .buffer_unordered(config.max_parallel.max(1))
+        .buffer_unordered(config.spawn_parallel.max(1))
         .collect()
         .await;
 

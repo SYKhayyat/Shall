@@ -15,7 +15,7 @@ fn unmeasured_is_reported_on_every_skip_path() {
     // it declines on both counts at once — which is why this asserts the sentence and not
     // the number.
     let lines = captured(|| {
-        report_if_over("sync", Duration::from_secs(1));
+        report_if_over("sync", Duration::from_secs(1), 16);
     });
     let got = markers(&lines);
     assert!(
@@ -34,7 +34,7 @@ fn unmeasured_is_reported_on_every_skip_path() {
     // (2) `report_shape` on a class with no fan-out shape at all, and only one reason to
     // decline — so this one *is* exactly one marker, and is the negative for the case above.
     let lines = captured(|| {
-        report_shape("info", Class::OneBackend);
+        report_shape("info", Class::OneBackend, 16);
     });
     let got = markers(&lines);
     assert_eq!(got.len(), 1, "one reason to decline, one marker: {got:?}");
@@ -59,7 +59,7 @@ fn unmeasured_is_reported_on_every_skip_path() {
         "the healthy reading is within budget, so there is nothing to report"
     );
     let lines = captured(|| {
-        report_shape("list", Class::OneBackend);
+        report_shape("list", Class::OneBackend, 16);
     });
     assert!(
         markers(&lines).is_empty() || !markers(&lines).iter().any(|m| m.contains("within")),

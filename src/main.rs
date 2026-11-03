@@ -183,9 +183,13 @@ async fn main() -> Result<()> {
     // question in seconds (E14).
     let started = std::time::Instant::now();
     let outcome = dispatch(&app, &cli).await;
+    // The budget the reporter reads is the run's child-process one: those are the children the
+    // shape verdict is about, and it is a value the configuration holds rather than an ambient
+    // fact about the machine (#111).
     shall::core::latency::report_if_over(
         &shall::core::latency::subcommand_name(&cli.command),
         started.elapsed(),
+        app.config.spawn_parallel,
     );
     // Before `finish`, which maps a refusal or a failure onto an exit code and leaves: a run
     // that ended badly is the one whose timing a user most wants to see.

@@ -774,9 +774,9 @@ impl<'a> ChangePlanner<'a> {
                     ))
                 }
             })
-            // The knob, not a number: the two fan-outs on either side of this one already read
-            // `max_parallel`, and a cap that ignores the setting is a cap the user cannot move.
-            .buffer_unordered(self.config.max_parallel.max(1))
+            // The knob, not a number: this fan-out asks managers what they have installed, and
+            // a cap that ignores the setting is a cap the user cannot move.
+            .buffer_unordered(self.config.spawn_parallel.max(1))
             .filter_map(|r| async move { r })
             .collect()
             .await
@@ -1021,9 +1021,10 @@ impl<'a> ChangePlanner<'a> {
         // Each spec's "is it already installed?" check is a separate query — usually a process
         // spawn (`apt list <pkg>`, `brew info <pkg>`). Done one after another this is the
         // dominant cost of `sync`/`status`/`plan` on a large config. Overlap the waits, capped
-        // at `max_parallel`; the futures borrow `&self` so this stays on one task (no spawn),
+        // at `spawn_parallel` — these children are managers being asked, not told (#111); the
+        // futures borrow `&self` so this stays on one task (no spawn),
         // which is all that is needed since the time is spent waiting on child processes.
-        let cap = self.config.max_parallel.max(1);
+        let cap = self.config.spawn_parallel.max(1);
         // **Collected, not propagated.** This used to `?` out of the stream, which under
         // `TryStreamExt` ends the whole plan on the first failure — so one manager that could not
         // answer one package meant none of the machine's declarations were planned, and the

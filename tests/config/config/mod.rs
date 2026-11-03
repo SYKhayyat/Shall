@@ -42,6 +42,7 @@ fn flag_pairs() -> Vec<FlagPair> {
         ),
     ]
 }
+mod a_child_process_budget_is_not_the_core_count;
 mod a_flag_that_was_passed_turns_the_setting_on;
 mod a_missing_file_still_remembers_where_it_looked;
 mod a_named_manager_list_pins_those_managers_and_no_others;

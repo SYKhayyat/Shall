@@ -2624,10 +2624,13 @@ open, or a `@scope=system` line against a store with no machine-wide commands is
 `None`/unverifiable, never *not in effect*. A failed read reported as drift would rewrite the key
 on every sync for ever and keep `check` permanently red on something nobody can see. **V.188.**
 
-**Two knobs, because processes and sockets are not the same thing.** `max_parallel` bounds
-concurrent **processes** and defaults to the core count. `network_parallel` bounds concurrent
-**network requests** and defaults to 16, whatever the core count. Nothing that fans out reads a
-number that is not one of these two. **V.116.**
+**Three knobs, because a core is not a socket and not a child process.** `max_parallel` bounds
+concurrent **processes Shall tells to change something** and defaults to the core count.
+`network_parallel` bounds concurrent **network requests** and defaults to 16, whatever the core
+count. `spawn_parallel` bounds concurrent **child processes Shall only waits on** — a manager
+being asked for an answer — and also defaults to 16, for the same reason: waiting on somebody
+else's process is not work a core does. Nothing that fans out reads a number that is not one of
+these three. **V.116**, **V.223**.
 
 **Every wait states its bound, or it has none on purpose.** A `search` backend that has not
 answered within twice the configured network timeout (floor 30s) contributes nothing and says
@@ -4408,3 +4411,30 @@ said in the same sentence.
   the next `sync` reads the repaired file.
 - **`schedule list` is unchanged** and asks no scheduler: it reads what this host's files declare
   (`J6`).
+
+## II.73 A child Shall only asks is not a core (`#111`, V.223)
+
+*(Owner ruling, 2026-11-03 — `C9`. `Y2`'s argument, applied to the other kind of wait.)*
+
+**`spawn_parallel` bounds every fan-out whose children are managers being *asked* for an answer —
+a listing, a probe, a version — and it defaults to 16, not to the core count. `max_parallel`
+bounds the children Shall *tells* to change something, and still defaults to the core count.**
+
+- **The axis is what the child does, not what it is called.** `list`, `check`, `plan`, `sbom`,
+  `export` and `adopt` ask; the transaction engine, `upgrade`, `remove-orphans`' deletions, a cache
+  clean and a metadata refresh tell. The first kind is a spawn and a wait; the second competes for
+  a package database and a lock.
+- **A read is a read wherever it happens.** `sync`'s own reads — the planner's per-spec "is it
+  installed", the resolver's fallback chain, the removal guard's essential lists — read the same
+  number, because they are the same kind of child. What the engine owns is its *writes*: one
+  number, `max_parallel`, for every child that changes a package.
+- **One future per manager, and one program at a time per database.** `pacman`, `yay` and `paru`
+  are three programs over one database; `app::stale_lock::lock_key` is the one place that knows,
+  and a fan-out groups by it. The budget is spent on managers that can answer at once, never on
+  two futures waiting for the same listing.
+- **The reporter names the budget it measured against.** `report_if_over` is handed this number,
+  so a run says *"16 slot(s) for child processes and used 3 of them"* rather than the width alone,
+  which is the reading `#107` had to give up. A one-wide run is still the collapse verdict's, not
+  a slot reading — one defect, one sentence.
+- **A `generate:` command is the user's program, not a manager.** The resolver's fan-out over
+  them stays on `max_parallel`: it is not an ask, its cost is unknown, and it runs on every sync.

@@ -1,4 +1,80 @@
-# Handoff — 2026-11-02 (`#133`, `#130`)
+# Handoff — 2026-11-03 (`#111`)
+
+State of the tree, what is verified, what is not, and how to continue. Read `CLAUDE.md` and
+`docs/SPEC.md` first; they still govern everything below.
+
+## Where the tree is now (2026-11-03)
+
+**Branch `main`, clean, pushed.** One issue this session, ruled and built:
+
+| # | Subject | Commit |
+|---|---|---|
+| `#111` | a fan-out over managers Shall only *waits* on was bounded by the core count | this session's commit |
+
+- **`#111` is ruled `C9` and built.** Rule **II.73**, reason **V.223**, register entry `C9`. A
+  third knob — **`spawn_parallel`, default 16** — bounds every fan-out whose children only *ask* a
+  manager for an answer (a listing, a probe, a version); `max_parallel` keeps its core-count
+  default and bounds the children Shall *tells* to change something. The axis is what the child
+  does, so `sync`'s own reads moved with it and its writes did not. `generate:` stays on
+  `max_parallel`: a user's script is not a manager.
+- **`managed_pkgs` fans out one future per manager**, grouped by `app::stale_lock::lock_key` — so
+  the budget is not spent on siblings waiting for the same listing, and `pacman`/`yay`/`paru`
+  (three programs over one database) are asked one at a time. That grouping is `#111`'s own stated
+  hazard, answered rather than assumed.
+- **The instrument can say the degree now.** `report_if_over` is handed the budget, `slot_reading`
+  is pure, and a wide run reports *"this run had 16 slot(s) for child processes and used 3 of
+  them, over 17 child command(s)"* — the reading `#107` had to give up when it moved to width. A
+  one-wide run is still the collapse verdict's, so one defect is still one sentence.
+- **Measured, mock managers, 120 ms each, seven of them:** two slots → **490 ms, width 2, four
+  waves**; sixteen → **122 ms, width 7, one wave**. On the CI runners' own table that is
+  `sbom`/`export`/`audit` going from ~4.25 s to ~their slowest child (~2.0 s). Route 3 — measure
+  and close as not worth doing — was available and the numbers did not support it.
+- **Verified on this tree, after the last edit:** `cargo build --all-targets`, `cargo test
+  --no-fail-fast` (3078 passed, **1 failed — pre-existing, see below**), `cargo clippy
+  --all-targets --all-features --locked -- -D warnings`, `cargo fmt -- --check`, and
+  `scripts/decision-count.sh --check` (0 OPEN, 242 ANSWERED, 247 entries).
+- **Not verified:** no container leg re-run since the widening; the new budget has been driven
+  through mocks, not through a real manager beyond this host's two; `x86_64-pc-windows-gnu` was
+  not re-checked this session (nothing in the change is `cfg`-gated).
+- **The one red on this host is not this change.** `grade2_wedged_manifest_tests::
+  a_name_no_backend_can_install_is_never_left_in_the_manifest` fails **identically on the
+  unmodified tree** (stashed and re-run: 3066 filtered, same panic). The cause is the host's `npm`
+  being a read-only nix-store install: Shall's install runs `npm install -g`, whose global prefix
+  resolves to `/nix/store/…-nodejs-slim-22.23.4/lib`, so npm dies with `ENOENT … mkdir` before it
+  ever reaches the registry (`npm error 404 'shall-no-such-pkg-zzz-9@*' is not in this registry`
+  is what a plain `npm install` says). Shall then reports *"Nothing classified the failure above"*
+  and keeps the line — correct for an unclassified failure, and a `#54`-class clean-host
+  assumption rather than a wedged-manifest defect.
+
+### Environment, as it is on this host
+
+Everything in the 2026-10-31 section below still holds, with three corrections:
+
+- **The rust toolchain needs `LD_LIBRARY_PATH`** pointing at a zlib in the store, and cargo strips
+  it for its children — so `RUSTC` (and `RUSTDOC`) must be a one-line wrapper that exports it.
+- **`rustfmt` no longer needs a shim: use the rustup one** (`$HOME/.rustup/toolchains/stable-*/bin`,
+  `rustfmt 1.9.0-stable`). The store path the earlier handoff names
+  (`…-rustfmt-1.97.1/bin/rustfmt`) is **gone** — garbage-collected — and a `RUSTFMT` pointing at
+  it makes `cargo fmt` fail with *"Could not run rustfmt"* while otherwise looking healthy.
+- **A Windows link** needs mingw's gcc wrapper (in the store), plus `libpthread.a` and
+  `libmcfgthread.a` via `-L` from a linker shim: the wrapper swallows `LIBRARY_PATH` and
+  `NIX_LDFLAGS`. Recipe in `plan.md` Tier 37.
+
+### What to take next
+
+1. **`#112`** — dispatch a native sweep. `C7`, `C8` and `C9` are all in, so the run answers the
+   lister question the issue was filed for, and `C9` gives the sweeps a wider fan-out at the same
+   time. No harness change.
+2. **`#100`** — the next `void` leg names uv/yarn. Needs a run.
+3. **`#130`'s unproven half** — a real `schtasks`/`launchd` provisioning after a `schedule` edit.
+4. **A container leg since `C9`** — nothing in the matrix has run against the widened reads, and
+   the removal guard's essential-list query is the one to watch (it is now up to 16 wide on a
+   path that ends in a deletion).
+
+---
+
+## Where the tree was — 2026-11-02 (`#133`, `#130`)
+
 
 State of the tree, what is verified, what is not, and how to continue. Read `CLAUDE.md` and
 `docs/SPEC.md` first; they still govern everything below.

@@ -503,7 +503,7 @@ pub type EssentialsCache = HashMap<String, EssentialOutcome>;
 pub async fn essential_names(
     registry: &Arc<BackendRegistry>,
     backends: &HashSet<String>,
-    max_parallel: usize,
+    spawn_parallel: usize,
     cache: &mut EssentialsCache,
 ) -> EssentialAnswers {
     // Each `essential()` is a subprocess and they have nothing to say to one another, so they
@@ -559,7 +559,7 @@ pub async fn essential_names(
                 }
             }
         })
-        .buffer_unordered(max_parallel.max(1))
+        .buffer_unordered(spawn_parallel.max(1))
         .collect::<Vec<_>>()
         .await;
 
@@ -916,7 +916,7 @@ pub async fn inspect_removals(
         RemovalKind::Package => {
             let backends: HashSet<String> = removals.iter().map(|(b, _)| b.clone()).collect();
             let answers =
-                essential_names(registry, &backends, config.max_parallel, essentials).await;
+                essential_names(registry, &backends, config.spawn_parallel, essentials).await;
             (answers.names, answers.unanswered)
         }
         // `service`/`link`/`setting` are not package managers and have no essential list to

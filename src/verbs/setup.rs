@@ -391,6 +391,11 @@ pub const CONFIG_TEMPLATE: &str = r#"# Shall refusals and behaviour (preferences
 # Omit to auto-detect this machine's core count (respecting container CPU limits).
 # max_parallel = 4
 
+# How many child processes Shall only WAITS on (a manager being asked a question) it has
+# in flight at once. Not the core count: waiting on someone else's process is not work a
+# core does. Omit for 16.
+# spawn_parallel = 16
+
 # Timeout (seconds) for outbound HTTP search requests (npm/PyPI/marketplace).
 network_timeout_secs = 15
 

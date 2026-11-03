@@ -352,6 +352,63 @@ build and what is deferred to hardware.**
     **refusal at apply**, never a parse failure, precisely so one shared Linux manifest still
     parses everywhere; that half is proven on any host.
 
+### Tier 38 — a child Shall only waits on is not a core (`PLAN.md` #111): BUILT
+
+**The issue was a budget question, and its first step was to measure — so the measurement is where
+this started.** `max_parallel` defaults to `available_parallelism()`, which is right for work that
+ends in a CPU, and it was also bounding every fan-out whose children are managers being *asked* a
+question. On the two CI runners `available_parallelism()` is **2**, so `shall sbom` asked its seven
+children two at a time: **four waves, 5.23 s of child time inside 4.25 s of wall clock**, and the
+`#107` width verdict had just given up the reading that would have shown it — both a two-wide run
+on a two-slot host and a two-wide run on a sixteen-slot budget read as *unmeasured*.
+
+**Measured over mock managers, because the numbers have to be the fan-out's and not this host's.**
+Seven managers, 120 ms each, the same `Counting` layer the width gate uses (so the second column is
+a count, not a clock reading):
+
+```text
+seven managers, 120 ms each   wall     width   waves
+two slots   (the old number)  490 ms   2       4
+sixteen slots                 122 ms   7       1
+```
+
+So the win is the fan-out and not the host: on the runner's own table, one wave is its slowest
+child — `npm list`, 2.02 s — which is `sbom`, `export` and `audit` going from ~4.25 s to ~2.0 s. A
+machine with seventeen managers and two cores goes from nine waves to one. Route 3 (measure, decide
+it is not worth it, close) was available and the numbers did not support it.
+
+**The ruling is `C9`; the rule is II.73; the reason is V.223.** A third knob — `spawn_parallel`,
+**16**, `network_parallel`'s number and `network_parallel`'s argument — bounds the children Shall
+only *asks*; `max_parallel` keeps its core-count default and bounds the children Shall *tells* to
+change something. The axis is what the child does, so it does not depend on which command reached
+the fan-out: `sync`'s own reads (the planner's per-spec check, the resolver's fallback chain, the
+removal guard's essential lists) read the same number as `list`'s. `generate:` stays on
+`max_parallel`, because a user's script is not a manager and its cost is unknown.
+
+**Two things came with the width.** *One future per manager*: the packages of one backend share a
+listing, so a fan-out over packages spent slots on siblings waiting for the same child;
+`managed_pkgs` now groups by `app::stale_lock::lock_key` and asks one manager at a time — which is
+also `#111`'s stated hazard, `pacman`/`yay`/`paru` being three programs over one database. And *the
+budget reaches the instrument*: `report_if_over` is handed `spawn_parallel`, `latency::slot_reading`
+is pure, and a wide run now says **"this run had 16 slot(s) for child processes and used 3 of
+them, over 17 child command(s)"**, adding that the fan-out never reached the width it was
+allowed. A
+one-wide run is still the collapse verdict's — one defect, one sentence.
+
+**Watched failing first, in three directions.** Against the unmodified code, with the signature
+already taking a `&Config` so the red was behaviour rather than a compile error:
+`two_cores_do_not_bound_how_many_managers_are_asked_at_once` (peak **2** of 7),
+`the_spawn_budget_caps_the_fan_out_at_three` (peak **7** against a budget of 3 — the budget was
+being ignored entirely) and `two_programs_over_one_database_are_asked_one_at_a_time` (`pacman` and
+`yay` both in flight). All three pass now, and the older width tests in that file were re-pointed
+at `budget(2, 2)` / `budget(4, 4)` so they still assert what they always said.
+
+**What this does not prove.** The mock measures the *scheduling*, not a manager. On this dev host
+`shall sbom` reports only **2 child commands** — the machine has two live managers — so the effect
+is invisible here by arithmetic, which is exactly the arithmetic the issue was about; the runner
+table and the mock are what stand in for a seventeen-manager two-core host. No container leg has
+been re-run since the widening.
+
 ### Tier 37 — a launch that did not wait (`PLAN.md` #133): BUILT
 
 **One missing flag, and it was the whole Windows half of "spawn a child and wait for it".**

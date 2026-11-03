@@ -1,4 +1,4 @@
-﻿# The decision register — 246 entries, none open
+﻿# The decision register — 247 entries, none open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **241** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **242** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 246 are accounted
-for: **241 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 247 are accounted
+for: **242 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21 and 2026-10-27 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, and what install converges, and what a schedule converges) — 8
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27 and 2026-11-03 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, and what bounds a fan-out over managers) — 9
 
 | | question | answered |
 |---|---|---|
@@ -526,6 +526,7 @@ deliberately no longer has.*
 | **C6** | Tests lived wherever they had been written — 2,129 of them inside `src/`, in files of their own — so "the library carries no tests" and "the library's tests are in the library" were the same tree, and a test that needed a private item could not be moved at all. Where does a test live? — RULED 2026-10-21: **`src/a/b/c.rs` owns `tests/a/b/c/`, `src/a/b/mod.rs` owns `tests/a/b/`**, the tree mirrors `src/`, and **a src file with no tests gets no folder**. The folder says how the test drives the product — `tests/e2e/` spawns the binary or the `Fixture` harness, `tests/review/` reads the `src/` tree and asserts a property of the code — and the filename says what it is about; the two are orthogonal. A test that needs `cfg(test)` cannot live in a test crate, so it stays inline **on an exception table audited in both directions** — **now empty**, with `cargo test --lib` reporting zero tests. A relocated test sees the crate's public API, so an item it needs is made visible and says so in its own doc comment. (II.69, V.219) | 2026-10-21 |
 | **C7** | `install X` wrote X's line and then converged the whole configuration — and the 2026-10-26 native sweeps measured what that costs: the harness's `install cargo:hexyl` ran a plan whose one change was `brew:rustup`, an adopted package that was never asked for, and the canary was absent from its own install's plan (#112). What do the commands that act on one thing converge? — RULED 2026-10-27: **exactly what they name** — the named specs and their `@requires` chains, nothing else; the line is still written first (S15, Q1's withdrawal intact); the whole-machine converge stays `sync`'s; after it the rest of the config is pending, named in one line; chaining is the shell's; a narrowed run reaps nothing; the Q34 apology machinery is deleted. **Extended 2026-10-30 (owner): one verb — `apply <line>` and `apply <line> --delete` replace `install`/`uninstall`**, and any declaration line is in scope, resource lines included, each through its own phase's applier; `--absent` stays a package idea and is refused on a resource line; the saved-plan executor moves to `execute`. Supersedes the converge half of `Q34`/V.136. (II.70, V.220) | 2026-10-27 |
 | **C8** | `handle_schedule` edited a `schedule:` line and ended in a whole-machine `handle_sync`, so `shall schedule remove tidy` — one block out of `schedules`, one timer off the machine — converged everything the configuration asked for, and on a real machine would have installed packages and reconciled the firewall at the moment the user asked for one timer off. `C7` narrowed the package verbs and left this one on purpose: its mechanism is keyed on package keys and a `schedule:` is a resource applied by a non-package phase, so the ruling was owed (#130). What does a `schedule` edit converge? — RULED 2026-11-02: **exactly the timer it named** — `add` provisions it, `remove` deprovisions it, and nothing else converges; the verb calls the same `apply_one`/`undo_statement` pair `apply` uses, so one phase table serves every one-line command; a `schedule:` whose `when` does not match this host is **named, not armed**; the write still comes first (S15) and a `schedules` file that no longer parses does not block a removal; the rest of the config is pending afterwards and the verb says so in II.70's sentence. The alternative — keeping the whole converge, the `rollback` reading — was declined. (II.72, V.222) | 2026-11-02 |
+| **C9** | A fan-out whose children are managers being *asked* a question was bounded by `max_parallel`, which defaults to the core count — so on the two-core CI runners `shall sbom` was two children wide however many managers it had declared: seven children summing to 5.23 s inside 4.25 s, four waves (#111). Nothing measured was serial; the number was the wrong number for a spawn plus a wait. And `#107`'s width verdict had just given up the reading that would have shown it, because the budget it would compare against was an ambient fact about the machine rather than a value the reporter could read. What bounds a child Shall only waits on? — RULED 2026-11-03: **a third knob, `spawn_parallel`, defaulting to 16 like `network_parallel`** — it bounds every fan-out whose children only *ask* a manager, while `max_parallel` (still the core count) bounds the children Shall *tells* to change something; a fan-out groups by `app::stale_lock::lock_key` so `pacman`/`yay`/`paru` are asked one at a time, and `managed_pkgs` fans out one future per manager rather than per package; and the reporter is handed the budget, so a run says **"16 slot(s) and used 3"** instead of a width with nothing to compare it to. Measured over mock managers at 120 ms: 490 ms / width 2 / four waves at two slots against 122 ms / width 7 / one wave at sixteen. (II.73, V.223) | 2026-11-03 |
 
 ---
 
@@ -10303,3 +10304,48 @@ scopes come to disagree about what they filter.
   it for the whole run; nothing about the narrowing moves that.
 - **A narrowed run does not reap.** Removing one timer leaves a drifted resource elsewhere on the
   machine alone; finding drift is `sync`'s and `check`'s.
+
+## C9
+
+**Status: ANSWERED 2026-11-03, built the same day.** What bounds a fan-out over managers Shall only
+waits on. Rule in **II.73**, reason in **V.223**. Filed as `#111`, found while fixing `#90` and
+re-filed out of `#107`.
+
+**The question.** `max_parallel` defaults to `available_parallelism()`, and `network_parallel`
+exists because waiting on a socket is not work a core does. A manager listing is the same shape —
+a spawn and a wait — and had no such number, so the fan-out was as wide as the machine had cores.
+The issue named three routes: one config field grouped by manager, a fan-out as wide as the work
+itself, or measure it and close it as not worth doing. It also named the risk that makes this a
+ruling rather than a patch: a wider fan-out must not put two programs over one package database.
+
+**The ruling.** **`spawn_parallel`, defaulting to 16** — the third knob beside `max_parallel` and
+`network_parallel`, with `network_parallel`'s default and reason. It bounds every fan-out whose
+children only *ask* a manager for an answer; `max_parallel` keeps the children Shall *tells* to
+change something, and keeps its core-count default.
+
+**Why not route 3.** It was measured, and the win is the fan-out itself: seven managers at 120 ms
+apiece take **490 ms over two slots and 122 ms over sixteen** — four waves against one, width 2
+against 7 — and on the CI runner's own numbers that is `sbom`'s 4.25 s becoming roughly its slowest
+child, about 2.0 s. A machine with seventeen managers and two cores goes from nine waves to one.
+
+**What was not chosen.** *A fan-out as wide as its input* (route 2): it reads `N` from the
+collection, which is the one shape `fanout_cap_reads_the_setting_tests` bans by name, and it would
+put seventeen managers in flight with no ceiling a user could lower. *Defaulting the new field from
+`max_parallel`*: it changes nothing for anyone who does not edit the file, which leaves the defect
+in place for every user who does not read the release notes.
+
+**What the ruling binds.**
+
+- **The axis is what the child does.** Asking is a listing, a probe, a version; telling is an
+  install, a removal, a cache clean, a metadata refresh. The first is `spawn_parallel`, the second
+  `max_parallel`, wherever the fan-out happens — including inside `sync`, whose *reads* now use the
+  same number as `list`'s.
+- **One program per database at a time.** `app::stale_lock::lock_key` is the grouping key, because
+  it is the one place that knows `pacman`, `yay` and `paru` are three programs over one database.
+- **The budget is a value the instrument reads.** `report_if_over` is handed it, `slot_reading` is
+  pure, and a wide run reports *slots and used* instead of a width alone. The collapse verdict stays
+  with `shape_violation`, so a serial fan-out is still one sentence.
+- **`managed_pkgs` fans out one future per manager**, not per package: siblings waiting on the same
+  listing were spending slots on nothing.
+- **`generate:` stays on `max_parallel`.** It is the user's program, not a manager, and the fan-out
+  over it is not an ask.

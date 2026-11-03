@@ -1661,7 +1661,7 @@ impl<'a> StateResolver<'a> {
         }
 
         use futures::stream::{FuturesOrdered, StreamExt};
-        let cap = self.config.max_parallel.max(1);
+        let cap = self.config.spawn_parallel.max(1);
         let mut queued = rest
             .iter()
             .map(|backend| self.ask(backend, name, constraint));

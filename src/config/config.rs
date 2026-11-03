@@ -724,6 +724,19 @@ pub struct Config {
     #[serde(default = "default_network_parallel")]
     pub network_parallel: usize,
 
+    /// How many **child processes Shall only waits on** it has in flight at once — a manager
+    /// being asked for an answer (`apt list`, `npm prefix -g`, `brew info`), as opposed to one
+    /// being told to change something.
+    ///
+    /// A separate number from `max_parallel` for the reason `network_parallel` is separate:
+    /// nothing about waiting on somebody else's process wants to be bounded by how many cores
+    /// the machine has. `max_parallel` is the core count, which is right for work that ends in a
+    /// CPU; a fan-out over managers is a spawn and a wait. On a two-core runner it was two
+    /// children wide however many managers the command had declared — seven children summing to
+    /// 5.23s inside 4.25s of wall clock, four waves, for a budget nobody chose (#111).
+    #[serde(default = "default_spawn_parallel")]
+    pub spawn_parallel: usize,
+
     /// How long a manager's installed listing may be reused **across** runs, in seconds.
     /// `0` — the default — means never: every run asks every manager afresh.
     ///
@@ -1033,9 +1046,10 @@ fn validate_safety_settings(config: &Config, path: &Path) -> Result<()> {
             ratio
         )));
     }
-    if config.max_parallel == 0 || config.network_parallel == 0 {
+    if config.max_parallel == 0 || config.network_parallel == 0 || config.spawn_parallel == 0 {
         return Err(Error::Config(format!(
-            "{} sets a parallelism limit to 0; max_parallel and network_parallel must be positive",
+            "{} sets a parallelism limit to 0; max_parallel, network_parallel and spawn_parallel \
+             must be positive",
             path.display()
         )));
     }
@@ -1093,6 +1107,15 @@ fn default_max_parallel() -> usize {
 /// registries answered in one wave instead of six on a four-core machine. Held below the point
 /// where a registry starts reading the fan-out as abuse; a machine that wants more says so.
 fn default_network_parallel() -> usize {
+    16
+}
+/// Sixteen, and deliberately not the core count — `network_parallel`'s argument applied to the
+/// other kind of wait. A child Shall is only going to wait on costs a file descriptor and some
+/// memory, not a core, and the machines that pay most for the wrong number are the ones with the
+/// fewest cores: a two-core runner asked seventeen managers two at a time, nine waves, while the
+/// managers did nothing but wait on each other's turns. Sixteen is one wave for a machine with a
+/// normal number of managers and small enough that a manager is never surprised by the company.
+fn default_spawn_parallel() -> usize {
     16
 }
 /// Zero — a listing is never reused across runs unless the machine's owner asks for it.
@@ -1308,6 +1331,7 @@ impl Default for Config {
             quiet: false,
             max_parallel: default_max_parallel(),
             network_parallel: default_network_parallel(),
+            spawn_parallel: default_spawn_parallel(),
             installed_cache_secs: default_installed_cache_secs(),
             manager_command_timeout_secs: default_manager_command_timeout_secs(),
             listing_invalidation: InvalidationScope::default(),

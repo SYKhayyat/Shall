@@ -142,7 +142,7 @@ impl Adopter {
         let answers: Vec<Result<Vec<(String, String)>>> =
             futures::stream::iter(backends.iter().filter_map(|b| b.as_queryable().cloned()))
                 .map(|q| async move { q.owned_system_packages().await })
-                .buffer_unordered(self.config.max_parallel.max(1))
+                .buffer_unordered(self.config.spawn_parallel.max(1))
                 .collect()
                 .await;
         let mut names = HashSet::new();
@@ -231,7 +231,7 @@ impl Adopter {
                     }
                 }
             })
-            .buffered(self.config.max_parallel.max(1))
+            .buffered(self.config.spawn_parallel.max(1))
             .filter_map(|r| async move { r })
             .collect()
             .await

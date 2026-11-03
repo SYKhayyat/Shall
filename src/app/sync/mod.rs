@@ -644,7 +644,7 @@ impl SyncEngine {
                     Self::probe_ok(&check.probe).await,
                 )
             })
-            .buffered(self.config.max_parallel.max(1))
+            .buffered(self.config.spawn_parallel.max(1))
             .collect()
             .await;
 

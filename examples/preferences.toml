@@ -30,6 +30,15 @@ max_parallel = 8
 # Defaults to 16 whatever the core count.
 network_parallel = 16
 
+# How many CHILD PROCESSES Shall only WAITS on it has in flight at once — a manager being
+# asked for an answer (`apt list`, `npm prefix -g`, `brew info`), not one being told to
+# change something. A separate number for the same reason as network_parallel: a spawn and
+# a wait is not bounded by how many cores you have, and on a two-core runner this used to be
+# two managers wide however many the command had declared. Two programs over one manager's
+# database (`pacman` and `yay`) are still asked one at a time whatever this says.
+# Defaults to 16 whatever the core count.
+spawn_parallel = 16
+
 # Timeout (in seconds) for outbound HTTP search requests
 # (npm/pnpm/yarn registry, PyPI for pip, the VS Code marketplace).
 network_timeout_secs = 15

@@ -521,7 +521,7 @@ async fn warn_about_unreachable_binaries(
     use futures::stream::StreamExt;
     let messages: Vec<Option<String>> = futures::stream::iter(backends.iter())
         .map(|be| crate::app::reachable::unreachable_warning(be, config, executor))
-        .buffered(config.max_parallel.max(1))
+        .buffered(config.spawn_parallel.max(1))
         .collect()
         .await;
     for message in messages.into_iter().flatten() {
@@ -731,7 +731,7 @@ pub async fn handle_rebuild(
         let essential = guard::essential_names(
             &app.registry,
             &backends,
-            app.config.max_parallel,
+            app.config.spawn_parallel,
             &mut Default::default(),
         )
         .await;

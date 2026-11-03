@@ -166,6 +166,22 @@ fn registry_and_mock_with_probes(
     Arc<MockExecutor>,
     Arc<tokio::sync::Mutex<Peak>>,
 ) {
+    let names: Vec<String> = (0..count).map(|i| format!("mock{i}")).collect();
+    let names: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
+    registry_and_mock_named(&names, probed)
+}
+
+/// The same registry over **the manager names the lock table knows**, which is what makes a
+/// fan-out's grouping testable: `pacman` and `yay` are two programs over one database
+/// (`app::stale_lock::lock_key`), and two programs over one database must not be asked at once.
+fn registry_and_mock_named(
+    names: &[&str],
+    probed: &[usize],
+) -> (
+    Arc<BackendRegistry>,
+    Arc<MockExecutor>,
+    Arc<tokio::sync::Mutex<Peak>>,
+) {
     let vfs: Arc<DashMap<PathBuf, String>> = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
     // The layer is the counting wrapper; the mock underneath still records the call log, which is
@@ -177,8 +193,8 @@ fn registry_and_mock_with_probes(
     });
     let exec = CommandExecutor::with_layer(true, false, layer, vfs, Arc::new(DashMap::new()));
     let mut reg = BackendRegistry::new();
-    for i in 0..count {
-        let name = format!("mock{i}");
+    for (i, name) in names.iter().enumerate() {
+        let name = (*name).to_string();
         mock.set_command_exists(&name, true);
         // `MockExecutor` matches on program plus argv, and this is the call that has to overlap:
         // `info` reaches the listing through `installed_listing`, one fetch per backend.
@@ -290,7 +306,7 @@ async fn five_managers_and_two_probes_keep_order_and_the_process_cap() {
         );
     }
 
-    let pkgs = shall::app::export::managed_pkgs(&state, &registry, 2).await;
+    let pkgs = shall::app::export::managed_pkgs(&state, &registry, &budget(2, 2)).await;
     let expected: Vec<String> = (0..BACKENDS).map(|i| format!("mock{i}-pkg")).collect();
     assert_eq!(
         pkgs.iter()
@@ -335,7 +351,7 @@ async fn seven_managers_are_asked_at_once_and_not_one_after_another() {
         );
     }
 
-    let pkgs = shall::app::export::managed_pkgs(&state, &registry, 4).await;
+    let pkgs = shall::app::export::managed_pkgs(&state, &registry, &budget(4, 4)).await;
 
     assert_eq!(
         pkgs.len(),
@@ -395,7 +411,7 @@ async fn a_manager_is_listed_once_however_many_packages_are_asked_about_it() {
         }));
     }
 
-    let pkgs = shall::app::export::managed_pkgs(&state, &registry, 2).await;
+    let pkgs = shall::app::export::managed_pkgs(&state, &registry, &budget(2, 2)).await;
     assert_eq!(
         pkgs.len(),
         BACKENDS * PER_BACKEND,
@@ -441,7 +457,7 @@ async fn a_width_of_one_is_serial_because_it_is_meant_to_be() {
         );
     }
 
-    let pkgs = shall::app::export::managed_pkgs(&state, &registry, 1).await;
+    let pkgs = shall::app::export::managed_pkgs(&state, &registry, &budget(1, 1)).await;
 
     assert_eq!(pkgs.len(), MANAGERS, "same seven packages");
     // **The control is the same instrument, not a clock.** It used to assert `elapsed >= 6 *
@@ -455,5 +471,130 @@ async fn a_width_of_one_is_serial_because_it_is_meant_to_be() {
         "a width of one had {} commands in flight at once, of {} — so the counter cannot tell a \
          loop from a fan-out, and the test above measures nothing",
         c.peak, c.started
+    );
+}
+
+/// The two numbers this fan-out could read, named separately, so a test can say which one it
+/// read. `max_parallel` is the core count's budget; `spawn_parallel` is the one for waiting on a
+/// manager (`#111`).
+fn budget(max_parallel: usize, spawn_parallel: usize) -> shall::config::Config {
+    shall::config::Config {
+        max_parallel,
+        spawn_parallel,
+        ..Default::default()
+    }
+}
+
+/// **`#111`: two cores must not decide how many managers are asked at once.**
+///
+/// The runner's own shape, without the runner: `max_parallel` is 2 — what `available_parallelism`
+/// returns there — and the budget for children Shall only waits on is 16. Seven managers, seven
+/// packages. Before this, `managed_pkgs` read `max_parallel`, so the fan-out was two wide and
+/// seven managers took four waves to answer seven questions; the ratio could not see it (a
+/// two-slot budget caps the ratio by arithmetic) which is why nothing reported the cost.
+///
+/// **The assertion is the peak, not a duration.** Eight `--release` builds on this host once moved
+/// a timing assertion in this file by 5x, and the question here is how many children were in
+/// flight, which no amount of load can move.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn two_cores_do_not_bound_how_many_managers_are_asked_at_once() {
+    let (registry, _mock, peak) = registry_and_mock_of(MANAGERS);
+    let state = Arc::new(tokio::sync::Mutex::new(StateRegistry::default()));
+    {
+        let mut guard = state.lock().await;
+        guard.set_managed(
+            (0..MANAGERS).map(|i| managed(&format!("mock{i}"), &format!("mock{i}-pkg"))),
+        );
+    }
+
+    let config = budget(2, 16);
+    let pkgs = shall::app::export::managed_pkgs(&state, &registry, &config).await;
+    assert_eq!(
+        pkgs.len(),
+        MANAGERS,
+        "every managed package must still be answered, so the peak below is about a fan-out and \
+         not about a short list"
+    );
+
+    let c = peak.lock().await.clone();
+    assert_eq!(
+        c.peak, MANAGERS,
+        "{MANAGERS} managers were asked with a spawn budget of 16 on a machine whose core count is \
+         two, and at most {} were in flight at once — so the fan-out is reading the core count, \
+         which is the number #111 is about. A child here is a manager being asked a question: the \
+         run is waiting, not computing: {:?}",
+        c.peak, c.at
+    );
+}
+
+/// **And the budget is a budget.** The same fan-out with `spawn_parallel = 3` asks three at a
+/// time and no more, which is what makes it a setting rather than a licence to open everything at
+/// once — the failure mode `fanout_cap_reads_the_setting_tests` exists to prevent.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_spawn_budget_caps_the_fan_out_at_three() {
+    let (registry, _mock, peak) = registry_and_mock_of(MANAGERS);
+    let state = Arc::new(tokio::sync::Mutex::new(StateRegistry::default()));
+    {
+        let mut guard = state.lock().await;
+        guard.set_managed(
+            (0..MANAGERS).map(|i| managed(&format!("mock{i}"), &format!("mock{i}-pkg"))),
+        );
+    }
+
+    let pkgs = shall::app::export::managed_pkgs(&state, &registry, &budget(16, 3)).await;
+    assert_eq!(pkgs.len(), MANAGERS, "same seven answers");
+
+    let c = peak.lock().await.clone();
+    assert_eq!(
+        c.peak, 3,
+        "a spawn budget of 3 over {MANAGERS} managers reached {} in flight: {:?}",
+        c.peak, c.at
+    );
+}
+
+/// **One database, one question at a time.** `#111`'s own risk note: a wider fan-out must not put
+/// two programs over one manager's database — `pacman` and `yay` are two backends over one
+/// `db.lck` (`app::stale_lock::lock_key`). So the fan-out groups by that key and asks the
+/// programs of one key in sequence, which is also what stops the budget being spent on a future
+/// that is waiting for its own sibling.
+///
+/// Both directions, because a grouping that grouped everything would pass the first half: two
+/// managers with different keys must still be asked together.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn two_programs_over_one_database_are_asked_one_at_a_time() {
+    let same_database: Vec<String> = vec!["pacman".into(), "yay".into()];
+    let (registry, _mock, peak) = registry_and_mock_named(&["pacman", "yay"], &[]);
+    let state = Arc::new(tokio::sync::Mutex::new(StateRegistry::default()));
+    {
+        let mut guard = state.lock().await;
+        guard.set_managed(
+            (0..2).map(|i| managed(&same_database[i], &format!("{}-pkg", same_database[i]))),
+        );
+    }
+
+    let pkgs = shall::app::export::managed_pkgs(&state, &registry, &budget(2, 16)).await;
+    assert_eq!(pkgs.len(), 2, "both answers, one after the other");
+    let c = peak.lock().await.clone();
+    assert_eq!(
+        c.peak, 1,
+        "`pacman` and `yay` are two programs over one database and were both in flight at once — \
+         a spawn budget of 16 is not a licence to open one manager's lock twice: {:?}",
+        c.at
+    );
+
+    // The control: two managers that share nothing are asked together at the same budget.
+    let (registry, _mock, peak) = registry_and_mock_named(&["brew", "npm"], &[]);
+    let state = Arc::new(tokio::sync::Mutex::new(StateRegistry::default()));
+    {
+        let mut guard = state.lock().await;
+        guard.set_managed([managed("brew", "curl"), managed("npm", "left-pad")]);
+    }
+    let pkgs = shall::app::export::managed_pkgs(&state, &registry, &budget(2, 16)).await;
+    assert_eq!(pkgs.len(), 2, "both answers");
+    let c = peak.lock().await.clone();
+    assert_eq!(
+        c.peak, 2,
+        "`brew` and `npm` share no database and must be asked at the same time: {:?}",
+        c.at
     );
 }

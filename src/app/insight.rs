@@ -29,11 +29,11 @@ pub struct ResolvedPkg {
 async fn resolve_managed(
     state: &tokio::sync::Mutex<crate::core::StateRegistry>,
     registry: &crate::backends::BackendRegistry,
-    max_parallel: usize,
+    config: &Config,
 ) -> Vec<ResolvedPkg> {
     // **One implementation, in `export`.** This was a byte-for-byte second copy of that loop,
     // and both were serial — so fixing the fan-out in one would have left the other at 1.0×.
-    crate::app::export::managed_pkgs(state, registry, max_parallel)
+    crate::app::export::managed_pkgs(state, registry, config)
         .await
         .into_iter()
         .map(|(backend, name, version)| ResolvedPkg {
@@ -133,7 +133,7 @@ pub async fn sbom(
     registry: &Arc<BackendRegistry>,
     state: &tokio::sync::Mutex<crate::core::StateRegistry>,
 ) -> Result<String> {
-    let pkgs = resolve_managed(state, registry, config.max_parallel).await;
+    let pkgs = resolve_managed(state, registry, config).await;
     let doc = build_cyclonedx(&pkgs);
     serde_json::to_string_pretty(&doc).map_err(|e| Error::Json(e.to_string()))
 }
@@ -245,7 +245,7 @@ pub async fn audit(
     registry: &Arc<BackendRegistry>,
     state: &tokio::sync::Mutex<crate::core::StateRegistry>,
 ) -> Result<AuditReport> {
-    let pkgs = resolve_managed(state, registry, config.max_parallel).await;
+    let pkgs = resolve_managed(state, registry, config).await;
     let (body, index_map) = build_querybatch(&pkgs);
 
     let mut report = AuditReport {
@@ -774,7 +774,7 @@ pub async fn why(
                     }
                 }
             })
-            .buffered(config.max_parallel.max(1))
+            .buffered(config.spawn_parallel.max(1))
             .filter_map(|r| async move { r })
             .collect()
             .await;

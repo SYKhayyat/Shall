@@ -2650,7 +2650,9 @@ remote lookups. On a four-core laptop that ran the registries in **six sequentia
 no reason but that the laptop has four cores, when nothing about waiting on a socket competes
 for one. `search` measured 15.5s / 25.5s / 48.0s / 160.2s across four runs.
 
-So there are two knobs and nothing reads a third. `network_parallel` defaults to 16: high enough
+So there are two knobs for these two kinds of wait — *and a third arrived on 2026-11-03 for a
+third kind, the child process Shall only waits on: `spawn_parallel`, at 16 for the same reason.
+See **V.223**; the rest of this entry is the sockets.* `network_parallel` defaults to 16: high enough
 that a normal fan-out is one wave, low enough that a registry does not read it as abuse. Where
 two fan-outs nest — every bare name at once, and within each name every candidate manager at
 once — the cap is held by the leaf that actually talks to a registry, so the two multiply into
@@ -8222,3 +8224,59 @@ while `HOME` pointed at the fixture. The units were disabled and removed by hand
 `XDG_CONFIG_HOME` now, and the test stands a `systemctl` in rather than reaching a session: the
 fifth fixture variable added for the same reason, which is why the next one should be added before
 a test needs it rather than after.
+
+---
+
+**V.223 — Why the budget for waiting on a manager is not the core count (`#111`, `C9`).**
+
+**Nothing measured was wrong; the number was.** `max_parallel` defaults to
+`available_parallelism()`, which is the right budget for work that ends in a CPU, and it was also
+bounding fan-outs whose children are managers being *asked* a question — a spawn and a wait. On
+the two-core CI runners that made every such fan-out two children wide however many managers the
+command had declared. `#111`'s own table, from the Windows and Linux jobs of run `37232355019`:
+`shall sbom` asked **seven children summing to 5.23 s inside 4.25 s of wall clock — 1.2×, four
+waves, two children in flight — while `available_parallelism()` was 2.** The same shape on Linux:
+seven children, 1.89 s inside 1.68 s, six waves. `search` had already been ruled out of
+`max_parallel` for exactly this reason (`Y2`, V.116); the sentence had never been asked of a
+child process, and a spawn plus a wait is no more a core's work than a socket is.
+
+**The arithmetic, not the scheduler.** Seven children each costing about the same over two slots
+is four waves however well they are scheduled, and over sixteen it is one. Measured on this host
+over mock managers at 120 ms each — no clock reading that a load spike can move, no real manager,
+and the width counted at the busiest instant:
+
+```text
+seven managers, 120 ms each   wall     width   waves
+two slots   (the old number)  490 ms   2       4
+sixteen slots (SpawnParallel) 122 ms   7       1
+```
+
+On the runner's own numbers that is **4.25 s → about 2.0 s** — one wave is the slowest child,
+`npm list` at 2.02 s — for `sbom`, `export` and `audit`, which all reach the same fan-out. A
+machine with seventeen managers and two cores goes from nine waves to one.
+
+**What the wrong number cost beyond the seconds.** The instrument could not see it either, and
+that is the half of `#111` that mattered more. `#107` moved the shape verdict onto *width* because
+the overlap ratio collapses when starting a child costs what the child costs, and it recorded the
+cost in `latency.rs`'s own words: *"a fan-out that uses two slots where it had sixteen is no longer
+reported."* Both runs are two wide; the only number that could tell them apart was the budget, and
+the budget was an **ambient fact about the machine** rather than a value the reporter could read —
+which is precisely what the issue said: *any fix here wants the instrument to be able to say "this
+run had N slots and used M", which means the budget has to be a value the reporter can read.* It
+is now `report_if_over`'s argument, `slot_reading` is pure, and a wide run says **"this run had 16
+slot(s) for child processes and used 3 of them, over 17 child command(s)"** and adds that the
+fan-out never reached the width it was allowed. A one-wide run is still judged by the collapse
+verdict, so one defect is still one sentence.
+
+**Why one future per manager.** The packages of one backend share a listing — the memo means one
+`list_installed` per manager per run — so a fan-out over *packages* spends its slots on sibling
+futures waiting for the same child. Grouping by `app::stale_lock::lock_key` fixes that and the
+hazard in the same move: `pacman`, `yay` and `paru` are three programs over one database, and a
+sixteen-slot budget must not be a licence to ask one manager twice at once. The budget is then
+spent on managers that can actually answer together.
+
+**What could reverse it.** A manager whose *read-only* listing takes a lock wide enough to fail
+under company — the shape of `dpkg --configure -a`, not of `dpkg-query -W` — would make a wider
+read budget unsafe rather than merely unwise. The grouping key is where that would be fixed, and
+`two_programs_over_one_database_are_asked_one_at_a_time` is the test that would have to change
+with it.

@@ -92,7 +92,7 @@ impl Inventory<'_> {
             .collect();
         // Every backend's lister is a separate process (`apt list`, `cargo install --list`,
         // …) with nothing to share, so querying them one after another is latency the machine
-        // is not spending — it is waiting. Fan out, bounded by `max_parallel`.
+        // is not spending — it is waiting. Fan out, bounded by `spawn_parallel`.
         let results = self
             .query_backends_concurrently(backends, |q| async move { q.list_installed().await })
             .await;
@@ -443,7 +443,9 @@ impl Inventory<'_> {
     }
 
     /// Run one read-only query against every queryable backend concurrently, capped at
-    /// `max_parallel`, returning each backend's result in registry order (a failed or absent
+    /// `spawn_parallel` — not `max_parallel`: the child is a manager being asked, so the run is
+    /// waiting rather than computing, and the core count is the wrong number for that (#111) —
+    /// returning each backend's result in registry order (a failed or absent
     /// query contributes nothing). One place for the fan-out so `list`, `info` and the
     /// unmanaged crawl cannot drift in how they bound concurrency or swallow errors.
     async fn query_backends_concurrently<T, F, Fut>(
@@ -457,7 +459,7 @@ impl Inventory<'_> {
         Fut: std::future::Future<Output = T> + Send,
     {
         use futures::stream::{FuturesOrdered, StreamExt};
-        let cap = self.config.max_parallel.max(1);
+        let cap = self.config.spawn_parallel.max(1);
         let query = Arc::new(query);
         let mut ordered = FuturesOrdered::new();
         let mut queued = backends.into_iter().filter_map(|b| {

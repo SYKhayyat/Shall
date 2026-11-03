@@ -26,7 +26,7 @@ pub async fn handle_remove_orphans(app: &App) -> Result<()> {
                 Some((backend.name().to_string(), up))
             })
             .map(|(name, up)| async move { (name, up.list_orphans().await) })
-            .buffered(app.config.max_parallel.max(1))
+            .buffered(app.config.spawn_parallel.max(1))
             .collect()
             .await;
 
@@ -723,7 +723,7 @@ pub async fn handle_protected(
         let all_essential = crate::app::sync::guard::essential_names(
             registry,
             &named_backends,
-            config.max_parallel,
+            config.spawn_parallel,
             &mut Default::default(),
         )
         .await;

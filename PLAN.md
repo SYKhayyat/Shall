@@ -1066,19 +1066,26 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
       `max_parallel = 2` peak. It passes with the corrected successful-listing fixture. This
       covers the observed `npm list`/`npm prefix` and `pipx list`/`pipx environment` shape and
       proves the probe is not a seventh manager or a bypass of the process cap.
-- [ ] #111 the manager fan-out is bounded by the core count, and no instrument reports the degree
-  it lost. (**Filed 2026-10-18 from the two measurements above, as a budget question rather than a
-  defect.** `max_parallel` defaults to `available_parallelism()`, which is right for work that ends
-  in a CPU and wrong for a manager listing — a spawn plus a wait — which is the same argument the
-  config already accepts for `network_parallel` on sockets. **Nothing measured is wrong today**
-  (both tables show two children in flight at once, so neither command is serial) and **no
-  benchmark exists for the win**, which the issue says in its own evidence section: the first step
-  is to measure on a many-core host, and on a two-core host with the budget raised. Three candidate
-  routes, the first being one config field defaulted from `max_parallel` and grouped by
-  `app::stale_lock::lock_key` — the function that already knows `pacman` and `yay` are two programs
-  over one database, which is the failure a wider fan-out could introduce. **An owner ruling, so
-  filed rather than landed**, and route 3 is to measure it and close it as not worth doing.)
-- [x] #105 the crash window between a per-operation WAL write and the once-per-run registry write.
+- [x] #111 the manager fan-out is bounded by the core count, and no instrument reports the degree
+  it lost. (**RULED 2026-11-03 — `C9`, rule II.73, reason V.223, built the same day.** The issue's
+  first step was to measure, and the measurement decided the rest: seven managers at 120 ms apiece
+  over mock managers take **490 ms at two slots (width 2, four waves) and 122 ms at sixteen (width
+  7, one wave)** — the fan-out, not the host, was the whole cost, and on the CI runners' own table
+  (7 children summing to 5.23 s inside 4.25 s, two cores) that is `sbom`/`export`/`audit` going
+  from ~4.25 s to roughly their slowest child, ~2.0 s. **The ruling**: a third knob,
+  `spawn_parallel`, default 16 like `network_parallel`, bounding every fan-out whose children only
+  *ask* a manager (a listing, a probe, a version) while `max_parallel` — still the core count —
+  keeps the children Shall *tells* to change something; a fan-out groups by
+  `app::stale_lock::lock_key` so `pacman`/`yay`/`paru` are asked one at a time; `managed_pkgs` fans
+  out one future per manager instead of per package, which also stops slots being spent on siblings
+  waiting for the same listing. **The instrument half**: `report_if_over` is now handed the budget
+  and `slot_reading` is pure, so a wide run reports *"this run had 16 slot(s) for child processes
+  and used 3 of them, over 17 child command(s)"* — the reading `#107` had to give up — while the
+  collapse verdict stays with `shape_violation`. Route 3 (measure and close as not worth doing) was
+  available and is not what the numbers said. **Watched failing first**: three tests in
+  `tests/core/latency/a_fan_out_of_managers_is_asked_concurrently_tests.rs` — the width at a
+  two-core budget, the budget as a *cap*, and one-program-per-database — failed against the
+  unmodified code at peak 2/7/2 and pass now.)**- [x] #105 the crash window between a per-operation WAL write and the once-per-run registry write.
   (**ROUTE (2) WAS ALREADY BUILT — the issue's own "better next move" — so what was left was its
   residual, and the residual has one cause: the evidence expires.** `heal` calls
   `reconcile_ownership` first and *unconditionally*, and `reconcile_ownership` reads

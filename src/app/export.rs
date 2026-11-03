@@ -23,12 +23,18 @@ pub type Pkg = (String, String, Option<String>);
 /// **1.0× overlap with one wave per child**: a serial loop wearing a fan-out's clothes, ~9s for
 /// `sbom` and ~11s for `export` against 3.6s for `list` doing more work over the same managers.
 ///
-/// Bounded by `max_parallel` for the same reason every other fan-out here is: a machine with
-/// hundreds of managed packages would otherwise start hundreds of processes at once.
+/// Bounded by `spawn_parallel` for the same reason every other fan-out here is bounded by a
+/// setting rather than a number: a machine with hundreds of managed packages would otherwise
+/// start hundreds of processes at once. **Not `max_parallel`**, though — the core count was the
+/// wrong number for this fan-out in both directions (#111): a child here is a manager being
+/// asked a question, so the run is waiting rather than computing, and a two-core runner asked its
+/// managers two at a time however many it had. One future per **manager**, too: `pacman` and
+/// `yay` are two programs over one database, so the packages of a shared manager are asked in
+/// sequence and the budget is spent on managers that can actually answer in parallel.
 pub async fn managed_pkgs(
     state: &tokio::sync::Mutex<crate::core::StateRegistry>,
     registry: &crate::backends::BackendRegistry,
-    max_parallel: usize,
+    config: &crate::config::Config,
 ) -> Vec<Pkg> {
     use futures::stream::StreamExt;
 
@@ -40,27 +46,63 @@ pub async fn managed_pkgs(
             .collect()
     };
 
+    // **One future per manager, not per package.** Two things follow, and both are the reason:
+    // the budget is spent on managers that can answer at once rather than on sibling futures
+    // waiting for the same manager's listing, and `pacman` + `yay` — two programs over one
+    // database, which `app::stale_lock::lock_key` is the one place that knows — are asked in
+    // sequence rather than together (#111).
+    let mut groups: Vec<(&str, Vec<usize>)> = Vec::new();
+    let mut seen: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    for (at, (backend, _, _)) in recorded.iter().enumerate() {
+        let key = crate::app::stale_lock::lock_key(backend);
+        match seen.get(key) {
+            Some(&group) => groups[group].1.push(at),
+            None => {
+                seen.insert(key, groups.len());
+                groups.push((key, vec![at]));
+            }
+        }
+    }
+
     // `buffered`, not `buffer_unordered`: the SBOM and every export format are documents whose
     // row order should not depend on which manager answered first.
-    futures::stream::iter(recorded)
-        .map(|(backend, name, rec)| {
-            let queryable = registry
-                .get(&backend)
-                .and_then(|b| b.as_queryable().cloned());
+    let answered: Vec<Vec<(usize, Option<String>)>> = futures::stream::iter(groups)
+        .map(|(_key, members)| {
+            let recorded = &recorded;
             async move {
-                let version = match queryable {
-                    Some(q) => match q.info(&name).await {
-                        Ok(Some(p)) => p.version.or(rec),
-                        _ => rec,
-                    },
-                    None => rec,
-                };
-                (backend, name, version)
+                let mut rows = Vec::with_capacity(members.len());
+                for at in members {
+                    let (backend, name, rec) = &recorded[at];
+                    let queryable = registry
+                        .get(backend)
+                        .and_then(|b| b.as_queryable().cloned());
+                    let version = match queryable {
+                        Some(q) => match q.info(name).await {
+                            Ok(Some(p)) => p.version.or_else(|| rec.clone()),
+                            _ => rec.clone(),
+                        },
+                        None => rec.clone(),
+                    };
+                    rows.push((at, version));
+                }
+                rows
             }
         })
-        .buffered(max_parallel.max(1))
+        .buffered(config.spawn_parallel.max(1))
         .collect()
-        .await
+        .await;
+
+    let mut versions: Vec<Option<String>> = recorded.iter().map(|(_, _, v)| v.clone()).collect();
+    for group in answered {
+        for (at, version) in group {
+            versions[at] = version;
+        }
+    }
+    recorded
+        .into_iter()
+        .zip(versions)
+        .map(|((backend, name, _), version)| (backend, name, version))
+        .collect()
 }
 
 /// The formats `export` can emit, plus which output filename each conventionally uses.
@@ -271,11 +313,11 @@ pub async fn export(
     to_stdout: bool,
     force: bool,
 ) -> Result<Vec<(String, Outcome)>> {
-    // `dry_run` and `max_parallel` arrived as two separate arguments and took this past the
+    // `dry_run` and the fan-out's budget arrived as two separate arguments and took this past the
     // seven clippy allows. They are both readings of one thing the caller already holds, so the
     // fix is the configuration itself rather than a wider signature.
     let dry_run = config.dry_run;
-    let pkgs = managed_pkgs(state, registry, config.max_parallel).await;
+    let pkgs = managed_pkgs(state, registry, config).await;
     let formats: Vec<Format> = match format {
         Some(f) => vec![f],
         None => Format::all().to_vec(),

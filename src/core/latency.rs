@@ -372,9 +372,9 @@ pub fn subcommand_name(command: &impl std::fmt::Debug) -> String {
 /// Reported rather than refused: a slow answer is still the answer, and a program that aborted
 /// a `check` at five seconds would have turned a performance defect into a correctness one. The
 /// point is that the number reaches somebody — E14 shipped because nobody was counting.
-pub fn report_if_over(subcommand: &str, elapsed: Duration) {
+pub fn report_if_over(subcommand: &str, elapsed: Duration, slots: usize) {
     let class = Class::of(subcommand);
-    report_shape(subcommand, class);
+    report_shape(subcommand, class, slots);
     let Some(budget) = class.budget() else {
         unmeasured(
             subcommand,
@@ -526,6 +526,40 @@ pub fn scheduling_violation(packages: usize, depth: usize, waves: usize) -> Opti
     ))
 }
 
+/// **"This run had N slots and used M"** — the reading the width alone could not give (`#111`).
+///
+/// Pure, so the sentence is asserted without a clock, a manager or a tracing subscriber. `None`
+/// means there is nothing for this reading to say: a **one-wide** run is a serial fan-out, and
+/// that verdict belongs to [`shape_violation`], which says it once rather than twice in two
+/// dialects. Anything wider overlapped, and the number that was missing was how much of the
+/// budget it reached — `width` against `slots`, over `children`.
+///
+/// **`slots` is the run's own child-process budget, not the core count.** That is the whole
+/// point: `max_parallel` is `available_parallelism()`, so a two-slot runner and a fan-out that
+/// chose not to use sixteen slots read identically against it. Passed in rather than read from
+/// the machine, and the caller that knows the number is `main`, which has the configuration.
+pub fn slot_reading(width: usize, slots: usize, children: usize) -> Option<String> {
+    if width < 2 {
+        return None;
+    }
+    let slots = slots.max(1);
+    let short = if width < slots && children > slots {
+        format!(
+            " — {children} child command(s) had to be run and only {width} of the {slots} slot(s) \
+             were in use at the busiest instant, so the fan-out never reached the width it was \
+             allowed"
+        )
+    } else {
+        String::new()
+    };
+    Some(format!(
+        "this run had {slots} slot(s) for child processes and used {width} of them at the busiest \
+         instant, over {children} child command(s); the fan-out overlapped, and the ratio and the \
+         wave ceiling are bounded by this budget and the child count rather than by the scheduler \
+         — the width against the budget is the reading they cannot supply{short}"
+    ))
+}
+
 /// Say when a fan-out stopped fanning out.
 ///
 /// Only on a run that asked for `--timings`, because that is the only run that records spans.
@@ -534,7 +568,7 @@ pub fn scheduling_violation(packages: usize, depth: usize, waves: usize) -> Opti
 /// purpose. This is what puts the same sentence in front of a user who asked.
 /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
 /// crate links the library without `cfg(test)`, so a private item is invisible there.
-pub fn report_shape(subcommand: &str, class: Class) {
+pub fn report_shape(subcommand: &str, class: Class, slots: usize) {
     let Some(shape) = class.shape() else {
         unmeasured(
             subcommand,
@@ -559,7 +593,7 @@ pub fn report_shape(subcommand: &str, class: Class) {
     let slowest = rows.iter().map(|r| r.longest).max().unwrap_or_default();
     let (waves, width) = crate::core::timing::schedule();
     // **A run that was more than one wide overlapped, and neither of this rule's numbers can
-    // judge it from there.** Both were calibrated on a host whose `max_parallel` was large enough
+    // judge it from there.** Both were calibrated on a host whose budget was large enough
     // to hide every child inside the slowest one; a two-slot budget over five managers with a
     // `list` and a `prefix` each is capped at 1.1x overlap and six waves by arithmetic, not by
     // scheduling. Measured on the CI runners, same code, same thresholds: Windows 7 children
@@ -572,21 +606,16 @@ pub fn report_shape(subcommand: &str, class: Class) {
     // reported as the collapse it is, and a two-wide run is recorded as unmeasured at `info`
     // rather than shouted about at `warn`.
     //
-    // **What this gives up is stated rather than buried.** A fan-out that uses two slots where
-    // it had sixteen is no longer reported by the ratio, because the ratio cannot tell that run
-    // from one on a host with two slots. The gates carry it instead and always did: the ratio
-    // and the wave ceiling are asserted directly for `list` by `tests/core/latency/latency_budget_tests.rs`,
-    // and the width for these two by `tests/core/latency/the_other_fan_outs_fan_out_too_tests.rs`.
-    if width >= 2 {
-        unmeasured(
-            subcommand,
-            &format!(
-                "{width} child command(s) were in flight at once, so this fan-out overlapped; \
-                 the ratio and the wave ceiling are bounded by the run's own `max_parallel` and \
-                 child count rather than by the scheduler, and the width is the reading they \
-                 cannot supply"
-            ),
-        );
+    // **What the ratio cannot supply, the budget can.** The reading `#107`'s change gave up was
+    // "this run had N slots and used M" — a two-wide run on a sixteen-slot budget and a
+    // two-wide run on a two-slot host were the same sentence, so a fan-out that lost most of its
+    // width went unreported (#111). `slots` is now handed in by the caller that knows the run's
+    // child budget, and the width is reported *against* it, which is exact and host-free. The
+    // gates carry the rest and always did: the ratio and the wave ceiling are asserted directly
+    // for `list` by `tests/core/latency/latency_budget_tests.rs`, and the width for these two by
+    // `tests/core/latency/the_other_fan_outs_fan_out_too_tests.rs`.
+    if let Some(reading) = slot_reading(width, slots, children) {
+        unmeasured(subcommand, &reading);
         return;
     }
     if let Some(why) = shape_measurement_gap(shape, children, summed, slowest, waves) {
