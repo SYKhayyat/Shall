@@ -393,12 +393,40 @@ an honest refusal) rather than a `/wait` that does not exist on that launcher.
 **Verified, 2026-11-02.** `cargo build --all-targets`, `cargo test --no-fail-fast` (3065 passed,
 0 failed), `cargo clippy --all-targets --all-features --locked -- -D warnings`, `cargo fmt
 -- --check`, and `cargo check --target x86_64-pc-windows-gnu --all-targets` with `-D warnings` —
-the last one compiling the `cfg(windows)` block this changes — are all clean. **Not verified: a
-live Windows run.** No Windows host exists here, and the native sweep runs in an image where a
-confinement mechanism is available, so the `None` branch closing still wants either that host
-or the stub `cmd` that records its argv, which is what #133 proposes as the second proof. What
-is proven here is the line `start` is given; what Windows does with it is the next sweep's
-answer.
+the last one compiling the `cfg(windows)` block this changes — are all clean.
+
+**Measured 2026-11-02 under Wine 11.0 — and this is the first time any of Shall's `cfg(windows)`
+code has run on this host.** A scratch crate depending on `shall` was built for
+`x86_64-pc-windows-gnu` and the two lines run under `wine`, through a real `cmd` implementation:
+
+```
+BEFORE (#133 unfixed, no /wait)          mode=before code=Some(0)   <- the child exited 7
+AFTER  (shipped Sandbox::wrap)           argv=["/c", "start", "", "/low", "/wait", "/b", "cmd", "/c", "exit", "7"]
+                                         mode=after  code=Some(7)
+```
+
+The bare shell agrees on the other half, the ordering: with no `/wait`, `PARENT-SPEAKS` printed
+before `CHILD-SPEAKS`; with `/wait`, the child first. Microsoft's own reference for `start` says
+`/wait` "starts an application and waits for it to end", and that is the documented half of this.
+
+**What that does not prove.** Wine's `cmd` is an independent reimplementation, so this is evidence
+about the flag in an implementation of `cmd` — not about `cmd.exe` on Windows, and not a
+substitute for the sweep. What it does retire is "nothing in any harness on this host executes it":
+the title slot, the priority class, `/wait`, `/b` and the empty environment now cross the boundary
+once, and the exit code differs before and after exactly where the issue said it would. The branch
+still closes on a host without Windows Sandbox, or on the stub `cmd` #133 proposes.
+
+**The recipe, because getting a Windows binary out of this host took an afternoon's worth of
+edges.** `nix-shell -p wine64` gives Wine 11.0; the mingw gcc wrapper is at
+`/nix/store/0vc2plg2dzk5153i8ky2dag2da7fnqmr-x86_64-w64-mingw32-gcc-wrapper-15.3.0/bin`, and it
+links neither `libpthread.a` nor `libmcfgthread.a` — `nix-build '<nixpkgs>' -A
+pkgsCross.mingwW64.windows.pthreads` supplies the first and the store's
+`mcfgthread-x86_64-w64-mingw32-2.3.2` the second. `LIBRARY_PATH` and `NIX_LDFLAGS` are both
+consumed by that wrapper and never reach `ld`, so the working shape is a linker shim
+(`CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER`) that passes the two `-L` flags ahead of `"$@"`.
+The build is also the first time this tree has been *linked* as a Windows program rather than only
+type-checked — the scratch binary links `libshall` and its whole dependency tree into a `.exe`,
+which `cargo check --target` cannot show because it stops at metadata.
 
 ### Tier 14 — two instruments that reported without asserting (`PLAN.md` #40): BUILT
 
