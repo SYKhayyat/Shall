@@ -501,25 +501,51 @@ impl Sandbox {
         Ok(Wrapped::with_config_file(command, tmp_file))
     }
 
-    /// Windows' unconfined path: BELOW-NORMAL PRIORITY, which is a scheduling courtesy and
-    /// not an integrity reduction — `start /low` sets the priority class and touches nothing
-    /// about the token. Reached only for a `Confinement::None` verdict, whose `because`
-    /// already says no mechanism is in force; this exists so the run still starts politely,
-    /// and this doc claims exactly that much.
+    /// The `cmd` argv for Windows' unconfined path, and **it waits for the child** (#133).
+    ///
+    /// BELOW-NORMAL PRIORITY is a scheduling courtesy and not an integrity reduction —
+    /// `start /low` sets the priority class and touches nothing about the token. Reached only
+    /// for a `Confinement::None` verdict, whose `because` already says no mechanism is in
+    /// force; this exists so the run still starts politely, and this doc claims exactly that
+    /// much.
     ///
     /// The empty `""` after `start` is its window-title slot: without it, `start` reads the
     /// first QUOTED argument as the title and runs nothing.
+    ///
+    /// **`/wait` is not decoration, and its absence was a defect for as long as this line has
+    /// existed.** `start` returns as soon as the process is created, so `cmd /c` exited, and
+    /// `Sandbox::run`'s `status()` reported `start`'s status — almost always 0 — before the
+    /// wrapped command had done anything. A failing program was reported as 0; its output
+    /// arrived after Shall had printed its own exit line and returned to the prompt, so a
+    /// pipe got a truncated answer; and `start` detached from the job tree, so `Stopping`
+    /// could not reach it. That is the whole Windows half of "spawn a child and wait for it",
+    /// on the path a Windows host **without** Windows Sandbox takes — which is most of them.
+    ///
+    /// The argv is built and returned as data, rather than inline where the `Command` is
+    /// assembled, so a test can assert it on a host that cannot run it: the local chain
+    /// type-checks `cfg(windows)` and executes none of it, which is how the flag went missing.
+    /// `tests/app/sandbox/the_unconfined_windows_launch_waits_for_its_child.rs` compares the
+    /// whole line, because a test that looks for one word passes on an argv that runs nothing.
+    pub fn windows_unconfined_argv(cmd: &str, args: &[String]) -> Vec<String> {
+        let mut argv = vec![
+            "/c".to_string(),
+            "start".to_string(),
+            String::new(),
+            "/low".to_string(),
+            "/wait".to_string(),
+            "/b".to_string(),
+            cmd.to_string(),
+        ];
+        argv.extend(args.iter().cloned());
+        argv
+    }
+
+    /// Windows' unconfined launch: the argv [`Sandbox::windows_unconfined_argv`] explains,
+    /// spawned by `cmd` with an empty environment.
     #[cfg(target_os = "windows")]
     fn low_integrity_windows(cmd: &str, args: &[String], config: &SandboxConfig) -> Command {
         let mut command = Command::new("cmd");
-        command
-            .arg("/c")
-            .arg("start")
-            .arg("")
-            .arg("/low")
-            .arg("/b")
-            .arg(cmd)
-            .args(args);
+        command.args(Self::windows_unconfined_argv(cmd, args));
         // **The environment starts EMPTY** (same ruling as the bwrap path): additive env
         // onto Shall's own means every token Shall holds rides into the process.
         command.env_clear();

@@ -352,6 +352,54 @@ build and what is deferred to hardware.**
     **refusal at apply**, never a parse failure, precisely so one shared Linux manifest still
     parses everywhere; that half is proven on any host.
 
+### Tier 37 — a launch that did not wait (`PLAN.md` #133): BUILT
+
+**One missing flag, and it was the whole Windows half of "spawn a child and wait for it".**
+`Sandbox::wrap`'s `Confinement::None` branch wraps every uncovered command as
+`cmd /c start "" /low /b <cmd> <args…>`, and `start` **without `/wait` returns as soon as the
+process is created**: `cmd /c` exits, `Sandbox::run`'s `status()` reports `start`'s status —
+almost always 0 — and the child is abandoned to the console, outside the job tree. Four
+observable consequences, all of them from one line: `shall run` reported success before the
+program ran and reported a failing program as 0; the child's output arrived after Shall had
+printed its own exit line, so anything piping `shall run` got a truncated answer; `Stopping`
+could no longer reach the child; and this is **the default** on a Windows host without Windows
+Sandbox, which is most Windows hosts. `shall shell`'s ephemeral path
+(`src/app/shell/mod.rs:207`) reaches the same builder, so the interactive door was detached the
+same way.
+
+**Why nothing saw it.** The local chain type-checks `cfg(windows)` and executes none of it, and
+the Windows sweep runs in an image with a real confinement mechanism, so the `None` branch is the
+one branch it never takes. Found while fixing **#132** — the same shape as `shall run` frozen, one
+layer down.
+
+**The fix is `/wait`, and the argv is now data.** `Sandbox::windows_unconfined_argv` returns the
+line rather than assembling a `Command` inline, for the reason the defect survived: a legacy that
+can only be read on one platform has to be assertable on the others. The title slot (`""`), the
+priority class (`/low`), `/wait` and `/b` are one line and the command follows it — a test that
+looks for a single word passes on an argv that runs nothing, so
+`tests/app/sandbox/the_unconfined_windows_launch_waits_for_its_child.rs` compares the whole
+vector. **Written first and watched failing**, on the missing flag exactly:
+`["/c", "start", "", "/low", "/b", "cargo", …]` against
+`["/c", "start", "", "/low", "/wait", "/b", "cargo", …]`.
+
+**Siblings, checked rather than assumed.** `Confinement::None` on Unix returns `Wrapped::bare` and
+is already synchronous — untouched. `Sandbox::run` has exactly one caller (`src/app/run.rs:138`);
+`shall shell` spawns and `wait()`s the wrapped command itself, so it inherits the fix. The
+**`.wsb` path is not fixed and cannot be by this flag**: `WindowsSandbox.exe` launches a VM and
+returns, so a sandboxed `shall run` reports the launcher's status while the command runs inside a
+machine nobody is watching. It is named in **#133** and needs its own answer (a wait, a marker, or
+an honest refusal) rather than a `/wait` that does not exist on that launcher.
+
+**Verified, 2026-11-02.** `cargo build --all-targets`, `cargo test --no-fail-fast` (3065 passed,
+0 failed), `cargo clippy --all-targets --all-features --locked -- -D warnings`, `cargo fmt
+-- --check`, and `cargo check --target x86_64-pc-windows-gnu --all-targets` with `-D warnings` —
+the last one compiling the `cfg(windows)` block this changes — are all clean. **Not verified: a
+live Windows run.** No Windows host exists here, and the native sweep runs in an image where a
+confinement mechanism is available, so the `None` branch closing still wants either that host
+or the stub `cmd` that records its argv, which is what #133 proposes as the second proof. What
+is proven here is the line `start` is given; what Windows does with it is the next sweep's
+answer.
+
 ### Tier 14 — two instruments that reported without asserting (`PLAN.md` #40): BUILT
 
 28. ~~**`MockExecutor`'s `unstubbed` ledger is written and never read, and all four of

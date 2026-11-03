@@ -19,6 +19,18 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 - [x] #37 proven-by-default polarity flip. (High)
 
 ## Phase 2 — Safety Criticals/Highs
+- [x] #133 the Windows unconfined path runs every command through `start` without `/wait`, so
+  `shall run` returns before its child and reports `start`'s exit status. (**High, BUILT
+  2026-11-02** — `cmd /c start "" /low /b …` returned as soon as the process was created, on
+  `Confinement::None`, which is what a Windows host **without** Windows Sandbox gets and so most
+  of them: exit status was `start`'s (almost always 0), output raced Shall's own exit line, and
+  `start` detached from the job tree so `Stopping` could not reach the child. One flag — `/wait` —
+  and the argv is now built as data (`Sandbox::windows_unconfined_argv`) so the line is assertable
+  on a host that cannot run it: `cargo check --target x86_64-pc-windows-gnu` type-checks
+  `cfg(windows)` and executes none of it, which is how it survived. Test written first, watched
+  failing on the missing flag:
+  `tests/app/sandbox/the_unconfined_windows_launch_waits_for_its_child.rs`. The `.wsb` path is
+  inherently asynchronous and is **not** fixed by this — named in the issue, needs its own answer.)
 - [x] #75 download truncates live PATH binary → temp+rename. (Critical)
 - [x] #76 symlink guard bypass via parent. (High)
 - [x] #77 watch blind to profiles/vars. (High)
