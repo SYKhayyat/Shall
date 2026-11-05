@@ -434,7 +434,24 @@ pub fn nimble() -> ExitPolicy {
         // that exists: the line carries a `@version=` to correct or a toolchain to fix, and
         // deleting it would throw away the thing the user has to edit.
         permanent_markers: vec!["version not found", "build failed for the package"],
-        absent_markers: vec!["package not found"],
+        // **Two wordings, because nimble reworded this sentence and the marker did not follow.**
+        // The original capture — `Package not found in nimble's package list.` — is what the
+        // marker was written against; current nimble answers a name it does not have with
+        // `Package <name>@any version not found.` (measured 2026-11-05, nimble 0.20.1; the CI
+        // runner's 0.24.1 words it the same way in `download.nim`'s `pkgNotFoundMsg`, which is
+        // `Package {pkg} not found.`). So a typo behind `nimble:` was no longer classified and
+        // the line stayed in `modules/imperative.txt`, which is exactly E1 — found by the
+        // Windows native sweep's own withdrawal check on the 2026-11-04 nightly, after every
+        // other backend had passed it for months.
+        //
+        // `@any version` and not `not found` is the discriminator, and the same rule that took
+        // the marker off `luarocks`: a *pinned* name nimble does not have answers
+        // `Package <name>@1.0.0 not found.`, one typo away from the sentence above, while a
+        // real package at a version that does not exist answers
+        // `Downloaded package's version does not satisfy requested version range`. Keeping a
+        // pinned line is the safe direction; withdrawing a real declaration over a wrong pin is
+        // not.
+        absent_markers: vec!["package not found", "@any version not found"],
         transient_markers: vec!["could not download", "connection", "temporary failure"],
         ..ExitPolicy::default()
     }

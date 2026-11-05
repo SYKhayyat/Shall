@@ -72,7 +72,14 @@ run_against() {
     removal_leaves_binary() { case "$1" in bun) echo "bun keeps its launcher" ;; *) echo "" ;; esac; }
 
     FAKE=""; FAKE_NAME="hello"
-    path_of() { case "$1" in "$FAKE_NAME") echo "$FAKE" ;; *) echo "" ;; esac; }
+    path_of() {
+        case "$1" in
+            "$FAKE_NAME") echo "$FAKE" ;;
+            # Everything else still answers for real, because `on_path` is now built on
+            # `path_of` and the case below has to keep finding `sh`.
+            *) sh -c 'command -v "$1" 2>/dev/null' _ "$1" || true ;;
+        esac
+    }
 
     for _fn in never_ran assert_binary_gone on_path named_bin_dir off_path_copy binary_present assert_binary_reachable conflicts_reported; do
         _body="$(lift "$_fn" "$SRC")"
@@ -278,6 +285,52 @@ run_against() {
 }
 
 for src in $SOURCES; do run_against "$src"; done
+
+# ---------------------------------------------------------------------------
+# A name Windows can run is on Windows' PATH, whatever git-bash's `command -v` says.
+#
+# The regression, measured on the 2026-11-04 nightly: `nimble install nimjson` succeeded,
+# `list` showed it, and the sweep failed "nimjson is not on PATH and nothing said where it
+# went" — because nimble writes a `nimjson.cmd` stub on the directory the workflow already put
+# on PATH, and a POSIX shell resolves neither that suffix nor the extensionless bash stub
+# beside it. The check asks a Windows question, so it has to accept Windows' answers.
+#
+# Lifted from the harness, like everything above: a copy of `path_of` would be the second
+# place to fix it.
+WIN_HARNESS="$(cd "$(dirname "$0")/../scripts" && pwd)/integration-windows.sh"
+_sfx_dir="$(mktemp -d "${TMPDIR:-/tmp}/shall-exe-suffix.XXXXXX")"
+# Deliberately NOT executable and not a shebang script: that is exactly what nimble writes for
+# the bash stub beside the `.cmd`, and the point of the case is that the suffix has to be what
+# decides.
+: > "$_sfx_dir/shall-suffix-canary.cmd"
+if [ -z "$(lift path_of "$WIN_HARNESS")" ] || [ -z "$(lift path_of_suffix "$WIN_HARNESS")" ]; then
+    echo "  FATAL: could not lift path_of()/path_of_suffix() for the suffix cases"
+    TOTAL=$((TOTAL + 1)); BAD=$((BAD + 1))
+else
+    eval "$(lift path_of "$WIN_HARNESS")"
+    eval "$(lift path_of_suffix "$WIN_HARNESS")"
+    _saved_path="$PATH"; PATH="$_sfx_dir:$PATH"
+    _sfx_want() { # label found|absent suffixes name
+        TOTAL=$((TOTAL + 1))
+        # Only the lifted `path_of` reads this, which shellcheck cannot see.
+        # shellcheck disable=SC2034
+        EXE_SUFFIXES="$3"
+        _sfx_got="$(path_of "$4")"
+        if [ "$2" = "found" ] && [ -n "$_sfx_got" ]; then
+            echo "  ok    $4 resolves with suffixes '$3' -> $_sfx_got"
+        elif [ "$2" = "absent" ] && [ -z "$_sfx_got" ]; then
+            echo "  ok    $4 does not resolve with suffixes '$3'"
+        else
+            echo "  BAD   $4 resolved to '$_sfx_got' with suffixes '$3'"; BAD=$((BAD + 1))
+        fi
+    }
+    _sfx_want "a .cmd stub is what Windows resolves" found  ".exe .cmd .bat .ps1" shall-suffix-canary
+    _sfx_want "the same file is not a program on a Unix host" absent ""                    shall-suffix-canary
+    _sfx_want "no suffix means no"                    absent ".exe .cmd .bat .ps1" shall-suffix-canary-zzz
+    _sfx_want "a real name still resolves"            found  ".exe .cmd .bat .ps1" sh
+    PATH="$_saved_path"
+fi
+rm -rf "$_sfx_dir"
 
 # ---------------------------------------------------------------------------
 # Every `gone_ok` tag must be recorded by a `witness`, in the same harness.

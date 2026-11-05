@@ -412,6 +412,27 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   has a source-level isolation control in `dirty_host_fixture_isolation_tests`.
 - [x] #53 Nimble Windows lifecycle: the nightly Windows-native job installs pinned Nim 2.2.12,
   refreshes Nimble's index, and runs `integration-windows.sh nimble nimjson` through Git Bash.
+  - **Resolved 2026-11-05, and the canary was never the problem.** The 2026-11-04 nightly's own
+    artifact says the install works: `nimble install nimjson` returns 0, `nimble list --installed`
+    shows it, and the uninstall takes it away. Three separate roots behind the red, all fixed:
+    - **The PATH question was asked in the wrong dialect.** nimble's Windows branch writes a
+      `nimjson.cmd` stub into `~\.nimble\bin` (and, beside it, an extensionless bash stub with
+      no shebang), and the workflow has already put that directory on PATH — but git-bash's
+      `command -v` resolves neither, so a correct install read as "not on PATH and nothing said
+      where it went". `path_of` now takes the platform's suffixes (`.exe .cmd .bat .ps1`), with
+      a file test rather than an execute test because msys decides a `.cmd`'s runnability from
+      the extension, and `scripts/harness-logic-test.sh` drives the case both ways.
+    - **nimble reworded its absent-name sentence and the marker did not follow.** A name it does
+      not have is now `Package <name>@any version not found.`; `exit_policy::nimble` still
+      matched only the old `Package not found …`, so a typo behind `nimble:` stopped being
+      withdrawn (E1) and the sweep's own manifest check went red. Both wordings are matched, and
+      the pinned-name sentence (`Downloaded package's version does not satisfy requested version
+      range`) is a test case that must *not* withdraw.
+    - **A bare name needs a searchable manager.** Section 11's chain rows write `$PKG` with no
+      manager in front, and `nimble` declares install/remove/list and no `search_args` — so the
+      rows failed on a resolution refusal that says nothing about chain grammar. They now ask
+      the resolver (`shall eval`) which name this host can resolve from a bare line and use it,
+      and 11b skips with a stated reason when the backend under test is the silent one.
 - [ ] #109 CI: the apt legs install off the image's baked lists, so a mirror rotation reds the leg
   for the mirror's reason. (**Filed 2026-10-15 with a candidate patch and NO failing run behind
   it, and the issue says so itself.** `Dockerfile.ubuntu` runs `apt-get update` at build and keeps

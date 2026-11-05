@@ -661,12 +661,55 @@ drift_verdict() { # host-class  backend  register-file  today-in-days
 # under bash and as 127 under dash and busybox ash — the same 127 that means "I could not
 # run at all", which is a distinction `nok` has to make. Collapsing it here keeps that
 # ambiguity out of every caller instead of teaching each one about the host's /bin/sh.
-on_path() {
-    sh -c 'command -v "$1" >/dev/null 2>&1' _ "$1" && return 0
-    return 1
+on_path() { [ -n "$(path_of "$1")" ]; }
+
+# The suffixes this platform's process launcher appends to a bare name, and a POSIX shell's
+# `command -v` does not.
+#
+# **Windows resolves `nimjson` to `nimjson.cmd`; git-bash's `command -v` never looks at it, and
+# that difference reported a correct install as a broken one.** Measured on the 2026-11-04
+# nightly: `nimble install nimjson` succeeded, `list` showed it, the install named no off-PATH
+# directory (the workflow has already put `~\.nimble\bin` on PATH), and the sweep failed with
+# `nimjson is not on PATH and nothing said where it went`. nimble's Windows branch writes a
+# `nimjson.cmd` stub and, beside it, an extensionless bash stub that starts with a quote rather
+# than a shebang (`packageinstaller.nim`, `setupBinSymlink`) — a file msys does not execute and
+# `command -v` therefore does not report. The program really was on a directory that really was
+# on PATH; this shell was just asked in a dialect that does not resolve it.
+#
+# Empty on every other host, so a `.cmd` file there is still only a file: a sweep on macOS must
+# not decide that `wget.cmd` is wget.
+EXE_SUFFIXES=""
+case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*|Windows*) EXE_SUFFIXES=".exe .cmd .bat .ps1" ;;
+esac
+
+# Where does NAME resolve, if anywhere. Same fresh-shell rule as on_path — and the platform's
+# own suffixes first, because a name cmd and PowerShell run from a directory PATH names is on
+# PATH even when this shell cannot see it.
+path_of() {
+    _po="$(sh -c 'command -v "$1" 2>/dev/null' _ "$1" || true)"
+    if [ -n "$_po" ]; then printf '%s\n' "$_po"; return 0; fi
+    for _poe in ${EXE_SUFFIXES:-}; do
+        _po="$(path_of_suffix "$1$_poe")"
+        if [ -n "$_po" ]; then printf '%s\n' "$_po"; return 0; fi
+    done
+    return 0
 }
-# Where does NAME resolve, if anywhere. Same fresh-shell rule as on_path.
-path_of() { sh -c 'command -v "$1" 2>/dev/null' _ "$1" || true; }
+
+# The first PATH directory holding NAME as a file, or "".
+#
+# A file test rather than an execute test, deliberately: msys decides that a `.cmd` or `.bat`
+# is runnable from its extension, and the stub nimble writes carries no execute bit at all —
+# so `command -v` and `-x` disagree with the launcher about the same file. The question here
+# is what the platform's launcher would find on PATH, and on Windows that is the file.
+path_of_suffix() {
+    printf '%s\n' "${PATH:-}" | tr ':' '\n' | while IFS= read -r _ps_dir; do
+        if [ -n "$_ps_dir" ] && [ -e "$_ps_dir/$1" ]; then
+            printf '%s\n' "$_ps_dir/$1"
+            break
+        fi
+    done
+}
 
 # The directory an install NAMED as the home of what it just put there, or "" if it named none.
 #
@@ -953,6 +996,12 @@ fi
 # --- 6. Negative path ------------------------------------------------------
 echo "[6] Negative path"
 nok "installing a nonexistent package fails" lx -y apply "$BACKEND:shall-no-such-pkg-zzz"
+# Kept before the next verb overwrites it: the row below asks what the product DID with this
+# failure, and when it did not withdraw the line the evidence is the sentence this run printed —
+# which is how nimble's reworded `Package <name>@any version not found.` was found to have left
+# the marker behind (`src/core/exit_policy.rs`, `nimble()`). A red here used to name the line
+# that stayed and not one word about why.
+cp /tmp/itw.out /tmp/itw-failed-install.out 2>/dev/null || :
 answers "a failed install leaves the model parseable" lx check
 # This asserts the PRODUCT withdrew the line. It used to `grep -v` the name out and then
 # assert it was gone, which tested its own `grep -v` and printed PASS on every run while the
@@ -965,8 +1014,12 @@ answers "a failed install leaves the model parseable" lx check
 # dropped network — which is a real gap in that backend, not a reason to put the scrub back.
 IMPERATIVE="$SHALL_CONFIG_DIR/modules/imperative.txt"
 if [ -f "$IMPERATIVE" ]; then
-    nok "the unresolvable name is out of the manifest" \
-        grep -q "shall-no-such-pkg-zzz" "$IMPERATIVE"
+    # `nok` returns 0 on a pass, so the negation here is "the line was still there".
+    if ! nok "the unresolvable name is out of the manifest" \
+        grep -q "shall-no-such-pkg-zzz" "$IMPERATIVE"; then
+        echo "        the failed install itself said:"
+        sed 's/^/          /' /tmp/itw-failed-install.out 2>/dev/null | head -20
+    fi
 fi
 
 # --- 7. Adopt (II.9: Windows managers install no deps, so adopt is exact) --
@@ -1067,12 +1120,55 @@ else
 fi
 
 # --- 11. Backend chains, the per-host lock, and unlock (II.7b) -------------
+# Which backend a BARE line resolves to on this host, or "" when the resolver cannot give it
+# one. First argument: the priority list to ask through, one manager per line. Second: the name.
+#
+# **A bare name is a question only a searchable manager can answer.** The resolver asks every
+# manager in `priority` whether it has the name (`src/app/sync/resolver.rs`), so a manager with
+# no search probe can only say "I could not tell", and a name nobody answers for is refused —
+# correctly — as `no package manager this line accepts has …`. `nimble` declares
+# install/remove/list and no `search_args`, so on the Windows sweep `nimjson` resolves nowhere,
+# and the three chain rows below went red on a resolution refusal that says nothing about the
+# grammar they exist to test (#112, measured on the 2026-11-04 nightly).
+#
+# Asked of the product rather than of a table here: `eval` is read-only and gives a bare line a
+# backend through the same resolver the rows under test use. A table of which managers can
+# search would be a second copy of `builtin_backends.toml`, and the copy is what goes stale.
+bare_backend() { # priority-text name
+    _bb_cfg="${TMPDIR:-/tmp}/shall-it-bare"
+    rm -rf "$_bb_cfg"; mkdir -p "$_bb_cfg/modules" "$_bb_cfg/profiles"
+    printf '%s\n' "$1" > "$_bb_cfg/priority"
+    printf 'Work\n' > "$_bb_cfg/active"
+    printf 'use base\n' > "$_bb_cfg/profiles/Work"
+    printf '%s\n' "$2" > "$_bb_cfg/modules/base.txt"
+    env SHALL_CONFIG_DIR="$(cygpath -w "$_bb_cfg" 2>/dev/null || echo "$_bb_cfg")" \
+        SHALL_DATA_DIR="$(cygpath -w "$_bb_cfg/state" 2>/dev/null || echo "$_bb_cfg/state")" \
+        $TO "$SHALL" eval 2>/dev/null \
+        | sed -n 's/.*"backend": "\([^"]*\)".*/\1/p' | head -1
+}
+
 echo "[11] Chains and the per-host lock"
 LOCKFILE=$(ls "$SHALL_CONFIG_DIR"/locks/bare.*.toml 2>/dev/null | head -1)
 echo "        lock file: ${LOCKFILE:-<none>}"
-ok  "a chain is legal"           lx --dry-run apply "$BACKEND,cargo:$PKG"
-ok  "a chain may end in list"    lx --dry-run apply "$BACKEND,list:$PKG"
-ok  "list alone is legal"        lx --dry-run apply "list:$PKG"
+# The three rows below write the name with no manager in front, so each one needs this host to
+# be able to answer "which backend is this". Where it cannot, they use the sweep's other cargo
+# canary instead: the rows are about chain grammar, and a substituted name still tests the
+# grammar. Dropping them would leave the one sweep whose manager cannot search with no chain
+# coverage at all, which is the shape of a check that quietly stopped existing (#99).
+CHAIN_PKG=""
+for _cp in "$PKG" hexyl jq catj; do
+    if [ -n "$(bare_backend "$(cat "$SHALL_CONFIG_DIR/priority" 2>/dev/null)" "$_cp")" ]; then
+        CHAIN_PKG="$_cp"; break
+    fi
+done
+if [ -z "$CHAIN_PKG" ]; then
+    soft "this host can give no name a backend from a bare line, so the three chain rows are unanswerable here"
+else
+    [ "$CHAIN_PKG" = "$PKG" ] || echo "        a bare \`$PKG\` resolves to no backend here; the chain rows use \`$CHAIN_PKG\`"
+    ok  "a chain is legal"           lx --dry-run apply "$BACKEND,cargo:$CHAIN_PKG"
+    ok  "a chain may end in list"    lx --dry-run apply "$BACKEND,list:$CHAIN_PKG"
+    ok  "list alone is legal"        lx --dry-run apply "list:$CHAIN_PKG"
+fi
 nok_saying "an empty slot is refused" "has an empty backend"   lx --dry-run apply "$BACKEND,,cargo:$PKG"
 nok_saying "an unknown link is refused" "is not a backend Shall uses" lx --dry-run apply "$BACKEND,nope:$PKG"
 nok_saying "list must come last" "must come last"        lx --dry-run apply "list,$BACKEND:$PKG"
@@ -1099,8 +1195,16 @@ nok_saying "and the refusal teaches the vocabulary" "everything, packages, scrip
 # --- 11b. A manager that could not answer is not one that said no (V.7c) ---
 echo "[11b] Silence is not a no"
 REAL_CARGO=$(sh -c 'command -v cargo' 2>/dev/null)
+# This section silences cargo's search and then asserts that `$PKG` still resolves — which can
+# only happen if the backend under test can answer for the name itself. A manager with no
+# search probe cannot, and then the only candidates are cargo (silenced on purpose) and silence,
+# so the row would be asserting that a refusal is a resolution. Asked of the product the same
+# way section 11 asks (#112).
+BE_ANSWERS_BARE="$(bare_backend "$BACKEND" "$PKG")"
 if [ -z "$REAL_CARGO" ]; then
     soft "no cargo on this host — cannot stage a manager that fails to answer"
+elif [ -z "$BE_ANSWERS_BARE" ]; then
+    soft "$BACKEND cannot answer for a bare \`$PKG\`, and this section silences the only other candidate — nothing here would be a silent manager"
 else
     # Shadow only cargo's *search*, so exactly one candidate in the chain goes silent
     # while the manager under test is untouched.

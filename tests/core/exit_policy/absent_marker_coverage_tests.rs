@@ -277,6 +277,10 @@ fn a_covered_manager_recognises_its_own_words_for_a_missing_name() {
         ("choco", "shall-no-such-pkg-zzz not installed. The package was not found with the source(s) listed."),
         ("winget", "No package found matching input criteria."),
         ("nimble", "Error:  Package not found in nimble's package list."),
+        // The wording current nimble uses, captured 2026-11-05: the old marker above stopped
+        // matching when nimble reworded the sentence, and a typo behind `nimble:` went back to
+        // wedging the config. Both are kept because both are real output from real versions.
+        ("nimble", "    Error:  Package shall-no-such-pkg-zzz@any version not found."),
         ("cabal", "cabal: Unknown package \"shall-no-such-pkg-zzz\"."),
         ("composer", "  Could not find a matching version of package shall-no-such-pkg-zzz. Check   "),
         ("opam", "[ERROR] No package named shall-no-such-pkg-zzz found."),
@@ -350,6 +354,10 @@ Please check your mirror and try again."),
         // A real crate that ships no program, and a real gem whose version pin is wrong.
         ("cargo", "error: there are no binaries in package `serde`"),
         ("nimble", "Error:  Version not found for package jsony"),
+        // A name that DOES exist at a version nimble does not have answers a different
+        // sentence, and it must not withdraw the line: measured 2026-11-05,
+        // `nimble install -y nimjson@99.99.99`.
+        ("nimble", "    Error:  Downloaded package's version does not satisfy requested version range: wanted 99.99.99 got 3.3.0."),
         // scoop declining to remove software that is not installed says nothing about the
         // bucket, and must never withdraw the line.
         ("scoop", "ERROR 'jq' isn't installed."),
