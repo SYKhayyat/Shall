@@ -290,6 +290,30 @@ container-linux-opensuse-local  shim:, dotfiles: and exec: driven for real  26
 container-linux-opensuse-local  sudo with a real password, on a pty  0
 
 # container-linux-slackware-local
+#
+# ONE LINE WAS RAISED, 52 -> 59 on `Plan-smoke`, because that number changed meaning.
+#
+# The section's own count is
+#
+#     plan-smoked backends + the statement rows that take two checks + the registry enumeration
+#
+# and `plan-smoked` is a LEFTOVER — every backend the sections above could not drive for real.
+# So the number moves 1:1 with the split between this section and `Real lifecycle`, in the
+# direction that reads as a hole: a backend promoted to a real lifecycle takes one check out of
+# the plan-smoke column, and the 2026-11-02 run did exactly that. It measured 51 for this
+# section while the audit in the same run printed `8 real lifecycle, 0 install-attempted, 48
+# plan-smoked` over 56 registered backends and PASSed "every registered backend got a lifecycle
+# or a plan-smoke" — coverage UP, section count DOWN, board red (run 42012538348, the only red
+# line on the leg). Lowering 52 to 51 would have been correct for that run and wrong for the
+# next promotion, which is the "ceiling drawn by whoever lowered it last" this file's header
+# warns about.
+#
+# So the harness now compares the UNION — `credited + covered above`, where the second number
+# is the backends this section skipped because a real lifecycle already answered for them. That
+# number only moves with the registry: 59 = 51 credited + 8 covered, measured on 2026-11-02,
+# and the same arithmetic reproduces the old 52 (49 plan-smoked + 2 statement rows + 1
+# enumeration) exactly when 7 were lifecycled. A section that stops running still falls below
+# it, because the covered half is written at the END of the section and a collapse loses both.
 container-linux-slackware-local  --help across the surface  60
 container-linux-slackware-local  A dependent statement driven for real: link:  12
 container-linux-slackware-local  Adopt  2
@@ -303,7 +327,7 @@ container-linux-slackware-local  Git history + rollback  8
 container-linux-slackware-local  Idempotency  1
 container-linux-slackware-local  Install  3
 container-linux-slackware-local  Negative path  3
-container-linux-slackware-local  Plan-smoke, every backend this image cannot run  52
+container-linux-slackware-local  Plan-smoke, every backend this image cannot run  59
 container-linux-slackware-local  Real lifecycle, every other manager on this image  21
 container-linux-slackware-local  Remove  2
 container-linux-slackware-local  SIGKILL mid-transaction, then heal  3

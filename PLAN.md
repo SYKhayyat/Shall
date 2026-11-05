@@ -56,6 +56,20 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   count it covers and the text this run printed, so the ubuntu run in the finding fails.
   **NOT the Windows/macOS half**: neither prints a section tally, so the gate is in force on
   neither — see `docs/spec/plan.md` Tier 14c)
+  - **The gate's own second blind spot, found 2026-11-05 on the `slackware` leg** (run
+    `42012538348`, the leg's only red): `Plan-smoke`'s number is a LEFTOVER — every backend the
+    sections above could not drive for real — so it falls by one whenever a backend is promoted
+    to a real lifecycle. That run's audit printed `8 real lifecycle, 0 install-attempted, 48
+    plan-smoked` over 56 registered backends and PASSed "every registered backend got a
+    lifecycle or a plan-smoke", while the section's own count went 52 -> 51 and reddened the
+    board: coverage UP, ratchet DOWN. Lowering the line would have been right for exactly one
+    run and wrong for the next promotion. **BUILT**: the harness credits the checks a section
+    owed and an earlier one already made (`SECTION_COVERED`, section 15 is its only writer) and
+    the floor compares `credited + covered` — 51 + 8 = 59, which the old arithmetic reproduces
+    exactly (49 plan-smoked + 2 statement rows + 1 enumeration) when 7 were lifecycled. A
+    collapse still fails, because the covered half is written at the END of the section. Three
+    predicates in `scripts/harness-logic-test.sh` drive it: a promotion is not a shortfall, a
+    hole is not covered into a pass, and the covered count lands on the open section.
 - [x] #96 CI: the 8 distro integration images are red on the container harness's `dir:` check (a
   check that never observes what it asserts). (**BUILT — and it was one missing line of harness,
   not a product defect.** `gone_ok "the dir is gone from disk" dir-dst` had no `witness dir-dst`

@@ -1035,8 +1035,8 @@ for _src in $SOURCES; do
         continue
     fi
     _body=""
-    for _fn in section_floor_record section_soft_says _credit_section _record_soft \
-               check_section_floors report_section_floors; do
+    for _fn in section_count section_floor_record section_soft_says _credit_section \
+               _credit_covered _record_soft check_section_floors report_section_floors; do
         _b="$(lift "$_fn" "$_src")"
         if [ -z "$_b" ]; then _body=""; break; fi
         _body="$_body
@@ -1057,8 +1057,9 @@ $_b"
 
         _sf_dir="$(mktemp -d)"
         SECTIONS="$_sf_dir/sections"; SECTION_CHECKS="$_sf_dir/checks"
-        SECTION_SOFTS="$_sf_dir/softs"; FLOOR="$_sf_dir/section-floor.txt"
-        : > "$SECTIONS"; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
+        SECTION_SOFTS="$_sf_dir/softs"; SECTION_COVERED="$_sf_dir/covered"
+        FLOOR="$_sf_dir/section-floor.txt"
+        : > "$SECTIONS"; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"; : > "$SECTION_COVERED"
         # Two sections, because a gate that only ever sees one cannot be shown to be reading
         # the right one. `Bootstrap` is at its floor, `SIGKILL` is the section the finding was
         # in, and the record gives the second a `soft`-bound — the shape a real entry has.
@@ -1071,7 +1072,10 @@ $_b"
         # `idx` is the section a check is credited to, which is the only thing the tally's two
         # files hold; `credit N` writes N of them against the current one.
         credit() { _i=0; while [ "$_i" -lt "$1" ]; do printf '%s\n' "$idx" >> "$SECTION_CHECKS"; _i=$((_i + 1)); done; }
-        reset() { PASS=0; FAILC=0; SOFTC=0; FAILED_NAMES=""; }
+        # `cover N` is what the harness's `_credit_covered` writes for a section whose scope is
+        # the complement of an earlier one: N checks it owed and that section already made.
+        cover() { _i=0; while [ "$_i" -lt "$1" ]; do printf '%s\n' "$idx" >> "$SECTION_COVERED"; _i=$((_i + 1)); done; }
+        reset() { PASS=0; FAILC=0; SOFTC=0; FAILED_NAMES=""; : > "$SECTION_COVERED"; }
         judge() {
             check_section_floors container-linux-ubuntu-local "$1" > "$_sf_dir/out" 2>&1
             report_section_floors >> "$_sf_dir/out" 2>&1
@@ -1150,6 +1154,40 @@ $_b"
         grep -q 'ratchet up:.*container-linux-ubuntu-local  Bootstrap  9' "$_sf_dir/out" \
             || { echo "  BAD   a section above its floor did not print the line to add:"; sed -n 's/^/          /p' "$_sf_dir/out"; _bad=1; }
         [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): beating the record passes and prints the edit"
+
+        # **A check this section owed and an earlier section made is not a check it lost.**
+        # `Plan-smoke`'s scope is every backend the sections above could not drive for real, so
+        # promoting one into a real lifecycle takes a check out of this section's count and
+        # gives it to the section above: measured on `slackware`, run 42012538348, where the
+        # audit printed coverage UP (8 real lifecycle, 48 plan-smoked of 56) while this
+        # section's own number fell 52 -> 51 and reddened the board. The floor is compared
+        # against credited + covered, so a promotion is flat: 22 credited + 19 covered is the
+        # 41 this section owes, and the run passes without a lowered number.
+        reset; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
+        idx=0; credit 4; idx=1; credit 22; cover 19
+        judge "$FLOOR"
+        [ "$FAILC" -eq 0 ] || { echo "  BAD   a check an earlier section made was scored as this section stopping"; _bad=1; }
+        [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): a promoted backend's check counts for this section and is not a shortfall"
+
+        # **And covered cannot manufacture a collapse into a pass.** The union has to leave a
+        # real hole below the floor, or the rule would excuse exactly the silence it exists to
+        # find: 4 credited + 2 covered is 6, not the 41 in the record.
+        reset; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
+        idx=0; credit 4; idx=1; credit 4; cover 2
+        judge "$FLOOR"
+        [ "$FAILC" -eq 1 ] || { echo "  BAD   covered checks absorbed a collapse past the floor"; _bad=1; }
+        grep -q "SIGKILL mid-transaction, then heal(6, floor 41)" "$_sf_dir/out" \
+            || { echo "  BAD   the union's shortfall did not print the two halves added:"; sed -n 's/^/          /p' "$_sf_dir/out"; _bad=1; }
+        [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): covered is added, never subtracted from the hole"
+
+        # The producer the two cases above assume exists: `_credit_covered N` opens N lines
+        # against the section that is currently open, which is the same key the tally and the
+        # floor read — and it must land on THAT section, not on the first one or on none.
+        reset; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
+        idx=0; credit 4; idx=1; credit 3; _credit_covered 5
+        [ "$(section_count 1)" = "3 5" ] || { echo "  BAD   _credit_covered did not land on the open section: $(section_count 1)"; _bad=1; }
+        [ "$(section_count 0)" = "4 0" ] || { echo "  BAD   _credit_covered leaked onto a section that was already closed"; _bad=1; }
+        [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): covered checks are written against the section that owed them"
 
         # **The gate that is not in force must say so, loudly.** A file that is not mounted —
         # the state N-5 describes for the ratchet that shares this shape, on five legs at once,

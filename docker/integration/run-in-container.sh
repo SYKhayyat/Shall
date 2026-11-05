@@ -298,13 +298,23 @@ grep_ok() {
 # found nothing to check" and "it never ran" are different and this is where they are told apart.
 SECTIONS=/tmp/shall-it-sections
 SECTION_CHECKS=/tmp/shall-it-section-checks
+# The checks a section owed and a PREVIOUS section already made, one line per check, keyed by
+# the same section index. `Plan-smoke` is the only writer: its scope is "every backend the
+# sections above could not drive for real", so its own count is the complement of section 14's
+# and falls by one every time a backend is promoted to a real lifecycle. A floor over that
+# number is a ratchet that goes red on a coverage GAIN — measured on the `slackware` leg of run
+# 42012538348, where the audit printed `8 real lifecycle, 0 install-attempted, 48 plan-smoked`
+# and PASSed "every registered backend got a lifecycle or a plan-smoke" while the section's own
+# count fell 52 -> 51 and reddened the board. The number that is honest about coverage is the
+# UNION, credited + covered, which rises and falls only with the registry.
 # Every `soft` this run printed, against the section that printed it. The tally above counts
 # checks; this is the other half of the same question, and the floor below cannot be honest
 # without it — a section that declines to measure says so, and a floor that ignores that turns
 # the instrument's own honesty into a red board.
 SECTION_SOFTS=/tmp/shall-it-section-softs
-rm -f "$SECTIONS" "$SECTION_CHECKS" "$SECTION_SOFTS"
-: > "$SECTIONS"; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
+SECTION_COVERED=/tmp/shall-it-section-covered
+rm -f "$SECTIONS" "$SECTION_CHECKS" "$SECTION_SOFTS" "$SECTION_COVERED"
+: > "$SECTIONS"; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"; : > "$SECTION_COVERED"
 
 section() { # section "<the same line the harness used to echo>"
     echo "$1"
@@ -326,6 +336,21 @@ _credit_section() {
     return 0
 }
 
+# Record the checks a LATER section owed and an earlier one already made — `n` of them,
+# against the section that is currently open. A line per check rather than a running total,
+# because `_credit_section` counts lines and two number formats in one tally is one question
+# answered two ways.
+_credit_covered() { # n
+    _cv_idx="$(tail -1 "$SECTIONS" 2>/dev/null | cut -f1)"
+    [ -n "$_cv_idx" ] || return 0
+    _cv_i=0
+    while [ "$_cv_i" -lt "${1:-0}" ]; do
+        printf '%s\n' "$_cv_idx" >> "$SECTION_COVERED"
+        _cv_i=$((_cv_i + 1))
+    done
+    return 0
+}
+
 # Called by `soft`, for the same reason `_credit_section` is called by everything that scores.
 # A `soft` does not credit its section — it is the absence of a measurement, and crediting it
 # would make "this section checked nothing and said so" look like "this section checked
@@ -334,6 +359,23 @@ _record_soft() {
     _rs_idx="$(tail -1 "$SECTIONS" 2>/dev/null | cut -f1)"
     [ -n "$_rs_idx" ] && printf '%s\t%s\n' "$_rs_idx" "$1" >> "$SECTION_SOFTS"
     return 0
+}
+
+# What a section ran, as two numbers: the checks it credited (`n`) and the checks it owed and a
+# PREVIOUS section already made (`covered`).
+#
+# One function, because two readers ask this — the tally that prints it and the floor that
+# compares it — and a unit that is counted one way in the log and another way in the gate is
+# the class of defect this whole file is a list of. `covered` is nonzero for one section only
+# and it is the difference between a ratchet that reads coverage and one that reads the split
+# between two complementary sections: `Plan-smoke`'s scope is everything the sections above
+# could not drive, so its own count falls every time one of them takes a backend on.
+section_count() { # section-index -> "<credited> <covered>"
+    _sc_n="$(grep -c "^$1\$" "$SECTION_CHECKS" 2>/dev/null)"
+    [ -n "$_sc_n" ] || _sc_n=0
+    _sc_c="$(grep -c "^$1\$" "$SECTION_COVERED" 2>/dev/null)"
+    [ -n "$_sc_c" ] || _sc_c=0
+    printf '%s %s\n' "$_sc_n" "$_sc_c"
 }
 
 # The tally, in the shape a build log can be read by. One line per section, then the total, so
@@ -345,10 +387,17 @@ print_section_tally() {
     _t_total=0
     while IFS='	' read -r _ts_i _ts_name; do
         [ -n "$_ts_i" ] || continue
-        _ts_n="$(grep -c "^$_ts_i\$" "$SECTION_CHECKS" 2>/dev/null)"
-        [ -n "$_ts_n" ] || _ts_n=0
+        _ts_pair="$(section_count "$_ts_i")"
+        _ts_n="${_ts_pair% *}"; _ts_c="${_ts_pair#* }"
         _t_total=$((_t_total + _ts_n))
-        printf '        shall-it-section: %-58s %3d\n' "$_ts_name" "$_ts_n"
+        if [ "$_ts_c" -gt 0 ]; then
+            # Both numbers and never only their sum: "what did this section run" and "what did
+            # it answer for" are different questions, and the floor compares the second.
+            printf '        shall-it-section: %-58s %3d  (+%d covered above = %d)\n' \
+                "$_ts_name" "$_ts_n" "$_ts_c" "$((_ts_n + _ts_c))"
+        else
+            printf '        shall-it-section: %-58s %3d\n' "$_ts_name" "$_ts_n"
+        fi
     done < "$SECTIONS"
     printf '        shall-it-section: %-58s %3d\n' "TOTAL" "$_t_total"
 }
@@ -2667,9 +2716,17 @@ smoke_pkg() {
     esac
 }
 
+SMOKE_COVERED=0
 for be in $ALL_BACKENDS; do
-    # Already proven by a real lifecycle above — a dry run would add nothing.
-    grep -qx "$be" "$LEDGER/be-life" 2>/dev/null && continue
+    # Already proven by a real lifecycle above — a dry run would add nothing. **Counted, not
+    # dropped.** This skip is the whole reason the section's own tally is not a coverage
+    # measure: every backend promoted into section 14 takes one check out of this one, and the
+    # floor compares credited + covered so that promotion reads as coverage gained rather than
+    # a section that stopped running.
+    if grep -qx "$be" "$LEDGER/be-life" 2>/dev/null; then
+        SMOKE_COVERED=$((SMOKE_COVERED + 1))
+        continue
+    fi
     case "$be" in
         service)
             # A dependent statement: it is declared in a module and applied by
@@ -2706,6 +2763,9 @@ for be in $ALL_BACKENDS; do
         echo "$be" >> "$LEDGER/be-smoke"
     fi
 done
+# What this section owed and the lifecycle above already answered for, credited to THIS
+# section's floor and to no count in the run: it is a check that ran, in another section.
+_credit_covered "$SMOKE_COVERED"
 
 # ==========================================================================
 # 16. The command surface, RUN — not just `--help`
@@ -4214,6 +4274,15 @@ sort -u "$LEDGER/cmd-real" > "$LEDGER/cmd-real.u" 2>/dev/null || : > "$LEDGER/cm
 echo "        backends: $(grep -c . "$LEDGER/be-life.u") real lifecycle, \
 $(grep -c . "$LEDGER/be-life-partial.u") install-attempted, \
 $(grep -c . "$LEDGER/be-smoke.u") plan-smoked"
+# **The names, not only the counts.** This line is the one every "which backend moved?"
+# question lands on, and the three counts cannot answer it: when a backend moves from
+# plan-smoke to a real lifecycle the total is unchanged, section 15's count drops by one, and
+# its ratchet goes red with no name in the log to explain why — which is exactly what the
+# `slackware` leg's 52 -> 51 has been saying since 2026-11-02. The lists are also the
+# evidence the two ratchets are complementary rather than redundant: `be-life` names what
+# `lifecycle-floor.txt` counts, `be-smoke` names what section 15's line counts.
+echo "        lifecycled: $(tr '\n' ' ' < "$LEDGER/be-life.u")"
+echo "        plan-smoked:$(tr '\n' ' ' < "$LEDGER/be-smoke.u") |"
 
 UNTOUCHED_BE=""
 for be in $ALL_BACKENDS; do
@@ -4562,8 +4631,13 @@ check_section_floors() { # host-class file
     # inside a quoted assignment is a formatting accident waiting for the next reader.
     while IFS='	' read -r _cf_i _cf_name; do
         [ -n "$_cf_i" ] || continue
-        _cf_n="$(grep -c "^$_cf_i\$" "$SECTION_CHECKS" 2>/dev/null)"
-        [ -n "$_cf_n" ] || _cf_n=0
+        # **The floor is compared against the UNION, not against what this section credited on
+        # its own** — see `section_count`. A section whose scope is "what the sections above
+        # left over" owes one fewer check for every backend they took on, so its own count
+        # FALLS on a coverage gain and a fixed floor over it reports improvement as a hole.
+        _cf_pair="$(section_count "$_cf_i")"
+        _cf_n="${_cf_pair% *}"; _cf_c="${_cf_pair#* }"
+        _cf_eff=$((_cf_n + _cf_c))
         _cf_rec="$(section_floor_record "$1" "$_cf_name" "$2")"
         if [ -z "$_cf_rec" ]; then
             _cf_unrecorded="$_cf_unrecorded$_cf_name=$_cf_n\n"
@@ -4571,8 +4645,8 @@ check_section_floors() { # host-class file
         fi
         _cf_compared=$((_cf_compared + 1))
         _cf_floor="${_cf_rec%%	*}"
-        if [ "$_cf_n" -ge "$_cf_floor" ]; then
-            [ "$_cf_n" -gt "$_cf_floor" ] && _cf_up="$_cf_up$_cf_name=$_cf_n\n"
+        if [ "$_cf_eff" -ge "$_cf_floor" ]; then
+            [ "$_cf_eff" -gt "$_cf_floor" ] && _cf_up="$_cf_up$_cf_name=$_cf_eff\n"
             continue
         fi
         _cf_bound=""; _cf_why=""
@@ -4586,11 +4660,11 @@ check_section_floors() { # host-class file
                 _cf_why="${_cf_rec##*	}"
                 ;;
         esac
-        if [ -n "$_cf_bound" ] && [ "$_cf_n" -ge "$_cf_bound" ] && section_soft_says "$_cf_name" "$_cf_why"; then
-            _cf_x="$_cf_name($_cf_n, excused to $_cf_bound)"
+        if [ -n "$_cf_bound" ] && [ "$_cf_eff" -ge "$_cf_bound" ] && section_soft_says "$_cf_name" "$_cf_why"; then
+            _cf_x="$_cf_name($_cf_eff, excused to $_cf_bound)"
             _cf_excused="$_cf_excused$_cf_x\n"
         else
-            _cf_x="$_cf_name($_cf_n, floor $_cf_floor)"
+            _cf_x="$_cf_name($_cf_eff, floor $_cf_floor)"
             _cf_short="$_cf_short$_cf_x\n"
         fi
     done < "$SECTIONS"
