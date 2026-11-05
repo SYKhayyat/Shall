@@ -97,7 +97,15 @@ container-guix apt guix
 # `sc` on windows-ci is the Windows service controller, and it is here rather than in a container
 # for the obvious reason. `snap` on linux-ci likewise: no image in the container matrix runs
 # systemd, and snap will not answer without it.
-linux-ci cabal cargo composer conda dotnet gem helm pip pipx snap stack yarn
+#
+# **`conda` left the ubuntu runner image on 2026-11-04** (ubuntu-26.04, image 20261101.186.1).
+# The nightly caught it as a lost row (#134), which is this file working: the line said the linux
+# leg measured conda, and the leg no longer could. It is dropped from THIS line only, and no row
+# loses its evidence — conda's row is `Evidence::Unasked` (`src/core/argv.rs`), and the
+# `container-tools` line above still measures it on an image that installs it. Do not add it back
+# because "the runner used to have it"; a measurement that exists by accident is what these
+# class lines exist to stop claiming.
+linux-ci cabal cargo composer dotnet gem helm pip pipx snap stack yarn
 macos-ci brew cargo dotnet gem pip pipx yarn
 windows-ci cabal cargo choco composer dotnet gem helm pip pipx sc stack yarn
 
