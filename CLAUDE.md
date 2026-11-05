@@ -192,7 +192,10 @@ later", it is **this list of properties currently unverified**:
 **And which of those were even attempted.** A harness section that stops running cannot fail —
 every check it did not make is a check that did not fail — so the container harness prints
 `shall-it-section: <section> <n>` per section and `scripts/section-floor.txt` ratchets those
-counts per host class. **A `soft` is not an excuse for one.** A shortfall the harness announced
+counts per host class. **One of those counts is a union:** `Plan-smoke` owes a check for every
+backend the sections above could not drive for real, so its own number falls when one of them is
+promoted — the line reads `<n> (+<k> covered above = <n+k>)` and the floor compares the sum, so a
+coverage gain is not a shortfall and a collapse still is. **A `soft` is not an excuse for one.** A shortfall the harness announced
 is excused by a dated line carrying both the count it covers and the text this run printed; a
 section that stopped in silence prints no `soft` and is excused by nothing, which is the whole
 point. `crash/groupkill` once lost 10 of its 10 checks on one image and the run stayed green, so

@@ -301,7 +301,11 @@ ends green with a hole in it. This happened — `crash/groupkill` lost 10 of its
 image, and finding those ten took a diff of two CI logs. So every container run prints
 `shall-it-section: <section> <n>` per section, and `scripts/section-floor.txt` ratchets those
 counts per host class: a section that credits fewer checks than its class has credited before
-fails, and one that credits more prints the line to add. A shortfall the harness *announced* is
+fails, and one that credits more prints the line to add. **One section is scored on its union
+with another.** `Plan-smoke`'s scope is whatever the sections above could not drive for real, so
+its own count falls by one every time a backend is promoted to a real lifecycle — the tally
+prints it as `<n> (+<k> covered above = <n+k>)`, and the floor compares the sum, which only the
+registry moves. A shortfall the harness *announced* is
 excused, but only by a dated line that names both the count it covers and the `soft` this run
 printed — a section that stopped in silence prints no `soft` and is excused by nothing. These are
 the container matrix's numbers; the Windows and macOS sweeps print no per-section tally yet, so
