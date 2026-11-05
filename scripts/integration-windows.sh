@@ -273,6 +273,19 @@ never_ran() { [ "$1" = 127 ] || [ "$1" = 126 ] || [ "$1" = 124 ]; }
 # program under test did not answer, and an audit of an answer nobody gave proves nothing.
 too_few_to_audit() { [ "$2" -lt "$1" ]; }
 
+# Is this `check conflicts` run a report, or silence? Exit 2 is the designed answer when a
+# cross-backend provider collision exists (U21); 0 says there is none; anything else is the
+# command failing rather than answering. **The report does not have to name the canary.** This
+# sweep runs on a host that already has whatever a developer installed, so the collisions it
+# finds are the host's, not necessarily `$PKG`'s — requiring `$PKG` failed the nimble sweep on a
+# machine whose only conflict was jq's (#54), and this block's own comment already said the
+# assertion was "that the conflict is REPORTED". The container harness's twin has always asked
+# only for a `MULTIPLE PROVIDERS` row; that is the rule this now shares.
+conflicts_reported() { # exit-code output-file
+    if [ "$1" -eq 0 ]; then return 0; fi
+    [ "$1" -eq 2 ] && grep -q "MULTIPLE PROVIDERS" "$2"
+}
+
 nok() {
     desc="$1"; shift
     "$@" >/tmp/itw.out 2>&1; rc=$?
@@ -1790,11 +1803,12 @@ ok "path --explain says which source won" lx path --explain
 ok "config show prints the active configuration" lx config show
 ok "policy checks the desired state against [guard]" lx policy
 # jq arrives via choco AND via the sweep's scoop install, so a cross-provider conflict is
-# the CORRECT answer here and exits 2 by design (U21). The assertion is that the conflict is
-# REPORTED - either exit code carries the report; silence (rc other than 0/2) still fails.
+# the CORRECT answer here and exits 2 by design (U21). So is any other collision this used host
+# already carries: the report proves the command works, and it does not have to name this
+# sweep's canary (see `conflicts_reported`).
 _rc=0
 lx check conflicts >/tmp/itw.out 2>&1 || _rc=$?
-if [ "$_rc" -eq 0 ] || { [ "$_rc" -eq 2 ] && grep -q "MULTIPLE PROVIDERS.*$PKG" /tmp/itw.out; }; then
+if conflicts_reported "$_rc" /tmp/itw.out; then
     PASS=$((PASS + 1)); echo "  PASS  check conflicts reports cross-backend conflicts"
 else
     FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES\n    - check conflicts (rc=$_rc)"

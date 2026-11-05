@@ -74,7 +74,7 @@ run_against() {
     FAKE=""; FAKE_NAME="hello"
     path_of() { case "$1" in "$FAKE_NAME") echo "$FAKE" ;; *) echo "" ;; esac; }
 
-    for _fn in never_ran assert_binary_gone on_path named_bin_dir off_path_copy binary_present assert_binary_reachable; do
+    for _fn in never_ran assert_binary_gone on_path named_bin_dir off_path_copy binary_present assert_binary_reachable conflicts_reported; do
         _body="$(lift "$_fn" "$SRC")"
         if [ -z "$_body" ]; then
             echo "  FATAL: could not lift $_fn() from this harness"
@@ -240,6 +240,40 @@ run_against() {
     else
         echo "  BAD   a clean removal was scored as a leftover"; BAD=$((BAD + 1))
     fi
+    # ---- `check conflicts` is a report, not a silence -------------------------
+    #
+    # U21: rc=2 is the designed answer when a collision exists. The Windows twin used to
+    # require the canary's name inside the row, so a used host whose only conflict was another
+    # package's failed the nimble sweep (#54); the container twin never did. One predicate now,
+    # lifted from both files.
+    _cf="$_rd/conflicts.out"
+    printf 'Cross-backend conflicts (1):\n  [MULTIPLE PROVIDERS] jq — provided by: choco, scoop\n' > "$_cf"
+    TOTAL=$((TOTAL + 1))
+    if conflicts_reported 2 "$_cf"; then
+        echo "  ok    rc=2 with a report that does not name the canary"
+    else
+        echo "  BAD   a real conflict was read as silence"; BAD=$((BAD + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+    if conflicts_reported 0 "$_cf"; then
+        echo "  ok    rc=0 (no conflicts) is accepted"
+    else
+        echo "  BAD   rc=0 must be accepted"; BAD=$((BAD + 1))
+    fi
+    : > "$_cf"
+    TOTAL=$((TOTAL + 1))
+    if conflicts_reported 2 "$_cf"; then
+        echo "  BAD   rc=2 with no report must fail"; BAD=$((BAD + 1))
+    else
+        echo "  ok    rc=2 with no report is not accepted"
+    fi
+    TOTAL=$((TOTAL + 1))
+    if conflicts_reported 1 "$_cf"; then
+        echo "  BAD   rc=1 must not be accepted"; BAD=$((BAD + 1))
+    else
+        echo "  ok    rc=1 is a failure, not a report"
+    fi
+
     rm -rf "$_rd"
 }
 

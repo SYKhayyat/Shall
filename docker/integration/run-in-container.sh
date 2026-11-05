@@ -180,6 +180,16 @@ never_ran() { [ "$1" = 127 ] || [ "$1" = 126 ] || [ "$1" = 124 ]; }
 # program under test did not answer, and an audit of an answer nobody gave proves nothing.
 too_few_to_audit() { [ "$2" -lt "$1" ]; }
 
+# Is this `check conflicts` run a report, or silence? Exit 2 is the designed answer when a
+# cross-backend provider collision exists (U21); 0 says there is none; anything else is the
+# command failing rather than answering. Twin of the predicate in `scripts/integration-windows.sh`
+# — the Windows copy used to require the canary's name in the row and this one did not, so the
+# same product answer scored differently on the two hosts (#54).
+conflicts_reported() { # exit-code output-file
+    if [ "$1" -eq 0 ]; then return 0; fi
+    [ "$1" -eq 2 ] && grep -q "MULTIPLE PROVIDERS" "$2"
+}
+
 # nok "desc" cmd...  — passes when cmd exits NON-zero (a refusal/negative path).
 nok() {
     desc="$1"; shift
@@ -2731,10 +2741,10 @@ ok "policy checks the desired state against [guard]" lx policy
 # `check conflicts` exits 2 by design (U21) when a cross-backend provider collision exists,
 # and the tools image ships one on purpose: conda's base environment carries `python` beside
 # apt's. The assertion is that the conflict is REPORTED — either exit code carries the report;
-# silence (rc other than 0/2) still fails. Twin of the block in integration-windows.sh.
+# silence (rc other than 0/2) still fails.
 _rc=0
 lx check conflicts >/tmp/it.out 2>&1 || _rc=$?
-if [ "$_rc" -eq 0 ] || { [ "$_rc" -eq 2 ] && grep -q "MULTIPLE PROVIDERS" /tmp/it.out; }; then
+if conflicts_reported "$_rc" /tmp/it.out; then
     PASS=$((PASS + 1)); _credit_section; echo "  PASS  check conflicts reports cross-backend conflicts"
 else
     FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES\n    - check conflicts (rc=$_rc)"
