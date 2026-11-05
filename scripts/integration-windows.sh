@@ -1039,8 +1039,21 @@ ok "adopt recorded at least one package" test "$ADOPTED" -ge 1
 echo "[8] The guard"
 # `lx` is a shell function, so `sh -c "lx …"` ran nothing at all and this asserted
 # only that the binary still exists — which it would whatever Shall did.
-$TO "$SHALL" -y apply shall --delete >/dev/null 2>&1 || true
-ok "Shall survives an uninstall attempt" on_path "$SHALL"
+#
+# **Running the command through `$TO` fixed half of that, and the other half was still the
+# assertion.** `on_path "$SHALL"` is a question about the filesystem, and a binary that fails
+# everything answers it without ever entering the delete path: this was the one survivor of the
+# fail-everything stub and it left the Windows catch count at 107 against a floor of 108, so the
+# mutation gate was red for a check that proved nothing rather than for a product that broke.
+#
+# What a working Shall answers here is a refusal that names its reason: `shall` is not a package
+# any backend on this host installed it as, so there is no declared line to undeclare and no
+# drift Shall owns to remove. Both branches in `src/verbs/apply.rs` say "nothing was
+# uninstalled", so that sentence is the assertion. The exit code alone cannot tell that refusal
+# from the stub's plain failure, and did not.
+nok_saying "an uninstall attempt on Shall itself is refused, saying what it found" \
+    "nothing was uninstalled" lx -y apply shall --delete
+ok "and Shall is still reachable afterwards" on_path "$SHALL"
 # **This establishes its premise instead of assuming the host's package census supplies
 # one.** It used to assert only that `purge-undeclared` refuses after adopt, and what did
 # the refusing was the ratio (II.11) — whose denominator is the undeclared crawl. When the
