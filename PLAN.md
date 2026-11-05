@@ -239,7 +239,12 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   Tests written first and watched failing on both directions
   (`tests/e2e/a_schedule_edit_converges_only_its_own_line_tests.rs`); landing them found that the
   fixture leaks `XDG_CONFIG_HOME`, so a real provisioning test had written and enabled a
-  `shall-tidy.timer` in the developer's own `~/.config/systemd/user` — the harness now sets it.)
+  `shall-tidy.timer` in the developer's own `~/.config/systemd/user` — the harness now sets it.
+  **The Apple job then caught the test's own second copy of the platform:** it named systemd's
+  `.timer` on every Unix, and macOS writes a launchd plist instead, so the addition arm failed on
+  `aarch64-apple-darwin` while passing here. The test now takes its stub, its record path and its
+  arming verb from the platform, which also exercises the launchd arm the comment called unproven;
+  the Windows arm is still not driven and says so.)
 - [x] **Gate names cited anywhere are not checked for resolving, while `V.n` citations are.**
   (Low — **BUILT, and it found NINE the day it was written**, which is the answer to "would
   anything notice the next one". `tests/a_gate_name_cited_anywhere_resolves_tests.rs`, the twin of

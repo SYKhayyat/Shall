@@ -11,11 +11,16 @@
 //! directory exists is the entire assertion. It is also the thing a whole-machine converge
 //! would create while a narrowed run must leave alone.
 //!
-//! **Why the removal is driven for real and the addition is previewed.** `schedule remove` with
-//! no ledger row touches no scheduler at all (`Extras::undo_one` says so and warns), so it is
-//! hermetic on every host. A real `add` provisions a timer through systemd/launchd/Task
-//! Scheduler, which no test fixture can own — so the addition is driven through `-n`, where the
-//! width of the converge is still observable in what the plan says.
+//! **Why the removal is driven for real and the addition is driven against a stub.** `schedule
+//! remove` with no ledger row touches no scheduler at all (`Extras::undo_one` says so and warns),
+//! so it is hermetic on every host. A real `add` provisions through systemd/launchd/Task
+//! Scheduler; the test stands the platform's own scheduler program in on `PATH`, so the
+//! provisioner really runs and writes its record without reaching this machine's session.
+//!
+//! **The record it writes is the platform's, and the assertion asks the platform.** This test
+//! used to name systemd's `.timer` path on every Unix, so it passed on Linux and failed on macOS
+//! — where `schedule add` writes `~/Library/LaunchAgents/com.shall.<name>.plist` and never a
+//! unit. That is `#130`'s own "unproven half" arriving as a red Apple job rather than a report.
 
 use crate::harness::{decl, Fixture};
 
@@ -52,14 +57,44 @@ fn a_schedule_removal_does_not_converge_the_machine() {
     );
 }
 
-/// The addition is narrowed the same way, driven for real.
+/// The scheduler program this platform's provisioner drives, and the verb that arms a task.
 ///
-/// A real `add` provisions a timer, which needs a scheduler: `systemctl` here. The test stands one
-/// in (`run_with_path`) that records what it was asked and exits 0, so the schedule phase really
-/// runs — unit file written, `enable` issued — without reaching this machine's session. The unit
-/// file lands under the fixture because the harness points `XDG_CONFIG_HOME` at it; the pending
-/// `dir:` must not be created at all.
-#[cfg(unix)]
+/// `Scheduler::detect` chooses the provisioner by `cfg!`, so the test has to choose its stub the
+/// same way. Naming `systemctl` everywhere is what made the Apple job red: on macOS the program
+/// is `launchctl` and the arming verb is `load`.
+#[cfg(target_os = "linux")]
+fn platform_scheduler() -> (&'static str, &'static str) {
+    ("systemctl", "enable")
+}
+#[cfg(target_os = "macos")]
+fn platform_scheduler() -> (&'static str, &'static str) {
+    ("launchctl", "load")
+}
+
+/// Where the platform's provisioner writes the record that the schedule exists.
+///
+/// Linux: `$XDG_CONFIG_HOME/systemd/user/shall-<name>.timer` (the fixture pins `XDG_CONFIG_HOME`
+/// at its own root). macOS: `$HOME/Library/LaunchAgents/com.shall.<name>.plist`.
+#[cfg(target_os = "linux")]
+fn provisioned_record(root: &std::path::Path, name: &str) -> std::path::PathBuf {
+    root.join(".config")
+        .join("systemd")
+        .join("user")
+        .join(format!("shall-{name}.timer"))
+}
+#[cfg(target_os = "macos")]
+fn provisioned_record(root: &std::path::Path, name: &str) -> std::path::PathBuf {
+    root.join("Library")
+        .join("LaunchAgents")
+        .join(format!("com.shall.{name}.plist"))
+}
+
+/// The addition is narrowed the same way, driven for real against the platform's scheduler.
+///
+/// The stub records what it was asked and exits 0, so the schedule phase really runs — record
+/// written, arming verb issued — without reaching this machine's session. The pending `dir:`
+/// must not be created at all.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn a_schedule_addition_applies_its_own_line_and_no_other() {
     use std::os::unix::fs::PermissionsExt;
@@ -68,10 +103,11 @@ fn a_schedule_addition_applies_its_own_line_and_no_other() {
     let pending = f.root.join("pending-dir");
     f.write_module(&format!("{}\n", dir_line(&pending)));
 
+    let (program, arming_verb) = platform_scheduler();
     let stub = f.root.join("stub-bin");
     std::fs::create_dir_all(&stub).unwrap();
-    let log = f.root.join("systemctl.log");
-    let script = stub.join("systemctl");
+    let log = f.root.join("scheduler.log");
+    let script = stub.join(program);
     std::fs::write(
         &script,
         format!("#!/bin/sh\necho \"$@\" >> '{}'\nexit 0\n", log.display()),
@@ -103,17 +139,18 @@ fn a_schedule_addition_applies_its_own_line_and_no_other() {
         "`schedule add` wrote no line:\n{}",
         schedules(&f)
     );
-    let unit = f.root.join(".config/systemd/user/shall-tidy.timer");
+    let record = provisioned_record(&f.root, "tidy");
     assert!(
-        unit.is_file(),
+        record.is_file(),
         "the schedule it named was not provisioned: {} is absent. A narrowed run still applies \
          what it was asked for:\n{out}",
-        unit.display()
+        record.display()
     );
     let asked = std::fs::read_to_string(&log).unwrap_or_default();
     assert!(
-        asked.contains("enable"),
-        "the timer file was written and never enabled — the stub `systemctl` was asked:\n{asked}"
+        asked.contains(arming_verb),
+        "the record was written and never armed ({arming_verb}) — the stub `{program}` was \
+         asked:\n{asked}"
     );
     assert!(
         !pending.is_dir(),
