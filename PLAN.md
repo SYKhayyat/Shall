@@ -1297,6 +1297,46 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     unpacked but not configured, which every listing correctly reports as *not installed*. Removing
     the reader would have restored that defect rather than fixed a documentation error.)
 
+- [x] #134 CI: the nightly argv-drift ubuntu leg is red because conda left the ubuntu-26.04 runner
+  image. (**BUILT 2026-11-05 as `2de7e50`** — `scripts/terminator-floor.txt` owed `conda` for
+  `linux-ci` and the image no longer ships it, so `every_terminator_claim_still_holds_where_the_tool_is_installed`
+  panicked on a host whose managers were otherwise all present. The `linux-ci` line drops the
+  token with a dated note; conda's row is `Evidence::Unasked`, so no `Measured` claim lost its
+  evidence, and the `container-tools` line still measures the binary. The next nightly shows the
+  leg green, which is the issue's own resolving test.)
+- [x] the section floor's `tools` excuse had gone stale, and the fix found two more defects
+  underneath it. (**BUILT 2026-11-06 off the nightly run `42204340681`, job `127847106318`.**
+  Recorded here as one entry because they are one family: three ways a gate can be right about a
+  number and wrong about its reason.)
+  - **The stale sentence.** `container-linux-tools-local  SIGKILL mid-transaction, then heal  41
+    soft  3` carried the cause `the control sync did not install` from `2026-09-30`. On this run
+    that image declined by the *other* route — `the kill opened no new entry in the write-ahead
+    log` — so the count was inside the bound (31 against 3) and the text was not, and the gate went
+    red excusing nothing. Both halves of an excuse are one sentence; when a class starts declining
+    for the other reason, the sentence is what has to move.
+  - **A printed edit that was cut in half.** The line `report_section_floors` prints for a
+    shortfall is built from `Name(31, floor 41)` and used to split it on `[(),]`, so the suggested
+    record read `SIGKILL mid-transaction   floor 41` — a section name the harness does not
+    declare, and `Real lifecycle, every other manager on this image` lost more still. Nothing
+    could see it until a run printed the block for a name with a comma in it. It is
+    `section_floor_suggestion` now, reading the name out of the brackets.
+  - **A short crash section with no crash in it.** Every iteration of section 16d either kills
+    inside a transaction — and the checks after the kill are the section's work — or declines with
+    a `soft` and returns before them. A run that lost checks to the second is the instrument being
+    honest and the floor's bound covers it; a run where the fixture installed and *no* kill landed
+    inside a transaction made none of those assertions at all, and read as the same excused
+    shortfall. `_crash_witness` writes a marker per real kill and the section now fails by name
+    when the ledger is empty — `too_few_to_audit` applied to the crash loop.
+  - **A gate so this cannot come back:** `tests/review/a_soft_bound_excuse_names_a_line_the_harness_prints_tests.rs`
+    asserts every recorded excuse's sentence is still a contiguous `soft` line in the harness, and
+    that `section_soft_says`'s own `case`-glob mechanism is the one being tested. It found two
+    further records whose prefixes are `$be:`/`go:` at runtime and one (`void`) that had lost its
+    check name; all three now match.
+  - **Covered, not fixed:** `snapshot → mutate → restore` prints 0 on `tools` (no loopback device
+    in the image — already recorded), `crash/groupkill` is the only iteration that can produce the
+    `0 before, 0 after` decline, and the four other `soft` lines in this run are other sections'
+    causes and their own records.
+
 ## Phase 4 — Feature gaps (Info, after core is safe)
 - [ ] Adopt discovery: #59 dotfiles, #60 schedules, #61 repos/PPAs, #62 shell, #63 settings, #64 services, #65 firewall.
 - [ ] Export: #66 from-scan, #67 from-declaration.

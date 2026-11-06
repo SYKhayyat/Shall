@@ -1035,8 +1035,9 @@ for _src in $SOURCES; do
         continue
     fi
     _body=""
-    for _fn in section_count section_floor_record section_soft_says _credit_section \
-               _credit_covered _record_soft check_section_floors report_section_floors; do
+    for _fn in section_count section_floor_record section_soft_says section_floor_suggestion \
+               _credit_section _credit_covered _record_soft check_section_floors \
+               report_section_floors; do
         _b="$(lift "$_fn" "$_src")"
         if [ -z "$_b" ]; then _body=""; break; fi
         _body="$_body
@@ -1097,7 +1098,7 @@ $_b"
         idx=0; credit 4; idx=1; credit 4
         judge "$FLOOR"
         [ "$FAILC" -eq 1 ] || { echo "  BAD   a section that credited 4 of 41 checks did not fail the run"; _bad=1; }
-        grep -q "SIGKILL mid-transaction, then heal(4, floor 41)" "$_sf_dir/out" \
+        grep -qF "[SIGKILL mid-transaction, then heal](4, floor 41)" "$_sf_dir/out" \
             || { echo "  BAD   the failure did not name the section, the count and the floor:"; sed -n 's/^/          /p' "$_sf_dir/out"; _bad=1; }
         [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): a section that stopped running in silence fails, and is named"
 
@@ -1176,7 +1177,7 @@ $_b"
         idx=0; credit 4; idx=1; credit 4; cover 2
         judge "$FLOOR"
         [ "$FAILC" -eq 1 ] || { echo "  BAD   covered checks absorbed a collapse past the floor"; _bad=1; }
-        grep -q "SIGKILL mid-transaction, then heal(6, floor 41)" "$_sf_dir/out" \
+        grep -qF "[SIGKILL mid-transaction, then heal](6, floor 41)" "$_sf_dir/out" \
             || { echo "  BAD   the union's shortfall did not print the two halves added:"; sed -n 's/^/          /p' "$_sf_dir/out"; _bad=1; }
         [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): covered is added, never subtracted from the hole"
 
@@ -1199,6 +1200,40 @@ $_b"
         grep -q "no record for container-linux-ubuntu-local" "$_sf_dir/out" \
             || { echo "  BAD   the missing file was not named as a missing record"; _bad=1; }
         [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): a class with no record at all is a failure, not a pass"
+
+        # **The line the gate prints for a shortfall has to name the section it is about.**
+        # The suggestion used to be built by splitting `Name(31, floor 41)` on `[(),]`, which
+        # reads `SIGKILL mid-transaction` — a name the harness does not declare — and
+        # `Real lifecycle, every other manager on this image` lost more still. Nothing could see
+        # it until a run printed the block for a name containing a comma, which tools did on
+        # 2026-11-06. A printed edit that is nearly right is worse than no edit, because it is
+        # the one thing here meant to be pasted.
+        for _pfx in "SIGKILL mid-transaction, then heal" \
+                    "Real lifecycle, every other manager on this image" \
+                    "Bootstrap"; do
+            reset; : > "$SECTION_CHECKS"; : > "$SECTION_SOFTS"
+            printf '0\t%s\n' "$_pfx" > "$SECTIONS"
+            # A floor file that knows this section, so the run takes the shortfall branch rather
+            # than the "no record at all" one — which has its own format and its own case below.
+            printf 'container-linux-ubuntu-local  %s  9\n' "$_pfx" > "$FLOOR"
+            idx=0; credit 1
+            judge "$FLOOR"
+            # The name and the shape, not the number: what this case is about is that the
+            # section survives the split, and the floor is the file's to supply.
+            grep -qF "            container-linux-ubuntu-local  $_pfx  9  soft  " "$_sf_dir/out" \
+                || { echo "  BAD   the suggested line for '$_pfx' does not keep the section's name:"; sed -n 's/^/          /p' "$_sf_dir/out"; _bad=1; }
+        done
+        [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): the line a shortfall prints names the section, commas and all"
+
+        # The loop above rewrote the floor fixture, and every case after this one reads the file
+        # the block was set up with — two sections, one with a `soft`-bound.
+        : > "$SECTIONS"
+        printf '0\tBootstrap\n1\tSIGKILL mid-transaction, then heal\n' > "$SECTIONS"
+        printf '%s\n' \
+            "# a comment, which the parser must skip" \
+            "container-linux-ubuntu-local  Bootstrap  4" \
+            "container-linux-ubuntu-local  SIGKILL mid-transaction, then heal  41  soft  22  2026-09-30  the kill opened no new entry in the write-ahead log" \
+            > "$FLOOR"
 
         # A class with no line for ONE section is neither passed nor failed, and says what to
         # add. Q12's rule 4: a gate that fails the first time it meets a new platform is a gate
@@ -1227,6 +1262,127 @@ $_b"
         [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): SMOKE_ONLY is not judged, and does not pass either"
 
         rm -rf "$_sf_dir"
+        exit "$_bad"
+    )
+    if [ $? -eq 0 ]; then :; else BAD=$((BAD + 1)); fi
+    TOTAL=$((TOTAL + 1))
+
+done
+
+# ---------------------------------------------------------------------------
+# The crash pool: a short count with no kill inside a transaction is not the poll.
+#
+# Run 42204340681 measured 31 of this section's checks on `tools` where the record says 41, and
+# the section's own `soft` — `crash/groupkill: the kill opened no new entry in the write-ahead
+# log` — was a true account of where two of the iterations landed. Both of the ways a short count
+# happens print a `soft`, and only one of them is honest about a measurement: an iteration that
+# did not put its kill inside a transaction measured nothing, and a section where that happened
+# to EVERY iteration made none of the assertions after a real crash at all. Under the floor's
+# `soft`-bound those two are the same number against the same one excuse, so the harness has to
+# tell them apart itself rather than letting the gate think it did.
+#
+# Driven through the real producers (`_crash_witness`, written by the two branches that score a
+# kill) and the real pool, so this cannot drift from what CI runs.
+echo "== a crash section where no kill landed inside a transaction is not a short count"
+for _src in $SOURCES; do
+    if ! grep -q 'CRASH_LEDGER' "$_src"; then
+        TOTAL=$((TOTAL + 1))
+        echo "  ok    $(basename "$_src"): has no crash loop, so it has no pool to get wrong"
+        continue
+    fi
+    _wind="$(lift _crash_witness "$_src")"
+    if [ -z "$_wind" ]; then
+        TOTAL=$((TOTAL + 1))
+        echo "  BAD   $(basename "$_src") has no _crash_witness(): the crash pool cannot tell a soft from a kill"
+        BAD=$((BAD + 1))
+        continue
+    fi
+    (
+        PASS=0; FAILC=0; SOFTC=0; FAILED_NAMES=""
+        _credit_section() { :; }
+        soft() { SOFTC=$((SOFTC + 1)); }
+        eval "$_wind"
+
+        _cp_dir="$(mktemp -d)"
+        CRASH_LEDGER="$_cp_dir/measured"
+        reset() { PASS=0; FAILC=0; SOFTC=0; FAILED_NAMES=""; }
+        # **Lifted out of the section, not written here.** The pool is four lines inside a
+        # 300-line else-branch and `lift` reads functions, so a version of it in this file would
+        # be a copy — and a copy of the pool is what this case would then be testing. The two
+        # lines it is made of are asserted verbatim below instead: a `grep` at the ledger and an
+        # arithmetic `>= 1` over the result, which is how the gate can be shown to fail even
+        # though the shape it guards lives inline.
+        # Pattern in a single-quoted shell string, so the only thing `$` can expand is
+        # `$CRASH_LEDGER` — which has to, because the line being matched has a variable in it.
+        # A double-quoted pattern instead expanded `$(grep …)` at ASSIGNMENT time, against a
+        # ledger that did not exist yet: the pattern became `_crash_measured=` and matched
+        # nothing, which is precisely the silent-empty-check this case exists to refuse.
+        # Two seds and not one alternation: `\|` inside a BRE also means `|`, and the second
+        # line of the pool contains one literally — so the alternation form split it at the
+        # pipe and `sed` answered `unknown option to s`. `@` is the delimiter for the same
+        # reason: `s|…|` with a `|` in the pattern is the same collision one layer down.
+        _pool_pat='^        \(_crash_measured=$(grep -c . "$CRASH_LEDGER" 2>\/dev\/null)\)$'
+        _pool_default_pat='^        \(\[ -n "$_crash_measured" \] || _crash_measured=0\)$'
+        _pool_lines="$(sed -n "s@$_pool_pat@\\1@p" "$_src"; sed -n "s@$_pool_default_pat@\\1@p" "$_src")"
+        if [ -z "$_pool_lines" ]; then
+            echo "  BAD   $(basename "$_src") has no pool reading \$CRASH_LEDGER — a short crash section is compared against nothing"
+            exit 1
+        fi
+        # The number is what the pool READS, so it is re-measured every time the ledger moves —
+        # which is what `pool` below does before it decides. `_pool_measure` is the lifted file's
+        # arithmetic and nothing else.
+        _pool_measure() { eval "$_pool_lines"; }
+        _pool_measure
+        # The pool's own arithmetic, asserted rather than assumed: a `grep -c` that found no
+        # ledger at all leaves the variable EMPTY, not 0, because `grep` exits 2 on a missing
+        # file. Empty is a number that is not a number, and the `[` below would then die with
+        # `integer expected` and take the else branch — passing on a ledger that was never read.
+        [ -n "$_crash_measured" ] \
+            || { echo "  BAD   the crash pool left \$_crash_measured empty when the ledger was absent, so its comparison is on a broken gate"; exit 1; }
+        # The branch the number selects. Read as text because it is one `if` inside the loop's
+        # own `else`, and driven here against the number the real lines above produced.
+        _pool_branch="$(grep -c 'if \[ "\$_crash_measured" -ge 1 \]; then' "$_src")"
+        [ "$_pool_branch" = 1 ] \
+            || { echo "  BAD   the crash pool does not pass on at least one kill inside a transaction"; exit 1; }
+        # `[ -n … ] || 0`, because the measured line above hands over whatever `grep -c` said
+        # and an empty string is not the number zero.
+        pool() { _pool_measure; _p="${_crash_measured:-0}"; if [ "$_p" -ge 1 ]; then PASS=$((PASS + 1)); else FAILC=$((FAILC + 1)); fi; }
+        _bad=0
+
+        # The control. One iteration killed inside a transaction, so the section did its work
+        # and whatever it lost was the poll — which is the flat `soft` case, and a pass.
+        reset; rm -f "$CRASH_LEDGER"
+        _crash_witness open-open
+        pool
+        [ "$PASS" -eq 1 ] || { echo "  BAD   a section with one real kill did not pass its pool check"; _bad=1; }
+
+        # **Two real kills, one from each scoring branch — and both call sites are read out of
+        # the harness rather than assumed.** `open`/`midway`/`groupkill` and `completed` score
+        # through different code and both must reach the ledger; a producer left wired into only
+        # one of them reports a run of the other as having measured nothing, and the pool above
+        # would then pass on a section that killed nothing. Deleting either call site is the
+        # mutation this case is for, so each is matched by name and the tags are counted.
+        rm -f "$CRASH_LEDGER"
+        _open_sites="$(grep -c '^        _crash_witness "open-$_tag"$' "$_src")"
+        _closed_sites="$(grep -c '^        _crash_witness "closed-$_tag"$' "$_src")"
+        [ "$_open_sites" = 1 ] \
+            || { echo "  BAD   the branch that scores a kill leaving an entry open does not write the ledger ($_open_sites call sites)"; _bad=1; }
+        [ "$_closed_sites" = 1 ] \
+            || { echo "  BAD   the branch that scores a kill with an entry CLOSED does not write the ledger ($_closed_sites call sites)"; _bad=1; }
+        _crash_witness open-open
+        _crash_witness closed-completed
+        [ "$(grep -c . "$CRASH_LEDGER")" -eq 2 ] \
+            || { echo "  BAD   a kill from each scoring branch did not both reach the ledger"; _bad=1; }
+
+        # The defect. The fixture installed, every iteration declined, and the section is short
+        # — the state that used to read as an excused shortfall and now fails by name.
+        reset; rm -f "$CRASH_LEDGER"
+        pool
+        [ "$FAILC" -eq 1 ] || { echo "  BAD   a crash section in which no iteration killed anything passed"; _bad=1; }
+        [ "$PASS" -eq 0 ] || { echo "  BAD   a crash section that measured no crash scored a pass"; _bad=1; }
+        [ "$_bad" = 0 ] && echo "  ok    $(basename "$_src"): a section where no kill landed inside a transaction fails rather than reading as the poll"
+
+        rm -rf "$_cp_dir"
         exit "$_bad"
     )
     if [ $? -eq 0 ]; then :; else BAD=$((BAD + 1)); fi

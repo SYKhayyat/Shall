@@ -487,6 +487,24 @@ section_soft_says() { # section text
     [ -n "$_ss_found" ]
 }
 
+# A shortfall as the line that would record it: `<class>  <section>  <floor>  soft  <bound>
+# <the soft's words>  <date>`.
+#
+# **The section name is the field that has to survive, and the first version lost it.**
+# `check_section_floors` hands over `Name(31, floor 41)`, and splitting that on `[(),]` reads
+# `SIGKILL mid-transaction` — so the line a person is told to paste names a section the harness
+# does not declare, and `Real lifecycle, every other manager on this image` loses more. It went
+# unnoticed for as long as no run printed this block for a name with a comma in it, which is the
+# failure mode of a printed edit that is nearly right. The name arrives in brackets so the `(`
+# that starts the counts cannot be confused with one inside a name.
+section_floor_suggestion() { # class "Name(n, floor f)" -> one line
+    _fss_name="$2"; _fss_name="${_fss_name#[}"; _fss_name="${_fss_name%%](*}"
+    _fss_tail="$2"; _fss_tail="${_fss_tail##*](}"
+    _fss_floor="$_fss_tail"; _fss_floor="${_fss_floor##*, floor }"; _fss_floor="${_fss_floor%)}"
+    printf '%s  %s  %s  soft  <lowest this excuse covers>  <that soft line>  %s\n' \
+        "$1" "$_fss_name" "$_fss_floor" "$(date -u +%Y-%m-%d)"
+}
+
 hard() { FAILC=$((FAILC + 1)); _credit_section; FAILED_NAMES="$FAILED_NAMES
     - $1"; echo "  FAIL  $1"; }
 # A refusal is its own outcome. Shall worked correctly and declined on purpose (exit 3), and
@@ -3161,6 +3179,21 @@ crash_wipe() {
     crash_undeclare
 }
 
+# Which iterations put a SIGKILL inside a transaction, one file each.
+#
+# **A `soft` is not a measurement, and the pool below must not read it as one.** This section's
+# counts swing with where a poll lands: run 42204340681 measured 31 of them on `tools` where the
+# record says 41, because two iterations declined to kill anything. That is the instrument being
+# honest, and the floor's `soft`-bound exists for it — but the bound is compared against the
+# number of checks that RAN, and a `soft` branches out before the kills that follow it, so the
+# same cause arrives at the bound from two directions and only one of them is legible.
+# Recording which iterations were real is what tells them apart: at least one kill has to have
+# landed inside a transaction for a short count to be about the poll rather than about a section
+# that never ran.
+CRASH_LEDGER=/tmp/shall-crash-measured
+rm -f "$CRASH_LEDGER"
+_crash_witness() { printf '%s\n' "$1" >> "$CRASH_LEDGER" 2>/dev/null; return 0; }
+
 # crash_run <tag> <when> [group]
 #   when   `open`       kill the moment the log has an entry — the manager may not have started
 #          <n>          kill once n of the canaries have reached the filesystem
@@ -3227,6 +3260,7 @@ crash_run() {
         fi
         PASS=$((PASS + 1))
         _credit_section
+        _crash_witness "closed-$_tag"
         echo "  PASS  crash/$_tag: SIGKILL landed with $_closed operation(s) closed in the write-ahead log and $_opened still open, with $(crash_installed) of $CRASH_N canaries on disk"
     elif [ "$_opened" -lt 1 ]; then
         # Honest, and deliberately NOT a pass. The kill landed outside a transaction, so
@@ -3238,6 +3272,10 @@ crash_run() {
     else
         PASS=$((PASS + 1))
         _credit_section
+        # **Only THIS branch records the sighting**, because the two above are the two ways an
+        # iteration measures nothing. The pool below reads the ledger, and a pool that counted
+        # a soft as a measurement would report the kill the soft declined to assess.
+        _crash_witness "open-$_tag"
         echo "  PASS  crash/$_tag: SIGKILL left $_opened newly-opened operation(s) in the write-ahead log ($_open_at_kill open in all), with $(crash_installed) of $CRASH_N canaries on disk"
     fi
 
@@ -3517,6 +3555,28 @@ else
             crash_run groupkill 1 group
         else
             soft "crash/groupkill: this image has no \`setsid\`, so Shall cannot be put in a process group of its own and the package manager cannot be killed with it"
+        fi
+
+        # **The short count has two causes, and only one of them is honest.** Every iteration
+        # above either kills inside a transaction — and then the checks after the kill are the
+        # section's work — or declines with a `soft` and returns before them. A run that lost
+        # checks to the second is the instrument saying so, and `section-floor.txt` carries a
+        # `soft`-bound for it. A run in which NO kill landed inside a transaction is not the same
+        # event at all: the fixture installed, the polls never found their window, and not one
+        # assertion after a real crash was made. Under the floor's bound that silence would be
+        # scored against the single excuse it printed, and it would read as a section that did its
+        # job. This is `too_few_to_audit` applied to the crash loop.
+        #
+        # Assigned in two steps and not `[ "$(grep -c …)" -ge 1 ]`: `grep -c` prints NOTHING when
+        # the file is absent (it exits 2), so the inline form compares an empty string, `[` errors,
+        # and the error takes the else branch — right here by accident, which is the shape a reader
+        # cannot tell from right on purpose.
+        _crash_measured=$(grep -c . "$CRASH_LEDGER" 2>/dev/null)
+        [ -n "$_crash_measured" ] || _crash_measured=0
+        if [ "$_crash_measured" -ge 1 ]; then
+            PASS=$((PASS + 1)); _credit_section; echo "  PASS  crash/heal: $_crash_measured iteration(s) put the kill inside a transaction, so the short count is the poll and not the section"
+        else
+            hard "crash/heal: the fixture installed and not one of the iterations killed inside a transaction, so nothing after a real crash was asserted here — every check this section lost went silent, not soft"
         fi
     else
         soft "crash/heal: the control sync did not install$CRASH_PKGS on this image, so the crash loop has no fixture — $(tail -c 300 /tmp/crash-control.out | tr '\n' ' ')"
@@ -4661,10 +4721,10 @@ check_section_floors() { # host-class file
                 ;;
         esac
         if [ -n "$_cf_bound" ] && [ "$_cf_eff" -ge "$_cf_bound" ] && section_soft_says "$_cf_name" "$_cf_why"; then
-            _cf_x="$_cf_name($_cf_eff, excused to $_cf_bound)"
+            _cf_x="[$_cf_name]($_cf_eff, excused to $_cf_bound)"
             _cf_excused="$_cf_excused$_cf_x\n"
         else
-            _cf_x="$_cf_name($_cf_eff, floor $_cf_floor)"
+            _cf_x="[$_cf_name]($_cf_eff, floor $_cf_floor)"
             _cf_short="$_cf_short$_cf_x\n"
         fi
     done < "$SECTIONS"
@@ -4703,9 +4763,9 @@ report_section_floors() { # reads what check_section_floors left in _cf_*
         echo "        its own checks — it never reaches them, and the run ends green."
         echo "        If a \`soft\` in one of these sections printed above and says why, record it"
         echo "        with the count it excuses, and every later run repeats the reason:"
-        printf '%b' "$_cf_short" \
-            | awk -v c="$_cf_class" -v d="$(date -u +%Y-%m-%d)" -F'[(),]' \
-                  '{ printf "            %s  %s  %s  soft  <lowest this excuse covers>  <that soft line>  %s\n", c, $1, $4, d }'
+        printf '%b' "$_cf_short" | while IFS= read -r _cf_line; do
+            printf '            %s' "$(section_floor_suggestion "$_cf_class" "$_cf_line")"
+        done
         echo "        If no soft printed, nothing stopped on purpose, and the number above is the"
         echo "        whole finding: which section, how many checks, against what."
         return 0
@@ -4717,11 +4777,11 @@ report_section_floors() { # reads what check_section_floors left in _cf_*
     # edit — the same `sed` the lifecycle ratchet prints, over the same file shape.
     [ -n "$_cf_excused" ] \
         && printf '%b' "$_cf_excused" | sed 's|^|        short, and excused by a recorded `soft`: |'
+    # One line for the same reason the shortfall's `awk` is: this function is LIFTED by
+    # `scripts/harness-logic-test.sh`, whose lifter ends a function at a `}` at end-of-line.
     [ -n "$_cf_up" ] \
         && printf '%b' "$_cf_up" \
-            | awk -F= -v c="$_cf_class" -v f="$_cf_file" 'NF == 2 {
-                  printf "        ratchet up:  sed -i %s\n", "\"s|^" c "  " $1 ".*|" c "  " $1 "  " $2 "|\" " f
-              }'
+            | awk -F= -v c="$_cf_class" -v f="$_cf_file" 'NF == 2 { printf "        ratchet up:  sed -i %s\n", "\"s|^" c "  " $1 ".*|" c "  " $1 "  " $2 "|\" " f }'
     [ -n "$_cf_unrecorded" ] \
         && printf '%b' "$_cf_unrecorded" \
             | awk -F= 'NF == 2 { printf "        not counted either way, no record yet for: %s (%s)\n", $1, $2 }'

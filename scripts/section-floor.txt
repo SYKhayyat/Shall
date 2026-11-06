@@ -93,6 +93,15 @@
 # `tools` bound is 3 rather than 22 because its own low was 3, from the other route: its fixture
 # did not install at all.
 #
+# **`tools` moved to the OTHER route on 2026-11-06, and its excuse did not follow it.** Run
+# 42204340681 printed `31` for that section and excused itself correctly — `crash/groupkill: the
+# kill opened no new entry in the write-ahead log (0 before, 0 after), so this iteration measured
+# no recovery` — and the gate went red anyway, because the line still carried the phrase from
+# `2026-09-30`, when the fixture had not installed at all. The count was right (`31` is above the
+# `3` recorded) and the text was stale, so the run printed an edit that would have re-recorded
+# the wrong reason. Both halves of an excuse are one sentence; when a class starts declining for
+# the other route, the sentence is what has to move.
+#
 # ONE SECTION DELIBERATELY HAS NO BLOCK, and it is this gate's own. The harness's section 18 is
 # "Did every section run, against the record", and it scores exactly one check — so its count is
 # 1 or 0 by construction, and a floor over that would compare 1 against 1 forever and catch
@@ -386,7 +395,7 @@ container-linux-tools-local  Negative path  3
 container-linux-tools-local  Plan-smoke, every backend this image cannot run  29
 container-linux-tools-local  Real lifecycle, every other manager on this image  125
 container-linux-tools-local  Remove  2
-container-linux-tools-local  SIGKILL mid-transaction, then heal  41  soft  3  2026-09-30  the control sync did not install
+container-linux-tools-local  SIGKILL mid-transaction, then heal  41  soft  3  2026-11-06  the kill opened no new entry in the write-ahead log
 container-linux-tools-local  Silence is not a no  3
 container-linux-tools-local  Snapshot → mutate → restore, on a real device  0
 container-linux-tools-local  The guard  3

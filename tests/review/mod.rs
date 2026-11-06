@@ -27,6 +27,7 @@ mod a_pub_fn_nobody_calls_is_dead_tests;
 mod a_removal_token_cannot_be_minted_tests;
 mod a_setting_the_config_declares_is_a_setting_that_acts_tests;
 mod a_silenced_advisory_says_why_tests;
+mod a_soft_bound_excuse_names_a_line_the_harness_prints_tests;
 mod a_spawned_child_has_an_owner_tests;
 mod a_string_carries_no_source_indentation_tests;
 mod a_version_pin_is_honoured_or_explained_tests;
