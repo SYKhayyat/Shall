@@ -13,9 +13,9 @@ fn a_free_directory_hands_out_the_lock_rather_than_reporting_contention() {
         "nobody holds this directory and `try_acquire` reported contention"
     );
     assert!(
-        held(),
-        "the lock was handed out and the count did not go up"
+        held_on(&dir),
+        "the lock was handed out and this process does not say it is inside it"
     );
     drop(taken);
-    assert!(!held());
+    assert!(!held_on(&dir));
 }

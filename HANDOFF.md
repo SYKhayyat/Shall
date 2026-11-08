@@ -1,44 +1,63 @@
-# Handoff — 2026-11-08 (`#117`, `#138`)
+# Handoff — 2026-11-08 (`#135`, `#136`, `#138`)
 
-**Branch `main`.** One ledger correction, one issue's remaining survivors pinned, one filed.
+**Branch `main`.** Three filed issues built, each with its ruling in the register, its rule in
+Part II and its reason in Part V.
 
 | # | Subject | Commit |
 |---|---|---|
 | `#129`, `#109`, `#25` | three entries said open or unbuilt when the evidence said otherwise | `a67c35a6` |
-| `#117` | the sync engine's last 12 mutation survivors, and the transaction shard's last one | this session's commit |
-| `#138` | the data-lock mutation shard times out before it can list anything | **filed, not built** |
+| `#117` | the sync engine's last 12 mutation survivors, and the transaction shard's last one | `5f70c6d1` |
+| `#135` | xbps's listing read a database row as an installation | this session's commit |
+| `#136` | a removal that leaves the launcher behind says so, and deletes nothing | this session's commit |
+| `#138` | the data-lock shard's timeouts were the process-wide `held` count | this session's commit |
 
-- **`#117`'s remaining half is pinned, not excused.** `2cf10e00` closed it with mirrors for the
-  five subjects, and the 2026-11-07 nightly (`42361477256`) still reported 12 MISSED. Four tests
-  now pin them, each watched failing under its mutant; `heal`'s `kept` arm of the save gate was
-  deleted rather than pinned (a refused removal changes the journal and not the registry). The
-  detail is in `PLAN.md`'s `#117` entry.
-- **The log collector is one fixture.** `tests/harness/mod.rs` holds `log_collector` and
-  `captured`; the two copies are gone. A log-only guard is pinnable, and that is what most of
-  the survivors were.
-- **Verified on this tree, after the last edit:** `cargo fmt -- --check`; `cargo clippy
-  --all-targets --all-features --locked -- -D warnings`; `cargo test --no-fail-fast` —
-  **3084 passed, 1 failed**, the failure being
-  `grade2_wedged_manifest_tests::a_name_no_backend_can_install_is_never_left_in_the_manifest`,
-  the host's read-only nix-store `npm` (identical on the unmodified tree; see the 2026-11-03
-  section).
-- **Ten hand-applied mutations, each watched red and reverted:** the removal counter; the three
-  `heal` summary guards; the save gate's `||`→`&&` and each deleted `!`; the prune guard as
-  `false`, `true` and inverted; and `transaction.rs:805`'s deleted `!`. One survived —
-  `!recovered || !kept && !failed` — and the arm it lives on is now deleted rather than tested.
-- **Not verified:** no container leg since the change (nothing it touches is `cfg`-gated, and
-  the next nightly or push is the instrument); no Windows or macOS run; `scripts/unix-check.sh`
-  not run this session.
+- **`#138` — the self-hold question is per directory.** `held()` was a process-wide counter, so
+  `for_this_write` skipped the lock whenever the process held *any* lock — a write into another
+  data directory raced, and three mutants of the count slept out `WAIT_SECS` in every e2e leg and
+  timed the mutation shard out at 825s. `held_on(path)` reads a set of canonical paths, the
+  handle keeps the key it recorded so `Drop` removes exactly that entry, and `for_this_write`
+  asks about the directory it writes under. Its acquire refuses at once when the owner stamp is
+  this pid; a direct `acquire` still waits for a same-process holder (`watch` depends on it).
+  Ruling `C12`, rule **II.76**, reason **V.226**. The module's 21 tests run in ~4s.
+- **`#135` — the lister was the bug.** `xbps-query -l` opens every row with a state word, and the
+  reader took the first token that parsed as a pkgver. `parse_xbps_list` now reads it
+  (`XBPS_STATE_WORDS`, exhaustive), a row dropped for its state is an answer rather than an
+  unrecognised shape, and `-m`'s bare pkgver still counts. The harness witness was its sibling:
+  `canary_manager_state` asked `xbps-query <pkg>` (the repository index) and now reads `-l` and
+  prints the state word itself. Ruling `C10`, rule **II.74**, reason **V.224**.
+- **`#136` — the sentence is in the engine, because every removal passes through it.**
+  `leftover_entries` decides by name (exactly the package or a dotted extension — `pv` never
+  accuses `pvx.cmd`), `leftover_warning` names the path and whether the directory is on PATH, and
+  `SyncEngine::sync` says it after a successful, non-reverted run that carried past no failure.
+  Both harnesses now treat their `removal_leaves_binary` entry as the expected leftover: they
+  pass only when the removal's own output named the file. Ruling `C11`, rule **II.75**, reason
+  **V.225**.
+- **Verified on this tree, after the last edit:** `cargo build --all-targets` (through the test
+  build), `cargo test --no-fail-fast` — **3091 passed, 0 failed** in 323.51s; `cargo clippy
+  --all-targets --all-features --locked -- -D warnings`; `cargo fmt -- --check`;
+  `scripts/decision-count.sh --check` (250 entries, 245 ANSWERED, 0 OPEN);
+  `scripts/harness-logic-test.sh` — **101/101**; `shellcheck -S warning` on the three touched
+  scripts.
+- **Two hand mutations watched red for `#138`:** `held_on` restored to the old process-wide flag
+  failed 11 tests in 1.7s, and `held_on -> false` failed in 0.02s — the re-entrant door's stamp
+  check is what keeps a later `for_this_write` from sleeping out the wait, and it answers from
+  the stamp rather than from the function the mutant replaced.
+- **Not verified:** no container leg (the harness change is shell-only and its predicates are
+  pinned by `harness-logic-test.sh`, but no real manager was driven); `x86_64-pc-windows-gnu` not
+  re-checked — the target std and mingw toolchain are not installed on this host, and nothing in
+  the change is `cfg`-gated; `scripts/unix-check.sh` not run because this host compiled the unix
+  half natively.
 
 ### What to take next
 
-1. **`#136`** — acceptance is the next Windows native run: the named `soft` is in place and the
-   leftover is nimble's own wrapper path, not a Shall removal that failed.
-2. **`#135`** — evidence, not a change: the crash section now prints the manager's state word
-   and the sync's rc, so the next 2-of-3 kill names which half is wrong.
-3. **`#138`** — needs a ruling before code: the recommended fix (ask the held handle rather than
-   the process-wide counter) changes the locking primitive.
-4. **`#41`** — deliberately not started; the reason is in `PLAN.md`.
+1. **The next nightly** answers all three: `#135`'s crash section check (5) on `void`/`tools`
+   (the witness now prints the manager's state word and the sync's rc), `#136`'s Windows sweep
+   (now asserting the removal named the file rather than excusing it), and `#138`'s datalock
+   shard (which should reach its survivor list instead of timing out).
+2. **`#100`** — the next `void` leg names uv/yarn. Needs a run.
+3. **`#130`'s unproven half** — a real `schtasks`/`launchd` provisioning after a `schedule` edit.
+4. **A container leg since `C9`** — nothing in the matrix has run against the widened reads, and
+   the removal guard's essential-list query is the one to watch.
 
 ---
 

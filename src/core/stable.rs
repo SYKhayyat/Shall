@@ -46,7 +46,7 @@ where
 {
     // A writer is reading its own state under its own lock, so there is nothing to detect and
     // nothing that could move: the only process allowed to write is this one, and it is here.
-    if datalock::held() {
+    if datalock::held_on(&crate::utils::safe_data_dir()) {
         return read().await;
     }
 

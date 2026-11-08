@@ -1,4 +1,4 @@
-﻿# The decision register — 247 entries, none open
+﻿# The decision register — 250 entries, none open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **242** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **245** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 247 are accounted
-for: **242 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 250 are accounted
+for: **245 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27 and 2026-11-03 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, and what bounds a fan-out over managers) — 9
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, and whether a lock is held on this directory or merely in this process) — 12
 
 | | question | answered |
 |---|---|---|
@@ -527,6 +527,9 @@ deliberately no longer has.*
 | **C7** | `install X` wrote X's line and then converged the whole configuration — and the 2026-10-26 native sweeps measured what that costs: the harness's `install cargo:hexyl` ran a plan whose one change was `brew:rustup`, an adopted package that was never asked for, and the canary was absent from its own install's plan (#112). What do the commands that act on one thing converge? — RULED 2026-10-27: **exactly what they name** — the named specs and their `@requires` chains, nothing else; the line is still written first (S15, Q1's withdrawal intact); the whole-machine converge stays `sync`'s; after it the rest of the config is pending, named in one line; chaining is the shell's; a narrowed run reaps nothing; the Q34 apology machinery is deleted. **Extended 2026-10-30 (owner): one verb — `apply <line>` and `apply <line> --delete` replace `install`/`uninstall`**, and any declaration line is in scope, resource lines included, each through its own phase's applier; `--absent` stays a package idea and is refused on a resource line; the saved-plan executor moves to `execute`. Supersedes the converge half of `Q34`/V.136. (II.70, V.220) | 2026-10-27 |
 | **C8** | `handle_schedule` edited a `schedule:` line and ended in a whole-machine `handle_sync`, so `shall schedule remove tidy` — one block out of `schedules`, one timer off the machine — converged everything the configuration asked for, and on a real machine would have installed packages and reconciled the firewall at the moment the user asked for one timer off. `C7` narrowed the package verbs and left this one on purpose: its mechanism is keyed on package keys and a `schedule:` is a resource applied by a non-package phase, so the ruling was owed (#130). What does a `schedule` edit converge? — RULED 2026-11-02: **exactly the timer it named** — `add` provisions it, `remove` deprovisions it, and nothing else converges; the verb calls the same `apply_one`/`undo_statement` pair `apply` uses, so one phase table serves every one-line command; a `schedule:` whose `when` does not match this host is **named, not armed**; the write still comes first (S15) and a `schedules` file that no longer parses does not block a removal; the rest of the config is pending afterwards and the verb says so in II.70's sentence. The alternative — keeping the whole converge, the `rollback` reading — was declined. (II.72, V.222) | 2026-11-02 |
 | **C9** | A fan-out whose children are managers being *asked* a question was bounded by `max_parallel`, which defaults to the core count — so on the two-core CI runners `shall sbom` was two children wide however many managers it had declared: seven children summing to 5.23 s inside 4.25 s, four waves (#111). Nothing measured was serial; the number was the wrong number for a spawn plus a wait. And `#107`'s width verdict had just given up the reading that would have shown it, because the budget it would compare against was an ambient fact about the machine rather than a value the reporter could read. What bounds a child Shall only waits on? — RULED 2026-11-03: **a third knob, `spawn_parallel`, defaulting to 16 like `network_parallel`** — it bounds every fan-out whose children only *ask* a manager, while `max_parallel` (still the core count) bounds the children Shall *tells* to change something; a fan-out groups by `app::stale_lock::lock_key` so `pacman`/`yay`/`paru` are asked one at a time, and `managed_pkgs` fans out one future per manager rather than per package; and the reporter is handed the budget, so a run says **"16 slot(s) and used 3"** instead of a width with nothing to compare it to. Measured over mock managers at 120 ms: 490 ms / width 2 / four waves at two slots against 122 ms / width 7 / one wave at sixteen. (II.73, V.223) | 2026-11-03 |
+| **C10** | `xbps-query -l` lists the package database and every row opens with a state word, but the reader took the first token that parsed as a pkgver and never read the word — so a package registered-but-unpacked (`uu`) or half-removed (`hr`) counted as installed. A machine killed between xbps's unpack/register and its configure came back with a declared package the plan never named, and `sync` reported convergence over it (#135, the crash section's check (5) on the void and tools legs). The `dpkg` `${db:Status-Status}` reader and scoop's dropped half rows were the same rule; xbps was the sibling that never got it. What does a listing row mean? — RULED 2026-11-07: **only the manager's installed state is an installation** — `ii` alone for xbps, with an exhaustive table like `DPKG_STATUS_WORDS`'s so a state a manager grows tomorrow is unreadable rather than believed; a row read and dropped for its state is an answer, not an unrecognised shape; `-m`'s bare-pkgver shape stays in the same reader and counts as installed, because that listing is manually-installed by construction. `heal`'s ownership claim was filed as a candidate and refuted: the planner asks the backend, and reads the registry only for `is_held`. (II.74, V.224) | 2026-11-07 |
+| **C11** | `shall -y apply nimble:nimjson --delete` reports success, nimble's listing drops the package, and `~/.nimble/bin/nimjson.cmd` still resolves on PATH — a file written by nimble's own Windows install, not by Shall (`#136`, the last red line on the Windows sweep after #112). The issue named three ways out and left the choice to the owner: accept it, delete the launcher the backend knows about, or say it. What does a removal owe when the manager leaves a launcher? — RULED 2026-11-07: **say it, and delete nothing** — after a removal succeeds, every entry in the manager's own executable directories named exactly the package or a dotted extension of it is named with its path and the fact that the name still answers; the leftover is decided by name rather than glob (`pv` must not accuse `pvx.cmd`); said only after a removal that succeeded; the directories are `app::reachable::user_bin_dirs`'s, the same answer the unreachable-install warning uses. Deleting was declined because the Windows file set (wrapper and a copied executable) is unmeasured on a runner, and a deletion that misses the `.exe` claims a cleanup it did not make. The Windows sweep's `removal_leaves_binary` entries stop being `soft` excuses and ASSERT that the removal named the file. (II.75, V.225) | 2026-11-07 |
+| **C12** | The data-lock mutation shard could not finish a nightly: three mutants of the process-wide `held()` count each made every e2e command sleep out `WAIT_SECS`, because a second `flock` handle in one process waits for the first — 15 failures × 120s × retries, and the shard timed out at 825s before it could report a survivor list (`#138`). The count was also wrong when nothing was mutated: a lock on one data directory excused a write to another, because `held()` answered for the process rather than the path. What decides whether this write is already inside the lock? — RULED 2026-11-08: **a fact about the directory, not a count about the process** — every `DataLock` records its directory under its canonical name, `held_on(path)` is a membership question, and `for_this_write` asks it of the directory it is about to write under. The re-entrant write door's acquire is **refused at once by name** when the owner stamp is this pid, rather than slept on; a direct acquire still waits, because another thread of this process may be about to release. No `held()` mutant exists to time out, and a lock on one directory is no longer a lock on another. (II.76, V.226) | 2026-11-08 |
 
 ---
 
@@ -10349,3 +10352,146 @@ in place for every user who does not read the release notes.
   listing were spending slots on nothing.
 - **`generate:` stays on `max_parallel`.** It is the user's program, not a manager, and the fan-out
   over it is not an ask.
+
+## C10
+
+**Status: ANSWERED 2026-11-07, built the same day.** The manager's listing is the only witness to
+"is it here", and a listing row is not an installation. Filed as `#135`; the failure is the crash
+section's check (5) on the `void` and `tools` legs.
+
+**The question.** A declared canary is missing after `heal`, the next `sync` exits 0, and its plan
+never names the package. Three candidates were filed with the issue: the planner believing the
+manager's post-crash listing, the resolved model having lost the declaration, and `heal`'s
+ownership claim (`reconcile_ownership`, S87) being read as "installed".
+
+**The ruling.** **The first, on xbps, and the lister was the bug.** `xbps-query -l` prints the
+package *database*: every row opens with a two-character state word — `ii` installed, `uu`
+registered-but-unpacked, `hr` half-removed, `??` unknown — and `lib/transaction_commit.c` unpacks
+and registers a package **before** it configures it, so a machine killed in that window comes back
+with a row and no usable software. The reader took the first token that parsed as a pkgver and
+never looked at the word, so all four read as installed; `sync` asked the listing, the listing said
+yes, and the plan was empty. The `dpkg` `${db:Status-Status}` reader (`parsers/apt.rs`, the
+2026-08-12 fix) is the same rule one manager over, and `scoop`'s dropped `failed`/half rows are
+the third; `xbps` was the sibling that never got it — the reported symptom was the plan, the family
+was every lister that treats presence in a database as delivery.
+
+**Candidate 3 is refuted, not deferred.** `SyncPlanner::spec_is_missing` asks the backend and
+`self.state` only for `is_held`; nothing in the planner reads the managed set to decide an install.
+Taking ownership of a package a journal records installing cannot suppress its install, which is
+why the S87 claim stays as it is.
+
+**What the ruling binds.**
+
+- **The state vocabulary is exhaustive**, as `DPKG_STATUS_WORDS` is: a state a manager grows
+  tomorrow is an unreadable row, not a silent "installed".
+- **A row read and dropped for its state is an answer**, not an unrecognised shape — a machine
+  whose every registered package is half-installed is a real machine and its installed set is
+  empty.
+- **The two shapes of an xbps listing stay one reader**: `-m` prints a bare pkgver with no state,
+  and every row there is installed by construction.
+- **The instrument asks the same question as the product.** The container harness's
+  `canary_manager_state` asked `xbps-query <pkg>` — the repository index, which answers for a
+  package that is not installed at all — so its witness could not disagree with the product's.
+  It reads `-l` and prints the state word itself, because `pv=off:hr` is the diagnosis and
+  `pv=off:absent` is not.
+
+## C11
+
+**Status: ANSWERED 2026-11-07, built the same day.** A removal that leaves the name answering is
+not a removal: Shall says which file the manager left, and deletes nothing. Filed as `#136` off
+the Windows native sweep (`42361477256`, job `128360605190`).
+
+**The question.** `shall -y apply nimble:nimjson --delete` reports success, nimble's own
+`list --installed` drops the package, and `~/.nimble/bin/nimjson.cmd` is still there and still
+resolves on PATH. Shall runs exactly `nimble uninstall -y nimjson` and writes no file into that
+directory; the control with no Shall involved (same nimble version on Linux) has its symlink
+removed by the same command, so the wrapper is the Windows install's shape, not a cleanup Shall
+forgot. The issue named three ways out — accept it, delete the launcher the backend knows about,
+or say it in the output — and said the choice was the owner's.
+
+**The ruling.** **Say it in the output.** Shall removes what the manager will remove and reports
+what the manager left: after a removal succeeds, every entry in the manager's own executable
+directories whose name is the package's name or a dotted extension of it is named, with its path,
+and with the fact that the name still resolves. Shall deletes no file a manager wrote — that is
+the rule the removal guard exists for, not an accident — and an uninstall that finishes by
+deleting files the manager's own database does not know about is a deletion nothing can undo or
+account for.
+
+**Why not delete the launcher.** The narrow deletion (`<bin>/<pkg>.cmd`) is only *narrow* on the
+platform this host cannot run: the Windows install writes a wrapper and a copied executable, the
+exact set is unmeasured on a runner (`#136` says so), and a guess that removes the wrapper but
+not the `.exe` leaves the name answering while claiming it was cleaned. A safety rule gets
+changed with a measurement behind it, and the measurement is on the platform nobody here has.
+
+**What the ruling binds.**
+
+- **The leftover is decided by name, not by glob.** Exact name or a dotted extension of it; `pv`
+  must not accuse `pvx.cmd`, and a manager with no bin directory has left nothing there.
+- **Said only after a removal that succeeded.** A failed removal has its own report, and its file
+  is still the package's.
+- **The directories are `app::reachable::user_bin_dirs`'s**, the one place that knows where each
+  manager puts executables — the same answer the unreachable-install warning uses, so a manager
+  whose directory is unknown says nothing rather than something wrong.
+- **The instrument asserts the sentence.** The Windows sweep's and the container harness's
+  `removal_leaves_binary` entries stop being `soft` excuses and become the expected leftover:
+  the check passes only when the removal's own output names the file, and fails when it does
+  not. `harness-logic-test.sh` pins both halves per harness — named passes, silent fails —
+  because the old case could only say `soft`.
+
+## C12
+
+**Status: ANSWERED 2026-11-08, built the same day.** The self-hold question is a fact about a
+directory, not a count about a process. Filed as `#138` off the nightly mutation job
+`42361477256`.
+
+**The question.** `Mutation (the data lock, nightly)` ran 37 mutants in 2h and exited 3 with
+`23 caught, 11 unviable, 3 timeouts` — and all three timeouts were the same three mutants of one
+function, `held()`. They were not silent: each failed fifteen tests. They were unaffordable. A
+binary whose `held()` lies `false` takes the data directory's lock in `main`, and then a deferred
+write calls `for_this_write` → `acquire`; the second `flock` handle contends with the first *in
+the same process*, so the deadline loop sleeps out `WAIT_SECS = 120` and only then refuses. Eight
+e2e tests × three tries is 2,880 seconds of sleeping, and the shard's 825-second budget ended the
+run before it reached the survivor list — so a *new* survivor and these three old timeouts printed
+the same red, and the gate could not report what it was for.
+
+**The ruling.** **Direction 1 of the issue: make it a fact, not a count.** `held()` read a
+process-wide `AtomicUsize`, so the question it answered was "has this process taken *a* lock
+anywhere", not "is this process inside the lock on *this* directory". The two are not the same
+sentence, and the difference is a real race rather than a mutation artefact: a run holding the
+lock on its own data directory made every later `for_this_write` skip the lock — including a
+write into a directory nothing had locked.
+
+The count is replaced by the set of directories this process is inside, keyed by the canonical
+path so one directory spelled two ways is one lock, and the key is kept on the `DataLock` rather
+than recomputed on drop (a directory that has since been renamed would otherwise leave a stale
+entry, and a stale entry is a write that goes unlocked). `for_this_write` asks `held_on` about the
+directory it is about to write under. `stable`'s reader asks the same question about the same
+directory.
+
+**The wait is refused, not shortened.** With the fact available, the *re-entrant write door*'s
+acquire detects at the contended branch that the owner stamp names this pid, and returns an
+error in milliseconds instead of sleeping. The refusal is on that door and not on `acquire`: a
+direct acquire still waits for a holder in this process, because another thread or task may be
+about to release it — `watch` takes the run's lock exactly that way, and the first build of
+this ruling refused it and broke that test. The 120-second wait stays exactly as it is for
+another process: that wait exists to outlast a legitimate holder, and direction 2 (an env
+override to shorten it for tests) was declined because it buys the gate time by changing what
+the e2e legs measure. Direction 3 (raise the shard timeout) hides the cost instead of removing
+it.
+
+**What the ruling binds.**
+
+- **The question is asked of the directory, per directory.** One process holding one data
+  directory's lock says nothing about a write into another; a test proves the second write takes
+  its own lock.
+- **The set and its key are paired on construction and drop.** The key recorded is the key
+  removed; a path canonicalised on the way in is never removed under a spelling that no longer
+  canonicalises.
+- **The re-entrant door's self-contended acquire is an error that says so, at once.** Its
+  message names the directory and points at `for_this_write`, because the fix is at the caller
+  and the caller is the code that is waiting. A direct acquire keeps waiting for a holder in
+  this process, which is a release another thread owes and not a deadlock.
+- **The wait for another process is unchanged.** `WAIT_SECS`, the holder announcement and the
+  S27 message stay; this ruling narrows what the wait is used for, not how long it is.
+- **Poisoning is not an error here.** The held set is read and written on the drop path, so a
+  panic in an unrelated thread must not turn releasing a lock into a second panic.

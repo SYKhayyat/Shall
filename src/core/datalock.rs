@@ -67,20 +67,37 @@ pub fn classify_lock_failure(error: std::io::Error) -> LockFailure {
 /// that someone else is writing, not a longer silence (S27).
 pub const WAIT_SECS: u64 = 120;
 
-/// How many `DataLock`s this process is holding.
+/// The data directories this process is inside.
 ///
 /// **`flock` is per open file description, not per process**, so a second handle opened in a
 /// process that already holds the lock does not re-enter â€” it waits for itself, for ever. Every
-/// door that takes the lock counts here, and every door that might take it asks here first.
-static HELD: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+/// door that takes the lock records its directory here, and every door that might take it asks
+/// here first. **Per directory, not per process**: a process-wide flag excused a write to one
+/// data directory because a lock was held on another.
+static HELD: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<PathBuf>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
 
-/// Whether this process is inside the lock right now.
+/// The held set, ignoring poisoning: it is touched on the drop path, where a panic in another
+/// thread must not turn releasing a lock into a second panic.
+fn held_dirs() -> std::sync::MutexGuard<'static, std::collections::HashSet<PathBuf>> {
+    HELD.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// The name a directory is remembered under, so one directory spelled two ways is one lock.
+fn held_key(data_dir: &Path) -> PathBuf {
+    std::fs::canonicalize(data_dir).unwrap_or_else(|_| data_dir.to_path_buf())
+}
+
+/// Whether this process is inside the lock on **this** directory right now.
 ///
 /// The question is dynamic and has to be: `LockScope::Deferred` takes the lock at each mutating
 /// action and releases it in between, so no value carried around by the type system can say
 /// whether it is held at the moment somebody writes.
-pub fn held() -> bool {
-    HELD.load(std::sync::atomic::Ordering::Acquire) > 0
+pub fn held_on(data_dir: &Path) -> bool {
+    // The path is resolved before the set is locked: `canonicalize` is filesystem work, and the
+    // same mutex is taken by `Drop` on every release.
+    let key = held_key(data_dir);
+    held_dirs().contains(&key)
 }
 
 /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
@@ -140,6 +157,10 @@ pub struct DataLock {
     file: File,
     owner_path: PathBuf,
     data_dir: PathBuf,
+    /// The name this lock was recorded under, kept so `Drop` removes exactly that entry —
+    /// recomputing it would fall back to an uncanonicalised spelling if the directory has
+    /// since been renamed or deleted, and the process would stay "inside" a lock nobody holds.
+    recorded_as: PathBuf,
 }
 
 impl DataLock {
@@ -198,11 +219,13 @@ impl DataLock {
     fn stamped(file: File, owner_path: PathBuf, data_dir: &Path, command: &str) -> Self {
         let stamp = format!("shall {} (pid {})", command, std::process::id());
         let _ = std::fs::write(&owner_path, stamp);
-        HELD.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        let recorded_as = held_key(data_dir);
+        held_dirs().insert(recorded_as.clone());
         Self {
             file,
             owner_path,
             data_dir: data_dir.to_path_buf(),
+            recorded_as,
         }
     }
 
@@ -217,15 +240,11 @@ impl DataLock {
     /// `Ok(None)` means the lock is already this process's and the caller writes as it is;
     /// re-taking it would be `flock` waiting for the same process's other handle, for ever.
     pub fn for_this_write(what: &str) -> Result<Option<Self>> {
-        if held() {
+        let data_dir = crate::utils::safe_data_dir();
+        if held_on(&data_dir) {
             return Ok(None);
         }
-        Self::acquire(
-            &crate::utils::safe_data_dir(),
-            what,
-            Duration::from_secs(WAIT_SECS),
-        )
-        .map(Some)
+        Self::acquire_reentrant(&data_dir, what, Duration::from_secs(WAIT_SECS)).map(Some)
     }
 
     /// Take the lock, waiting up to `timeout` for whoever holds it.
@@ -233,6 +252,26 @@ impl DataLock {
     /// Waiting with no reason given is indistinguishable from hanging, so the wait announces
     /// the holder â€” the lock file carries the pid and the command that took it.
     pub fn acquire(data_dir: &Path, command: &str, timeout: Duration) -> Result<Self> {
+        Self::take(data_dir, command, timeout, false)
+    }
+
+    /// The acquire behind [`for_this_write`](Self::for_this_write), which refuses at once
+    /// instead of waiting when the lock is this process's own.
+    ///
+    /// **A wait for a lock this process holds ends only when the caller lets go**, and the
+    /// caller is the code standing here — that is the two minutes a lying `held_on` would buy,
+    /// and the mutation gate measured it. A direct [`acquire`](Self::acquire) still waits,
+    /// because another thread or task in this process may be about to release it (`watch`
+    /// takes the run's lock exactly that way), so only the door whose purpose is re-entry
+    /// refuses.
+    ///
+    /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
+    /// test crate links the library without `cfg(test)`, so a private item is invisible there.
+    pub fn acquire_reentrant(data_dir: &Path, command: &str, timeout: Duration) -> Result<Self> {
+        Self::take(data_dir, command, timeout, true)
+    }
+
+    fn take(data_dir: &Path, command: &str, timeout: Duration, refuse_self: bool) -> Result<Self> {
         let (file, owner_path) = Self::open_lock_file(data_dir)?;
         let path = data_dir.join("shall.lock");
 
@@ -240,6 +279,21 @@ impl DataLock {
             Ok(()) => {}
             Err(e) => match classify_lock_failure(e) {
                 LockFailure::Contended => {
+                    // **Waiting for the handle this process already holds cannot end.** The wait
+                    // is released by `Drop`, which is the code that is standing here, so the only
+                    // outcome is the timeout below — 120s of silence for a lock the caller is
+                    // already inside. Contention between two processes is the case the wait is
+                    // for; this is the case it exists to refuse.
+                    if refuse_self && Self::holder_is_this_process(&owner_path) {
+                        return Err(Error::Other(format!(
+                            "this process already holds the lock on {}, and a second handle on \
+                             it would wait for that one.\n  \
+                             A command takes this lock once, in `main`; a write reached from \
+                             inside it asks `DataLock::for_this_write`, which declines instead of \
+                             taking it again.",
+                            data_dir.display()
+                        )));
+                    }
                     eprintln!(
                         "shall: waiting for the data directory â€” held by {}",
                         Self::holder(&owner_path)
@@ -317,6 +371,20 @@ impl DataLock {
         Self::try_acquire(&crate::utils::safe_data_dir(), what)
     }
 
+    /// Whether the owner stamp names this process.
+    ///
+    /// Only read while the lock is contended, and the stamp is removed when its holder releases
+    /// the lock — so a stamp that names this process while somebody holds the lock means the
+    /// holder is this process.
+    fn holder_is_this_process(owner_path: &Path) -> bool {
+        let Ok(stamp) = std::fs::read_to_string(owner_path) else {
+            return false;
+        };
+        stamp
+            .trim_end()
+            .ends_with(&format!("(pid {})", std::process::id()))
+    }
+
     /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
     /// test crate links the library without `cfg(test)`, so a private item is invisible there.
     /// Who is holding the lock, for the message. The stamp lives beside the lock file rather
@@ -357,7 +425,7 @@ impl Drop for DataLock {
                 &next.to_string(),
             );
         }
-        HELD.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+        held_dirs().remove(&self.recorded_as);
         let _ = std::fs::remove_file(&self.owner_path);
         // The lock file itself stays. Deleting it races the next process, which may already
         // have opened this inode and be about to lock a file no longer at that name.

@@ -9,15 +9,15 @@ use super::*;
 fn a_wait_that_runs_out_first_spends_the_time_it_was_given() {
     let _g = gate();
     let dir = tmp("wait-expires");
-    let _held = DataLock::acquire(&dir, "holder", Duration::from_secs(5)).unwrap();
+    let _holder = ChildHolder::on(&dir);
 
     let started = Instant::now();
-    // Matched rather than `expect_err`, which would want `DataLock: Debug` â€” a derive on a
+    // Matched rather than `expect_err`, which would want `DataLock: Debug` -- a derive on a
     // production type to satisfy a test is the test choosing what the type looks like.
     let outcome = DataLock::acquire(&dir, "waiter", Duration::from_millis(700));
     let waited = started.elapsed();
     let Err(err) = outcome else {
-        panic!("the holder never let go, so the wait must fail â€” it succeeded after {waited:?}")
+        panic!("the holder never let go, so the wait must fail -- it succeeded after {waited:?}")
     };
 
     assert!(
@@ -27,7 +27,7 @@ fn a_wait_that_runs_out_first_spends_the_time_it_was_given() {
     // And it still says who, because a timeout that names nobody is the sentence this file
     // exists to print going missing at the one moment it is read.
     assert!(
-        err.to_string().contains("holder"),
+        err.to_string().contains("the child"),
         "the timeout does not name the holder: {err}"
     );
 }

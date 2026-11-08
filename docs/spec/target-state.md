@@ -4438,3 +4438,68 @@ bounds the children Shall *tells* to change something, and still defaults to the
   a slot reading — one defect, one sentence.
 - **A `generate:` command is the user's program, not a manager.** The resolver's fan-out over
   them stays on `max_parallel`: it is not an ask, its cost is unknown, and it runs on every sync.
+
+## II.74 A listing row is not an installation (`#135`, C10, V.224)
+
+**A package counts as installed when the manager's own state says installed, and at no other
+time.** A listing that carries a state word is read for that word: `xbps-query -l`'s `ii` alone is
+installed, `uu` (registered, unpacked, configure never ran), `hr` (a removal that stopped part
+way) and `??` (a state this manager does not know) are not. `dpkg`'s `${db:Status-Status}` is the
+same rule one manager over, and scoop's dropped `failed`/unversioned rows are the third.
+
+- **The vocabulary is exhaustive and written down**, as `DPKG_STATUS_WORDS` is: a state a manager
+  grows tomorrow is an unreadable row, not a silent "installed".
+- **A row read and dropped for its state is an answer, not a shape this file could not read.** A
+  machine whose every registered package is half-installed is a real machine, and its installed
+  set is empty — reporting that as unrecognised would turn "nothing usable here" into "unknown".
+- **One reader per manager, however many shapes its listing has.** `xbps-query -m` prints a bare
+  pkgver with no state, and every row there is installed by construction; a reader that demanded
+  a state word would answer the manual listing with nothing.
+- **What a crash leaves is read, not assumed.** A kill between a manager's register and its
+  configure leaves a package the plan must install, and the plan gets it from this rule rather
+  than from a guess about what the crash probably did.
+- **The instrument asks the same question.** The container harness's witness for xbps reads `-l`
+  and prints the state word itself; asking `xbps-query <pkg>` answers from the repository index,
+  which says a package exists, not that it is on the machine.
+
+## II.75 A removal that leaves the name answering is said out loud (`#136`, C11, V.225)
+
+**Shall removes what the manager will remove, and reports what the manager left.** After a
+removal succeeds, every entry in the manager's own executable directories whose name is exactly
+the package's name, or the package's name followed by a dotted extension, is named with its path
+and with the fact that the name still resolves on PATH. The file is not deleted.
+
+- **The rule is name, not glob.** `pv` must not accuse `pvx.cmd`; a directory that cannot be read
+  is skipped rather than turned into a warning about a file nobody can point at.
+- **Only after a removal that succeeded**, and only for packages this run removed. A failed
+  removal has its own report, and its leftover is still the package's.
+- **The directories are the same ones the unreachable-install warning reads**
+  (`app::reachable::user_bin_dirs`), so a manager whose directory is decided by the tool itself
+  (`yarn global bin`, `npm prefix -g`) is answered by the tool rather than by a constant.
+- **Shall deletes nothing a manager wrote.** An uninstall that finished by removing files the
+  manager's database does not know about is a deletion nothing can undo or account for.
+
+## II.76 The self-hold question is asked of the directory (`#138`, C12, V.226)
+
+**Whether this process is already inside the lock is a fact about the directory, and it is asked
+of that directory.** Every lock this process holds is recorded under its canonical path, and the
+door for a write that cannot know whether its caller holds the lock (`DataLock::for_this_write`)
+asks whether *the directory it is about to write under* is in that set — never whether the process
+holds a lock somewhere.
+
+- **Per directory, not per process.** A lock taken on one data directory is not a lock on
+  another, and a write into a directory nothing has locked takes its own lock.
+- **The recorded key is the removed key.** The canonical name a lock was recorded under is kept
+  on the handle and removed on drop, so a directory renamed underneath a running command cannot
+  leave the process recorded as inside a lock it has released.
+- **The re-entrant write door refuses at once, by name, when the lock is this process's own.**
+  The contention is visible from the owner stamp naming this process's pid; the answer says the
+  lock is this process's own and points at `for_this_write`. It is an error, not a wait — the
+  release it would wait for is the code that is standing there. **A direct `acquire` keeps
+  waiting**, because another thread of this process may be about to release it (`watch` takes the
+  run's lock that way), and refusing that wait would turn a legitimate hand-off into an error.
+- **The wait is for another process, and it is unchanged.** `WAIT_SECS`, the announcement of the
+  holder, and the refusal that names the live holder's stamp stay exactly as they are.
+- **The held set is never the reason a release panics.** Its mutex is read ignoring poisoning:
+  the drop path is where it is touched, and a panic elsewhere must not become a second panic
+  while unlocking.

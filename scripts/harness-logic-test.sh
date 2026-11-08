@@ -120,9 +120,18 @@ run_against() {
     _be=go; _bin=hello; _was=""; FAKE=""
     check "clean removal" pass
 
-    # A documented leftover softens only when it actually happens.
+    # **A documented leftover is the expected leftover now, and the removal owes the sentence**
+    # (`#136`, C11). The entry used to soften the check to a `soft`, which recorded the leftover
+    # and left the name answering with nobody told. Named in the removal's own output -> pass;
+    # the file there and the removal silent -> fail, which is what the old case could not say.
+    # The two harnesses keep that output under different names, so both are written.
     _be=bun; _bin=hello; _was=""; FAKE="/root/.bun/bin/hello"
-    check "documented leftover softens" soft
+    printf 'bun removed hello, but left /root/.bun/bin/hello behind\n' > /tmp/itw-remove.out
+    cp /tmp/itw-remove.out /tmp/it-remove.out
+    check "documented leftover the removal named" pass
+    : > /tmp/itw-remove.out
+    : > /tmp/it-remove.out
+    check "documented leftover the removal did not name" fail
     _be=bun; _bin=hello; _was=""; FAKE=""
     check "documented quirk that did not happen still passes strictly" pass
 

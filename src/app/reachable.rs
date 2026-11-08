@@ -200,6 +200,70 @@ fn how_to_add(dir: &Path) -> String {
     }
 }
 
+/// What a manager's own uninstall left behind, in the directories it installs executables into.
+///
+/// A file named exactly `name` or `name.<extension>` — exact or a dotted extension, never a
+/// prefix, so removing `pv` does not accuse `pvx.cmd`. Directories that cannot be read are
+/// skipped: a manager with no bin directory has left nothing there, and a permission problem is
+/// not evidence of a launcher.
+pub fn leftover_entries(dirs: &[PathBuf], name: &str) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    for dir in dirs {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let file = entry.file_name();
+            let Some(file) = file.to_str() else {
+                continue;
+            };
+            let same = file == name
+                || file
+                    .strip_prefix(name)
+                    .is_some_and(|rest| rest.starts_with('.'));
+            if same {
+                found.push(entry.path());
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+/// The sentence for a removal that left a launcher behind, or `None` when it left nothing.
+///
+/// **A removal that leaves a name resolving is not a removal, and Shall does not delete the
+/// file.** The manager wrote it, and deleting what a manager wrote is the rule the removal guard
+/// exists to stop — so the honest ending is to name the file, its directory, and the fact that
+/// the name still answers. Measured on the Windows sweep: `nimble uninstall -y nimjson` returns
+/// 0, drops the package from its own listing, and leaves `nimjson.cmd` in `~\.nimble\bin`, which
+/// is on PATH.
+pub async fn leftover_warning(
+    backend: &str,
+    name: &str,
+    cfg: &Config,
+    exec: &CommandExecutor,
+) -> Option<String> {
+    let dirs = user_bin_dirs(backend, cfg, exec).await;
+    let left = leftover_entries(&dirs, name);
+    if left.is_empty() {
+        return None;
+    }
+    let resolves = dirs.iter().any(|d| is_on_path(d));
+    let paths: Vec<String> = left.iter().map(|p| p.display().to_string()).collect();
+    Some(format!(
+        "`{backend}` removed `{name}`, but left {} behind{}.\n  The file is the manager's, not \
+         Shall's, so Shall will not delete {}: remove it by hand if the name has to stop answering.",
+        paths.join(", "),
+        if resolves {
+            " — that name still resolves on your PATH"
+        } else {
+            ""
+        },
+        if left.len() == 1 { "it" } else { "them" }
+    ))
+}
+
 /// The sentence a user can act on, or `None` when there is nothing to say.
 ///
 /// Names the directory and the exact command, because "add it to your PATH" is advice and a

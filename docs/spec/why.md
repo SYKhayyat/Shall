@@ -8280,3 +8280,105 @@ under company — the shape of `dpkg --configure -a`, not of `dpkg-query -W` —
 read budget unsafe rather than merely unwise. The grouping key is where that would be fixed, and
 `two_programs_over_one_database_are_asked_one_at_a_time` is the test that would have to change
 with it.
+
+**V.224 — Why a listing row is not an installation (`#135`, `C10`).**
+
+The crash section's last promise is check (5): *the next sync converges onto the declaration,
+whatever the crash left behind.* On 2026-11-07 it failed on both legs that could reach the window,
+with a declared canary missing and `sync` exiting 0. The evidence that made this a planner defect
+rather than an install defect was the plan itself: the convergence sync on `void` printed
+`Installs: 1` and `✓ [xbps] perl`, and the missing `pv` was not in it.
+
+Three candidates were filed. The third — `heal`'s ownership claim (S87) being read as "installed" —
+is refuted by reading: `spec_is_missing` asks the backend, and the planner reads the registry only
+for `is_held`. The second — a model that lost the declaration — cannot explain why the same
+declaration installed the package two iterations earlier. The first was right, and it was in the
+lister.
+
+`xbps-query -l` prints the package *database*, and every row opens with a two-character state:
+`ii` installed, `uu` registered-but-unpacked, `hr` half-removed, `??` unknown. xbps's own
+`lib/transaction_commit.c` unpacks a package, registers it as `XBPS_PKG_STATE_UNPACKED`, forces the
+database to disk, and only then runs its configure half — so a kill anywhere in that window leaves
+a row that says the package exists and no usable software. The reader took the first whitespace
+token that parsed as a pkgver and never looked at the word, so all four read as installed. `sync`
+asked the listing, the listing said yes, and the plan was empty.
+
+**Why this is the family and not the instance.** The same mistake was fixed twice already, both
+times after a red run: `dpkg-query -W` lists packages dpkg merely remembers, so the apt reader was
+taught to ask `${db:Status-Status}` and to refuse a row whose status word it does not know; scoop's
+export was taught to drop `failed` and unversioned rows for the same reason. `xbps` was the sibling
+that never got the fix, and the report that found it was about a plan rather than a listing — which
+is why the rule in II.74 is written about *rows*, not about xbps.
+
+**What could reverse it.** A manager that keeps a legitimate package in a non-installed state and
+whose reinstall is destructive rather than idempotent would need its state read as a third answer
+("registered but not installed") rather than as absent. None of the managers here does that: every
+install in this tree is idempotent, which is what V.64 already relies on for recovery.
+
+**V.225 — Why a leftover launcher is named rather than deleted (`#136`, `C11`).**
+
+`nimble uninstall -y nimjson` returns 0. Nimble's own `list --installed` stops showing the
+package. `~/.nimble/bin/nimjson.cmd` is still there, and `.CMD` is in `PATHEXT`, so typing
+`nimjson` still runs it. The Windows native sweep reported it as its last red line after the #112
+family was fixed, and the measurement in the issue says the file survives **nimble's** uninstall:
+the same command on Linux removes the symlink its own install wrote, so the wrapper is the Windows
+install's shape.
+
+Three ways out were filed. **Accept it** was what shipped, and it is not a ruling: the sweep
+carried a dated `soft` and the user still had a command that answers after being told it was
+removed. **Delete the launcher** is the narrowest possible deletion and still a deletion outside
+the package database, of a file Shall did not write — and the exact set is unmeasured where it
+matters: the issue itself says the Windows install writes a wrapper *and a copied executable*,
+that set was never reproduced by hand on a runner, and a fix that removes the wrapper and not the
+`.exe` leaves the name answering while claiming otherwise. **Say it** is the one that can be
+verified on this host and on the sweep at once, and it makes the promise honest: the removal
+reports what is still there, with the path, so the user can finish it.
+
+**Why the check moves rather than softens.** The sweep's assertion was "the binary is gone", and
+`removal_leaves_binary` turned it into a `soft` for two managers. A `soft` that still prints is
+not a lie, but it is also not a check: nothing failed if the sentence never reached the user. The
+assertion becomes "the removal named the leftover", which the pass path can only satisfy by
+printing it — so the sweep now measures the promise that shipped instead of recording the excuse
+for the one that did not.
+
+**What could reverse it.** A manager whose launcher survives but whose *file set* is known exactly
+and whose package is unambiguously gone — measured on the platform, with the whole set in the
+issue — would make the narrow deletion safe. Nothing here has that measurement, which is why the
+deletion is declined rather than postponed.
+
+**V.226 — Why the self-hold question is per directory (`#138`, `C12`).**
+
+The nightly `Mutation (the data lock)` job exited 3 with three timeouts, all of them the same
+function: `held() -> false`, `held() >= 0`, and `held() > 0` read as `held() < 0`. A timeout in
+that gate is not a survivor and it is not a catch: the job never reached the survivor list, so a
+new defect and these three old timeouts printed the same red. The shard's whole purpose — "name the
+mutation no test kills" — was unavailable for 41 minutes a night.
+
+**The cost was a deadlock, not a slow test.** `held()` is the process-wide count behind
+`for_this_write`, the door that lets a write reached from inside a command's lock proceed without
+taking the lock a second time. `flock` is per open file description, not per process, so when the
+count lies `false` the second handle in the same process does not re-enter: it contends with the
+first, and the deadline loop sleeps out the full `WAIT_SECS = 120` before refusing. Fifteen tests
+failing at 120s each, three tries deep, is 2,880 seconds of sleeping — more than the shard's
+budget, which is why the run ended with a signal rather than a verdict.
+
+**The count was also wrong when nothing was mutated, which is the part that made this a rule and
+not a test-speed fix.** An `AtomicUsize` answers "has this process taken *a* lock anywhere", and
+`for_this_write` has a narrower question: "is this process inside the lock on the directory I am
+about to write under". A run that held its own data directory's lock made every later
+`for_this_write` skip locking — including a write into a different directory, which then raced
+whatever else was writing there. The lock covers a directory, so the fact that says whether it is
+held is a fact about that directory; the process-wide flag was the wrong shape, and the mutation
+timeout was the symptom that made somebody read it.
+
+**Why not shorten the wait.** An environment override for `WAIT_SECS` used by the test harness
+would make the gate finish without changing the defect: the two-minute sleep is correct for a
+*human* waiter behind another process, and making it shorter for tests only means the tests
+measure a wait the product does not have. Raising the shard's timeout is the same trade with the
+sign flipped.
+
+**What could reverse it.** A caller that holds one directory's lock and must write under a second
+directory *as part of the same atomic action* would need the second lock taken while the first is
+held — two `flock`s, which is exactly the deadlock a per-process fact was invented to avoid. No
+such caller exists: a run writes under its own data directory, and the tests that cross
+directories do so to prove they are independent.

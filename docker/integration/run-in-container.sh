@@ -1970,9 +1970,13 @@ no_lifecycle_reason() {
     esac
 }
 
-# A manager whose own uninstall deletes the package and keeps its launcher. Reported,
-# never assumed: the strict check runs first, and this only softens the result when the
-# leftover actually happens — so a manager that cleans up properly still has to.
+# A manager whose own uninstall deletes the package and keeps its launcher.
+#
+# **The entry is not an excuse any more; it is the expected leftover, and the assertion is that
+# Shall NAMED it** (`#136`, C11). `assert_binary_gone` used to soften these to a `soft`, which
+# recorded the leftover and left the promise broken — the file still answered, and the user was
+# never told. Shall deletes no files a manager wrote, so what it owes is the sentence; the
+# strict check still runs first, so a manager that starts cleaning up passes as gone.
 removal_leaves_binary() {
     case "$1" in
         bun) echo "bun's own \`remove -g\` drops the package and keeps its launcher (reproduced against bun directly, with no Shall involved)" ;;
@@ -2010,8 +2014,21 @@ assert_binary_gone() {
     fi
     _known="$(removal_leaves_binary "$_be")"
     if [ -n "$_known" ]; then
-        soft "$_be: $_bin is still there after removal — $_known"
-        return 0
+        # The leftover is expected from this manager, so the question is whether the removal
+        # said so. Asked of the removal's OWN output (`/tmp/it-remove.out`, written by the
+        # call site), not of the lifecycle log: the install log names where the binary went, so
+        # grepping that would pass before the removal ran.
+        _base="$(basename "$_now")"
+        if [ -s /tmp/it-remove.out ] && grep -qF -- "$_base" /tmp/it-remove.out; then
+            PASS=$((PASS + 1))
+            _credit_section
+            echo "  PASS  $_be: $_bin is still there after removal, and Shall named it — $_known"
+            return 0
+        fi
+        FAILC=$((FAILC + 1))
+        FAILED_NAMES="$FAILED_NAMES\n    - $_be: $_bin is still there after removal and the removal said nothing about it (at $_now)"
+        echo "  FAIL  $_be: $_bin is still there after removal and the removal said nothing about it — $_known"
+        return 1
     fi
     FAILC=$((FAILC + 1))
     FAILED_NAMES="$FAILED_NAMES\n    - $_be: $_bin is still on PATH after removal (at $_now)"
@@ -2204,6 +2221,9 @@ lifecycle() {
     fi
 
     ok "$be: uninstall $cpkg" lx_slow -y apply "$be:$cpkg" --delete
+    # The removal's own output, before `nok` below overwrites /tmp/it.out: the leftover check
+    # asks whether THIS command named the file a manager's uninstall left behind (#136).
+    cp /tmp/it.out /tmp/it-remove.out 2>/dev/null || : > /tmp/it-remove.out
     [ -n "$_nolist" ] || nok "$be: $ctok is gone from list" sh -c \
         "$SHALL list --backend '$be' 2>/dev/null | grep -q '$ctok'"
     [ -n "$cbin" ] && assert_binary_gone "$be" "$cbin" "$_prepath" "$LIFELOG"
@@ -3100,15 +3120,24 @@ journal_open_names() {
 # and the two need different repairs.
 #
 # Asked of the manager's own database rather than of `shall`, since the program is on trial. The
-# words are the manager's: dpkg's `installed`/`unpacked`/`half-installed`, xbps's presence in
-# `-l`, rpm's `normal`. A manager this table does not name prints `?`, which is honest.
+# words are the manager's: dpkg's `installed`/`unpacked`/`half-installed`, xbps's two-character
+# state word, rpm's `normal`. A manager this table does not name prints `?`, which is honest.
+#
+# **`xbps-query <pkg>` is the wrong question and was asked here until 2026-11-07.** Without `-l`
+# it answers from the REPOSITORY index — the package's metadata, whether or not it is installed
+# — so every canary in the repo came back `installed` and this witness could not disagree with
+# anything. `-l` reads the package database and its first column is the state: `ii` installed,
+# `uu` registered-but-unpacked (`lib/transaction_commit.c` unpacks and registers before it
+# configures), `hr` half-removed, `??` unknown. Printed here as the word itself rather than as a
+# verdict, because `uu` beside `pv=off` is the diagnosis and `absent` beside it is not.
 canary_manager_state() { # pkg
     case "$BACKEND" in
         apt)    dpkg-query -W -f='${db:Status-Status}' "$1" 2>/dev/null || echo absent ;;
         dnf|zypper) rpm -q "$1" >/dev/null 2>&1 && echo installed || echo absent ;;
         pacman) pacman -Q "$1" >/dev/null 2>&1 && echo installed || echo absent ;;
         apk)    apk info -e "$1" >/dev/null 2>&1 && echo installed || echo absent ;;
-        xbps)   xbps-query "$1" >/dev/null 2>&1 && echo installed || echo absent ;;
+        xbps)   _st=$(xbps-query -l 2>/dev/null | awk -v p="$1" '$2 ~ ("^" p "-") { s = $1 } END { print s }')
+                [ -n "$_st" ] && echo "$_st" || echo absent ;;
         *)      echo '?' ;;
     esac
 }

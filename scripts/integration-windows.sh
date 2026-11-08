@@ -1481,9 +1481,13 @@ no_lifecycle_reason() {
     esac
 }
 
-# A manager whose own uninstall deletes the package and keeps its launcher. Reported,
-# never assumed: the strict check runs first, and this only softens the result when the
-# leftover actually happens — so a manager that starts cleaning up still passes.
+# A manager whose own uninstall deletes the package and keeps its launcher.
+#
+# **The entry is not an excuse any more; it is the expected leftover, and the assertion is that
+# Shall NAMED it** (`#136`, C11). `assert_binary_gone` used to soften these to a `soft`, which
+# recorded the leftover and left the promise broken — the file still answered, and the user was
+# never told. Shall deletes no files a manager wrote, so what it owes is the sentence; the
+# strict check still runs first, so a manager that starts cleaning up passes as gone.
 removal_leaves_binary() {
     case "$1" in
         bun) echo "bun's own \`remove -g\` drops the package and keeps its .exe/.bunx launchers (reproduced against bun directly, with no Shall involved)" ;;
@@ -1493,10 +1497,8 @@ removal_leaves_binary() {
         # so the file survives **nimble's** uninstall, not Shall's removal. The Linux control
         # (same nimble version, no Shall) has its symlink removed by the same command, so this
         # is the Windows wrapper path rather than a cleanup nimble never does. Not reproduced by
-        # hand on Windows: the evidence is the run. Filed as #136, which carries the three ways
-        # out and the ruling that would end this entry. The strict check runs first, so a nimble
-        # that starts cleaning up still passes.
-        nimble) echo "nimble's own Windows uninstall drops the package and leaves the .cmd launcher its install wrote in ~/.nimble/bin (run 42361477256; filed as #136)" ;;
+        # hand on Windows: the evidence is the run.
+        nimble) echo "nimble's own Windows uninstall drops the package and leaves the .cmd launcher its install wrote in ~/.nimble/bin (run 42361477256)" ;;
         *)   echo "" ;;
     esac
 }
@@ -1529,8 +1531,20 @@ assert_binary_gone() {
     fi
     _known="$(removal_leaves_binary "$_be")"
     if [ -n "$_known" ]; then
-        soft "$_be: $_bin is still there after removal — $_known"
-        return 0
+        # The leftover is expected from this manager, so the question is whether the removal
+        # said so. Asked of the removal's OWN output (`/tmp/itw-remove.out`, written by the
+        # call site), not of the lifecycle log: the install log names where the binary went, so
+        # grepping that would pass before the removal ran.
+        _base="$(basename "$_now")"
+        if [ -s /tmp/itw-remove.out ] && grep -qF -- "$_base" /tmp/itw-remove.out; then
+            PASS=$((PASS + 1))
+            echo "  PASS  $_be: $_bin is still there after removal, and Shall named it — $_known"
+            return 0
+        fi
+        FAILC=$((FAILC + 1))
+        FAILED_NAMES="$FAILED_NAMES\n    - $_be: $_bin is still there after removal and the removal said nothing about it (at $_now)"
+        echo "  FAIL  $_be: $_bin is still there after removal and the removal said nothing about it — $_known"
+        return 1
     fi
     FAILC=$((FAILC + 1))
     FAILED_NAMES="$FAILED_NAMES\n    - $_be: $_bin is still on PATH after removal (at $_now)"
@@ -1717,6 +1731,9 @@ lifecycle() {
         return 0
     fi
     ok "$be: uninstall $cpkg" lx -y apply "$be:$cpkg" --delete
+    # The removal's own output, before `nok` below overwrites /tmp/itw.out: the leftover check
+    # asks whether THIS command named the file a manager's uninstall left behind (#136).
+    cp /tmp/itw.out /tmp/itw-remove.out 2>/dev/null || : > /tmp/itw-remove.out
     [ -n "$_nolist" ] || nok "$be: $ctok is gone from list" sh -c \
         "$SHALL list --backend '$be' 2>/dev/null | grep -q '$ctok'"
     [ -n "$cbin" ] && assert_binary_gone "$be" "$cbin" "$_prepath" "$LIFELOG"

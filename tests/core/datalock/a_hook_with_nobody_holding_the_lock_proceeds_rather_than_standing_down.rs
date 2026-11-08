@@ -17,11 +17,14 @@ fn a_hook_with_nobody_holding_the_lock_proceeds_rather_than_standing_down() {
         taken.is_some(),
         "nobody holds this directory, so the hook had to take the lock and record; standing down here loses whatever the manager just did"
     );
-    assert!(held());
+    assert!(
+        held_on(&dir),
+        "the hook took the lock and this process does not say it is inside it"
+    );
     assert!(
         lock_file_is_in(&dir),
         "the hook took a lock somewhere other than the data directory it was pointed at"
     );
     drop(taken);
-    assert!(!held());
+    assert!(!held_on(&dir));
 }

@@ -19,12 +19,15 @@ fn a_deferred_step_takes_the_lock_when_it_is_free() {
         .unwrap();
     rt.block_on(async {
         let taken = DataLock::for_one_step("sync").await.unwrap();
-        assert!(held(), "the deferred step's lock was taken and not counted");
+        assert!(
+            held_on(&dir),
+            "the deferred step's lock was taken and the directory is not recorded as held"
+        );
         assert!(
             lock_file_is_in(&dir),
             "the deferred step locked a directory other than the one safe_data_dir names, so two runs would each hold a lock nobody else sees"
         );
         drop(taken);
-        assert!(!held());
+        assert!(!held_on(&dir));
     });
 }

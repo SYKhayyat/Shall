@@ -12,7 +12,7 @@ async fn the_off_runtime_wait_returns_holding_the_lock() {
         .await
         .unwrap();
     assert!(
-        held(),
+        held_on(&dir),
         "acquire_async returned without the lock it promised"
     );
     assert!(
@@ -20,5 +20,5 @@ async fn the_off_runtime_wait_returns_holding_the_lock() {
         "acquire_async locked a directory other than the one it was handed"
     );
     drop(taken);
-    assert!(!held());
+    assert!(!held_on(&dir));
 }

@@ -26,6 +26,7 @@ fn mocked(answers: &[(&str, &str)]) -> (CommandExecutor, Config) {
     let exec = CommandExecutor::with_layer(false, false, mock, vfs, Arc::new(DashMap::new()));
     (exec, Config::sandboxed(Path::new(SANDBOX)))
 }
+mod a_leftover_launcher_is_named_and_a_prefix_sibling_is_not;
 mod a_per_user_ecosystem_names_its_bin_dir;
 mod a_reachable_directory_is_not_warned_about;
 mod a_system_manager_has_nothing_to_warn_about;

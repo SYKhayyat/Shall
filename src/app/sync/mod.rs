@@ -377,7 +377,18 @@ impl SyncEngine {
 
             // XIII.5: and then whether the machine still works. A failure restores the snapshot
             // taken above.
-            self.verify_health(&changes, restore_point.as_deref()).await;
+            let reverted = self.verify_health(&changes, restore_point.as_deref()).await;
+
+            // ...and only then, what the removals left behind. **Every verb that removes
+            // arrives here**, which is why this is not in one of them: `sync`, `apply
+            // --delete`, `execute`, `remove-orphans`, `purge-undeclared` and `rollback` all
+            // remove through this engine, and a rule written at six call sites is a rule one of
+            // them will not have read. Not after a revert (the package is back), and not after
+            // a run that carried past a failure (the failures are the report; this is about
+            // what *succeeded*).
+            if !reverted && matches!(result.as_deref(), Ok([])) {
+                self.warn_about_leftovers(&changes).await;
+            }
 
             // `after_sync` fires LAST, after the health check that can revert everything above
             // it. Firing it earlier meant a hook could post "sync complete" and then have the
@@ -624,12 +635,16 @@ impl SyncEngine {
     /// One revert path for both kinds of check (U7). The machine does not care whether it was
     /// a package's own probe or the machine-wide one that noticed — a broken nginx and a broken
     /// boot both mean go back.
-    async fn verify_health(&self, changes: &SyncChanges, snapshot: Option<&str>) {
+    /// Whether the machine still works, and whether it had to be put back.
+    ///
+    /// The answer is returned because a revert undoes the removals this run made, and what a
+    /// removal left behind is only a leftover while the removal stands.
+    async fn verify_health(&self, changes: &SyncChanges, snapshot: Option<&str>) -> bool {
         use crate::model::health::{self, Outcome};
 
         let checks = self.declared_health_checks(changes);
         if checks.is_empty() {
-            return;
+            return false;
         }
         info!("running {} health check(s)...", checks.len());
 
@@ -659,7 +674,10 @@ impl SyncEngine {
         }
 
         match Outcome::of(failed, snapshot) {
-            Outcome::Healthy => debug!("every health check passed."),
+            Outcome::Healthy => {
+                debug!("every health check passed.");
+                false
+            }
             Outcome::Revert { failed, snapshot } => {
                 warn!("{}", health::reverted_message(&failed, &snapshot));
                 if let Err(e) = self.snapshot_manager.restore(&snapshot).await {
@@ -673,12 +691,42 @@ impl SyncEngine {
                 } else {
                     info!("restored {}.", snapshot);
                 }
+                true
             }
             // Only reachable on a dry run, or if the provider vanished between the pre-flight
             // check and here — `require_revert_path` refuses this case before anything runs.
             Outcome::FailedWithoutRevert { failed } => {
-                warn!("{}", health::not_reverted_message(&failed))
+                warn!("{}", health::not_reverted_message(&failed));
+                false
             }
+        }
+    }
+
+    /// A removal that left the name still answering is said out loud (`#136`).
+    ///
+    /// **`SyncEngine::sync` is the one place every removal passes through** (LX-5), so the
+    /// sentence is owed here rather than at each verb. A manager's uninstall can return success,
+    /// drop the package from its own listing, and leave the launcher its install wrote — measured
+    /// on the Windows sweep for `nimble`, whose `.cmd` stays in `~/.nimble/bin` and still
+    /// resolves on PATH. Shall deletes no file a manager wrote, so the honest ending is to name
+    /// it.
+    async fn warn_about_leftovers(&self, changes: &SyncChanges) {
+        use futures::stream::StreamExt;
+        let removed: Vec<(String, String)> = changes
+            .generate_report()
+            .remove
+            .into_iter()
+            .map(|e| (e.backend, e.name))
+            .collect();
+        let messages: Vec<Option<String>> = futures::stream::iter(removed.iter())
+            .map(|(backend, name)| {
+                crate::app::reachable::leftover_warning(backend, name, &self.config, &self.executor)
+            })
+            .buffered(self.config.spawn_parallel.max(1))
+            .collect()
+            .await;
+        for message in messages.into_iter().flatten() {
+            warn!("{}", message);
         }
     }
 

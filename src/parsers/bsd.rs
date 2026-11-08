@@ -71,19 +71,62 @@ fn split_pkgver(tok: &str) -> Option<(&str, &str)> {
     }
 }
 
+/// Every state word `xbps-query -l` prints, and whether it means the software is installed.
+///
+/// `lib/transaction_commit.c` unpacks a package, **registers it as `XBPS_PKG_STATE_UNPACKED`**
+/// and only then runs its configure half — so a machine killed in between comes back with the
+/// package in the database and not usable, which is `uu`. `hr` is a removal that stopped
+/// part-way and `??` is a state this xbps does not know; neither is software on the machine.
+///
+/// Exhaustive on purpose, for the reason `parsers/apt.rs`'s table is: a state xbps grows
+/// tomorrow should be an unreadable line rather than a silent "installed".
+const XBPS_STATE_WORDS: [(&str, bool); 4] =
+    [("ii", true), ("uu", false), ("hr", false), ("??", false)];
+
+/// One row of either shape this listing comes in: `(is_installed, pkgver token)`.
+///
+/// `-l` prints `<state> <pkgver> <desc>`; `-m` prints the bare pkgver, and every row there is
+/// manually installed by construction. `None` is a line neither shape could have produced.
+fn read_xbps_row(line: &str) -> Option<(bool, &str)> {
+    let mut tokens = line.split_whitespace();
+    let first = tokens.next()?;
+    match XBPS_STATE_WORDS
+        .iter()
+        .find_map(|(word, installed)| (*word == first).then_some(*installed))
+    {
+        Some(installed) => Some((installed, tokens.next()?)),
+        None => Some((true, first)),
+    }
+}
+
 /// `xbps-query -l` / `xbps-query -m`. `-l` lines carry a two-character state flag
-/// (`ii <pkgver> <desc>`); `-m` lines are the bare pkgver. Either way the pkgver is the first
-/// token that parses, so this reads both.
+/// (`ii <pkgver> <desc>`); `-m` lines are the bare pkgver.
+///
+/// **The flag is load-bearing, and reading past it was the crash section's defect.** `-l`
+/// lists the package *database*, not the installed set: a package that is registered and
+/// unpacked, or half-removed, prints a row exactly like a working one. Taking the first token
+/// that parsed as a pkgver made every one of them "installed", so `sync` planned nothing for a
+/// declared package the machine did not have and reported convergence over it.
 pub fn parse_xbps_list(output: &str) -> ParseResult {
     let clean = sanitize(output);
     let candidates = crate::parsers::data_lines(&clean);
-    let mut packages = Vec::new();
-    for line in &candidates {
-        if let Some((name, ver)) = line.split_whitespace().find_map(split_pkgver) {
-            packages.push(Package::with_version(name, ver, "xbps"));
-        }
-    }
-    or_unrecognised("xbps", packages, &candidates)
+    let found = candidates
+        .iter()
+        .filter_map(|line| {
+            let (installed, token) = read_xbps_row(line)?;
+            let (name, ver) = split_pkgver(token)?;
+            installed.then(|| Package::with_version(name, ver, "xbps"))
+        })
+        .collect();
+    // A row read correctly and dropped for its state is an answer, not a shape this file could
+    // not read — a machine whose every registered package is half-installed is a real machine,
+    // and refusing the listing would turn it into "unknown" rather than "nothing usable here".
+    let unreadable: Vec<&str> = candidates
+        .iter()
+        .copied()
+        .filter(|line| read_xbps_row(line).is_none_or(|(_, token)| split_pkgver(token).is_none()))
+        .collect();
+    or_unrecognised("xbps", found, &unreadable)
 }
 
 /// `xbps-query -Rs <query>`: `[-] bash-5.2.15_2   The GNU Bourne Again Shell`, where `[*]`

@@ -181,27 +181,29 @@ what blocks the next one.
     is missing declared software and the next sync says it converged. The section's other
     iterations pass on both legs, so this is one window, not recovery in general.
 
-    **Status 2026-11-08: still open, and the green run since is not a fix.** Run `42429598163`
-    (HEAD `22eac0f6`, whose only change was the Windows harness) is `pass=471 fail=0` on `tools`
-    and `pass=348 fail=0` on `void` — because the kill landed at **3 of 3** canaries on disk
-    instead of the **2 of 3** both failures have in common. Nothing in that commit reaches the
-    container harness, so the window moved and the section stopped aiming at the defect. The same
-    trick hides it locally: a tools run on this host killed at 3 of 3 and converged.
+    **Status 2026-11-08: DIAGNOSED AND BUILT — the xbps lister read a database row as an
+    installation.** The convergence plan's missing `pv` was the whole diagnosis: the planner asks
+    the manager, and the manager said yes. `xbps-query -l` lists the package *database*, and every
+    row opens with a two-character state (`ii` installed, `uu` registered-but-unpacked, `hr`
+    half-removed, `??` unknown). xbps's own `lib/transaction_commit.c` unpacks, **registers as
+    UNPACKED**, writes the database, and only then configures — so a kill leaves a row for a
+    package that is not usable, and the reader took the first token that parsed as a pkgver and
+    never read the word. Rule **II.74**, reason **V.224**, ruling **C10**.
 
-    **What was built instead of a diagnosis (`60810c5e`, no assertion touched):** the section now
-    prints `pkg=on/off:manager-word` for each canary on every kill and every convergence failure
-    (asked of dpkg/rpm/pacman/apk/xbps, never of `shall`); the sync's **rc** is captured rather
-    than folded into a `&&`, because "exited non-zero" and "exited 0 having planned nothing" are
-    different defects wearing one sentence; and the failure branch prints the whole sync log plus
-    what a plan would do now, where before it printed the last six lines — which on the failing run
-    were three `service:cron` warnings, and that is where the previous diagnosis stopped.
-    Two local repro attempts at exactly the 2-of-3 window (kill, then heal with no dump in between,
-    HEAD's binary in the tools image) converged: the kill leaves `pv`/`ncdu` **unpacked** with
-    their binaries on PATH while dpkg correctly reports them absent, and both heal's replay and the
-    following sync repair it there. The CI difference worth checking first is the config section
-    16d inherits on the tools image (a `service:cron` line whose removal fails on every sync) and
-    the orphaned `apt-get` the kill leaves running while `heal` looks at the lock — the CI log has
-    `waited 0s` for it. The next 2-of-3 kill answers it from the log.
+    Built: `parse_xbps_list` now reads the state (`XBPS_STATE_WORDS`, exhaustive like
+    `DPKG_STATUS_WORDS`), a row read and dropped for its state is an answer rather than an
+    unrecognised shape, and the `-m` bare-pkgver listing still reads as installed. The container
+    harness's own witness was the family's second site: `canary_manager_state` asked
+    `xbps-query <pkg>`, which answers from the repository index whether or not anything is
+    installed, so it could not disagree with the product; it now reads `-l` and prints the state
+    word itself (`pv=off:hr` is the diagnosis, `pv=off:absent` is not).
+
+    The failing test was watched first: `a_state_word_decides_whether_a_row_is_installed` reported
+    `["bash", "pv", "ncdu", "mystery"]` against `["bash"]` before the fix. The `tools` half
+    (apt, `crash/midway`) is **not** claimed by this: dpkg's status reader already excludes
+    `unpacked`, both local 2-of-3 repros converged, and the section now prints the manager's word
+    and the sync's rc — the next 2-of-3 kill is what separates "the manager said unpacked" from
+    "the sync exited non-zero", which the 2026-11-07 log could not tell apart.
 
 ### Tier 1 — small ruled fixes (additive, low-risk, clears the register backlog)
 
@@ -878,6 +880,28 @@ them and each was watched red under its mutant; `heal`'s `kept` arm of the save 
 registry, so the arm could only rewrite an unchanged `state.json`. `PLAN.md`'s `#117` entry
 carries the detail; `#138` carries the data-lock shard that is red for time, not for a
 survivor.
+
+**2026-11-08: the data-lock shard's three timeouts were the count, not the wait (`#138`).** All
+three were mutants of `held()`, and each made every e2e command sleep out `WAIT_SECS`: the
+process-wide count let `for_this_write` decide a write was covered by a lock held *somewhere*,
+and when a mutant made it lie `false` the second `flock` handle in the same process contended
+with the first for two minutes. The fact is now per directory — `held_on(path)` reads a set of
+canonical paths, recorded and removed as one key on the handle — and a second handle that meets
+this process's own is refused at once from the owner stamp rather than slept on. Built with the
+ruling: `C12` in `decisions.md`, rule **II.76**, reason **V.226**. The tests pin the family —
+`held_on` both ways and after a drop, the write door taking a lock when it holds none and
+declining when **the directory it is pointed at** is held, **taking a different directory's lock
+while another is held**, the re-entrant door's self-contended acquire returning in under a second
+with "already holds", and the contended wait still exercised against a whole other process (a
+child re-invokes the test binary). A direct acquire keeps waiting for a same-process holder —
+`watch` depends on it — so only the door whose purpose is re-entry refuses.
+
+Two hand mutations, watched red and reverted. `held_on` restored to the old process-wide flag
+failed **11 tests in 1.7s**, the per-directory case and both directions among them. `held_on ->
+false` failed in **0.02s**, at the assertion that the process is inside the lock it just took —
+and the owner-stamp refusal is what stops the later `for_this_write` from sleeping out the wait
+in the e2e legs, since it answers from the stamp rather than from the same function the mutant
+replaced. The shard's whole cost was that sleep; the 21 tests in the module now run in 4s.
 
 The full chain is green on this host: `cargo fmt -- --check`, clippy
 `--all-targets --all-features --locked -- -D warnings`, and the full suite
@@ -3456,6 +3480,16 @@ nimble's own Windows uninstall leaves behind is a named `soft` in `removal_leave
 the wrapper stays; on Linux the same version removes the symlink it wrote), the three ways out
 and the resolving test. The container twin must not excuse it, and `harness-logic-test.sh`
 asserts that per harness.
+
+**Built 2026-11-08 (`#136`, C11, II.75/V.225).** The entry stopped being an excuse in **both**
+harnesses: it is now the expected leftover, and the check passes only when the removal's own
+output (`/tmp/itw-remove.out`, `/tmp/it-remove.out`) names the file — a manager that starts
+cleaning up still passes the strict check first. The sentence itself is owed by
+`SyncEngine::sync` rather than by one verb, because every removal in the program passes through
+it: `sync`, `apply --delete`, `execute`, `remove-orphans`, `purge-undeclared` and `rollback`.
+`tests/app/sync/a_removal_names_the_launcher_the_manager_left` pins both
+directions — a removal names the file in `[bin_dir]`, an install-only run says nothing — and
+`harness-logic-test.sh` now pins named -> pass and silent -> fail for each harness.
 
 **Verified, 2026-10-31.** `cargo build --all-targets`, `cargo test --no-fail-fast` (3062
 passed, 0 failed), `cargo clippy --all-targets --all-features --locked -- -D warnings`,
