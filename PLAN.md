@@ -243,18 +243,28 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   already carried `zstd` 0.14.3 for `zip` — so the fixed version of the crate was in the lock
   file all along, twice over. The gate is the resolving check, and the suite stays green over the
   new versions.)
-- [ ] #129 four container legs are red on `check health (rc=2)`, and the failure names no backend.
+- [x] #129 four container legs are red on `check health (rc=2)`, and the failure names no backend.
   (**Filed 2026-10-26 off the push run's logs**, `40353618389`: ubuntu `121680058151`
   (`pass=395 fail=2`), fedora `121680058263` (`pass=374 fail=2`), opensuse `121680058267`
   (`pass=375 fail=2`), arch `121680058061` (`pass=385 fail=6`) — the same `FAIL check health
-  (rc=2)` and the same section-floor breach. **The evidence is thrown away by the harness**: the
+  (rc=2)` and the same section-floor breach. **The evidence was thrown away by the harness**: the
   health output prints the sick backend rows ABOVE the `System:` section, and the failure excerpt
-  is the tail, so the reader gets four system rows, a summary line, and no backend. There are
+  is the tail, so the reader got four system rows, a summary line, and no backend. There are
   two ways a backend is critical — absent-but-named-in-`priority` (`src/verbs/check.rs:197`) and
   claims-healthy-but-cannot-list (`src/verbs/check.rs:287`) — and they are different bugs.
-  **Partly built**: the container harness prints the sick rows by name now (the `health_check`
-  in `docker/integration/run-in-container.sh`, with #112's commit), so the next run names the
-  backend. **That is the evidence, not the fix** — the issue stays open until the cause is found.)
+  **BUILT in two halves, both by their own commits.** The evidence half (`99540c13`) prints the
+  sick rows by name from `health_check` in `docker/integration/run-in-container.sh`, and the next
+  run's log used it: `bun — says it is ready but cannot list: bun answered with 1 line(s) this
+  parser does not recognise, the first being /root/.bun/install/global node_modules (0
+  installed)`. The fix half (`cee823ae`, 2026-10-27): that bun appends the word to its npm-style
+  count, and `bun_header_count_is_zero` parsed only a bare `(0)` — so a bun with nothing
+  installed read as an unreadable format, the psresource-class promotion made it CRITICAL, and
+  every leg whose image had a bun went red on the same line. Tests:
+  `tests/parsers/language/an_empty_listing_is_not_an_unreadable_one_tests/an_empty_bun_global_is_empty_and_not_unreadable.rs`
+  (written against the arch leg's own bytes, watched failing as `Unrecognised`) and
+  `tests/parsers/language/tests/test_bun_list_parsing.rs` (the populated `(2 installed)` header,
+  and nonzero still a format change rather than emptiness). **Closed 2026-10-27**; all six
+  container legs have been green since.)
 
 ## Phase 3 — Correctness Mediums
 - [x] #130 the `schedule` verb edits a line then converges the whole machine — the C7 class, on the
@@ -433,7 +443,15 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   `core::batch`: the per-package budget, monotonicity, the cap across batch sizes, and **that the
   cap did not swallow the shape** (a fix that flattened everything to an hour would pass the cap
   test and give one package an hour). — ISSUE #82)
-- [ ] #25 lifecycle jobs on distro containers.
+- [x] #25 lifecycle jobs on distro containers. (**CLOSED 2026-11-08 on the legs themselves, not on
+  a change that names this issue**: every job it lists now runs and passes. Push `42434062129`
+  (HEAD `e4468168`) is green on ubuntu, arch, fedora, opensuse, alpine, void and storage; the
+  nightly `42361477256` is green on ubuntu, fedora, opensuse, alpine, arch, guix, slackware,
+  gentoo, storage and macOS; its two red legs (`tools`, `void`) each completed the lifecycle and
+  failed one named section — `crash/midway` and `crash/completed`, both #135 — which is the
+  distinction this issue asked for, arriving. The issue's own first observation held — *the binary
+  builds and runs, the script fails* — and the harness now separates the script's work into named
+  checks, so a red leg names its failing section instead of the whole step.)
 - [x] #54 dirty-host fixtures: the Windows/macOS native sweep now creates a unique run root before
   deriving config, data, ledger, stall, and helper paths, cleans it on exit and signal paths, and
   has a source-level isolation control in `dirty_host_fixture_isolation_tests`.
@@ -460,19 +478,23 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
       rows failed on a resolution refusal that says nothing about chain grammar. They now ask
       the resolver (`shall eval`) which name this host can resolve from a bare line and use it,
       and 11b skips with a stated reason when the backend under test is the silent one.
-- [ ] #109 CI: the apt legs install off the image's baked lists, so a mirror rotation reds the leg
+- [x] #109 CI: the apt legs install off the image's baked lists, so a mirror rotation reds the leg
   for the mirror's reason. (**Filed 2026-10-15 with a candidate patch and NO failing run behind
   it, and the issue says so itself.** `Dockerfile.ubuntu` runs `apt-get update` at build and keeps
-  the lists; nothing refreshes them before an install, so an install off a suite whose revision
+  the lists; nothing refreshed them before an install, so an install off a suite whose revision
   the pool has rotated away 404s — and `docker/integration/retry.sh` deliberately does not wrap
-  the distro's own managers, so a mirror's fault surfaces as a red leg. The evidence for the
-  *mechanism* is real (`audit/results/ubuntu-build.log:354` resolves `noble-updates` at run time);
-  **the evidence for the failure is not**, and landing the fix would put an unproven precondition
-  into the harness — the same shape of mistake as `#96`'s missing `witness`. **The patch applies
-  cleanly to `c5d0547` (`git apply --check`) and is ready; the missing half is a run, and a
-  container runtime is available on this host** (tools `pass=471 fail=0` and void `pass=348
-  fail=0`, both measured locally in the 2026-11-08 session), so the issue's own first step —
-  attach the apt log from the four fast apt legs — is possible here and is what it waits on.)
+  the distro's own managers, so a mirror's fault surfaced as a red leg. **BUILT 2026-10-27 as
+  `5bf94cfc` and closed the same day**, after the measurement the issue was waiting on: against a
+  locally built ubuntu image, two superseded point revisions (`curl_…10.14`, `…10.11`) answer 404
+  from the pool while the current candidate and an older release answer 206 — the premise,
+  measured. The refresh sits where the exposure begins (before the first install, not before the
+  service install the issue named), is best-effort on purpose, and a failure is a `soft` saying
+  the leg continues on the image's baked lists; apt only, because it is the one manager whose
+  metadata the image bakes *and* whose pool drops point revisions. **This entry claimed the patch
+  was ready and unapplied for eleven days after it landed** — and `e4468168` extended that
+  sentence (`a container runtime is available on this host … what it waits on`) instead of
+  catching it, while the lines were already in the harness. Corrected 2026-11-08: #137's own
+  class, one entry later.)
 - [x] #137 two plan entries said the work was impossible when it is not. (**Filed and fixed
   2026-11-08**, because a ledger that says the container runtime is missing, and that macOS is
   untested, stops the next worker from doing either. The first is false here (above); the
