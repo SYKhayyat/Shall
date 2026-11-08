@@ -468,10 +468,17 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   the distro's own managers, so a mirror's fault surfaces as a red leg. The evidence for the
   *mechanism* is real (`audit/results/ubuntu-build.log:354` resolves `noble-updates` at run time);
   **the evidence for the failure is not**, and landing the fix would put an unproven precondition
-  into the harness — the same shape of mistake as `#96`'s missing `witness`. **Not landed here:
-  there is no Docker on this host**, so neither the harness nor the patch can be executed, and the
-  issue's own first step is to attach the apt log. The patch applies cleanly to `c5d0547`
-  (`git apply --check`), so it is ready for whoever has a container runtime.)
+  into the harness — the same shape of mistake as `#96`'s missing `witness`. **The patch applies
+  cleanly to `c5d0547` (`git apply --check`) and is ready; the missing half is a run, and a
+  container runtime is available on this host** (tools `pass=471 fail=0` and void `pass=348
+  fail=0`, both measured locally in the 2026-11-08 session), so the issue's own first step —
+  attach the apt log from the four fast apt legs — is possible here and is what it waits on.)
+- [x] #137 two plan entries said the work was impossible when it is not. (**Filed and fixed
+  2026-11-08**, because a ledger that says the container runtime is missing, and that macOS is
+  untested, stops the next worker from doing either. The first is false here (above); the
+  second is false on every nightly — `Integration (macOS native, nightly)` is green on
+  `42429598163`. What is actually unproven on macOS is narrower and is now the only thing `0f`
+  claims: `mas`, `macports`' live lifecycle, the APFS provider and `launchd`.)
 - [x] #112 the two native sweeps are red on the same family. (**Filed 2026-10-18 off the nightly
   logs, because macOS native had no issue at all and Windows had two that name two symptoms.** Ten
   backends on Windows and eight on macOS fail the same pair — `list shows <pkg> (missing)` and

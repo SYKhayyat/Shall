@@ -146,12 +146,17 @@ what blocks the next one.
     suspect the runner and re-dispatch before touching code.
     is now on the trigger; the tag itself is still the owner's to push, and `readme.md` says so
     at the install command until it happens.
-0f. **macOS has never been exercised**, only compiled and unit-tested. **Scheduled 2026-07-26,
-    not yet proven:** a `macos-native` job runs `scripts/integration-windows.sh brew wget` on
-    `macos-latest`, nightly — the first execution `release-check.sh`'s Darwin branch will ever
-    have had. Nightly rather than per-push on purpose: it has never run, and a never-run job on
-    the push gate gets disabled rather than fixed. Promote it once it has been green a few
-    nights. **Also done, and it needs no Mac:** the OS-native registrars were
+0f. **macOS is exercised nightly, and four things on it are still unproven.** *(Corrected
+    2026-11-08: this line said the platform had never been exercised at all, which was true when
+    it was written and had been false for months — the job has run every night since 2026-07-26 and is
+    green on `42429598163` (`22eac0f6`), with `brew`/`wget` driven for real. A ledger that says a
+    platform is untested when it is tested nightly is the same defect as one that says a blocker
+    is unbuildable: it changes what the next worker picks up. Filed and fixed as #137.)*
+    **Scheduled 2026-07-26:** a `macos-native` job runs `scripts/integration-windows.sh brew wget`
+    on `macos-latest`, nightly — the first execution `release-check.sh`'s Darwin branch will ever
+    have had. Nightly rather than per-push on purpose: it had never run, and a never-run job on
+    the push gate gets disabled rather than fixed. **Promote it once it has been green a few
+    nights**, which it now has been. **Also done, and it needs no Mac:** the OS-native registrars were
     `#[cfg(target_os = …)]`, so `mas`/`macports` argv only existed on a Mac; they compile
     everywhere now (registration still gated, at runtime) and a test asserts the program and the
     verbs for 26 backends on every host. It found **S35** immediately — `macports` invoked a
