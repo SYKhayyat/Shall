@@ -157,6 +157,19 @@ Part II and its reason in Part V.
   the change is `cfg`-gated; `scripts/unix-check.sh` not run because this host compiled the unix
   half natively.
 
+### Where the issue list stands
+
+Closed this session: `#135`, `#136`, `#138` (built previously, pushed at the start of this
+session), `#139`, `#140`, `#141`, `#142`, and `#17` (audited open — six of its seven candidates
+were already closed and the seventh's proposed fix would break its only caller). Commented with
+what is done and what remains: `#18` (sub-tasks 1 and 4 done, 2/3/5/6/7 open), `#19` (five of
+eight closed, four open, next step named for each), `#20` (TUI gap closed, stale-session gap
+needs a ruling), `#21` (release/install half done, three items open).
+
+Still untouched and owed a conversation rather than a commit: `#94` and `#124` (owner decisions),
+`#59`–`#67` (the `adopt`/`export` feature family), and `#39`–`#44` (the Lamdan/interop prose
+audits, which delete large spec prose).
+
 ### What to take next
 
 1. **The next nightly** answers all three: `#135`'s crash section check (5) on `void`/`tools`
