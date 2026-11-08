@@ -160,6 +160,22 @@ what blocks the next one.
     is not — but the macOS column has now caught two real bugs (S34, S35), which is two more than
     it had.
 
+0g. **The sync after a crash does not converge** (`#135`, filed 2026-11-07 off nightly run
+    `42361477256`, HEAD `d2574408`). This is the only red left on the `tools` and `void` legs.
+    - `Integration (tools, nightly)`, job `128370605253`: `crash/midway` left 3 operations open and
+      2 of 3 canaries on disk; `heal` recovered them, every canary the crash left was under
+      management, and the next sync still did not install `dos2unix`.
+    - `Integration (void)`, job `128370605102`: `crash/completed` left 3 operations closed and 2 of
+      3 canaries on disk; the convergence sync's own plan printed `Installs: 1` and
+      `✓ [xbps] perl` — the missing `pv` was not in the plan at all.
+
+    The plan output is the evidence that this is not an install that failed: the missing declared
+    package was never scheduled. The candidates are the planner's manager listing after the crash,
+    a model that lost the declaration, and `heal`'s ownership claim being read as "installed"; the
+    issue carries them and the proposed hermetic fixture. **Do not soften check (5)**: the machine
+    is missing declared software and the next sync says it converged. The section's other
+    iterations pass on both legs, so this is one window, not recovery in general.
+
 ### Tier 1 — small ruled fixes (additive, low-risk, clears the register backlog)
 
 1. ~~**D5** — `github:`/`web:` may install a file (a `.deb` to `dpkg`); the lock records the

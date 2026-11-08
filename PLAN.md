@@ -501,7 +501,15 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
       scoop, failed, and skipped nimble). `if: always()` now.
   - **What is not claimed:** no product fix. Whether a listing that cannot see an installed
     package is a lister bug or an install that delivered nothing is still unknown, because the
-    harness threw that evidence away on every previous run. The next native run carries it.)
+    harness threw that evidence away on every previous run. The next native run carries it.
+  - **The family is gone; one assertion was still wrong (2026-11-07).** Run `42361477256` (HEAD
+    `d2574408`) is `pass=316 fail=1` on the scoop sweep and `pass=309 fail=0` on the nimble sweep.
+    The nine `list shows` failures and the `link` segfault are gone; the one failure is `nimble:
+    nimjson is still on PATH after removal (at .../nimjson.cmd)`. The package is gone from
+    `nimble list`, the uninstall returned 0, and what remains is the `.cmd` launcher nimble's own
+    Windows install wrote. `removal_leaves_binary` now names it, with the run as the reproduction,
+    and `harness-logic-test.sh` asserts the entry per harness (Windows names it; the container,
+    where nimble cleans up, must not). The next Windows native run is the acceptance.
 - [~] #113 the `guix` leg's section floor is red. (**Filed 2026-10-18 off the nightly logs.**
   `RESULT pass=316 fail=9 soft=12`, and the most specific line is not one of the nine: **`section
   floor: this run credited fewer checks than container-linux-guix-local has before`**, naming six
@@ -1304,6 +1312,11 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   token with a dated note; conda's row is `Evidence::Unasked`, so no `Measured` claim lost its
   evidence, and the `container-tools` line still measures the binary. The next nightly shows the
   leg green, which is the issue's own resolving test.)
+  **Verified 2026-11-07 (run `42361477256`, HEAD `d2574408`):** `Upstream argv drift
+  (ubuntu-latest)` is green, and `Integration (tools, nightly)` prints `PASS section floor: 26
+  section(s) at or above the floor for container-linux-tools-local`. The tools leg's only
+  remaining red is `crash/midway`, filed as **#135** because it is a recovery defect and not this
+  file's excuse.
 - [x] the section floor's `tools` excuse had gone stale, and the fix found two more defects
   underneath it. (**BUILT 2026-11-06 off the nightly run `42204340681`, job `127847106318`.**
   Recorded here as one entry because they are one family: three ways a gate can be right about a

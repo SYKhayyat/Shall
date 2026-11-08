@@ -69,7 +69,6 @@ run_against() {
 
     PASS=0; FAILC=0; SOFTC=0; FAILED_NAMES=""
     soft() { SOFTC=$((SOFTC + 1)); }
-    removal_leaves_binary() { case "$1" in bun) echo "bun keeps its launcher" ;; *) echo "" ;; esac; }
 
     FAKE=""; FAKE_NAME="hello"
     path_of() {
@@ -81,7 +80,7 @@ run_against() {
         esac
     }
 
-    for _fn in never_ran assert_binary_gone on_path named_bin_dir off_path_copy binary_present assert_binary_reachable conflicts_reported; do
+    for _fn in removal_leaves_binary never_ran assert_binary_gone on_path named_bin_dir off_path_copy binary_present assert_binary_reachable conflicts_reported; do
         _body="$(lift "$_fn" "$SRC")"
         if [ -z "$_body" ]; then
             echo "  FATAL: could not lift $_fn() from this harness"
@@ -126,6 +125,38 @@ run_against() {
     check "documented leftover softens" soft
     _be=bun; _bin=hello; _was=""; FAKE=""
     check "documented quirk that did not happen still passes strictly" pass
+
+    # The table itself, per harness, because the two managers' cleanup differs by platform.
+    # nimble on Windows leaves the `.cmd` launcher its install wrote; on Linux the same
+    # uninstall takes the binary away. A named entry is a claim about the manager, so it is
+    # asserted where the run measured it and refused where it was not measured.
+    TOTAL=$((TOTAL + 1))
+    if [ -n "$(removal_leaves_binary bun)" ]; then
+        echo "  ok    bun's launcher is named in $SRC"
+    else
+        echo "  BAD   bun's launcher is not named in $SRC"; BAD=$((BAD + 1))
+    fi
+    TOTAL=$((TOTAL + 1))
+    case "$SRC" in
+        *integration-windows.sh)
+            if [ -n "$(removal_leaves_binary nimble)" ]; then
+                echo "  ok    nimble's Windows launcher is named in $SRC"
+            else
+                echo "  BAD   nimble's Windows launcher is not named in $SRC"; BAD=$((BAD + 1))
+            fi ;;
+        *)
+            if [ -z "$(removal_leaves_binary nimble)" ]; then
+                echo "  ok    nimble is not excused where its uninstall cleans up ($SRC)"
+            else
+                echo "  BAD   nimble is excused where its uninstall cleans up ($SRC)"; BAD=$((BAD + 1))
+            fi ;;
+    esac
+    TOTAL=$((TOTAL + 1))
+    if [ -z "$(removal_leaves_binary apt)" ]; then
+        echo "  ok    a manager that cleans up is not excused"
+    else
+        echo "  BAD   a manager that cleans up was excused"; BAD=$((BAD + 1))
+    fi
 
     # Resolution that MOVED to this backend's own directory is its leftover, not
     # the pre-existing copy.

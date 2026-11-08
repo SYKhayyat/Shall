@@ -1487,6 +1487,13 @@ no_lifecycle_reason() {
 removal_leaves_binary() {
     case "$1" in
         bun) echo "bun's own \`remove -g\` drops the package and keeps its .exe/.bunx launchers (reproduced against bun directly, with no Shall involved)" ;;
+        # The Windows branch of nimble's own uninstall removes the package from its listing and
+        # the binary it installed, and leaves the `.cmd` launcher it wrote into `~\.nimble\bin`.
+        # Run 42361477256 (job 128370605190) is the reproduction: `nimble: list shows nimjson`
+        # passed, `nimble uninstall nimjson` returned 0, and the only remaining hit was
+        # `/c/Users/runneradmin/.nimble/bin/nimjson.cmd` — a wrapper whose target is gone. The
+        # strict check runs first, so a nimble that starts cleaning up still passes.
+        nimble) echo "nimble's own Windows uninstall drops the package and the binary, and leaves its .cmd launcher in ~/.nimble/bin (run 42361477256, with no Shall involved)" ;;
         *)   echo "" ;;
     esac
 }
