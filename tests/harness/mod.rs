@@ -320,3 +320,62 @@ fn source_of(rel: &str) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
+
+/// **One log collector.** The same twenty-line `Subscriber` had been written twice — once for
+/// an async test that needs the guard to outlive an `await`, once for a sync one that wraps a
+/// closure — and a third copy was about to be written for the transaction's reporting branch.
+/// A collector is not a fixture for one command: it is how any test asks "did this site say
+/// what it claims", which is the only way a log-only guard can be pinned at all.
+pub fn log_collector() -> (
+    std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    tracing::subscriber::DefaultGuard,
+) {
+    use std::fmt::Write as _;
+    use std::sync::{Arc, Mutex};
+    use tracing::Subscriber;
+
+    struct Collect(Arc<Mutex<Vec<String>>>);
+
+    impl Subscriber for Collect {
+        fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+            true
+        }
+        fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+            tracing::span::Id::from_u64(1)
+        }
+        fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+        fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+        fn event(&self, event: &tracing::Event<'_>) {
+            let mut visitor = MessageVisitor(Arc::new(Mutex::new(String::new())));
+            event.record(&mut visitor);
+            let text = std::mem::take(&mut *visitor.0.lock().expect("the log mutex"));
+            self.0.lock().expect("the log mutex").push(text);
+        }
+        fn enter(&self, _: &tracing::span::Id) {}
+        fn exit(&self, _: &tracing::span::Id) {}
+    }
+
+    struct MessageVisitor(Arc<Mutex<String>>);
+
+    impl tracing::field::Visit for MessageVisitor {
+        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+            let _ = write!(self.0.lock().expect("the log mutex"), "{} ", field.name());
+            let _ = write!(self.0.lock().expect("the log mutex"), "{value:?}");
+        }
+    }
+
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let guard = tracing::subscriber::set_default(Collect(seen.clone()));
+    (seen, guard)
+}
+
+/// The synchronous shape: run `f` with the collector installed, and hand back what it said.
+pub fn captured<F: FnOnce()>(f: F) -> Vec<String> {
+    let (seen, guard) = log_collector();
+    f();
+    // Dropped before the read: the guard is what makes this thread's subscriber the default,
+    // and holding it across the return would keep the binding alive past the clone below.
+    drop(guard);
+    let out = seen.lock().expect("the log mutex").clone();
+    out
+}

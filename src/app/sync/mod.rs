@@ -1641,10 +1641,16 @@ impl SyncEngine {
         // **`failed` is in this condition, and leaving it out was the other half of `S87`.** A
         // recovery that could not finish now takes ownership anyway — that is the whole point of
         // the branch above — and a run where *every* entry failed changes the registry and
-        // nothing else. Gated on `recovered || kept`, exactly that run wrote nothing, so the
+        // nothing else. Gated on `recovered` alone, exactly that run wrote nothing, so the
         // ownership record died with the process and the orphan came straight back on the next
         // one. The group-kill scenario is that run: dpkg is wedged, every replay fails.
-        if !recovered.is_empty() || !kept.is_empty() || !failed.is_empty() {
+        //
+        // **`kept` is not in it, and that is not an omission.** A refused removal resolves the
+        // journal entry — flushed below — and changes nothing in the registry, so an arm for it
+        // could only rewrite an unchanged `state.json`. The mutation job proved the point by
+        // keeping two mutants alive on that arm (a deleted `!` and a `||` turned `&&`); the arm
+        // is gone rather than pinned.
+        if !recovered.is_empty() || !failed.is_empty() {
             crate::core::save_off_the_runtime(&self.state)
                 .await
                 .map_err(|e| Error::Other(format!("writing the registry after heal: {}", e)))?;

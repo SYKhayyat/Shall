@@ -25,12 +25,20 @@ async fn a_successful_sync_prunes_the_snapshots_the_retention_policy_doomed() {
 
     mock.set_response("brew install -- neovim", Ok(DryRunOutput::default().into()));
     let changes = install_changes(&[package("brew", "neovim")]);
+    let (logs, guard) = log_collector();
 
     engine
         .sync(changes, GuardScope::Sync)
         .await
         .expect("the sync failed");
+    drop(guard);
 
+    let logs = logs.lock().expect("the log mutex").clone();
+    assert!(
+        logs.iter()
+            .any(|line| line.contains("pruned 1 snapshot(s)")),
+        "a prune that deleted a snapshot did not report it: {logs:?}"
+    );
     let deleted = deletions.lock().await.clone();
     assert!(
         deleted.contains(&"shall_pre_ancient".to_string()),

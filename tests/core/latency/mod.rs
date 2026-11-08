@@ -1,45 +1,7 @@
+pub use crate::harness::captured;
 pub use shall::core::latency::*;
-use std::fmt::Write;
-pub use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tracing::Subscriber;
 
-fn captured<F: FnOnce()>(f: F) -> Vec<String> {
-    struct Collect(Arc<Mutex<Vec<String>>>);
-    impl Subscriber for Collect {
-        fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
-            true
-        }
-        fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-            tracing::span::Id::from_u64(1)
-        }
-        fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
-        fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
-        fn event(&self, event: &tracing::Event<'_>) {
-            let mut visitor = MessageVisitor(Arc::new(Mutex::new(String::new())));
-            event.record(&mut visitor);
-            let text = { std::mem::take(&mut *visitor.0.lock().unwrap()) };
-            self.0.lock().unwrap().push(text);
-        }
-        fn enter(&self, _: &tracing::span::Id) {}
-        fn exit(&self, _: &tracing::span::Id) {}
-    }
-    struct MessageVisitor(Arc<Mutex<String>>);
-    impl tracing::field::Visit for MessageVisitor {
-        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-            let _ = write!(self.0.lock().unwrap(), "{} ", field.name());
-            let _ = write!(self.0.lock().unwrap(), "{value:?}");
-        }
-    }
-    let seen = Arc::new(Mutex::new(Vec::new()));
-    let guard = tracing::subscriber::set_default(Collect(Arc::clone(&seen)));
-    f();
-    // Dropped before the read: the guard is what makes this thread's subscriber the default,
-    // and holding it across the return would borrow `seen` for the rest of the function.
-    drop(guard);
-    let out = seen.lock().unwrap().clone();
-    out
-}
 fn markers(lines: &[String]) -> Vec<&str> {
     lines
         .iter()

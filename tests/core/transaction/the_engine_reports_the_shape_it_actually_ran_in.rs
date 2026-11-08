@@ -102,4 +102,39 @@ async fn the_engine_reports_the_shape_it_actually_ran_in() {
         ran.waves,
         ran.depth
     );
+
+    // **The report is part of the measurement, in both directions.** `execute_internal`
+    // announces a plan too small to have a shape, and stays silent about one the rule could
+    // judge — and the nightly mutation job reports deleting that `!` as a survivor, which
+    // inverts the pair: a one-package plan would say nothing and a measurable one would be
+    // described as unmeasured while the violation check was skipped. `latency.rs` has a test
+    // for the predicate; nothing drove the call site.
+    let mut one = StableDiGraph::new();
+    one.add_node(GraphAction::Install(spec("apt", "only")));
+    let mut h = harness(one, &["apt"]).await;
+    let (logs, guard) = crate::harness::log_collector();
+    h.tx.execute_with_telemetry().await.unwrap();
+    drop(guard);
+    let logs = logs.lock().expect("the log mutex").clone();
+    assert!(
+        logs.iter()
+            .any(|line| line.contains("shall-latency-unmeasured:") && line.contains("the plan")),
+        "one package has no scheduling shape worth a rule, and the skip must say so: {logs:?}"
+    );
+
+    let mut two = StableDiGraph::new();
+    let first = two.add_node(GraphAction::Install(spec("apt", "first")));
+    let second = two.add_node(GraphAction::Install(spec("apt", "second")));
+    two.add_edge(first, second, ());
+    let mut h = harness(two, &["apt"]).await;
+    let (logs, guard) = crate::harness::log_collector();
+    h.tx.execute_with_telemetry().await.unwrap();
+    drop(guard);
+    let logs = logs.lock().expect("the log mutex").clone();
+    assert!(
+        !logs
+            .iter()
+            .any(|line| line.contains("shall-latency-unmeasured:") && line.contains("the plan")),
+        "this plan was measurable, so a skip about it is a lie: {logs:?}"
+    );
 }

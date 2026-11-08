@@ -787,13 +787,42 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
       local notification silently disables the shared policy.
     - **And the engine's own tests now live in the folder that owns them** (`tests/app/sync/`),
       because `src/app/sync/mod.rs` owns that folder.
-  - **WHAT IS LEFT, and it is the expensive half.** `prune_snapshots_after_sync` (five mutants —
-      it needs a snapshot provider, which a mock machine does not have), `execute_transaction`'s
-      counters (two — a counter that accumulates becoming one that multiplies, and the two agree
-      at one and at zero), `heal` (eight — the journal state a recovery reads), and
-      `rebuild_kernel_modules` (four — it needs `dkms` and a kernel in the plan). **All four
-      need the machine fixture the convergence test already builds**, which is the next thing to
-      do. — ISSUE #117)- [x] #118 the data lock's contention detection is unpinned. (**Filed 2026-10-20 off the nightly's
+  - **WHAT WAS LEFT, built 2026-11-08 — and the 2026-10-26 close was twelve mutants short.**
+    `2cf10e00` added the mirrors and closed the issue, but the nightly of 2026-11-07
+    (`42361477256`) still reported **12 MISSED** in `src/app/sync/mod.rs`: three on
+    `prune_snapshots_after_sync`'s `Ok(r) if !r.is_empty()` (a guard around a `debug!`), one on
+    `execute_transaction`'s `removed += 1`, three on `heal`'s summary guards
+    (`recovered`/`kept`/`reported`), and five on `heal`'s save condition. The tests the close
+    named assert the *effects*; none of them asked what the code **said**, so every guard that
+    only decides whether a line is logged survived — and the counter's test had no removal in
+    it, so `removed *= 1` and `removed += 1` agreed at zero.
+  - **Four tests, each watched failing under its mutant.** `a_sync_that_both_installs_and_removes_
+    counts_both` (kills `removed *= 1`); `a_heal_that_recovered_an_install_writes_it_to_disk`
+    (the deleted `!` on `recovered` and the `||`→`&&`); `a_heal_that_changed_nothing_does_not_
+    write_the_registry` (the empty summaries and the save gate's no-op side);
+    `a_sync_with_nothing_to_prune_says_nothing_about_pruning` plus a log assertion in the
+    existing prune test (all three guard mutants: `false`, `true`, inverted). Ten mutations
+    applied by hand, each watched red, each reverted — the eleventh, `!recovered || !kept &&
+    !failed`, survived a recovered-only run by operator precedence, and that is the arm's
+    epitaph rather than a test's.
+  - **One arm was deleted rather than pinned.** `heal`'s save gate also carried
+    `|| !kept.is_empty()`, and `kept` — a refused protected removal — resolves the journal entry
+    and changes nothing in the registry, so that arm could only rewrite an unchanged
+    `state.json`. A gate arm that cannot change the file it gates is not a behaviour; it is
+    gone, and the same test that pins the no-op heal pins that it stayed gone.
+  - **The log collector is one fixture now.** `tests/harness/mod.rs` holds `log_collector` and
+    `captured`; `tests/app/sync/mod.rs` and `tests/core/latency/mod.rs` re-export them instead
+    of carrying two copies, and the transaction test that needed a third uses the same one.
+  - **The transaction shard's last survivor is the same class one file over.**
+    `transaction.rs:805`'s `!scheduling_is_measurable` decides only whether the
+    `shall-latency-unmeasured:` marker is emitted, and `latency.rs` pinned the predicate while
+    nothing drove the call site. `the_engine_reports_the_shape_it_actually_ran_in` now asserts
+    the marker for a one-package plan and its absence for a measurable one; the deleted `!` was
+    watched red.
+  - **What is still red is not a survivor**: the data lock's three `held()` mutants are caught,
+    but they cost 120s per e2e command and time the shard out at 825s before it can list
+    anything — filed as **#138**. — ISSUE #117)
+- [x] #118 the data lock's contention detection is unpinned. (**Filed 2026-10-20 off the nightly's
   mutation output: eight surviving mutants in `src/core/datalock.rs`, and every one of them is in
   the code that decides whether a second Shall is standing in the way.** `is_lock_contended` →
   `true` makes *every* error read as "someone else holds the lock" — a Shall that fails for any
@@ -825,6 +854,15 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     (the classification in **both** directions, from the same fixture, for every kind and every
     raw code) and `both_doors_read_a_busy_lock_the_same_way` (the two doors asked the same
     question, and answered it the same way, contended and free). — ISSUE #118)
+  - **The shard is still red, and not for a survivor (filed 2026-11-08 as #138).**
+    `42361477256`'s `Mutation (the data lock)` is three TIMEOUTs, all at `held()`
+    (`datalock.rs:83`): with the predicate lying, the binary takes the data lock at startup and
+    every deferred write then waits out `WAIT_SECS = 120` for the handle the same process
+    already holds, so eight e2e tests × three tries blow the 825s budget. The mutants **are**
+    caught — fifteen tests fail — but the shard never reaches its survivor list, which is #99's
+    shape one gate over, and it costs ~41 minutes per nightly. #138 carries the three
+    directions and recommends the one that removes the deadlock (ask the held handle, not the
+    process-wide counter) — that changes the locking primitive, so it waits on a ruling.
 - [x] #119 the transaction's worker shutdown and lock budget are unpinned. (**Filed 2026-10-20 off
   the nightly's mutation output: three surviving mutants in `src/core/transaction.rs`, shards 2, 3
   and 4.** `Transaction::quiesce_workers` → `()` is the bad one: quiescing is how the transaction

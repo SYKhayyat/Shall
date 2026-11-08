@@ -1,4 +1,48 @@
-# Handoff — 2026-11-03 (`#111`)
+# Handoff — 2026-11-08 (`#117`, `#138`)
+
+**Branch `main`.** One ledger correction, one issue's remaining survivors pinned, one filed.
+
+| # | Subject | Commit |
+|---|---|---|
+| `#129`, `#109`, `#25` | three entries said open or unbuilt when the evidence said otherwise | `a67c35a6` |
+| `#117` | the sync engine's last 12 mutation survivors, and the transaction shard's last one | this session's commit |
+| `#138` | the data-lock mutation shard times out before it can list anything | **filed, not built** |
+
+- **`#117`'s remaining half is pinned, not excused.** `2cf10e00` closed it with mirrors for the
+  five subjects, and the 2026-11-07 nightly (`42361477256`) still reported 12 MISSED. Four tests
+  now pin them, each watched failing under its mutant; `heal`'s `kept` arm of the save gate was
+  deleted rather than pinned (a refused removal changes the journal and not the registry). The
+  detail is in `PLAN.md`'s `#117` entry.
+- **The log collector is one fixture.** `tests/harness/mod.rs` holds `log_collector` and
+  `captured`; the two copies are gone. A log-only guard is pinnable, and that is what most of
+  the survivors were.
+- **Verified on this tree, after the last edit:** `cargo fmt -- --check`; `cargo clippy
+  --all-targets --all-features --locked -- -D warnings`; `cargo test --no-fail-fast` —
+  **3084 passed, 1 failed**, the failure being
+  `grade2_wedged_manifest_tests::a_name_no_backend_can_install_is_never_left_in_the_manifest`,
+  the host's read-only nix-store `npm` (identical on the unmodified tree; see the 2026-11-03
+  section).
+- **Ten hand-applied mutations, each watched red and reverted:** the removal counter; the three
+  `heal` summary guards; the save gate's `||`→`&&` and each deleted `!`; the prune guard as
+  `false`, `true` and inverted; and `transaction.rs:805`'s deleted `!`. One survived —
+  `!recovered || !kept && !failed` — and the arm it lives on is now deleted rather than tested.
+- **Not verified:** no container leg since the change (nothing it touches is `cfg`-gated, and
+  the next nightly or push is the instrument); no Windows or macOS run; `scripts/unix-check.sh`
+  not run this session.
+
+### What to take next
+
+1. **`#136`** — acceptance is the next Windows native run: the named `soft` is in place and the
+   leftover is nimble's own wrapper path, not a Shall removal that failed.
+2. **`#135`** — evidence, not a change: the crash section now prints the manager's state word
+   and the sync's rc, so the next 2-of-3 kill names which half is wrong.
+3. **`#138`** — needs a ruling before code: the recommended fix (ask the held handle rather than
+   the process-wide counter) changes the locking primitive.
+4. **`#41`** — deliberately not started; the reason is in `PLAN.md`.
+
+---
+
+## Where the tree was — 2026-11-03 (`#111`)
 
 State of the tree, what is verified, what is not, and how to continue. Read `CLAUDE.md` and
 `docs/SPEC.md` first; they still govern everything below.

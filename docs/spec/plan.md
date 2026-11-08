@@ -868,6 +868,17 @@ starts empty. The last three pieces of the sweep:
   `the_class_table_is_read_not_copied_tests`'s read of `latency_budget_tests` — because the
   citation gates check that every path a comment names exists.
 
+**2026-11-08: the mirrors were there; the guards were not pinned.** The nightly `42361477256`
+still reported 12 missed mutants in `src/app/sync/mod.rs`, and every one of them was a guard
+that decides what the code *says* — three around `prune_snapshots_after_sync`'s `debug!`, three
+around `heal`'s recovery summaries — plus `execute_transaction`'s removal counter, which the
+partial-run test could not see because that run never removed anything. Four tests now pin
+them and each was watched red under its mutant; `heal`'s `kept` arm of the save gate was
+**deleted** rather than pinned, because a refused removal changes the journal and not the
+registry, so the arm could only rewrite an unchanged `state.json`. `PLAN.md`'s `#117` entry
+carries the detail; `#138` carries the data-lock shard that is red for time, not for a
+survivor.
+
 The full chain is green on this host: `cargo fmt -- --check`, clippy
 `--all-targets --all-features --locked -- -D warnings`, and the full suite
 (**3,047 passed, 0 failed** — the fresh-process `startup_budget_tests` fix from `#123` and the
