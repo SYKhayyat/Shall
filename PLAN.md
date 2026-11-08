@@ -199,7 +199,20 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     Void's old excuse (`appimage`, down to 33) is *replaced* rather than added — a line carries one
     excuse, and the leg now has a bigger one.
   - **Still open behind it:** *why* those registries answer 0 and serve nothing. This makes it one
-    visible class rather than five half-vacuous checks, and deliberately does not guess. — ISSUE #100)
+    visible class rather than five half-vacuous checks, and deliberately does not guess.
+  - **CLOSED 2026-11-07, and the answer is "neither of the two shapes the issue named".** The
+    investigation half is answered by measurement, not by a guess: `uv` and `yarn` pass **every**
+    lifecycle check on `void` — install, `list shows`, the exact on-PATH path
+    (`/root/.local/bin/pyjoke`, `/usr/local/bin/catj`), uninstall and gone — on three consecutive
+    nightlies (2026-11-06 `42204340681`, 2026-11-07 `42361477256`, `42429598163`), and the whole
+    void leg is `pass=348 fail=0 soft=7` on the last of them. So it was never Shall misreading a
+    listing (the listing and PATH agree, and the removal half is no longer vacuous — a package
+    that was never there cannot produce those four lines), and it is no longer a registry that
+    answers 0 and serves nothing. **What is not claimed:** the October cause was never named, and
+    it stopped on its own; what changed is that the leg now *says* "installed, delivered nothing"
+    as one unmeasured backend instead of scoring five checks over a package that was never on the
+    machine, so a recurrence is a named soft rather than a red list nobody can compare. The
+    `dir:` check that shared this leg (#96) is green too. — ISSUE #100)
 
 - [x] #125 CI: `Advisories and licences` is red on `main` — two published advisories in
   dependencies Shall ships. (High — **BUILT**: `ctutils 0.4.2 → 0.4.4` (RUSTSEC-2026-0385, the
@@ -459,7 +472,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   there is no Docker on this host**, so neither the harness nor the patch can be executed, and the
   issue's own first step is to attach the apt log. The patch applies cleanly to `c5d0547`
   (`git apply --check`), so it is ready for whoever has a container runtime.)
-- [ ] #112 the two native sweeps are red on the same family. (**Filed 2026-10-18 off the nightly
+- [x] #112 the two native sweeps are red on the same family. (**Filed 2026-10-18 off the nightly
   logs, because macOS native had no issue at all and Windows had two that name two symptoms.** Ten
   backends on Windows and eight on macOS fail the same pair — `list shows <pkg> (missing)` and
   `<pkg> is not on PATH and nothing said where it went` — after the harness watched the install
@@ -510,6 +523,37 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     Windows install wrote. `removal_leaves_binary` now names it, with the run as the reproduction,
     and `harness-logic-test.sh` asserts the entry per harness (Windows names it; the container,
     where nimble cleans up, must not). The next Windows native run is the acceptance.
+  - **ACCEPTED 2026-11-08 (run `42429598163`, HEAD `22eac0f6`): both native sweeps are green** —
+    scoop `pass=316 fail=0 soft=15`, nimble `pass=309 fail=0 soft=16`, macOS native green too. The
+    nine `list shows` failures, the five PATH failures, the `link` `rc=139` pair and the coverage
+    ceiling are all gone, so the issue's own resolving test is met.
+  - **And the one leftover is a product question, filed rather than excused twice (#136).** The
+    `.cmd` launcher nimble leaves behind is now a **named soft** in `removal_leaves_binary`, and
+    the evidence for *whose* leftover it is was strengthened after the table entry was written: on
+    Linux the same nimble version removes the symlink its own uninstall wrote (`nimble install -y
+    nimjson` → `~/.nimble/bin/nimjson` → `~/.nimble/bin` empty after `nimble uninstall -y
+    nimjson`), so the Windows `.cmd` is nimble's wrapper path rather than a cleanup it never does.
+    What was **not** measured is a hand-run of nimble's uninstall on Windows; the claim rests on
+    the run, where Shall ran exactly `nimble uninstall -y nimjson`, it returned 0, and nimble's
+    own listing dropped the package. #136 carries that, the three ways out, and the resolving
+    test — a PASS instead of a soft, with the table entry deleted in the same change.
+- [ ] #136 nimble's Windows uninstall leaves its `.cmd` launcher, so `shall uninstall nimble:X`
+  leaves the name on PATH. (**Filed 2026-11-08 off the run that closed #112.** Shall runs exactly
+  `nimble uninstall -y nimjson`; it returned 0 and nimble's own `list --installed` dropped the
+  package, and `~/.nimble/bin/nimjson.cmd` is still there and still resolves. Control measured on
+  this host with no Shall involved: the same nimble version on Linux removes the symlink its own
+  install wrote, so this is nimble's Windows wrapper path and not a cleanup it never does. **Not
+  measured:** a hand-run of nimble's uninstall on Windows — the evidence is the run.
+  - **Ships as a named `soft`, not a silent pass:** `removal_leaves_binary` prints it, the strict
+    check runs first, and `harness-logic-test.sh` asserts the nimble entry exists in the Windows
+    harness and is **absent** from the container one.
+  - **Owner decision, which is why it is filed rather than fixed:** (1) accept it, named; (2) have
+    the `nimble` backend delete `<pkg>.cmd` in the manager's own bin directory, the narrowest
+    deletion there is and still a deletion outside the package DB; (3) have `uninstall` warn, the
+    way it already names an off-PATH bin directory it installed into. Each changes behaviour a
+    user would notice, so none is taken in code.
+  - **Resolving test:** the Windows sweep's `nimble: nimjson is still on PATH after removal` is a
+    PASS, and the `removal_leaves_binary` entry is deleted in the same change.)
 - [~] #113 the `guix` leg's section floor is red. (**Filed 2026-10-18 off the nightly logs.**
   `RESULT pass=316 fail=9 soft=12`, and the most specific line is not one of the nine: **`section
   floor: this run credited fewer checks than container-linux-guix-local has before`**, naming six
@@ -1317,6 +1361,35 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   section(s) at or above the floor for container-linux-tools-local`. The tools leg's only
   remaining red is `crash/midway`, filed as **#135** because it is a recovery defect and not this
   file's excuse.
+- [ ] #135 the sync after a crash does not converge on the window it was aimed at. (**Filed
+  2026-11-07 off run `42361477256` (HEAD `d2574408`), where it was the last red on two legs:**
+  tools `crash/midway: the sync after the crash did not converge — still missing: dos2unix`, and
+  void `crash/completed: … still missing: pv`. In both, `heal` recovered the interrupted work,
+  every canary the crash left was under management, and the next sync either planned nothing for
+  the missing package or failed without saying so.
+  - **It is window-specific, and the window is the point.** Both failures killed at **2 of 3**
+    canaries on disk. The 2026-11-08 nightly (`42429598163`, `22eac0f6`) and a local tools run on
+    this host both killed at **3 of 3** and converged, and the section is `pass=471 fail=0` — so
+    the defect is real and the harness stopped aiming at it, which is the worst pair to mistake
+    for a fix. Nothing about the 22eac0f6 change (`scripts/integration-windows.sh`, PLAN.md) can
+    reach the container harness, so the green run is the window moving, not a repair.
+  - **What was built instead of a guess (`60810c5e`):** the section now prints what it never did.
+    `canary_states` puts the **manager's** own state word beside PATH on every kill and every
+    convergence failure (`pv=on:unpacked dos2unix=off:absent …`, asked of dpkg/rpm/pacman/apk/xbps,
+    never of `shall`); the sync's rc is captured rather than folded into a `&&`, because "exited
+    non-zero" and "exited 0 having planned nothing" are two different defects wearing one
+    sentence; and the failure branch prints the **whole** sync log (its tail was three
+    `service:cron` warnings, which is where the previous diagnosis stopped) plus what a plan would
+    do now. No assertion changed, no check removed.
+  - **Not known, and not guessed:** why 2-of-3 fails. Two local repro attempts at exactly that
+    window (kill at 2 of 3, heal with no dump in between, on the tools image with HEAD's binary)
+    converged — the kill leaves `pv`/`ncdu` **unpacked** with their binaries on PATH and dpkg
+    correctly reporting them absent, and both heal's replay and the following sync repair it
+    there. The CI difference worth checking first is the config the tools image carries by section
+    16d (a `service:cron` line whose removal fails on every sync) and the orphaned `apt-get` the
+    kill leaves running while `heal` looks at the lock — the CI log has `waited 0s` for it.
+  - **Next step is evidence, not a change:** the next 2-of-3 kill prints the manager word and the
+    rc, which separates "the planner believes it is installed" from "the run failed to execute".)
 - [x] the section floor's `tools` excuse had gone stale, and the fix found two more defects
   underneath it. (**BUILT 2026-11-06 off the nightly run `42204340681`, job `127847106318`.**
   Recorded here as one entry because they are one family: three ways a gate can be right about a

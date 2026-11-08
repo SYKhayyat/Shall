@@ -176,6 +176,28 @@ what blocks the next one.
     is missing declared software and the next sync says it converged. The section's other
     iterations pass on both legs, so this is one window, not recovery in general.
 
+    **Status 2026-11-08: still open, and the green run since is not a fix.** Run `42429598163`
+    (HEAD `22eac0f6`, whose only change was the Windows harness) is `pass=471 fail=0` on `tools`
+    and `pass=348 fail=0` on `void` — because the kill landed at **3 of 3** canaries on disk
+    instead of the **2 of 3** both failures have in common. Nothing in that commit reaches the
+    container harness, so the window moved and the section stopped aiming at the defect. The same
+    trick hides it locally: a tools run on this host killed at 3 of 3 and converged.
+
+    **What was built instead of a diagnosis (`60810c5e`, no assertion touched):** the section now
+    prints `pkg=on/off:manager-word` for each canary on every kill and every convergence failure
+    (asked of dpkg/rpm/pacman/apk/xbps, never of `shall`); the sync's **rc** is captured rather
+    than folded into a `&&`, because "exited non-zero" and "exited 0 having planned nothing" are
+    different defects wearing one sentence; and the failure branch prints the whole sync log plus
+    what a plan would do now, where before it printed the last six lines — which on the failing run
+    were three `service:cron` warnings, and that is where the previous diagnosis stopped.
+    Two local repro attempts at exactly the 2-of-3 window (kill, then heal with no dump in between,
+    HEAD's binary in the tools image) converged: the kill leaves `pv`/`ncdu` **unpacked** with
+    their binaries on PATH while dpkg correctly reports them absent, and both heal's replay and the
+    following sync repair it there. The CI difference worth checking first is the config section
+    16d inherits on the tools image (a `service:cron` line whose removal fails on every sync) and
+    the orphaned `apt-get` the kill leaves running while `heal` looks at the lock — the CI log has
+    `waited 0s` for it. The next 2-of-3 kill answers it from the log.
+
 ### Tier 1 — small ruled fixes (additive, low-risk, clears the register backlog)
 
 1. ~~**D5** — `github:`/`web:` may install a file (a `.deb` to `dpkg`); the lock records the
@@ -3407,6 +3429,17 @@ its subject is the whole config.
 **Exit condition:** the nine acceptance criteria in the #112 comment, all met, and
 `shall apply cargo:hexyl` on a native host applying exactly hexyl. That is also what closes
 #112 — the next native run answers the lister question with no harness change, either way.
+
+**#112 CLOSED, 2026-11-08 (run `42429598163`, HEAD `22eac0f6`).** Both native sweeps are green:
+scoop `pass=316 fail=0 soft=15`, nimble `pass=309 fail=0 soft=16`, macOS native success. The
+nine `list shows`, five PATH, `link rc=139` and the coverage-ceiling failures are gone, so the
+exit condition above is met by the instrument it named rather than by a softened check. **The one
+remaining line is a different defect and is filed rather than excused:** the `.cmd` launcher
+nimble's own Windows uninstall leaves behind is a named `soft` in `removal_leaves_binary`, and
+**#136** carries the measurement (nimble's uninstall returns 0, its listing drops the package,
+the wrapper stays; on Linux the same version removes the symlink it wrote), the three ways out
+and the resolving test. The container twin must not excuse it, and `harness-logic-test.sh`
+asserts that per harness.
 
 **Verified, 2026-10-31.** `cargo build --all-targets`, `cargo test --no-fail-fast` (3062
 passed, 0 failed), `cargo clippy --all-targets --all-features --locked -- -D warnings`,
