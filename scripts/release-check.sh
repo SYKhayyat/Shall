@@ -7,6 +7,9 @@
 #        cargo clippy -D warnings   (HARD)
 #        cargo test --release --no-fail-fast   (HARD — all unit/integration tests)
 #        cargo build --release      (HARD)
+#        scripts/decision-count.sh --check     (HARD — every documented count matches the register)
+#        scripts/harness-logic-test.sh         (HARD — the harnesses' own predicates)
+#        scripts/harness-mutation-test.sh      (HARD — those predicates can still go red)
 #   2. REAL integration matrix (needs Docker on Linux): every distro image + the broad `tools`
 #        image, each doing real install→list→remove for every feasible backend, full feature
 #        coverage, and a self-checking coverage audit. On macOS (no Docker for Linux images)
@@ -134,6 +137,18 @@ fi
 # predicates; parity between the two release scripts is asserted from ci.yml by
 # `tests/the_review_apparatus_is_rust_tests.rs`, so a gate added to CI fails until it is added
 # here too.
+# The decision register's counts are typed in three files and its own script checks them against
+# the register by reading it. CI runs it; this script did not, so a local GO could ship a tree
+# whose SPEC.md and decisions.md disagree about how many decisions are ruled (#21's class of
+# drift, one file over).
+echo "-> scripts/decision-count.sh --check"
+if sh scripts/decision-count.sh --check >/dev/null; then
+    pass "the decision register's documented counts match it"
+else
+    sh scripts/decision-count.sh --check | grep -E '^  BAD' || true
+    fail "a documented decision count disagrees with the register"
+fi
+
 echo "-> scripts/harness-logic-test.sh"
 if SHALL_BIN="$REPO_ROOT/target/release/shall" bash scripts/harness-logic-test.sh; then
     pass "harness predicates"

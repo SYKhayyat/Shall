@@ -614,10 +614,18 @@ impl Transaction {
                 .into_iter()
                 .filter(|b| !b.is_empty())
             {
-                let permit = match semaphore.clone().acquire_owned().await {
-                    Ok(p) => p,
-                    Err(e) => return Err(Error::Transaction(format!("Semaphore failure: {}", e))),
-                };
+                // **The permit is taken inside the worker, not here.** Acquired on this side it
+                // was a `await` on the coordinator's own loop, so the concurrency ceiling
+                // throttled the scheduler as well as the work: while a permit was unavailable
+                // the loop could not dispatch anything, could not join a finished task, and
+                // therefore could not record the completion that would release the permit. Every
+                // finished batch's bookkeeping waited on the next permit (#18).
+                //
+                // Moving it one line in is what makes the ceiling a ceiling on *work*: the task
+                // is already spawned and counted in `in_progress`, and the loop goes straight on
+                // to `join_next`, so a completion is always recorded promptly. The limit is
+                // unchanged — a task without a permit runs nothing.
+                let permit_source = semaphore.clone();
 
                 for (idx, _) in &batch {
                     in_progress.insert(*idx);
@@ -632,7 +640,41 @@ impl Transaction {
                 let hooks = self.hooks.clone();
 
                 worker_pool.spawn(async move {
-                    let _permit_holder = permit;
+                    let _permit_holder = match permit_source.acquire_owned().await {
+                        Ok(p) => p,
+                        // A closed semaphore means the transaction is shutting down, and a batch
+                        // that ran anyway would be unbounded work during a shutdown. Every member
+                        // is reported failed through the same shape a skipped node uses, so the
+                        // summary counts them rather than the run looking like it lost them.
+                        Err(e) => {
+                            let said = Error::Transaction(format!("Semaphore failure: {}", e));
+                            return batch
+                                .iter()
+                                .map(|(idx, action)| {
+                                    let (backend_name, package_name) = match action {
+                                        GraphAction::Install(s) => {
+                                            (s.backend.clone(), s.name.clone())
+                                        }
+                                        GraphAction::Remove { backend, name } => {
+                                            (backend.clone(), name.clone())
+                                        }
+                                    };
+                                    TaskResult {
+                                        node_index: *idx,
+                                        result: Err(said.clone()),
+                                        backend_name,
+                                        package_name,
+                                        retries: 0,
+                                        duration: Duration::ZERO,
+                                        bytes_downloaded: 0,
+                                        start_time: chrono::Utc::now(),
+                                        prior: Prior::Unknown,
+                                        batch_size: 0,
+                                    }
+                                })
+                                .collect();
+                        }
+                    };
                     Self::execute_batch_with_retry(
                         batch,
                         registry,

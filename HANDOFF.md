@@ -13,6 +13,8 @@ red**) and worked outward from it.
 | `#141` | the mutation gate's timeout was derived from a solo baseline | this session |
 | — | the test fixture read the developer's `~/.npmrc` and called the answer Shall's | this session |
 | — | the `stack` row left `windows-ci`'s terminator floor, by the `conda` rule | this session |
+| `#18` | the concurrency ceiling was taken from the loop that releases it | this session |
+| `#21` | the release path is four files that must agree, and nothing checked | this session |
 
 - **`#139` — a download's status is classified by its code.** `github:`, `web:` and `appimage:`
   folded every non-success status into `Error::Other` → `Retryability::Unknown` →
@@ -59,6 +61,33 @@ red**) and worked outward from it.
 - **`retry.sh` waits long enough to matter.** Its 3 attempts were spaced 5s and 10s, and the
   nightly lost four attempts at `github:sharkdp/fd` and four more in the arch build to `504`s
   within ~25 seconds — the backoff never crossed the far end's own recovery. Now 15s, doubling.
+- **`#18` — a permit taken on the coordinator's loop is a permit taken from the thing that
+  releases it.** With a graph wider than `max_concurrent` the arrangement was self-blocking: the
+  loop awaited permits held by tasks it could not reach `join_next` for, and the loop is what
+  records the completions that free them. The permit is taken inside the spawned task now; the
+  limit is unchanged and the loop records a finished batch when it finishes. A closed semaphore
+  reports every member of the batch as failed through the skipped-node shape, so a shutdown is
+  counted rather than looking like lost work. **Restored to the near side the new test does not
+  go red — it deadlocks**, which was measured (killed at 120s) and is recorded in the test's own
+  comment. Ruling `C14`, rule **II.78**, reason **V.229**.
+- **`#21`, the release half — four files decide what a user downloads and none can see the
+  others.** The build matrix, the release job's asset naming, `install.sh` and `install.ps1`. Each
+  is reasonable alone; the only run that would show a disagreement is the tag push. Three tests
+  now parse each file in its own shape and compare the sets in every direction: nothing built
+  that is not published, nothing published that is not built, every installer asking for a
+  published target, every published target reachable from a documented line (the two `-linux-gnu`
+  rows exempt, because the installer's header publishes them as opt-in). Both directions watched
+  red — dropping a target from the release list failed two tests, a typo in `install.sh`'s triple
+  failed the third.
+- **`#18`, sub-task 4 — the preview's phase order was correct and nothing asserted it.** The engine
+  asks removals first and the install ceiling after; `preview_refusals` did the same and no test
+  said so. Three tests now pin it: the removal refusal comes before the install one, each tripped
+  ceiling names its own setting, and a run inside every ceiling says nothing. Putting the install
+  question first was watched failing the order test. The order decides the *count* as well as the
+  name, because every phase spends against one `Reaping` budget.
+- **`#21`, the local gate.** `release-check.sh` ran neither `decision-count.sh --check` nor the
+  release-metadata check, so a local GO could ship a tree whose `SPEC.md` and `decisions.md`
+  disagreed. Both are gates in it now.
 - **The fixture bug the red suite found.** `grade2_wedged_manifest_tests` passed on CI and failed
   here, and the reason was not the product: the harness pointed `HOME` at the fixture but npm
   reads its global prefix from `~/.npmrc`, so the fixture's `npm install -g` was writing to the

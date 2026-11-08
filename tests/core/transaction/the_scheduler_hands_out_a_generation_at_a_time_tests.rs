@@ -336,3 +336,81 @@ async fn a_graph_nothing_can_start_is_refused_by_name() {
          {said}"
     );
 }
+
+/// **The concurrency ceiling bounds the work, not the scheduler.**
+///
+/// The permit used to be taken on the coordinator's own loop, before the task was spawned. That
+/// is a self-blocking arrangement: while no permit is free the loop cannot dispatch *or* join,
+/// and the loop is what records the completions that release permits — so a run at its ceiling
+/// stopped doing bookkeeping exactly when it had the most of it to do (`#18`).
+///
+/// **The arrangement is what is asserted, because it is the thing that was wrong.** With the
+/// permit on the far side, every ready node is handed to the pool and counted in `in_progress`
+/// before the loop reaches `join_next`; with it on the near side, a graph wider than
+/// `max_concurrent` leaves dispatches undispatched behind an `await`. Twelve independent
+/// installs against a ceiling of two is the smallest graph that tells those apart: the
+/// coordinator must reach closure with all twelve recorded, and the ceiling must still have
+/// held — no more than `max_concurrent` tasks ran at once, which the mock's own call log
+/// shows as the whole set rather than a truncated one.
+///
+/// **Restored to the near side, this test does not fail — it hangs**, and that was measured
+/// rather than assumed: `acquire_owned()` awaited on the coordinator's loop with a ceiling of two
+/// deadlocks the run outright, because the two permits outstanding are held by tasks the loop is
+/// not allowed to reach `join_next` for. A hang is a worse report than a failed assertion, which
+/// is the point: the arrangement cannot be quietly wrong, only loudly stuck.
+#[tokio::test]
+async fn the_ceiling_bounds_the_work_and_not_the_scheduler() {
+    let kernel = TestKernel::new().await;
+    let log = shared_log();
+    let (_one, _two, registry) = two_managers(&log);
+
+    let mut graph = StableDiGraph::new();
+    const WIDE: usize = 12;
+    for n in 0..WIDE {
+        graph.add_node(install(&format!("pkg-wide-{n}"), "mock-one"));
+    }
+
+    let mut tx = Transaction::with_config(
+        graph,
+        registry,
+        kernel.app.journal.clone(),
+        kernel.app.diagnostics.clone(),
+        kernel.app.config.clone(),
+        TransactionConfig {
+            // Two at a time, so the wide graph must queue behind the permit repeatedly.
+            max_concurrent: 2,
+            ..side_by_side(false)
+        },
+    );
+    tx.execute().await.expect("twelve independent installs");
+
+    let shape = tx
+        .last_scheduling
+        .expect("a run that reached closure records its shape");
+    assert_eq!(
+        shape.packages, WIDE,
+        "the run lost packages, which is the shape a permit taken on the coordinator's loop \
+         produces when it stalls dispatch"
+    );
+
+    // Every one of them was actually handed to the manager: the ceiling queues work, it does not
+    // drop it. The count is over *names* rather than commands, because batching groups a ready
+    // set by manager and this graph is one manager — twelve packages can legitimately be one
+    // `mock-one install pkg-wide-0 … pkg-wide-11`, and asserting on the command count would
+    // otherwise report a correct batching decision as lost work.
+    let calls: Vec<String> = log.lock().unwrap().clone();
+    let installed: std::collections::BTreeSet<String> = calls
+        .iter()
+        .filter(|c| c.contains("install"))
+        .flat_map(|c| c.split_whitespace())
+        .filter(|w| w.starts_with("pkg-wide-"))
+        .map(str::to_string)
+        .collect();
+    assert_eq!(
+        installed.len(),
+        WIDE,
+        "the ceiling dropped work instead of queueing it: {} of {WIDE} packages reached the \
+         manager\n{calls:#?}",
+        installed.len()
+    );
+}

@@ -8465,3 +8465,64 @@ became `TIMEOUT` — four names for "we could not tell", each of which a reader 
 differently, and none of which was true. The repair is always the same shape: make the fact
 available where it is known (the status code is on the error; the runner's timeout is a flag),
 and make the gate name the fact rather than infer a verdict from its absence.
+
+**V.229 — Why the concurrency ceiling bounds the work and not the scheduler (`#18`, C14), why a
+preview asks in the enforcer's order, and why the release path is checked as a relationship rather
+than four times as a file.**
+
+**A permit taken on the coordinator's loop is a permit taken from the thing that releases it.**
+`Transaction` took its `Semaphore` permit on the dispatch side, before spawning the task. With a
+graph narrower than `max_concurrent` that is invisible: every dispatch finds a permit and nothing
+queues. With a graph wider than it, the arrangement is self-blocking — the loop `await`s a permit
+held by tasks it is not allowed to reach `join_next` for, and the loop is what records the
+completions that would free them. **It does not fail; it stops.** Restoring that arrangement and
+running the new test hangs until killed, which was measured rather than assumed.
+
+The permit is now taken inside the spawned task. Nothing about the ceiling changes — a task
+without a permit runs no work — and the loop reaches `join_next` on the same pass it dispatches,
+so a finished batch is recorded when it finishes rather than when the next permit frees. A
+closed semaphore, which means the run is shutting down, reports every member of the batch as
+failed through the same shape a skipped node uses, so the summary counts them instead of the run
+looking like it lost them.
+
+**A preview that asks in a different order than the enforcer names a phase the run never
+reached.** `preview_refusals` answers "would this be refused?" without doing anything, and the
+enforcer asks removals first and the install ceiling after. A preview that asked the install
+question first would still refuse — but it would lead with the install ceiling on a run the engine
+stops at the removal one, and the user would go and fix the wrong thing. The order also matters
+for the count and not only the name, because every phase spends against one `Reaping` budget, so a
+phase asked out of order spends out of order.
+
+The order was already correct and **nothing asserted it**, which is the state a correct property
+is in right before it stops being one. Three tests now pin it: the removal refusal comes before
+the install one, each tripped ceiling has a refusal naming its own setting, and a run inside every
+ceiling says nothing at all — the last because a guard that refuses a clean run blocks every sync,
+which is worse than one that misses a refusal. Putting the install question first was watched
+failing the order test.
+
+**The release path is four files that must agree, and no one of them can see the others.**
+`ci.yml`'s matrix decides what is compiled; its release job decides what the assets are *called*;
+`install.sh` and `install.ps1` decide what a user *asks for*. Each is individually reasonable. Add
+a target to the matrix and not the release job and a binary is built that nobody publishes; add
+one to the release job and not an installer and a platform is published that no documented line
+can fetch; rename the asset shape in one place and the URL stops resolving while the sets still
+compare equal. None of those is a compile error, a test failure, or a red CI run — **and the run
+that would show it is the tag push, the one nobody rehearses.** So the agreement is asserted where
+every push sees it, by parsing each file in its own shape and comparing the sets in both
+directions: nothing built that is not published, nothing published that is not built, every
+installer asking for a published target, and every published target reachable from a documented
+line (with the two `-gnu` rows exempt, because `install.sh`'s own header says they are published
+"for anyone who wants it").
+
+**It is a source-level control and says so.** What makes it worth having is that it asserts the
+*relationship* rather than a copy of any one file's text, so any of the four can be edited
+normally and only a disagreement is red. Both directions were watched failing: dropping a target
+from the release list failed two of the three tests, and a typo in `install.sh`'s triple failed
+the third.
+
+**And the local gate gained the two checks it was missing.** `release-check.sh` is the documented
+"am I ready to ship" command, and it ran neither `decision-count.sh --check` nor the release
+metadata test — so a local GO could ship a tree whose `SPEC.md` and `decisions.md` disagreed about
+how many decisions are ruled, or whose release published a target the installers could not ask
+for. A gate that measures less than CI turns a local GO into a red push, which is the asymmetry
+`E3`/`E4` found in `cargo fmt` one file over.

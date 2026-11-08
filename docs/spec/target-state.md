@@ -4504,7 +4504,7 @@ holds a lock somewhere.
   the drop path is where it is touched, and a panic elsewhere must not become a second panic
   while unlocking.
 
-## II.77 A download's status is classified by its code (`#139`, C13, V.227)
+## II.77 A download's status is classified by its code (`#139`, C13, V.227, V.228)
 
 **A non-success HTTP status from a download is classified from the status, not from whether it
 was mentioned.** 5xx is the far end failing to serve and is transient; any other non-success
@@ -4532,3 +4532,44 @@ status is the request being wrong and is permanent. `429` keeps `Error::RateLimi
   such a backend toward its real-lifecycle floor and names it, exactly as it counts one a dated
   `drift` line excuses. Only a backend no classification and no register line accounts for stays
   uncounted.
+
+## II.78 A ceiling bounds the work, a preview asks in the enforcer's order, and a release path is one relationship (C14, V.229)
+
+**`Transaction`'s concurrency ceiling never makes the coordinator wait on itself.** The permit is
+taken inside the spawned task, so the loop reaches `join_next` on the same pass it dispatches and
+a finished batch is recorded when it finishes rather than when the next permit frees. The limit
+itself is unchanged: a task without a permit runs no work.
+
+- **A closed semaphore is a shutdown, and it is reported per member.** A batch that could not get
+  a permit because the run is shutting down says so for every member, through the same shape a
+  skipped node uses, rather than running unbounded or vanishing from the summary.
+- **The arrangement is load-bearing, and its failure mode is a hang.** Asserting it is the only
+  way to keep it: restored to the coordinator's side, the run deadlocks rather than failing a
+  test, which is louder than an assertion and less likely to be dismissed as flake.
+
+**The four files that decide what a user downloads agree with each other, and the agreement is
+checked where every push sees it.** The build matrix, the release job's asset naming, `install.sh`
+and `install.ps1` are each reasonable alone and none can see the others; the only run that would
+show a disagreement is the tag push.
+
+- **Nothing is built that is not published, and nothing is published that is not built.**
+- **Every target an installer asks for is one the release publishes**, and every published target
+  is reachable from a documented install line. The `-linux-gnu` rows are exempt because the
+  installer's own header publishes them as an opt-in rather than a default.
+- **The asset name shape is pinned once**, in both the release job and both installers, because a
+  set comparison can stay equal while the URL stops resolving.
+- **A local "ready to ship" must measure at least what CI does.** `release-check.sh` carries the
+  release-metadata check and the decision-count check, so a local GO cannot ship a tree whose
+  documented counts disagree with the register or whose release publishes an uninstallable target.
+
+**A preview asks its questions in the enforcer's order, and leading with a later phase is the
+defect.** `preview_refusals` answers what the engine would refuse without doing anything, so it
+must ask what the engine asks, in the engine's order — removals before the install ceiling.
+
+- **The order decides the name a refusal carries**, and a preview leading with the install
+  question names a phase the run would never have reached; the user fixes the wrong ceiling.
+- **It decides the count as well**, because every phase spends against one `Reaping` budget and a
+  phase asked out of order spends out of order.
+- **A tripped ceiling has a refusal naming its own setting**, so one refusal cannot stand in for
+  two, and **a run inside every ceiling says nothing at all** — a guard that refuses a clean run
+  blocks every sync.

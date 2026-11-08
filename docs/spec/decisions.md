@@ -1,4 +1,4 @@
-﻿# The decision register — 251 entries, none open
+﻿# The decision register — 252 entries, none open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **246** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **247** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 251 are accounted
-for: **246 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 252 are accounted
+for: **247 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, and what a download's status means) — 13
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, and what a ceiling bounds) — 14
 
 | | question | answered |
 |---|---|---|
@@ -531,7 +531,7 @@ deliberately no longer has.*
 | **C11** | `shall -y apply nimble:nimjson --delete` reports success, nimble's listing drops the package, and `~/.nimble/bin/nimjson.cmd` still resolves on PATH — a file written by nimble's own Windows install, not by Shall (`#136`, the last red line on the Windows sweep after #112). The issue named three ways out and left the choice to the owner: accept it, delete the launcher the backend knows about, or say it. What does a removal owe when the manager leaves a launcher? — RULED 2026-11-07: **say it, and delete nothing** — after a removal succeeds, every entry in the manager's own executable directories named exactly the package or a dotted extension of it is named with its path and the fact that the name still answers; the leftover is decided by name rather than glob (`pv` must not accuse `pvx.cmd`); said only after a removal that succeeded; the directories are `app::reachable::user_bin_dirs`'s, the same answer the unreachable-install warning uses. Deleting was declined because the Windows file set (wrapper and a copied executable) is unmeasured on a runner, and a deletion that misses the `.exe` claims a cleanup it did not make. The Windows sweep's `removal_leaves_binary` entries stop being `soft` excuses and ASSERT that the removal named the file. (II.75, V.225) | 2026-11-07 |
 | **C12** | The data-lock mutation shard could not finish a nightly: three mutants of the process-wide `held()` count each made every e2e command sleep out `WAIT_SECS`, because a second `flock` handle in one process waits for the first — 15 failures × 120s × retries, and the shard timed out at 825s before it could report a survivor list (`#138`). The count was also wrong when nothing was mutated: a lock on one data directory excused a write to another, because `held()` answered for the process rather than the path. What decides whether this write is already inside the lock? — RULED 2026-11-08: **a fact about the directory, not a count about the process** — every `DataLock` records its directory under its canonical name, `held_on(path)` is a membership question, and `for_this_write` asks it of the directory it is about to write under. The re-entrant write door's acquire is **refused at once by name** when the owner stamp is this pid, rather than slept on; a direct acquire still waits, because another thread of this process may be about to release. No `held()` mutant exists to time out, and a lock on one directory is no longer a lock on another. (II.76, V.226) | 2026-11-08 |
 | **C13** | The nightly of 2026-11-08 reds three legs on one upstream fact: `github:sharkdp/fd` answered `504 Gateway Timeout` and the sweep scored it `a defect, not ecosystem variance`, while the storage image's build met the same weather at `openzfs/zfs` and ran no lifecycle at all. In both cases the ratchet and the section floor then reported *lost coverage*, so one transient failure printed three red lines and two of them named no cause (`#139`). Shall's own answer was `shall-failure-class: unknown`, because the three downloading backends folded every non-success status into `Error::Other`. **What does a download's status mean?** — RULED 2026-11-08: **the status decides, from its code** — a 5xx is the far end failing to serve and is transient, any other non-success status is the request being wrong and is permanent, `429` keeps `RateLimit`'s verdict, and all three backends build the error through one typed constructor so the verdict survives a note and is never re-derived from prose. In the harnesses, **a backend whose install failed for a reason Shall classed as passing counts toward the real-lifecycle floor and is named** — it is not coverage and it is not a collapse, and one 504 must not be able to say both. (II.77, V.227) | 2026-11-08 |
----
+| **C14** | `Transaction` took its `Semaphore` permit on the coordinator's own loop, before spawning the task. For a graph narrower than `max_concurrent` that is invisible; for a wider one it is self-blocking, because the permits outstanding are held by tasks the loop cannot reach `join_next` for, and the loop is what records the completions that free them — so a run at its ceiling stops doing bookkeeping exactly when it has the most of it (`#18`). Separately, the four files that decide what a user downloads — the build matrix, the release job's asset naming, `install.sh` and `install.ps1` — each reasonable alone and none able to see the others, with the only run that would show a disagreement being the tag push. **What does a ceiling bound, and what does a release have to agree with?** — RULED 2026-11-08: **the ceiling bounds the work and not the scheduler** — the permit is taken inside the spawned task, so the loop reaches `join_next` on the same pass it dispatches and a closed semaphore reports the batch's members as failed rather than running them unbounded; and **the release path is one relationship asserted in every direction** — nothing built that is not published, nothing published that is not built, every installer asking for a published target, and every published target reachable from a documented line. (II.78, V.229) | 2026-11-08 |---
 
 # The blocking round — thirteen questions, all ruled
 
@@ -10535,3 +10535,73 @@ reads differently even though both mean try again.
 - **The section floor stops being a third opinion.** It reads the counts the same run printed, and
   the excuse it prints names the unmeasurable backend, so one 504 produces one fact and two
   named shadows rather than three red lines.
+
+## C14
+
+**Status: ANSWERED 2026-11-08, built the same day.** A ceiling bounds the work, not the
+scheduler; a release path is one relationship. Carried out of the `#18` and `#21` audits.
+
+**The question.** Two, and they are the same question asked of different things: *what has to
+agree, and where does the agreement live?*
+
+**§1 — The ceiling.** `Transaction` took its `Semaphore` permit on the coordinator's own loop,
+before spawning the task. For a graph narrower than `max_concurrent` that is invisible, because
+every dispatch finds a permit and nothing queues. For a wider one it is **self-blocking**: the
+permits outstanding are held by tasks the loop cannot reach `join_next` for, and the loop is what
+records the completions that would free them. A run at its ceiling therefore stopped doing
+bookkeeping exactly when it had the most of it to do.
+
+**§1, the ruling: the permit is taken inside the spawned task.** Nothing about the limit changes —
+a task without a permit runs no work — and the loop reaches `join_next` on the same pass it
+dispatches, so a finished batch is recorded when it finishes rather than when the next permit
+frees. A closed semaphore means the run is shutting down, and a batch that ran anyway would be
+unbounded work during a shutdown, so every member is reported failed through the same shape a
+skipped node uses: the summary counts them rather than the run looking like it lost them.
+
+**What §1 binds.**
+
+- **The ceiling is a ceiling on work.** The number of concurrent `execute_batch_with_retry` calls
+  is unchanged; what is unchanged *also* is that the coordinator never waits on it.
+- **A shutdown is reported, not obeyed silently.** A batch that could not get a permit because the
+  semaphore closed says so per member, with the error, instead of vanishing.
+- **The arrangement is asserted, and a wrong one hangs rather than fails.** A test drives twelve
+  independent installs through a ceiling of two and asserts all twelve reached the manager. Put
+  the permit back on the near side and the test does not go red — it deadlocks, which was measured
+  and is recorded in the test's own doc comment, because that is the honest description of what a
+  future reader will see.
+
+**§2 — The release path.** Four files decide what a user downloads, and not one of them can see
+the others: `ci.yml`'s build matrix decides what is compiled, its release job decides what the
+assets are *called* (`dist/shall-<target>`, `.exe` on Windows), `scripts/install.sh` decides what
+a Linux or macOS user asks for, and `scripts/install.ps1` decides what a Windows user asks for.
+
+Each is individually reasonable. Add a target to the matrix and not the release job and a binary
+is built that nobody publishes. Add one to the release job and not an installer and a platform is
+published that no documented line can fetch. Rename the asset shape in one place and the URL stops
+resolving while the sets still compare equal. **None of those is a compile error, a test failure,
+or a red CI run — and the run that would show it is the tag push**, the one push nobody
+rehearses.
+
+**§2, the ruling: the release path is one relationship, asserted in every direction.** Four
+readings, each parsing its own file in its own shape, compared as sets:
+
+- nothing is built that is not published;
+- nothing is published that is not built;
+- every target an installer asks for is one the release publishes;
+- every published target is reachable from a documented install line.
+
+The last has one deliberate exemption: the two `-linux-gnu` rows. `install.sh`'s own header says
+`-gnu` is published for both architectures "for anyone who wants it", so they are the documented
+case of a target published and not defaulted — and a rule that failed on them would be a rule
+against the file's stated policy rather than against drift.
+
+**What §2 binds.**
+
+- **It is a source-level control, and says so.** What makes it worth having is that it asserts the
+  *relationship* and not a copy of any one file's text: any of the four can be edited normally and
+  only a disagreement is red.
+- **Both directions are exercised.** Dropping a target from the release list failed two of the
+  three tests; a typo in `install.sh`'s triple failed the third.
+- **The local gate runs it.** `release-check.sh` is the documented "am I ready to ship" command,
+  and it ran neither this nor `decision-count.sh --check` — so a local GO could ship a tree whose
+  `SPEC.md` and `decisions.md` disagreed. Both are gates in it now.

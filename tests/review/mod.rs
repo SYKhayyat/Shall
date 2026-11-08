@@ -63,6 +63,7 @@ mod the_composition_root_is_not_a_service_tests;
 mod the_exit_table_is_generated_not_retyped_tests;
 mod the_planner_never_reads_the_filesystem_tests;
 mod the_readme_install_promise_matches_reality_tests;
+mod the_release_publishes_what_the_installers_ask_for_tests;
 mod the_review_apparatus_is_rust_tests;
 mod the_stated_lifecycle_coverage_matches_the_ratchet_tests;
 mod wal_enumeration_tests;
