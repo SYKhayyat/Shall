@@ -3090,6 +3090,37 @@ journal_open_names() {
         | awk '{ last[$1] = $2 } END { for (k in last) if (last[k] == "InProgress" || last[k] == "Abandoned") print "        | " k }'
 }
 
+# What the MANAGER says about each canary, in its own state word, beside what PATH says.
+#
+# `crash_installed` counts binaries on PATH, and that is the wrong witness for this section's
+# question on exactly the run that matters: a package killed mid-unpack is **unpacked but not
+# configured**, so its files are on disk (on PATH) while every listing correctly reports it not
+# installed — and the reverse, a listing that claims a package whose files never landed, is the
+# other half. A crash report that says only "2 of 3 canaries on disk" cannot tell those apart,
+# and the two need different repairs.
+#
+# Asked of the manager's own database rather than of `shall`, since the program is on trial. The
+# words are the manager's: dpkg's `installed`/`unpacked`/`half-installed`, xbps's presence in
+# `-l`, rpm's `normal`. A manager this table does not name prints `?`, which is honest.
+canary_manager_state() { # pkg
+    case "$BACKEND" in
+        apt)    dpkg-query -W -f='${db:Status-Status}' "$1" 2>/dev/null || echo absent ;;
+        dnf|zypper) rpm -q "$1" >/dev/null 2>&1 && echo installed || echo absent ;;
+        pacman) pacman -Q "$1" >/dev/null 2>&1 && echo installed || echo absent ;;
+        apk)    apk info -e "$1" >/dev/null 2>&1 && echo installed || echo absent ;;
+        xbps)   xbps-query "$1" >/dev/null 2>&1 && echo installed || echo absent ;;
+        *)      echo '?' ;;
+    esac
+}
+# `pkg=on/off:manager-word` for each canary, one line, for the kill report and the failure.
+canary_states() {
+    _cs=""
+    for _p in $CRASH_PKGS; do
+        _cs="$_cs $_p=$(on_path "$_p" && echo on || echo off):$(canary_manager_state "$_p")"
+    done
+    printf '%s' "$_cs"
+}
+
 # Candidates: package name == binary name, present in the repos of six of the seven distros this
 # harness images, and none of them a section-14 canary. Six of seven and not all of them:
 # Slackware's mirror carries none of the three, which is why availability is asked below rather
@@ -3261,7 +3292,7 @@ crash_run() {
         PASS=$((PASS + 1))
         _credit_section
         _crash_witness "closed-$_tag"
-        echo "  PASS  crash/$_tag: SIGKILL landed with $_closed operation(s) closed in the write-ahead log and $_opened still open, with $(crash_installed) of $CRASH_N canaries on disk"
+            echo "  PASS  crash/$_tag: SIGKILL landed with $_closed operation(s) closed in the write-ahead log and $_opened still open, with $(crash_installed) of $CRASH_N canaries on disk —$(canary_states)"
     elif [ "$_opened" -lt 1 ]; then
         # Honest, and deliberately NOT a pass. The kill landed outside a transaction, so
         # nothing here exercised recovery — scoring it green is the vacuous check IV.1 exists
@@ -3276,7 +3307,7 @@ crash_run() {
         # iteration measures nothing. The pool below reads the ledger, and a pool that counted
         # a soft as a measurement would report the kill the soft declined to assess.
         _crash_witness "open-$_tag"
-        echo "  PASS  crash/$_tag: SIGKILL left $_opened newly-opened operation(s) in the write-ahead log ($_open_at_kill open in all), with $(crash_installed) of $CRASH_N canaries on disk"
+        echo "  PASS  crash/$_tag: SIGKILL left $_opened newly-opened operation(s) in the write-ahead log ($_open_at_kill open in all), with $(crash_installed) of $CRASH_N canaries on disk —$(canary_states)"
     fi
 
     _hout=$(lx heal 2>&1); _hrc=$?
@@ -3339,7 +3370,12 @@ crash_run() {
 
     # (5) The promise the whole loop exists to test: the next sync converges onto the
     #     declaration, whatever the crash left behind.
-    if lx_slow -y sync >"/tmp/crash-conv-$_tag.out" 2>&1 && [ "$(crash_installed)" -eq "$CRASH_N" ]; then
+    #     The rc is captured rather than folded into the condition, because the failure branch
+    #     below has to print it: "did not converge" covers both a sync that exited non-zero and
+    #     one that exited 0 having planned nothing, and only the rc tells them apart.
+    lx_slow -y sync >"/tmp/crash-conv-$_tag.out" 2>&1
+    _convrc=$?
+    if [ "$_convrc" -eq 0 ] && [ "$(crash_installed)" -eq "$CRASH_N" ]; then
         PASS=$((PASS + 1)); _credit_section; echo "  PASS  crash/$_tag: the sync after the crash converged onto all $CRASH_N canaries"
 
         # (6) ...and there is nothing left to do. A crash that leaves permanent phantom drift is
@@ -3381,8 +3417,21 @@ crash_run() {
             excerpt "/tmp/crash-conv-$_tag.out" 6
         fi
     else
-        hard "crash/$_tag: the sync after the crash did not converge — still missing:$(crash_missing)"
-        excerpt "/tmp/crash-conv-$_tag.out" 6
+        # **Two different failures wear this one sentence**, and the tail of the log cannot tell
+        # them apart: the sync may have exited non-zero (a manager it needs is wedged), or it may
+        # have exited 0 having planned nothing for the package (the planner believes it is
+        # installed). The rc is the fact that separates them, so it is captured and printed.
+        hard "crash/$_tag: the sync after the crash did not converge — still missing:$(crash_missing) (the sync exited $_convrc) —$(canary_states)"
+        # The WHOLE log, not its last six lines. The tail of the failing sync in run 42361477256
+        # was three `service:cron` warnings and nothing else, which is where the diagnosis for
+        # #135 stopped: whatever the sync said about the missing canary was above them.
+        sed 's/^/        | /' "/tmp/crash-conv-$_tag.out" | head -40
+        # And what the plan would do now, which is the other half: a plan that does not name the
+        # missing package says the planner believes it is installed, and a plan that names it
+        # says the run failed to execute rather than failed to see.
+        lx --dry-run sync >"/tmp/crash-plan-$_tag-fail.out" 2>&1
+        echo "        -- what a plan would do now:"
+        sed 's/^/        | /' "/tmp/crash-plan-$_tag-fail.out" | head -20
         # **What the manager's own lock was doing at the time** (`Q50`). The commonest cause of
         # this failure is a lock the killed run left behind, and `heal` clears one it can prove
         # nobody holds — so when the sync still does not converge, the two facts a reader needs

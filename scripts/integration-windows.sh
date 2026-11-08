@@ -1487,13 +1487,16 @@ no_lifecycle_reason() {
 removal_leaves_binary() {
     case "$1" in
         bun) echo "bun's own \`remove -g\` drops the package and keeps its .exe/.bunx launchers (reproduced against bun directly, with no Shall involved)" ;;
-        # The Windows branch of nimble's own uninstall removes the package from its listing and
-        # the binary it installed, and leaves the `.cmd` launcher it wrote into `~\.nimble\bin`.
-        # Run 42361477256 (job 128370605190) is the reproduction: `nimble: list shows nimjson`
-        # passed, `nimble uninstall nimjson` returned 0, and the only remaining hit was
-        # `/c/Users/runneradmin/.nimble/bin/nimjson.cmd` — a wrapper whose target is gone. The
-        # strict check runs first, so a nimble that starts cleaning up still passes.
-        nimble) echo "nimble's own Windows uninstall drops the package and the binary, and leaves its .cmd launcher in ~/.nimble/bin (run 42361477256, with no Shall involved)" ;;
+        # nimble's own uninstall removes the package from its listing and leaves the `.cmd`
+        # launcher its install wrote into `~\.nimble\bin`. Shall runs exactly `nimble uninstall
+        # -y <pkg>`; on run 42361477256 it returned 0 and nimble's listing dropped the package,
+        # so the file survives **nimble's** uninstall, not Shall's removal. The Linux control
+        # (same nimble version, no Shall) has its symlink removed by the same command, so this
+        # is the Windows wrapper path rather than a cleanup nimble never does. Not reproduced by
+        # hand on Windows: the evidence is the run. Filed as #136, which carries the three ways
+        # out and the ruling that would end this entry. The strict check runs first, so a nimble
+        # that starts cleaning up still passes.
+        nimble) echo "nimble's own Windows uninstall drops the package and leaves the .cmd launcher its install wrote in ~/.nimble/bin (run 42361477256; filed as #136)" ;;
         *)   echo "" ;;
     esac
 }
