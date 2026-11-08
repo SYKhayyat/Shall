@@ -1,4 +1,4 @@
-﻿# The decision register — 250 entries, none open
+﻿# The decision register — 251 entries, none open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **245** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **246** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 250 are accounted
-for: **245 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 251 are accounted
+for: **246 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, and whether a lock is held on this directory or merely in this process) — 12
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, and what a download's status means) — 13
 
 | | question | answered |
 |---|---|---|
@@ -530,7 +530,7 @@ deliberately no longer has.*
 | **C10** | `xbps-query -l` lists the package database and every row opens with a state word, but the reader took the first token that parsed as a pkgver and never read the word — so a package registered-but-unpacked (`uu`) or half-removed (`hr`) counted as installed. A machine killed between xbps's unpack/register and its configure came back with a declared package the plan never named, and `sync` reported convergence over it (#135, the crash section's check (5) on the void and tools legs). The `dpkg` `${db:Status-Status}` reader and scoop's dropped half rows were the same rule; xbps was the sibling that never got it. What does a listing row mean? — RULED 2026-11-07: **only the manager's installed state is an installation** — `ii` alone for xbps, with an exhaustive table like `DPKG_STATUS_WORDS`'s so a state a manager grows tomorrow is unreadable rather than believed; a row read and dropped for its state is an answer, not an unrecognised shape; `-m`'s bare-pkgver shape stays in the same reader and counts as installed, because that listing is manually-installed by construction. `heal`'s ownership claim was filed as a candidate and refuted: the planner asks the backend, and reads the registry only for `is_held`. (II.74, V.224) | 2026-11-07 |
 | **C11** | `shall -y apply nimble:nimjson --delete` reports success, nimble's listing drops the package, and `~/.nimble/bin/nimjson.cmd` still resolves on PATH — a file written by nimble's own Windows install, not by Shall (`#136`, the last red line on the Windows sweep after #112). The issue named three ways out and left the choice to the owner: accept it, delete the launcher the backend knows about, or say it. What does a removal owe when the manager leaves a launcher? — RULED 2026-11-07: **say it, and delete nothing** — after a removal succeeds, every entry in the manager's own executable directories named exactly the package or a dotted extension of it is named with its path and the fact that the name still answers; the leftover is decided by name rather than glob (`pv` must not accuse `pvx.cmd`); said only after a removal that succeeded; the directories are `app::reachable::user_bin_dirs`'s, the same answer the unreachable-install warning uses. Deleting was declined because the Windows file set (wrapper and a copied executable) is unmeasured on a runner, and a deletion that misses the `.exe` claims a cleanup it did not make. The Windows sweep's `removal_leaves_binary` entries stop being `soft` excuses and ASSERT that the removal named the file. (II.75, V.225) | 2026-11-07 |
 | **C12** | The data-lock mutation shard could not finish a nightly: three mutants of the process-wide `held()` count each made every e2e command sleep out `WAIT_SECS`, because a second `flock` handle in one process waits for the first — 15 failures × 120s × retries, and the shard timed out at 825s before it could report a survivor list (`#138`). The count was also wrong when nothing was mutated: a lock on one data directory excused a write to another, because `held()` answered for the process rather than the path. What decides whether this write is already inside the lock? — RULED 2026-11-08: **a fact about the directory, not a count about the process** — every `DataLock` records its directory under its canonical name, `held_on(path)` is a membership question, and `for_this_write` asks it of the directory it is about to write under. The re-entrant write door's acquire is **refused at once by name** when the owner stamp is this pid, rather than slept on; a direct acquire still waits, because another thread of this process may be about to release. No `held()` mutant exists to time out, and a lock on one directory is no longer a lock on another. (II.76, V.226) | 2026-11-08 |
-
+| **C13** | The nightly of 2026-11-08 reds three legs on one upstream fact: `github:sharkdp/fd` answered `504 Gateway Timeout` and the sweep scored it `a defect, not ecosystem variance`, while the storage image's build met the same weather at `openzfs/zfs` and ran no lifecycle at all. In both cases the ratchet and the section floor then reported *lost coverage*, so one transient failure printed three red lines and two of them named no cause (`#139`). Shall's own answer was `shall-failure-class: unknown`, because the three downloading backends folded every non-success status into `Error::Other`. **What does a download's status mean?** — RULED 2026-11-08: **the status decides, from its code** — a 5xx is the far end failing to serve and is transient, any other non-success status is the request being wrong and is permanent, `429` keeps `RateLimit`'s verdict, and all three backends build the error through one typed constructor so the verdict survives a note and is never re-derived from prose. In the harnesses, **a backend whose install failed for a reason Shall classed as passing counts toward the real-lifecycle floor and is named** — it is not coverage and it is not a collapse, and one 504 must not be able to say both. (II.77, V.227) | 2026-11-08 |
 ---
 
 # The blocking round — thirteen questions, all ruled
@@ -10495,3 +10495,43 @@ it.
   S27 message stay; this ruling narrows what the wait is used for, not how long it is.
 - **Poisoning is not an error here.** The held set is read and written on the drop path, so a
   panic in an unrelated thread must not turn releasing a lock into a second panic.
+
+## C13
+
+**Status: ANSWERED 2026-11-08, built the same day.** A download's status means what its code
+says. Filed as `#139` off the scheduled nightly `42469891783`.
+
+**The question.** Three legs of one nightly red on the same upstream fact. `github:sharkdp/fd`
+answered `504 Gateway Timeout` while downloading a release asset, and the sweep scored it
+`a defect, not ecosystem variance`. `Dockerfile.storage` hit a `504` fetching the OpenZFS
+tarball, so the storage image was never built and the job reported no lifecycle at all. And in
+both cases the real-lifecycle ratchet and the section floor then reported *lost coverage*, because
+a backend whose install did not happen is a missing member of a count. Shall's own answer to the
+user was `shall-failure-class: unknown`: `github:`, `web:` and `appimage:` folded every
+non-success status into `Error::Other`, and `Other` is `Retryability::Unknown`.
+
+**The ruling.** **The status decides, and it decides from its code.** A 5xx is the far end
+failing to serve — the same URL serves the same bytes a minute later — and is `Transient`. Any
+other non-success status is the request being wrong and is `Permanent`; a second attempt asks the
+same wrong question. `429` stays out of both families and keeps `Error::RateLimit`'s own
+`Transient` verdict with its own sentence, because "not now" and "never" are two answers a user
+reads differently even though both mean try again.
+
+**What the ruling binds.**
+
+- **One constructor, `Error::http_status`.** All three downloading backends build the error
+  through it, so a status is classified once, where it was received, rather than three times by
+  whoever reads the message later.
+- **The status travels on the error** (`Error::HttpStatus { status, url, detail }`), so
+  `retryability()` answers from the code and a future caller cannot re-classify it by rewording
+  a message.
+- **A note does not take the verdict away.** `with_note` appends to `detail`; the status stays,
+  and the `while applying` line cannot turn a retried 504 into an unknown.
+- **In the harnesses, a backend whose install failed for a reason Shall classed as passing
+  counts toward the real-lifecycle floor and is named.** `tally_unmeasurable` (one function,
+  lifted by `harness-logic-test.sh` and used by both harnesses) puts those backends in the same
+  bucket as a dated `drift` excuse: not coverage, not a collapse. Only a backend nothing knows
+  about stays uncounted and pointed at the register, so a genuine collapse still fails by name.
+- **The section floor stops being a third opinion.** It reads the counts the same run printed, and
+  the excuse it prints names the unmeasurable backend, so one 504 produces one fact and two
+  named shadows rather than three red lines.

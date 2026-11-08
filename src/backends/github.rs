@@ -771,12 +771,11 @@ impl Installable for GithubInstallable {
                 // Status before bytes, same as `web:`: a 404 body hashed under the asset's
                 // name poisons this ledger against the real release for ever.
                 if !response.status().is_success() {
-                    return Err(Error::Other(format!(
-                        "Download failed for {} asset {}: {}",
-                        spec.name,
-                        pick.asset.name,
-                        response.status()
-                    )));
+                    return Err(Error::http_status(
+                        format!("{} asset {}", spec.name, pick.asset.name),
+                        response.status(),
+                        &pick.asset.url,
+                    ));
                 }
                 // Defense-in-depth: GitHub constrains asset names to alphanumerics and
                 // punctuation today, but the constraint is theirs, not ours. A name

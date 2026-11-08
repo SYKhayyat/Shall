@@ -105,6 +105,17 @@ impl Fixture {
             // landing #130, and the units had to be disabled by hand). The fifth entry in this
             // list, for the fifth time the same way.
             .env("XDG_CONFIG_HOME", self.root.join(".config"))
+            // **Two managers keep their own configuration under `$HOME`, and one of them was
+            // measuring the developer's machine through it.** `npm` resolves its global prefix
+            // from `~/.npmrc` before its built-in default, so on a host whose `~/.npmrc` says
+            // `prefix=~/.npm-global` — the ordinary way to install globals without sudo — a
+            // fixture `npm install -g` writes to the developer's real prefix. Measured
+            // 2026-11-08: `grade2_wedged_manifest_tests` passed on CI and on a host without an
+            // `.npmrc`, and on this one npm answered `ENOENT … mkdir '<the nix store's node>'`
+            // because the prefix it was given by that file does not exist in the fixture. The
+            // test was reading the machine's npm configuration and calling the answer Shall's.
+            .env("NPM_CONFIG_USERCONFIG", self.root.join(".npmrc"))
+            .env("NPM_CONFIG_PREFIX", self.cfg().join("npm-global"))
             // A test that blocks on a prompt is a test that hangs CI rather than failing it.
             .stdin(std::process::Stdio::null());
         if let Some(dir) = path_prefix {

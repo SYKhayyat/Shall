@@ -993,10 +993,10 @@ for _src in $SOURCES; do
         done
 
         _reg="$(mktemp)"
-        printf 'container-linux-tools-ci 25
-' > "$_reg"
-        printf 'drift container-linux-tools-ci cabal 2026-08-21
-' >> "$_reg"
+        {
+            printf 'container-linux-tools-ci 25\n'
+            printf 'drift container-linux-tools-ci cabal 2026-08-21\n'
+        } > "$_reg"
         _today=20686   # 2026-08-21, the day the line was written
 
         _v="$(drift_verdict container-linux-tools-ci cabal "$_reg" "$_today")"
@@ -1525,6 +1525,78 @@ else
     sed -n 's/^  BAD   /        /p' /tmp/dc.out
     BAD=$((BAD + 1))
 fi
+
+# **One upstream 504 must not read as lost coverage.** The real-lifecycle ratchet compares this
+# run's real lifecycles against a floor recorded per host class, and a backend whose install
+# failed for a reason Shall classed as PASSING belongs to neither side of that comparison: it is
+# not coverage, and it is not a collapse. Until 2026-11-08 it counted toward the floor only when
+# a dated `drift` line said it might, so one 5xx from `github.com` produced three red lines where
+# one was a fact — the install, the ratchet and the section floor — and two of them named no
+# cause. The rule is one function now, lifted here, so both harnesses are asked the same question
+# and a backend that ran cannot hide inside the bucket for one that did not.
+echo "== an unmeasurable lifecycle counts toward the floor without being coverage"
+for _src in $SOURCES; do
+    TOTAL=$((TOTAL + 1))
+    _tu="$(lift tally_unmeasurable "$_src")"
+    # The verdict the tally asks about each name, lifted with it for the same reason: the
+    # question here is the bucketing, so the register's arithmetic must be the harness's own and
+    # not a second copy this file keeps of it.
+    _tudv="$(lift drift_verdict "$_src")"
+    # And the civil-to-days arithmetic `drift_verdict` is built on, for its own reason: a tally
+    # test that pasted a date formula would pass while the harness's own parsed the register
+    # wrong.
+    _tude="$(lift days_since_epoch "$_src")"
+    if [ -z "$_tu" ] || [ -z "$_tudv" ]; then
+        echo "  BAD   $(basename "$_src") has no tally_unmeasurable: an unmeasurable backend is either lost coverage or excused forever"
+        BAD=$((BAD + 1))
+        continue
+    fi
+    (
+        # Read by the lifted function and by nothing shellcheck can see through `eval`.
+        # shellcheck disable=SC2034
+        DRIFT_TODAY=20686
+        eval "$_tude"
+        eval "$_tudv"
+        eval "$_tu"
+        _bad=0
+        LEDGER="$(mktemp -d)"
+        _reg="$(mktemp)"
+        {
+            printf 'container-linux-tools-ci 25\n'
+            printf 'drift container-linux-tools-ci cabal 2026-08-21\n'
+        } > "$_reg"
+        FLOOR_FILE="$_reg"
+        HOST_CLASS="container-linux-tools-ci"
+        # Prelude that would have failed with them undone: nothing here is ran here.
+        : > "$LEDGER/be-life"
+        : > "$LEDGER/be-life.u"
+        # Three backends, three verdicts, in one run.
+        printf 'cabal\nhelm\nnimble\n' > "$LEDGER/be-life-unmeasured"
+        EXCUSED=0; EXHAUSTED_UNREGISTERED=0
+        tally_unmeasurable
+        [ "$EXCUSED" -eq 1 ] || { echo "  BAD   a dated drift line did not excuse cabal (EXCUSED=$EXCUSED)"; _bad=1; }
+        [ "$EXHAUSTED_UNREGISTERED" -eq 2 ] || { echo "  BAD   two unregistered unmeasurable backends did not count as not-this-run's-coverage (got $EXHAUSTED_UNREGISTERED)"; _bad=1; }
+        [ -s "$LEDGER/be-life-unmeasured.u" ] && { echo "  BAD   a backend that merely could not be measured was left in the bucket for a real collapse"; _bad=1; }
+
+        # A backend both recorded as unmeasured AND proved by this run is coverage, and must not
+        # be counted a second time as an excuse.
+        printf 'cabal\nhelm\nnimble\n' > "$LEDGER/be-life-unmeasured"
+        printf 'helm\n' > "$LEDGER/be-life"
+        printf 'helm\n' > "$LEDGER/be-life.u"
+        EXCUSED=0; EXHAUSTED_UNREGISTERED=0
+        tally_unmeasurable
+        [ "$EXHAUSTED_UNREGISTERED" -eq 1 ] || { echo "  BAD   a lifecycle this run proved was also counted as unmeasured (got $EXHAUSTED_UNREGISTERED)"; _bad=1; }
+        [ "$EXCUSED" -eq 1 ] || { echo "  BAD   the drift line stopped excusing when another backend ran (got $EXCUSED)"; _bad=1; }
+
+        rm -rf "$LEDGER" "$_reg"
+        exit "$_bad"
+    )
+    if [ $? -eq 0 ]; then
+        echo "  ok    $(basename "$_src") counts an unmeasurable lifecycle without calling it coverage"
+    else
+        echo "  BAD   $(basename "$_src")'s ratchet buckets are wrong"; BAD=$((BAD + 1))
+    fi
+done
 
 echo "--------------------------------------------------------------"
 echo " harness predicates: $((TOTAL - BAD))/$TOTAL ok"

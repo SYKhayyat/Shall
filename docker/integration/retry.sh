@@ -22,8 +22,14 @@
 #     RUN retry 'curl -fsSL https://example.invalid/install | bash' || true
 set -u
 
+# **`5` was too impatient for the failure this exists for.** A 504 from a CDN edge is a
+# seconds-to-a-minute kind of weather — the nightly of 2026-11-08 lost four attempts at
+# `github:sharkdp/fd` and four more inside the arch build to `504 Gateway Timeout`, all within
+# ~25 seconds of each other, so the backoff had not yet crossed the far end's own recovery. The
+# delay starts at 15s and doubles, so the third attempt lands a minute after the first: still a
+# blip being absorbed, still three attempts, still `|| true` afterwards.
 ATTEMPTS=3
-DELAY=5
+DELAY=15
 
 if [ "$#" -eq 0 ]; then
     echo "retry: nothing to run" >&2

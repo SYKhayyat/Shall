@@ -70,10 +70,21 @@ fn every_kernel_bound_backend_records_itself_when_its_module_is_absent() {
 #[test]
 fn the_ratchet_counts_a_kernel_absent_backend_toward_the_floor() {
     let h = harness();
+    // The total carries one channel per reason a lifecycle is not this run's coverage: excused
+    // against a dated `drift` line, kernel-absent, and exhausted-but-unregistered (`#139` — a
+    // backend whose install failed for a reason Shall classed as passing is named and counted,
+    // rather than reading as a collapse). Each is a separate ledger, so a total that drops one
+    // is a total that reports a regression for a reason the run already explained by name.
     assert!(
-        h.contains("MEASURABLE=$((LIFECYCLES + EXCUSED + NOKERNEL))"),
-        "the ratchet's MEASURABLE total does not include the kernel-absent backends, so a host \
-         without a module still reads as a coverage regression"
+        h.contains("MEASURABLE=$((LIFECYCLES + EXCUSED + EXHAUSTED_UNREGISTERED + NOKERNEL))"),
+        "the ratchet's MEASURABLE total does not include every explained-and-not-a-collapse \
+         channel, so a host missing a module or a leg that met upstream weather still reads as a \
+         coverage regression"
+    );
+    assert!(
+        h.contains("EXHAUSTED_UNREGISTERED=$((EXHAUSTED_UNREGISTERED + 1))"),
+        "nothing tallies the exhausted-but-unregistered backends, so the total above adds a \
+         variable that is never set"
     );
     // `NOKERNEL` goes in ungated and `EXCUSED` does not, and the asymmetry is the point. A
     // missing kernel module is a fact about the machine that no retry and no repair to this

@@ -80,6 +80,19 @@ fn the_mutation_gate_retries_a_failed_test_before_crediting_a_catch() {
     // the two jobs at a time.
     assert!(job.contains("cargo mutants --no-shuffle -j2"));
     assert!(job.contains("--file ${{ matrix.file }} --shard ${{ matrix.shard }}"));
+
+    // **The ceiling must clear one contended suite, not exactly scale with a solo one.** The
+    // nightly of 2026-11-08 had four shards exit 3 with `TIMEOUT` rows and no survivor list:
+    // `in 77s build + 610s test`, where 610 is the multiplier applied to the unmutated suite's
+    // own 121s — an arithmetic that is right for a suite running alone and wrong for two
+    // mutants each running the whole suite on a shared runner. Both timed-out mutants are caught
+    // locally in ~210s of suite, so the ceiling measured contention. A shard that times out
+    // cannot report a survivor, which is the one thing this gate is for.
+    assert!(
+        job.contains("--minimum-test-timeout"),
+        "the mutation job must set a floor under its derived test timeout, or a busy runner \
+         reads as a hang and the shard reports no survivors at all:\n{job}"
+    );
 }
 
 #[test]

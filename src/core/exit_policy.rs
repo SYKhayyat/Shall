@@ -419,6 +419,20 @@ pub fn scoop() -> ExitPolicy {
             "the remote name could not be resolved",
             "unable to connect",
             "hash check failed",
+            // **`is not valid` is scoop's wrapper, and the URL in it may be perfectly good.**
+            // `lib/download.ps1` prints `URL <url> is not valid` inside the `catch` around its
+            // download call, whatever the exception was — a 504, a reset connection, a rate
+            // limit. So the sentence names a URL as the suspect when the transfer is what
+            // failed. The nightly of 2026-11-08 reds the Windows native sweep on
+            // `scoop:jq` with exactly this line for `jqlang/jq`'s `jq-1.8.2` asset, and that
+            // URL answers 200 from every machine that asked it before or since. Classed
+            // permanent, it reports `a defect, not ecosystem variance` about a manifest that
+            // scoop itself published correctly (#139's family, one manager out).
+            "is not valid",
+            // Scoop prints this from the same `catch` when the transfer itself gave up, and
+            // its `abort` line names the bucket issue it wants filed — which is what a
+            // failed download looks like and not what a wrong manifest looks like.
+            "download failed",
         ],
         ..ExitPolicy::default()
     }

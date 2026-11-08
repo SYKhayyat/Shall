@@ -652,6 +652,48 @@ drift_verdict() { # host-class  backend  register-file  today-in-days
     echo "ok $_dv_age"
 }
 
+# Which of this run's unmeasurable backends count toward the real-lifecycle floor, and which do
+# not.
+#
+# Three answers, and the difference between them is the whole reason this is a function:
+#
+#   * a backend whose install failed for a reason Shall classed as PASSING (`Exhausted` — a
+#     rate-limit window, a held lock) is not this run's coverage and is not a collapse either. It
+#     counts, and the run names it. ANY upstream 5xx reaches here, because a 5xx is now classed
+#     transient by the product.
+#   * a backend with a dated `drift` line counts too, and the line is the stronger form because
+#     the debt is visible in a diff.
+#   * a backend nothing knows about counts for nothing and is pointed at, unchanged: the
+#     register exists so a real collapse stays red.
+#
+# **The first rule is one upstream 504 away from being load-bearing, and was missing.** On the
+# nightly of 2026-11-08 `github: Download failed … 504 Gateway Timeout` was classed passing,
+# retried, failed again, and the ratchet then reported `10 real lifecycle(s)` against a floor of
+# 12 on the arch and tools legs — a collapse that had not happened, printed as one. One red line
+# became three, and the two shadows named no cause of their own.
+tally_unmeasurable() {
+    _tu_lines="$LEDGER/be-life"
+    # A lifecycle this run PROVED is not unmeasured, whatever an earlier attempt recorded.
+    sort -u "$LEDGER/be-life-unmeasured" > "$LEDGER/be-life-unmeasured.u" 2>/dev/null \
+        || : > "$LEDGER/be-life-unmeasured.u"
+    if [ -s "$_tu_lines" ]; then
+        grep -vxF -f "$LEDGER/be-life.u" "$LEDGER/be-life-unmeasured.u" \
+            > "$LEDGER/be-life-unmeasured.f" 2>/dev/null || :
+    else
+        cp "$LEDGER/be-life-unmeasured.u" "$LEDGER/be-life-unmeasured.f"
+    fi
+    : > "$LEDGER/be-life-unmeasured.u"
+    while read -r _tu_be; do
+        [ -n "$_tu_be" ] || continue
+        case "$(drift_verdict "$HOST_CLASS" "$_tu_be" "$FLOOR_FILE" "$DRIFT_TODAY")" in
+            ok\ *)                EXCUSED=$((EXCUSED + 1)) ;;
+            unrecorded)           EXHAUSTED_UNREGISTERED=$((EXHAUSTED_UNREGISTERED + 1)) ;;
+            *)                    echo "$_tu_be" >> "$LEDGER/be-life-unmeasured.u" ;;
+        esac
+    done < "$LEDGER/be-life-unmeasured.f"
+}
+
+
 
 # Is NAME runnable right now? `command -v` alone answers from the shell's hash table
 # and keeps naming a path after the file is gone, so a removal check written with it
@@ -2761,19 +2803,14 @@ HOST_FLAVOUR=""
 HOST_CLASS="windows-native-${HOST_OS}${HOST_FLAVOUR}-$([ -n "${CI:-}" ] && echo ci || echo local)"
 FLOOR_FILE="$(dirname "$0")/lifecycle-floor.txt"
 
-# Which of the unmeasurable backends this host class is still allowed to excuse. See
-# `drift_verdict` above for why an excuse needs a date on it at all.
+# Which of the unmeasurable backends this host class is still allowed to excuse, and which of
+# them merely could not be measured this time. One answer for both harnesses, in
+# `tally_unmeasurable` above, so the two cannot come to different conclusions about one fact.
 EXCUSED=0
+EXHAUSTED_UNREGISTERED=0
 : > "$LEDGER/be-life-drift-unrecorded"
 DRIFT_TODAY="$(days_since_epoch "$(date -u +%Y-%m-%d)")"
-while read -r _drift_be; do
-    [ -n "$_drift_be" ] || continue
-    _drift_v="$(drift_verdict "$HOST_CLASS" "$_drift_be" "$FLOOR_FILE" "$DRIFT_TODAY")"
-    case "${_drift_v%% *}" in
-        ok)      EXCUSED=$((EXCUSED + 1)) ;;
-        *)       echo "$_drift_be" >> "$LEDGER/be-life-drift-unrecorded" ;;
-    esac
-done < "$LEDGER/be-life-unmeasured.u"
+tally_unmeasurable
 while read -r _drift_be; do
     [ -n "$_drift_be" ] || continue
     soft "ecosystem drift: $_drift_be could not be measured on $HOST_CLASS and no register line excuses it"
@@ -2781,7 +2818,7 @@ while read -r _drift_be; do
     echo "        than absorbed. Write down what you decided by adding to $FLOOR_FILE:"
     echo "            drift $HOST_CLASS $_drift_be $(date -u +%Y-%m-%d)"
 done < "$LEDGER/be-life-drift-unrecorded"
-MEASURABLE=$((LIFECYCLES + EXCUSED))
+MEASURABLE=$((LIFECYCLES + EXCUSED + EXHAUSTED_UNREGISTERED))
 if [ -f "$FLOOR_FILE" ]; then
     FLOOR=$(grep -E "^${HOST_CLASS} " "$FLOOR_FILE" 2>/dev/null | awk '{print $2}' | head -1)
     if [ -z "$FLOOR" ]; then
@@ -2799,6 +2836,7 @@ if [ -f "$FLOOR_FILE" ]; then
         echo "        Something stopped running. A plan-smoke satisfies the audit above, so this"
         echo "        is the only check that notices coverage collapsing rather than breaking."
         [ "$EXCUSED" -gt 0 ] && echo "        ($EXCUSED excused by a dated register line, and it was still not enough.)"
+        [ "$EXHAUSTED_UNREGISTERED" -gt 0 ] && echo "        ($EXHAUSTED_UNREGISTERED unmeasurable, classed passing by Shall and counted as not this run's coverage)"
     elif [ "$LIFECYCLES" -lt "$FLOOR" ]; then
         # Short of the floor, and the shortfall is exactly the backends nothing could measure.
         # Reported at full volume and never silently: a run that excuses coverage has to say so,

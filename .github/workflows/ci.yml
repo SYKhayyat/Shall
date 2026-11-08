@@ -1299,7 +1299,23 @@ jobs:
     - name: Install cargo-nextest
       run: cargo install cargo-nextest --locked --version 0.9.149
     - name: Mutate ${{ matrix.file }} (shard ${{ matrix.shard }}), where a silent mutation is a safety failure
-      run: cargo mutants --no-shuffle -j2 --test-tool nextest --file ${{ matrix.file }} --shard ${{ matrix.shard }} -- --no-fail-fast --retries 2
+      # **The timeout is derived from the baseline, and the baseline is measured alone.** On
+      # the nightly of 2026-11-08 four of the five mutation shards exited 3 with TIMEOUT rows
+      # instead of a survivor list: `in 77s build + 610s test`, where 610 is cargo-mutants'
+      # `--timeout-multiplier` applied to the unmutated suite's own 121s. The arithmetic is
+      # right for a suite running on its own and wrong for these: `-j2` runs two mutants at
+      # once, each running the whole suite, so under a mutant that fails a few tests (and with
+      # `--retries 2` re-running each of them) one mutant's "test" leg is several suites deep on
+      # a shared four-core runner. Both mutants that timed out were reproduced locally and are
+      # caught in ~210s of suite, well inside 610s when nothing else is competing — so what the
+      # ceiling measured was contention, and a shard that times out cannot report a survivor.
+      #
+      # `--minimum-test-timeout` is the lower bound on that auto-set number, and setting it is
+      # the narrow fix: it says the ceiling must clear one contended suite rather than exactly
+      # scale with a solo one. It is not a loosening of what counts as caught — a mutant still
+      # has to fail a test — and it is not the `#138` shape of buying time by changing what the
+      # leg measures, because the leg still measures the whole suite.
+      run: cargo mutants --no-shuffle -j2 --minimum-test-timeout 1800 --test-tool nextest --file ${{ matrix.file }} --shard ${{ matrix.shard }} -- --no-fail-fast --retries 2
     - name: The survivors, kept whether the run passed or failed
       if: ${{ !cancelled() }}
       uses: actions/upload-artifact@v7

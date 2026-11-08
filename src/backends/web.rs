@@ -238,11 +238,11 @@ impl Installable for WebInstallable {
             // the day the real file returns reads as "same URL, different bytes". The
             // appimage half of this family has checked first since it was written.
             if !response.status().is_success() {
-                return Err(Error::Other(format!(
-                    "Download failed for {}: {}",
-                    spec.name,
-                    response.status()
-                )));
+                return Err(Error::http_status(
+                    &spec.name,
+                    response.status(),
+                    &spec.name,
+                ));
             }
 
             let tmp_dir = tempfile::tempdir().map_err(Error::from)?;

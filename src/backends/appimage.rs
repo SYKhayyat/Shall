@@ -217,11 +217,7 @@ impl Installable for AppImageInstallable {
             info!("AppImage: Downloading {}...", url);
             let response = client.get(url).send().await?;
             if !response.status().is_success() {
-                return Err(Error::Other(format!(
-                    "Download failed for {}: {}",
-                    url,
-                    response.status()
-                )));
+                return Err(Error::http_status(url, response.status(), url));
             }
 
             // **Nothing arrives at the artifact path until it is whole and verified**, and that is

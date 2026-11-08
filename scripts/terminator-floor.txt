@@ -105,9 +105,20 @@ container-guix apt guix
 # `container-tools` line above still measures it on an image that installs it. Do not add it back
 # because "the runner used to have it"; a measurement that exists by accident is what these
 # class lines exist to stop claiming.
+#
+# **`stack` leaves THIS line and not the others** (nightly `42469891783`, 2026-11-08). The
+# windows runner still carries the Haskell toolchain — the probe drove it, and it is not in
+# `absent` — but no verb of it ever resolved the operand there, so the run reported
+# `inconclusive: stack` and the name it owed could not be paid. That is the machine, not the
+# tree: the SAME nightly's ubuntu leg measured `stack` (`divergent: stack (recorded as differing
+# by host; this one honours the terminator)`) and its line keeps the name, as does
+# `container-tools`. No row loses evidence, because `stack`'s row is `Evidence::Divergent` — it
+# is `false` on the refusing reading and the refusal is what ships either way, so this leg was
+# never the leg its claim rested on. Do not add it back because "the runner used to measure it":
+# this is the `conda` rule, and the probe's `inconclusive` sentence is the finding.
 linux-ci cabal cargo composer dotnet gem helm pip pipx snap stack yarn
 macos-ci brew cargo dotnet gem pip pipx yarn
-windows-ci cabal cargo choco composer dotnet gem helm pip pipx sc stack yarn
+windows-ci cabal cargo choco composer dotnet gem helm pip pipx sc yarn
 
 # The storage image, from push run 31946026041 (2026-08-16) — the first run that ever asked it.
 # It had been listed as a class owing a line on the assumption that every class prints one on its

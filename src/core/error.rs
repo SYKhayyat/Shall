@@ -98,6 +98,22 @@ pub enum Error {
     #[error("HTTP request failed: {0}")]
     Http(String),
 
+    /// A far end answered with a status that says the download is not the file.
+    ///
+    /// **Typed rather than a sentence, because the classification is the point.** A 5xx is
+    /// weather at a mirror — the same URL serves the same bytes a minute later — and a 404 is
+    /// the request being wrong. Folded into `Other`, both arrived as `Unknown`, which
+    /// `shall-failure-class: unknown` reports to the user and every harness in this tree reads
+    /// as *a defect*: the nightly of 2026-11-08 scored a `504 Gateway Timeout` from
+    /// `github.com/sharkdp/fd` as a red `github:` install. The status travels with the error so
+    /// `retryability()` can answer from the code rather than from a substring of a message.
+    #[error("HTTP {status} from {url}: {detail}")]
+    HttpStatus {
+        status: u16,
+        url: String,
+        detail: String,
+    },
+
     #[error("JSON processing error: {0}")]
     Json(String),
 
@@ -217,6 +233,17 @@ impl Error {
             Error::Config(s) => plus!(Error::Config, s),
             Error::Validation(s) => plus!(Error::Validation, s),
             Error::Http(s) => plus!(Error::Http, s),
+            // The status is what carries the verdict, so the note attaches to the detail rather
+            // than to a message this variant rebuilds from its parts.
+            Error::HttpStatus {
+                status,
+                url,
+                detail,
+            } => Error::HttpStatus {
+                status,
+                url,
+                detail: format!("{detail}{note}"),
+            },
             Error::Json(s) => plus!(Error::Json, s),
             Error::Toml(s) => plus!(Error::Toml, s),
             Error::Unreadable(s) => plus!(Error::Unreadable, s),
@@ -267,6 +294,28 @@ impl Error {
             message: message.into(),
             retry,
             absent_name: false,
+        }
+    }
+
+    /// A far end answered a download with a non-success status.
+    ///
+    /// One constructor for the three backends that download (`github:`, `web:`, `appimage:`),
+    /// so a status is classified once by the code that received it rather than three times by
+    /// whoever reads the message later.
+    pub fn http_status(
+        what: impl AsRef<str>,
+        status: impl std::fmt::Display,
+        url: impl Into<String>,
+    ) -> Self {
+        let rendered = status.to_string();
+        Error::HttpStatus {
+            status: rendered
+                .split_whitespace()
+                .next()
+                .and_then(|c| c.parse().ok())
+                .unwrap_or(0),
+            url: url.into(),
+            detail: format!("Download failed for {}: {}", what.as_ref(), rendered),
         }
     }
 
@@ -386,6 +435,17 @@ impl Error {
 
             // The whole point of a rate limit is that the window moves.
             Error::RateLimit(_) | Error::Http(_) => Retryability::Transient,
+
+            // A far end that failed to serve is a mirror having a bad minute; the same URL is
+            // worth asking again. A far end that says the thing is not there is the request
+            // being wrong, and a second attempt asks the same wrong question.
+            Error::HttpStatus { status, .. } => {
+                if (500..600).contains(status) {
+                    Retryability::Transient
+                } else {
+                    Retryability::Permanent
+                }
+            }
 
             Error::Io(_)
             | Error::Persist(_)

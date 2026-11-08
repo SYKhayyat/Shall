@@ -1,3 +1,83 @@
+# Handoff — 2026-11-08, second session (`#139`, `#140`, the CI reds)
+
+**Branch `main`.** The first session's three filings were pushed (`10b72fa6`) at the start of
+this one. This session opened with the scheduled nightly `42469891783` (3h37m, **9 of its jobs
+red**) and worked outward from it.
+
+| # | Subject | Commit |
+|---|---|---|
+| `#135`, `#136`, `#138` | pushed — built in the previous session, never pushed | `10b72fa6` |
+| `#139` | one upstream 504 printed three red lines, and Shall called it `unknown` | this session |
+| `#140` | the storage image's single-source, no-retry ZFS fetch | this session |
+| `#142` | scoop's download exception was read as a wrong manifest | this session |
+| `#141` | the mutation gate's timeout was derived from a solo baseline | this session |
+| — | the test fixture read the developer's `~/.npmrc` and called the answer Shall's | this session |
+| — | the `stack` row left `windows-ci`'s terminator floor, by the `conda` rule | this session |
+
+- **`#139` — a download's status is classified by its code.** `github:`, `web:` and `appimage:`
+  folded every non-success status into `Error::Other` → `Retryability::Unknown` →
+  `shall-failure-class: unknown`, which both harnesses read as *a defect*. `Error::HttpStatus`
+  carries the status, `retryability()` answers from it (5xx transient, other non-success
+  permanent, 429 keeps `RateLimit`'s own verdict), and the three backends build it through one
+  constructor. `with_note` attaches to the detail, so the verdict survives the `while applying`
+  line — the bug `with_note` was written to fix, one variant over. Ruling `C13`, rule **II.77**,
+  reason **V.227**.
+- **`#139`, the harness half.** A backend whose install failed for a reason Shall classed as
+  passing was *also* shrinking the real-lifecycle ratchet and the section floor, so one 504
+  reported both "a defect" and "coverage collapsed", and the two shadows named no cause of their
+  own. `tally_unmeasurable` — one function, lifted by `harness-logic-test.sh` and called by both
+  harnesses — now counts those backends toward the floor and names them, in the same bucket as a
+  dated `drift` excuse. Only a backend nothing accounts for stays uncounted.
+- **`#140` — the storage image's fetch has retries and two doors.** `Dockerfile.storage` fetched
+  the OpenZFS tarball once, with no retry; a `504` at `github.com` meant the image was never
+  built and the whole ZFS shard reported no lifecycle. `--retry 5 --retry-all-errors` on the
+  release URL, then the same against `codeload.github.com`'s archive of the same tag (verified
+  200 from here). No third-party mirror: an unverified archive is worse than a leg that is
+  occasionally red.
+- **`#142` — scoop's `catch` was read as a verdict on the manifest.** `lib/download.ps1` prints
+  `URL <url> is not valid` inside the `catch` around its download call, whatever the exception
+  was, so the sentence names a URL as the suspect when the transfer is what failed. The Windows
+  sweep reds `scoop:jq` on it against a `jqlang/jq` asset that answers `200` from every machine
+  asked since, and scoop's own manifest carries a hash that matches. Two markers added
+  (`is not valid`, `download failed`), and the widening is bounded on both sides by tests: a
+  clean `Couldn't find manifest for 'x'` stays permanent and absent, and when both arrive
+  together transient wins — `retryability` consults it before `absent` on purpose.
+- **`#141` — the mutation ceiling was derived as though a mutant ran alone.** Four shards exited
+  3 with `TIMEOUT` and no survivor list. Both `guard.rs` mutants that timed out are caught
+  locally inside the old ceiling (~210s of suite against 610s), so the number was not too small
+  for the work: it was too small for two mutants at once, each running the whole suite with
+  `--retries 2`, on a shared four-core runner. `--minimum-test-timeout 1800` bounds the derived
+  number from below. A review test pins the flag, because the shard's whole value is reporting a
+  survivor.
+- **`stack` left `windows-ci`'s floor line, and only that line.** The runner still carries the
+  toolchain — the probe drove it and it is not in `absent` — but no verb resolved the operand, so
+  the run printed `inconclusive: stack` and the owed name could not be paid. The same nightly's
+  ubuntu leg measured it (`divergent: stack … this one honours the terminator`) and keeps the
+  name, as does `container-tools`. No row loses evidence: `stack`'s row is `Evidence::Divergent`
+  and its refusal is what ships either way, so this leg was never the leg its claim rested on.
+  This is the `conda` rule from `#134`, and the reasoning is in the file.
+- **`retry.sh` waits long enough to matter.** Its 3 attempts were spaced 5s and 10s, and the
+  nightly lost four attempts at `github:sharkdp/fd` and four more in the arch build to `504`s
+  within ~25 seconds — the backoff never crossed the far end's own recovery. Now 15s, doubling.
+- **The fixture bug the red suite found.** `grade2_wedged_manifest_tests` passed on CI and failed
+  here, and the reason was not the product: the harness pointed `HOME` at the fixture but npm
+  reads its global prefix from `~/.npmrc`, so the fixture's `npm install -g` was writing to the
+  **developer's** `~/.npm-global`. `TestKernel` now sets `NPM_CONFIG_USERCONFIG` and
+  `NPM_CONFIG_PREFIX` too — the sixth setting to arrive for the sixth time this way.
+- **Verified on this tree, after the last edit:** `cargo build --all-targets`, `cargo test
+  --no-fail-fast` — **3100 passed, 0 failed** in 206.45s; `cargo clippy --all-targets
+  --all-features --locked -- -D warnings`; `cargo fmt -- --check`;
+  `scripts/decision-count.sh --check` (251 entries, 246 ANSWERED, 0 OPEN);
+  `scripts/harness-logic-test.sh` — **103/103**; `shellcheck -S warning` on both harnesses,
+  `retry.sh` and the two touched scripts.
+- **Three hand mutations watched red:** `(500..600).contains(status) → false` failed 2 of the 5
+  new classification tests in 0.03s; `unrecorded) EXHAUSTED_UNREGISTERED=…` deleted from the
+  Windows tally failed `harness-logic-test.sh` by name; and removing scoop's two new markers
+  failed **3 of 4** cases in `a_scoop_url_that_did_not_download_is_not_a_wrong_manifest`.
+- **Not verified:** no container leg and no Windows run (neither is available on this host); the
+  `#139`/`#140` evidence will be the next nightly — a `github:` install that retries and clears
+  where it used to red the leg, and a storage build that succeeds.
+
 # Handoff — 2026-11-08 (`#135`, `#136`, `#138`)
 
 **Branch `main`.** Three filed issues built, each with its ruling in the register, its rule in

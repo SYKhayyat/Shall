@@ -8382,3 +8382,86 @@ directory *as part of the same atomic action* would need the second lock taken w
 held — two `flock`s, which is exactly the deadlock a per-process fact was invented to avoid. No
 such caller exists: a run writes under its own data directory, and the tests that cross
 directories do so to prove they are independent.
+**V.227 — Why an upstream HTTP status is classified by its code (`#139`, C13), and why one 504
+red three lines instead of one.**
+
+`github:` answered `504 Gateway Timeout` while downloading `sharkdp/fd`'s release asset on the
+arch leg, and the sweep called it `a defect, not ecosystem variance`; the storage image's own
+build hit the same weather at `openzfs/zfs` `Dockerfile.storage:45` and reported no lifecycle at
+all; both failures then also shrank the real-lifecycle ratchet and the section floor, because a
+backend whose install did not happen is absent from the count and the arithmetic read "fewer
+measured" as "coverage collapsed". Three distinct red lines, one fact: the far end of a download
+had a bad minute.
+
+**An HTTP status is knowable, so it is the fact.** The three backends that download (`github:`,
+`web:`, `appimage:`) used to fold a non-success status into `Error::Other`, which is
+`Retryability::Unknown`, which `shall-failure-class` prints as `unknown`, which both harnesses
+read as *a defect*. One constructor, `Error::http_status`, now carries the status on the error,
+and `retryability()` answers from the code: a 5xx is the mirror having a bad minute (transient,
+worth a retry; the same URL serves the same bytes a minute later), and a 404 is the request
+being wrong (permanent; a second attempt asks the same wrong question). `429` stays out of both
+families so `RateLimit` keeps its own sentence. A note appended to the error — the `while
+applying` line — attaches to the detail and cannot take the verdict away.
+
+**A failure the program classed as passing is not a collapse.** The real-lifecycle ratchet
+compares this run's real lifecycles against a floor recorded per host class, so the one question
+it must separate is "this host did less" from "this run measured less". A backend whose install
+failed for a reason Shall classed as passing (an `exhausted` verdict: retried once, failed,
+classed transient) is neither: it is not coverage, and it is not a regression in the harness's
+ability to measure. `tally_unmeasurable` (one function in both harnesses) now counts every such
+backend toward the floor and names it, alongside the backends a dated `drift` line excuses; only
+a backend nothing knows about remains pointed at the register and uncounted, so a genuine
+collapse still fails by name. Before that, one 504 produced the install failure, the ratchet
+red, and the section-floor red — three lines, and the two shadows named no cause of their own.
+
+**What could reverse it.** A 5xx that outlives the retry window still comes back as "exhausted"
+and is counted toward the floor — it can never be called a defect while the far end keeps
+answering 503. If a backend's policy is later given a `permanent_markers` string that matches
+5xx prose (a 404 page that arrives with a 200 status is the one real case that still lands in
+`Other`), the classification would need a reason of its own, because a 404 body under a 200
+status is the one shape the code cannot see.
+**V.228 — Why scoop's download sentence is transient, and why a mutation shard's timeout is a
+ceiling rather than a budget (`#139`, `#141`, C13), and why three reds in one nightly were one
+fact twice.**
+
+The nightly of 2026-11-08 is worth reading whole, because it is one evening's weather reported
+six ways. `github:sharkdp/fd` met a `504` and was scored `a defect`. The storage image met a
+`504` at OpenZFS and never built, so its leg reported no lifecycle at all. `scoop:jq` met scoop's
+own `URL … is not valid` on a `jqlang/jq` asset that answers `200` from every machine that has
+asked it since. And four mutation shards exited 3 with `TIMEOUT` rows and no survivor list. Not
+one of those five facts was about the tree.
+
+**Scoop's sentence names the wrong suspect, and that is the finding.** `lib/download.ps1` prints
+`URL <url> is not valid` inside the `catch` around its download call — whatever the exception
+was. So the sentence points at the URL and the thing that failed was the transfer. Shall read it
+as permanent, and permanent is the verdict that says *the request is wrong, do not try again*,
+about a request that was right. The marker list now carries it as transient, alongside
+`download failed`, which the same `catch` prints. **The widening is bounded on both sides:** a
+`Couldn't find manifest for 'x'` with nothing else in the output is still permanent and still
+absent — and when both facts arrive in one breath, transient wins, because `retryability`
+consults it before `absent` for the reason it always has: an absent verdict is a claim about an
+index, and a manager that reports the index as unreachable has not earned it. Both directions are
+pinned, because a widening that swallowed the real case would be the worse bug.
+
+**A mutation shard's timeout is derived from the baseline, and the baseline runs alone.** The
+competing reading is that three mutants in `guard.rs` are slow, and it is measurably wrong: the
+`enforce_additions -> Ok(())` mutant is caught in ~210s of suite and the
+`allow_mass_removal || -> &&` mutant in ~208s, both comfortably inside the 610s the run allowed.
+So 610 was not too small for the work; it was too small for the work *with two of them and the
+whole suite each, on a shared four-core runner with `--retries 2` re-running every test the
+mutant broke*. The ceiling is now bounded from below (`--minimum-test-timeout`), which says the
+number must clear one contended suite rather than scale exactly with a solo one.
+
+**What that is not.** It is not `#138`'s shape of buying a gate time by changing what it
+measures: the leg still runs the whole suite, a mutant is still caught only when a test fails,
+and the retry is still what tells a flake from a catch. It is not raising a job's
+`timeout-minutes` either — every shard here finished in ~90 minutes against a 360-minute limit,
+so the job was never near its ceiling. What was wrong was the per-mutant ceiling, and the reason
+it was wrong is that it had been derived as though a mutant ran alone.
+
+**The lesson the three reds share, and it is the one worth keeping.** A gate that cannot say what
+it saw reports *a defect* by default. `unknown` became `a defect` became `coverage collapsed`
+became `TIMEOUT` — four names for "we could not tell", each of which a reader acts on
+differently, and none of which was true. The repair is always the same shape: make the fact
+available where it is known (the status code is on the error; the runner's timeout is a flag),
+and make the gate name the fact rather than infer a verdict from its absence.

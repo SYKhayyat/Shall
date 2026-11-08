@@ -18,6 +18,7 @@ const CHOCO_SOURCE_UNREACHABLE: &str =
     include_str!("../../../../tests/fixtures/choco/install-source-unreachable.txt");
 const CHOCO_ABSENT_NAME: &str =
     include_str!("../../../../tests/fixtures/choco/install-absent-name.txt");
+mod a_download_status_is_classified_by_its_code;
 mod a_held_lock_is_transient_and_a_missing_name_is_not;
 mod a_luarocks_manifest_that_would_not_download_is_transient_not_a_missing_rock;
 mod a_luarocks_summary_without_a_download_failure_is_not_retried;
@@ -25,6 +26,7 @@ mod a_name_the_source_does_not_carry_is_still_absent;
 mod a_permanent_marker_still_outranks_a_transient_one;
 mod a_policy_with_no_markers_classifies_nothing;
 mod a_prefix_marker_anchors_to_a_line_and_does_not_match_prose;
+mod a_scoop_url_that_did_not_download_is_not_a_wrong_manifest;
 mod a_signal_kill_is_never_benign;
 mod a_successful_nimble_listing_is_not_a_failure;
 mod an_unreachable_source_is_not_a_missing_package;

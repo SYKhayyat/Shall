@@ -4503,3 +4503,32 @@ holds a lock somewhere.
 - **The held set is never the reason a release panics.** Its mutex is read ignoring poisoning:
   the drop path is where it is touched, and a panic elsewhere must not become a second panic
   while unlocking.
+
+## II.77 A download's status is classified by its code (`#139`, C13, V.227)
+
+**A non-success HTTP status from a download is classified from the status, not from whether it
+was mentioned.** 5xx is the far end failing to serve and is transient; any other non-success
+status is the request being wrong and is permanent. `429` keeps `Error::RateLimit`'s own verdict.
+
+- **One constructor.** `github:`, `web:` and `appimage:` build this error through
+  `Error::http_status`, so a status is classified once where it was received.
+- **The status travels on the error**, so `retryability()` answers from the code rather than
+  from a substring of a message a future caller may rewrite.
+- **A note does not re-classify.** `with_note` attaches to the detail and leaves the status
+  intact; the verdict survives the `while applying` line.
+- **A manager's wrapper sentence is read for what it wraps.** scoop prints `URL <url> is not
+  valid` inside the `catch` around its download call, naming a URL that is usually fine; a
+  manager's sentence about a transfer is therefore transient evidence, and the marker lists say
+  so. **The widening is bounded on both sides**: a name the manager could not find, said alone,
+  stays permanent and absent, and when both facts arrive in one breath the transient one wins,
+  because an absent verdict is a claim about an index the manager has just said it could not
+  read.
+- **A gate's per-attempt ceiling clears one contended attempt, not exactly one solo attempt.**
+  A mutation shard's timeout is derived from an unmutated baseline measured alone; the shard runs
+  two mutants at once, each running the whole suite, and re-runs every test a mutant broke. The
+  ceiling therefore takes a lower bound, and a timeout stops reading as a hang. What this does
+  **not** change is what counts as caught, or what the leg measures.
+- **A failed install that Shall classed as passing is not lost coverage.** The harness counts
+  such a backend toward its real-lifecycle floor and names it, exactly as it counts one a dated
+  `drift` line excuses. Only a backend no classification and no register line accounts for stays
+  uncounted.
