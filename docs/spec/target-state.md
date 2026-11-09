@@ -4679,3 +4679,21 @@ production count is bounded, and a raise is a written decision rather than a sid
   decision gets written down.
 - **A classification that excludes nothing is broken.** The test asserts the excluded total is the
   larger number, which can only be true while the `cfg(test)` cutoff does something.
+
+## II.85 A check whose name claims an effect is followed by a look for that effect (C22, V.238)
+
+**An `ok` whose description names what a command *printed* is followed, on the next check, by an
+assertion on what it printed — and the witness names the same subject.**
+
+- **The mutation instrument runs the whole harness against a do-nothing `shall`.** A check that
+  passes under a `shall` which installs nothing, removes nothing and rebuilds nothing is measuring
+  the image, not the product. About fifty checks in the command surface had this shape and were
+  satisfied by a command that printed nothing at all.
+- **A pattern is read off a real backend's output, per command.** `search`, `info`, `why` and `lock`
+  answer differently on `apt`, `dnf`, `pacman`, `apk`, `xbps` and `emerge`; a pattern that holds for
+  one and not another reddens the matrix for being wrong about the image.
+- **Some effects are not printed.** `activate` writes a file and says nothing, so its witness is
+  that file's content. A command with no printed evidence and no effect is not a check, it is a
+  smoke test wearing a name that claims more.
+- **The bare share may only shrink.** Three survivors are allowed, each asserting an effect the exit
+  status does not carry; a fourth is a question, and the count is bounded relative to the section.

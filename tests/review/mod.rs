@@ -15,6 +15,7 @@ mod every_inline_test_module_is_on_an_exception_table_with_a_reason;
 mod the_mutation_gate_retries_a_failed_test;
 
 mod a_blocking_wait_is_off_the_runtime_tests;
+mod a_check_that_names_an_effect_looks_for_it;
 mod a_citation_in_a_comment_still_points_at_its_claim_tests;
 mod a_configured_capability_is_a_registered_one_tests;
 mod a_gate_name_cited_anywhere_resolves_tests;

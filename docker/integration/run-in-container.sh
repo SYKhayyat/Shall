@@ -2855,7 +2855,9 @@ _credit_covered "$SMOKE_COVERED"
 # cannot be are exempted BY NAME with a reason, in EXEMPT_CMDS.
 section "[16] Command surface, executed"
 
-ok "vars resolves this machine's variables" lx vars
+# `vars` prints the variables it resolved, or one sentence saying it resolved none — either way it
+# says something. A do-nothing stub exits 0 and prints nothing, and this refuses that.
+grep_ok "vars resolves this machine's variables" "resolved\|AR\|=" lx vars
 # `eval` is the one output that will acquire consumers Shall cannot see, so the
 # thing asserted is the contract: a top-level schema version, and valid JSON.
 grep_ok "eval prints a versioned document" '"schema"' lx eval
@@ -2874,10 +2876,10 @@ fi
 refuses_with_3 "try refuses when there is no container runtime" lx try
 grep_ok "try's refusal names what is missing" "podman" lx try
 ok "check unmanaged lists what Shall does not manage" lx check unmanaged
-ok "path prints the config repo" lx path
-ok "path --explain says which source won" lx path --explain
-ok "config show prints the active configuration" lx config show
-ok "policy checks the desired state against [guard]" lx policy
+grep_ok "path prints the config repo" "$SHALL_CONFIG_DIR" lx path
+grep_ok "path --explain says which source won" 'source\|\S' lx path --explain
+grep_ok "config show prints the active configuration" '^# source:\|^[a-z_]* = ' lx config show
+grep_ok "policy checks the desired state against [guard]" '\[guard\]\|guard\|rule' lx policy
 # `check conflicts` exits 2 by design (U21) when a cross-backend provider collision exists,
 # and the tools image ships one on purpose: conda's base environment carries `python` beside
 # apt's. The assertion is that the conflict is REPORTED — either exit code carries the report;
@@ -2891,7 +2893,7 @@ else
     echo "  FAIL  check conflicts (rc=$_rc)"; excerpt /tmp/it.out 4
 fi
 # With no event hooks declared, approvals is clean and exits 0 (not 2).
-ok "check approvals is clean with no hooks" lx check approvals
+grep_ok "check approvals is clean with no hooks" "approv" lx check approvals
 # `adapters` (S78) — the eight extension surfaces. The container starts with no `adapters/`
 # directory at all, which is the state almost every machine is in and the one a survey must
 # report without complaining about.
@@ -2936,18 +2938,32 @@ ok "add vendors a module from a local source" lx add /tmp/shall-share
 ok "add brought the module file in" test -f "$SHALL_CONFIG_DIR/modules/shared.txt"
 nok_saying "add refuses a source that does not exist" "no/such/source" \
     lx add /no/such/source/here
-ok "sbom emits a bill of materials" lx sbom
-ok "completions bash generates a script" lx completions bash
+# The document is the product, so the assertions are on the document: a CycloneDX header and a
+# component list. `sbom` on an empty machine and on a full one differ only in the list, never in
+# the shape.
+grep_ok "sbom emits a bill of materials" '"bomFormat"' lx sbom
+grep_ok "and names the component list" '"components"' lx sbom
+grep_ok "completions bash generates a script" '^_shall()' lx completions bash
 ok "profile list" lx profile list
-ok "profile active" lx profile active
-ok "profile create scaffolds one" lx profile create HarnessProfile
-ok "profile show reads it back" lx profile show HarnessProfile
-ok "module list" lx module list
-ok "module create scaffolds one" lx module create harness-module
-ok "module show reads it back" lx module show harness-module
-ok "snapshot list" lx snapshot list
-ok "schedule list" lx schedule list
-ok "service list" lx service list
+# Each of these names a fact it claims was *printed*, so each looks for that fact. A bare `ok` on
+# the exit status would be satisfied by a command that printed nothing, which is what the mutation
+# instrument's do-nothing stub does — and then the verdict would be reporting the image, not Shall
+# (issue #39). The patterns are read off the real binary and hold on every backend: `profile active`
+# names the active profile whatever it is, `profile list` marks it with a star, and a scaffolded
+# name comes back from its own `show`.
+grep_ok "profile active names the active profile" '\S' lx profile active
+grep_ok "profile create scaffolds one" "Created profile 'HarnessProfile'" lx profile create HarnessProfile
+grep_ok "profile list marks the active profile" '^★ ' lx profile list
+grep_ok "profile show reads it back" 'HarnessProfile' lx profile show HarnessProfile
+grep_ok "module list enumerates them" 'starter' lx module list
+grep_ok "module create scaffolds one" 'modules/harness-module\.txt' lx module create harness-module
+grep_ok "module show reads it back" '# Module: harness-module' lx module show harness-module
+# `snapshot list` and `schedule list` say *why* they are empty on a machine with no provider and no
+# declaration, and that sentence is the contract — an exit-0 that printed nothing would be the same
+# silent nothing, so the pattern is the sentence rather than a row.
+grep_ok "snapshot list explains what it cannot list" 'snapshot provider\|No snapshots' lx snapshot list
+grep_ok "schedule list explains what is declared" 'No schedules are declared\|^\s*\S' lx schedule list
+grep_ok "service list enumerates running services" 'services\|^\s\s\S' lx service list
 # Not every manager can enumerate its repositories (apt has no listing command Shall
 # drives). Either it lists, or it says the backend cannot — an unexplained non-zero is
 # still a failure.
@@ -2957,9 +2973,13 @@ else
     grep_ok "repo list says which backends cannot enumerate" \
         "not supported\|does not support" cat /tmp/it.out
 fi
-ok "list enumerates what is installed" lx list
+# The row shape is `backend  name  version`, so a backend name in column one is what makes this
+# a listing rather than an empty exit. `$PKG`'s backend was chosen by this image.
+grep_ok "list enumerates what is installed" "$BACKEND" lx list
 ok "hooks status says which managers are hookable" lx hooks status
-ok "hooks shell-init prints the wrapper functions" lx hooks shell-init bash
+# The wrapper functions ARE the product here: a shell-init that printed a comment header and no
+# function would wire nothing, and an exit-0 says nothing about it.
+grep_ok "hooks shell-init prints the wrapper functions" '^[a-z]*() {' lx hooks shell-init bash
 # `heal` when there is nothing to recover — and the check has to say WHICH, because by the time
 # it runs this sweep has deliberately failed an install (section 7) and that leaves a Failed
 # entry in the journal. `get_incomplete_actions` counts Failed as incomplete, so heal correctly
@@ -2992,7 +3012,7 @@ fi
 # its job: `clean-cache` installs nothing and removes nothing, so there is no reason for it to
 # be skipped, and skipping it is a hole in the subcommand ledger rather than a saving. The
 # gentoo leg is SMOKE_ONLY by construction, so this would have taken that leg with it.
-ok "clean-cache frees archives" lx clean-cache
+grep_ok "clean-cache reports what it freed" 'cache\|Forgot\|Cleared\|nothing' lx clean-cache
 if [ -n "$SMOKE" ]; then
     skip_smoke "the proof that clean-cache left the package behind (nothing was installed)"
 else
@@ -3004,20 +3024,38 @@ else
     stays_ok "and without removing a package" pkg-installed \
         binary_present "$BACKEND" "$PKG" /tmp/it-life0.out
 fi
-ok "update refreshes repository metadata" lx update
-ok "watch --once runs a single unattended reconcile" lx -y watch --once
-ok "search finds something" lx search "$PKG"
-ok "info reads a package's metadata" lx info "$PKG"
-ok "why explains a package's provenance" lx why "$PKG"
-ok "lock records installed versions" lx lock
-ok "upgrade --dry-run previews" lx --dry-run upgrade
-ok "remove-orphans previews without removing" lx --dry-run remove-orphans
+# `update` succeeds silently on some backends and prints a line on others, so the thing that is
+# actually checkable is that it did not report a failure — `nok_saying` refuses a refusal, which a
+# do-nothing stub cannot satisfy.
+nok_saying "update refreshes repository metadata without failing" "failed" lx update
+# `watch` is a loop, and `--once` is the promise that one pass happens and it stops. The sentence
+# it prints at the end of that pass is the only evidence it ran the reconcile rather than exiting.
+grep_ok "watch --once runs a single unattended reconcile" "in sync\|reconcil" lx -y watch --once
+# `$PKG` was installed by an earlier section on every image, so a search that finds nothing found
+# nothing it should have. The row shape is `backend  name  version`, and the name is the one the
+# harness installed.
+grep_ok "search finds something" "$PKG" lx search "$PKG"
+# Whether `$PKG` reads as managed or as absent, `info` names the package in its first sentence —
+# that sentence is the contract, and it is what a do-nothing stub cannot print.
+grep_ok "info reads a package's metadata" "$PKG" lx info "$PKG"
+grep_ok "why explains a package's provenance" "$PKG" lx why "$PKG"
+# `lock` writes the files its name claims, so the assertion is on the files rather than on a
+# sentence that varies with how many packages are pinned.
+grep_ok "lock records installed versions" 'locks/' lx lock
+grep_ok "upgrade --dry-run previews" "DRY-RUN\|would" lx --dry-run upgrade
+grep_ok "remove-orphans previews without removing" "orphan" lx --dry-run remove-orphans
+# `activate` writes the active-profile file and prints nothing, so the only observation is the
+# file's content — a do-nothing shall leaves whatever was there before, which is why the check is
+# the content and not the exit status.
 ok "activate converges onto the named profiles" lx -y activate Main
-ok "deactivate previews dropping one" lx --dry-run deactivate HarnessProfile
-ok "hold pins a package against bulk upgrade" lx hold "$PKG"
-ok "unhold releases it" lx unhold "$PKG"
-ok "teleport previews moving a package between managers" lx --dry-run teleport "$PKG" cargo
-ok "unmanage forgets a package without uninstalling it" lx unmanage "$PKG"
+grep_ok "activate made Main the active profile" "Main" cat "$SHALL_CONFIG_DIR/active"
+grep_ok "deactivate previews dropping one" "DRY-RUN\|would\|deactivat" lx --dry-run deactivate HarnessProfile
+grep_ok "hold pins a package against bulk upgrade" "Held\|held\|hold" lx hold "$PKG"
+grep_ok "unhold releases it" "Releas\|releas\|unhold" lx unhold "$PKG"
+grep_ok "teleport previews moving a package between managers" "DRY-RUN\|would\|teleport" lx --dry-run teleport "$PKG" cargo
+# `unmanage` forgets a row and leaves the package installed, so the sentence it prints is the
+# evidence for the *forget*, and the survival proof for the *without uninstalling* is below.
+grep_ok "unmanage forgets a package without uninstalling it" 'forgot\|forget\|no longer\|not managed' lx unmanage "$PKG"
 if [ -n "$SMOKE" ]; then
     skip_smoke "the proof that unmanage left the package behind (nothing was installed)"
 else
@@ -3034,7 +3072,7 @@ if lx check security >/tmp/it.out 2>&1; then
 else
     soft "check security ran but could not reach the OSV.dev database"
 fi
-ok "export writes native manifests" lx export --out /tmp/shall-it-export
+grep_ok "export names the manifests it wrote or skipped" 'skipped\|wrote\|Wrote' lx export --out /tmp/shall-it-export
 # The package is PINNED to this image's native manager. An unpinned `jq` resolved to
 # `cargo:jq` on an image that had cargo and no jq — a library crate that installs no
 # program — so the check failed on the resolver's answer, not on `run`.
@@ -3059,7 +3097,7 @@ fi
 rm -f /tmp/shall-it-plan.json
 answers "plan freezes a reviewable file" lx plan --out /tmp/shall-it-plan.json
 ok "the plan file exists" test -f /tmp/shall-it-plan.json
-ok "execute reads a saved plan" lx --dry-run execute /tmp/shall-it-plan.json
+grep_ok "execute reads a saved plan" 'plan\|would\|nothing\|Nothing\|Refus' lx --dry-run execute /tmp/shall-it-plan.json
 
 # `edit` shells out to $VISUAL/$EDITOR; `true` is an editor that exits 0.
 record_argv edit priority
@@ -3071,7 +3109,7 @@ refuses_with_3 "reset refuses while a config repo still exists" lx reset
 grep_ok "and says --force is what overrides it" "force" lx reset
 
 # self-upgrade --check only reports; it rebuilds nothing.
-ok "self-upgrade --check reports the version and source" lx self-upgrade --check
+grep_ok "self-upgrade --check reports the version and source" 'version' lx self-upgrade --check
 
 # --- 16b. bundle → restore, the round trip (V.59) -------------------------
 section "[16b] bundle → restore"

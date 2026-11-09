@@ -8755,3 +8755,33 @@ decision being written down where the next reader finds it.
 assertion in every inline test module into the production count, the ceiling would read thousands,
 and the number would stop meaning anything — so one test requires the excluded total to be the
 larger one.
+
+**V.238 — Why a name that claims an effect is checked for it (`#39`, `II.85`).**
+
+The container harness runs the whole thing against a do-nothing `shall` stub, so a check that
+survives an executable which installs nothing, removes nothing and rebuilds nothing is not measuring
+Shall. It is measuring the image. That is the finding, and the gate's own header had already named
+the class: *"the ones worth fixing are the checks whose NAME claims an effect and which are followed
+by nothing that looks for it"*.
+
+**The dishonest shape is a name that outruns its assertion.** `search finds something` gated on exit
+0 is satisfied by a search that printed nothing — and worse, the verdict moved with the host. The
+same harness against the same stub read `PASS` on a machine whose image shipped the package and
+`FAIL` on a clean runner, which is a check reporting the image rather than the product.
+
+**The patterns are the cost, and they are why this is a sweep rather than a patch.** `search`,
+`info`, `why` and `lock` answer differently on `apt`, `dnf`, `pacman`, `apk`, `xbps` and `emerge`,
+so a pattern read off one image reddens the matrix for being wrong about the others. Every pattern
+here was read off the real binary and checked to hold on the shapes all backends share: a
+`CycloneDX` header, a `locks/` path, the package name in the first sentence of `info`.
+
+**Two shapes, not one.** `activate` converges by writing a file and prints nothing, so there is no
+pattern to write and the witness is the file's content. Collapsing that case into "grep the output"
+would have produced a pattern matching the empty string, which is the defect returning wearing the
+fix's clothes.
+
+**The ceiling is on the bare share, not on the absolute count.** The survivors are legitimate — an
+`eval` whose runner parses the JSON, a `run` whose subject is `true`, an `edit` whose only
+observable is that `$EDITOR` was invoked. What must not happen is the class growing back, so the test
+bounds the bare checks relative to the section and requires any new one to be argued into the
+allowance with its reason.
