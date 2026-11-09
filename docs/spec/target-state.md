@@ -4621,3 +4621,17 @@ session is gone, the protection is relaxed — the packages are not removed.**
   row never exists without the answer to whether its session is running.
 - **A refusal or skip naming a live session names the session**, because exiting that shell is the
   action that makes the removal available and no other surface says so.
+
+## II.81 A document a script reads carries the action, not only the situation (C18, V.234)
+
+**Every row a machine-readable document reports about work it did not do carries what to do about
+it, as its own field.**
+
+- **`reason` says what happened; `advice` says what to do.** They are separate fields because a
+  consumer that logs the situation and acts on the fix needs both, and one sentence cannot be both.
+- **The advice is derived from the kind, never stored per row.** The terminal's heading, the
+  terminal's advice sentence and the document's advice field all come from one source, so they
+  cannot drift into telling a script and a person different things.
+- **A script never has to parse English.** An enumeration that identifies a situation is not an
+  answer to "what should I do"; a consumer that must map the enum itself, or scrape the reason
+  sentence, is reading prose that was never promised to be stable.

@@ -8648,3 +8648,27 @@ constructed expensive object, so it is spent *inside* the measured window, and i
 other task to run, the clock auto-advances, and the sleep returns at once. The first version spent
 a nominal 240 ms and measured 82.5 ms, which was the sleep being skipped rather than the ratio being
 blind. A control that cannot fail proves nothing about the gate it sits in.
+
+**V.234 — Why a machine-readable document carries the action and not only the situation (`#18`,
+`II.81`).**
+
+Every kind of skip a sync can report already had an advice sentence — `SkipKind::advice` — and it
+reached exactly one place: a terminal. A script reading `sync --dry-run --json` got `kind:
+"install_skipped"` and a sentence describing what happened, and had to work out for itself what to
+do about it. Mapping a `kind` to an action is the consumer's job only when the producer has not
+done it, and here the producer had — the answer was written, and withheld from the one audience that
+cannot read the situation.
+
+**This is the same defect `heal` was cured of, one surface over.** Refusal reasons were once derived
+by parsing the guard's display prose; they are typed objections now. A document that names a
+situation and expects a sentence to be understood by a program is the same error in the other
+direction: the human-facing half is stable enough to read and not stable enough to depend on.
+
+**So the field is derived, not stored.** `advice` comes from `kind.advice()`, the same function the
+terminal's sentence comes from, so the heading, the sentence and the document cannot drift apart.
+Storing a per-row string would let a row be constructed with advice for the wrong kind, and the
+only thing that would notice is a person reading two surfaces side by side.
+
+**`reason` and `advice` stay separate.** A consumer that logs why something did not happen and acts
+on what to do needs both, and a document where the advice repeats the reason offers one field and
+calls it two.

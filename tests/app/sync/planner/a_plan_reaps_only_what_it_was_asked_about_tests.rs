@@ -257,3 +257,41 @@ async fn activating_a_profile_reaps_only_the_backends_priority_names() {
         );
     }
 }
+
+/// **A narrowed plan asks no manager it cannot act on** (`#18`, finding 2).
+///
+/// The removal loops already skip rows outside the scope before doing anything with them, so no
+/// removal was ever planned wrongly. What was wrong was the *cost*: `installed_sets` asks every
+/// backend named by the plan for its full installed listing, and a plan narrowed to one module
+/// used to build that backend set from the whole config — one subprocess per manager on the
+/// machine, for managers whose packages this plan could not touch either way.
+///
+/// The assertion is on the command log, because the claim is about asking and asking leaves a
+/// trace. A count of planned removals cannot see it: the bug cost a listing, not a decision.
+#[tokio::test]
+async fn a_narrowed_plan_asks_no_manager_it_cannot_act_on() {
+    let kernel = TestKernel::new().await;
+    machine_holding_four(&kernel).await;
+
+    // A module that reaches exactly one package, so the plan has something to do and cannot
+    // pass this by planning nothing at all.
+    let desired = desired_of(&[spec("cargo", "ripgrep")]);
+    {
+        let state = kernel.app.state.lock().await;
+        ChangePlanner::new(kernel.app.registry.clone(), &state, &kernel.app.config)
+            .plan(
+                &desired,
+                PlanScope::Narrowed(Scope::Module("nothing-matches".into())),
+            )
+            .await
+            .unwrap();
+    }
+
+    let calls: Vec<String> = kernel.mock_executor.get_calls().await;
+    let asked_brew = calls.iter().any(|c| c.contains("brew"));
+    assert!(
+        !asked_brew,
+        "a plan narrowed to a module with no declarations must not list `brew`'s installed set — \
+         it can neither install nor remove anything through that manager. Calls: {calls:?}"
+    );
+}

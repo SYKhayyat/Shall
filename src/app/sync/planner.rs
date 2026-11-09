@@ -354,8 +354,21 @@ impl SkipKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Skipped {
     pub key: String,
+    /// What happened, in the kind's own words.
     pub reason: String,
     pub kind: SkipKind,
+    /// **What to do about it** (`#18`, finding 7), carried as a field rather than left to the
+    /// printer.
+    ///
+    /// The advice was already written — `SkipKind::advice` — but only ever reached a terminal. A
+    /// `--json` consumer saw `kind: "install_skipped"` and a sentence describing the situation,
+    /// and had to map the enum to an action itself or scrape the sentence. That is the same
+    /// prose-parsing defect the guard refused to have (`heal`'s typed objections), one surface
+    /// over: the machine-readable answer should not require reading English.
+    ///
+    /// Derived from `kind` and not stored per row, so it cannot drift from the heading and the
+    /// human sentence that already belong to that kind.
+    pub advice: String,
 }
 
 impl Skipped {
@@ -546,14 +559,16 @@ impl SyncChanges {
             self.graph.remove_node(idx);
             self.install_map.remove(&key);
             self.removal_tracker.remove(&key);
+            let kind = if was_removal {
+                SkipKind::RemovalWithdrawn
+            } else {
+                SkipKind::InstallSkipped
+            };
             self.skipped.push(Skipped {
                 reason: format!("`{}` is not on this machine", backend),
                 key,
-                kind: if was_removal {
-                    SkipKind::RemovalWithdrawn
-                } else {
-                    SkipKind::InstallSkipped
-                },
+                advice: kind.advice().to_string(),
+                kind,
             });
         }
     }
@@ -961,6 +976,7 @@ impl<'a> ChangePlanner<'a> {
                     "`{}` is not on this machine, so it cannot install `{}` here",
                     spec.backend, spec.name
                 ),
+                advice: SkipKind::InstallSkipped.advice().to_string(),
                 kind: SkipKind::InstallSkipped,
             });
         }
@@ -995,6 +1011,7 @@ impl<'a> ChangePlanner<'a> {
             changes.skipped.push(Skipped {
                 key: pin.key,
                 reason,
+                advice: SkipKind::InstallSkipped.advice().to_string(),
                 kind: SkipKind::InstallSkipped,
             });
         }
@@ -1086,6 +1103,7 @@ impl<'a> ChangePlanner<'a> {
                 Verdict::Unanswerable(why) => unanswerable.push(Skipped {
                     key: format!("{}:{}", spec.backend, spec.name),
                     reason: why,
+                    advice: SkipKind::CouldNotAsk.advice().to_string(),
                     kind: SkipKind::CouldNotAsk,
                 }),
             }
@@ -1176,6 +1194,7 @@ impl<'a> ChangePlanner<'a> {
                     changes.skipped.push(Skipped {
                         key,
                         reason,
+                        advice: SkipKind::RemovalDeclined.advice().to_string(),
                         kind: SkipKind::RemovalDeclined,
                     });
                 }
