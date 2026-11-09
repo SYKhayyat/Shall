@@ -4600,3 +4600,22 @@ measures the developer's machine.
 - **A step whose failure would cost a whole leg to a rolling index is retried**, because a mirror
   caught mid-rewrite is weather and not a defect — and the arms that are meant to fail loudly keep
   failing loudly.
+
+## II.80 A stale session stops protecting and reaps nothing (C16, V.232)
+
+**A package an ephemeral session installed is the session's while that session runs. When the
+session is gone, the protection is relaxed — the packages are not removed.**
+
+- **Staleness is a fact about a row, not about the machine.** The question is not "is the active
+  session alive" but "is the session that stamped *this* row alive", asked per row, because a
+  session killed mid-flight leaves the global stamp set while its process is gone.
+- **The check may relax a protection and may never authorise a deletion.** The removal a relaxed
+  protection exposes is proposed by the ordinary drift rules, goes through the removal guard, is
+  shown by `shall plan`, and can be refused. No pid check deletes anything by itself.
+- **Unanswerable means alive.** A missing stamp, an unparseable one, or a platform whose process
+  table cannot be read leaves the rows protected. The two errors are not symmetric: relax wrongly
+  and the user sees it in a preview, remove wrongly and a running shell loses its software.
+- **A session's pid is written before any package it installs**, under the data lock, so a stamped
+  row never exists without the answer to whether its session is running.
+- **A refusal or skip naming a live session names the session**, because exiting that shell is the
+  action that makes the removal available and no other surface says so.

@@ -72,6 +72,42 @@ impl Sandbox {
         Self { root }
     }
 
+    /// The same machine, but the managed row was installed by an ephemeral session.
+    ///
+    /// `pid` is what the session stamp says its process is; `None` writes no stamp at all, which
+    /// is the unanswerable case. Writing a stamp for a pid that is not running is how a killed
+    /// session looks from the next command's point of view (`C16`, II.80).
+    fn in_session(self, session: &str, pid: Option<u32>) -> Self {
+        let data = self.root.path().join("data");
+        std::fs::write(
+            data.join("registry.json"),
+            serde_json::json!({
+                "packages": [{
+                    "name": "hello",
+                    "backend": "cargo",
+                    "version": null,
+                    "installed_at": 0,
+                    "expires_at": null,
+                    "options": {},
+                    "source": "sync",
+                    "is_transient": true,
+                    "session_id": session
+                }],
+                "active_session_id": session,
+                "suspensions": [],
+                "held": []
+            })
+            .to_string(),
+        )
+        .unwrap();
+        if let Some(pid) = pid {
+            let dir = self.root.path().join("config").join("sessions");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join(format!("{session}.pid")), pid.to_string()).unwrap();
+        }
+        self
+    }
+
     fn cfg(&self) -> PathBuf {
         self.root.path().join("config")
     }
@@ -233,6 +269,7 @@ fn every_reason_a_removal_is_declined_says_whether_the_user_hears_about_it() {
         Declined::BackendNotInPriority("cargo".into()),
         Declined::BackendNotOnThisMachine("zypper".into()),
         Declined::Protected("hello".into()),
+        Declined::HeldByLiveSession("shell-abc".into()),
     ] {
         let reported = declined.reported();
         let must_report = match declined {
@@ -251,6 +288,12 @@ fn every_reason_a_removal_is_declined_says_whether_the_user_hears_about_it() {
             Declined::BackendNotInPriority(_)
             | Declined::BackendNotOnThisMachine(_)
             | Declined::Protected(_) => true,
+            // **A live session's row is a standing disagreement too**, and the loudest kind: the
+            // machine keeps software nothing declares, no `sync` will touch it while the session
+            // runs, and the user cannot know why without being told which session holds it. It
+            // is also the one reason the user can act on immediately — exit the shell and the
+            // ordinary rules apply (`C16`, II.80).
+            Declined::HeldByLiveSession(_) => true,
         };
 
         assert_eq!(
@@ -269,4 +312,58 @@ fn every_reason_a_removal_is_declined_says_whether_the_user_hears_about_it() {
             );
         }
     }
+}
+
+/// **A live session's package is kept and the row says which session holds it** (`C16`, II.80).
+///
+/// The process is this test's own, so the pid in the stamp is genuinely running. The planner must
+/// not schedule the removal — taking a package out from under a live shell is the failure this
+/// protection exists for — and it must say whose it is, because "installed and declared nowhere"
+/// with no mention of the shell sends the user looking for a manifest they never had.
+#[test]
+fn a_live_session_keeps_its_package_and_the_skip_names_the_session() {
+    let sandbox =
+        Sandbox::new("nothing-matches-this").in_session("shell-live", Some(std::process::id()));
+    let (out, _rc) = sandbox.run(&["sync", "--dry-run"]);
+
+    assert!(
+        out.contains("shell-live"),
+        "the preview must name the session holding the package, because exiting that shell is \
+         the action that makes the removal available: {out}"
+    );
+}
+
+/// **The same machine with the session's process gone: the ordinary rules now apply.**
+///
+/// This is the whole ruling. Nothing deletes on the strength of the pid check — the row simply
+/// stops being protected, and the drift rules see it. The assertion is that the session's id is
+/// no longer named as the reason, which is exactly "protection relaxed" and not "reaped": a
+/// reaping implementation would have removed the row and had nothing to report at all.
+#[test]
+fn a_dead_session_stops_protecting_and_the_row_is_ordinary_drift() {
+    // `u32::MAX` is not a pid any kernel hands out, so the session reads as gone.
+    let sandbox = Sandbox::new("nothing-matches-this").in_session("shell-dead", Some(u32::MAX));
+    let (out, _rc) = sandbox.run(&["sync", "--dry-run"]);
+
+    assert!(
+        !out.contains("shell-dead"),
+        "the session is gone, so it is not a reason to keep anything — the row is ordinary drift \
+         and the ordinary sentence is owed instead: {out}"
+    );
+}
+
+/// **And with no stamp at all — the unanswerable case — the protection stays.**
+///
+/// Fail-open, asserted through the binary rather than the predicate, because this is the arm that
+/// decides whether the fix can ever delete something it had no business deleting.
+#[test]
+fn an_unanswerable_session_keeps_protecting() {
+    let sandbox = Sandbox::new("nothing-matches-this").in_session("shell-unknown", None);
+    let (out, _rc) = sandbox.run(&["sync", "--dry-run"]);
+
+    assert!(
+        out.contains("shell-unknown"),
+        "no stamp means the question cannot be answered, and an unanswerable session must keep \
+         its protection — not knowing may never authorise a removal: {out}"
+    );
 }

@@ -8581,3 +8581,38 @@ before any later command overwrites it.
 **The rule underneath both.** A test asserts a property of the product, and a fixture that can only
 run on one platform asserts a property of that platform. When a test cannot fail on the machine it
 was written on, that is not coverage — it is a record of what the developer's laptop had installed.
+
+**V.232 — Why a stale session relaxes its protection instead of reaping its packages (`#20`, `C16`, `II.80`).**
+
+`shall shell` stamps every package it installs with the session's id, and the planner keeps those
+rows because a shell is using them. Teardown clears the stamp and removes the packages. A `SIGKILL`,
+a closed lid or a torn-down container never reaches teardown, so the stamp outlives the session and
+the rows stay protected with nothing behind them. The obvious repair — have the next run delete
+whatever a dead session left — was rejected, and the rejection is the rule.
+
+**A deletion must be previewable, and a pid check is not a preview.** If staleness removed packages,
+`shall sync` — a command whose whole promise is convergence toward your manifests — would start
+deleting software on the strength of a process-table read. The user could not see it coming or
+decline it. Relaxing the protection instead leaves the row to the ordinary drift rules: the removal
+is proposed by the planner, goes through the removal guard, appears in `shall plan`, and can be
+refused. Nothing about the deletion path is new, which is what makes it safe.
+
+**The two ways to be wrong are not symmetric, so only one of them may be believed.** Answering
+"stale" about a live session removes software out from under a running shell — irrecoverable from
+the user's side and invisible until something breaks. Answering "live" about a dead one leaves the
+bug exactly where it was. No process check gets both right: pids are reused, containers hide their
+process tables, and a data directory can be shared. So the check is allowed to **relax a
+protection** and never to **authorise a deletion**, and the asymmetry decides the whole design.
+
+**Unanswerable means alive.** No stamp file, an unparseable one, a platform with no `/proc` — each
+of those leaves the rows protected. The cost is stated rather than hidden: this cannot repair such a
+host, and a session stranded there keeps its protection, which is the status quo. A check that
+guessed in the other direction on those hosts would be a check that deletes live sessions' packages
+on a guess, and the guess would be wrong on exactly the hosts where nobody can see it happen.
+
+**Relaxing is idempotent for free.** It cannot half-happen and cannot depend on when it ran, which a
+reaper has to be written carefully to achieve. A rule that needs care to be correct twice is a rule
+that is wrong once on the machine that matters.
+
+**The stamp goes before the packages.** A teardown interrupted between the two leaves a session
+nobody claims, rather than one whose pid answers "alive" for rows already removed.

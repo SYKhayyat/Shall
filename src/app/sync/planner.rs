@@ -427,6 +427,18 @@ pub enum Declined {
     BackendNotOnThisMachine(String),
     /// A `[guard] protected_packages` rule matched, carrying the rule that decided it.
     Protected(String),
+    /// **An ephemeral session installed it and that session is still running** (`C16`, II.80).
+    ///
+    /// Not a drift decision at all: the row exists because a shell is using the package right
+    /// now, and removing it would take software out from under a live process. When the session
+    /// is found **stale** — its process is gone — this stops being a reason and the ordinary
+    /// drift rules see the row, which is the whole ruling: a stale session stops protecting and
+    /// reaps nothing.
+    ///
+    /// Reported, because a machine keeping software nothing declares and no future run will
+    /// touch is a standing disagreement with the files — and the sentence has to name the session
+    /// so the reader knows which shell to exit and which `shall` command to run.
+    HeldByLiveSession(String),
 }
 
 impl Declined {
@@ -452,6 +464,12 @@ impl Declined {
             Self::Protected(rule) => {
                 Some(crate::app::sync::guard::Protection::Rule(rule.clone()).reason())
             }
+            Self::HeldByLiveSession(session) => Some(format!(
+                "`{}` installed it and that shell session is still running, so removing it would \
+                 take it out from under a live process — exit the session (or `shall shell` \
+                 again) and the ordinary rules apply",
+                session
+            )),
         }
     }
 }
@@ -711,7 +729,30 @@ impl<'a> ChangePlanner<'a> {
         if let Some(rule) = self.config.protection_rule(&pkg.name) {
             return Some(Declined::Protected(rule.to_string()));
         }
+        // A row an ephemeral session installed is the session's while that session runs. Read
+        // per row rather than from `active_session_id`, because the two disagree exactly when it
+        // matters: a killed session leaves the field set with its process gone, and the field
+        // alone cannot tell that apart from a live shell.
+        if let Some(session) = &pkg.session_id {
+            if self.session_protects(session) {
+                return Some(Declined::HeldByLiveSession(session.clone()));
+            }
+        }
         None
+    }
+
+    /// Whether `session` still protects the rows it stamped.
+    ///
+    /// **Unanswerable means protected.** Every way of not knowing — no stamp file, an
+    /// unparseable one, a platform whose process table cannot be read — stays on the protecting
+    /// side, because the two directions are not symmetric: relaxing a protection is recoverable
+    /// and the user sees it in `shall plan`, while removing a live shell's packages is not.
+    fn session_protects(&self, session: &str) -> bool {
+        use crate::app::session_liveness::{liveness, read_stamp};
+        use crate::app::stale_lock::ProcFs;
+        let dir = self.config.config_root.join("sessions");
+        let stamp = read_stamp(&dir, session);
+        liveness(stamp.as_ref(), &ProcFs).protects()
     }
 
     /// What each named backend reports as installed, asked **once per backend**.

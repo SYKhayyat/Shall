@@ -33,6 +33,7 @@ pub mod repl;
 pub mod run;
 pub mod sandbox;
 pub mod search;
+pub mod session_liveness;
 pub mod shim_manager;
 pub mod snapshot_restore;
 pub mod stale_lock;

@@ -73,6 +73,36 @@ impl EphemeralShell {
                 }
             }
 
+            // **The stamp that makes "is this session still alive" answerable.**
+            //
+            // Written here, under the data lock and before any package is installed, so a row
+            // stamped with this session never exists without the pid that can answer for it. The
+            // planner reads it per row (`C16`, II.80): a row whose session is still running is
+            // held by that session, and a row whose session is gone goes back to the ordinary
+            // drift rules rather than being deleted on the strength of a pid check.
+            //
+            // Best-effort on purpose: an unwritable session directory leaves the stamp absent,
+            // and an absent stamp is read as **live**, which protects the rows. The failure
+            // direction of a broken write has to be "keeps protecting", not "silently stale".
+            let session_dir = self.m.config.config_root.join("sessions");
+            if let Err(e) = std::fs::create_dir_all(&session_dir) {
+                warn!(
+                    "could not create {} ({}), so this session's packages stay protected until \
+                     the session is torn down",
+                    session_dir.display(),
+                    e
+                );
+            } else if let Err(e) = std::fs::write(
+                session_dir.join(format!("{session_id}.pid")),
+                std::process::id().to_string(),
+            ) {
+                warn!(
+                    "could not record this session's pid ({}); its packages stay protected until \
+                     it is torn down",
+                    e
+                );
+            }
+
             info!("installing session packages");
             self.provision_transient_env(packages, &session_id).await?;
         }
@@ -117,6 +147,15 @@ impl EphemeralShell {
         // the whole point of the split is that nobody waits on a person's shell — and released
         // by the end of this scope rather than by the end of `enter`.
         let _data_lock = crate::core::datalock::DataLock::for_one_step("shell teardown").await?;
+        // The stamp goes before the packages, so a teardown interrupted half way leaves a
+        // session nobody claims rather than one that answers "alive" for rows already gone.
+        let _ = std::fs::remove_file(
+            self.m
+                .config
+                .config_root
+                .join("sessions")
+                .join(format!("{session_id}.pid")),
+        );
         self.cleanup_transient_env(&session_id).await?;
 
         // Restore anything the user temporarily uninstalled for the duration of this
