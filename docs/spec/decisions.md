@@ -1,4 +1,4 @@
-﻿# The decision register — 256 entries, none open
+﻿# The decision register — 257 entries, none open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **251** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **252** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 256 are accounted
-for: **251 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 257 are accounted
+for: **252 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script) — 18
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested) — 19
 
 | | question | answered |
 |---|---|---|
@@ -536,6 +536,7 @@ deliberately no longer has.*
 | **C16** | An ephemeral session stamps the packages it installs, and the planner kept every row whose session stamp was set. Teardown clears the stamp, but a `SIGKILL`, a closed lid or a torn-down container never reaches teardown, so the stamp outlived the session and its packages stayed protected forever — with no preview and no way to decline (`#20`). The obvious repair, reaping whatever a dead session left, was rejected: it makes `shall sync` delete software on the strength of a process-table read. **Does a stale session reap its packages, or only stop protecting them?** — RULED 2026-11-10: **it stops protecting, and reaps nothing.** Staleness is asked per row, since the row carries its session's id; the check may relax a protection and never authorise a deletion, so the removal it exposes goes through the ordinary drift rules and the removal guard where `shall plan` shows it; and **unanswerable means alive**, because relaxing wrongly is visible in a preview and removing wrongly takes software from a running shell. The pid is written under the data lock before any package is installed, so a stamped row never exists without its answer. (II.80, V.232) | 2026-11-10 |
 | **C17** | The startup budget asserted that registering 56 backends takes under **120 ms**, measured as the best of three fresh processes. Isolated it was ~55 ms and passed three runs in a row; at the end of two consecutive full suites it measured **145.8 ms and 148.4 ms**, in suites that also took 480–530 s instead of the usual 260 s. Nothing about the registry had changed — the budget was measuring the machine's load, and a gate that goes red on a busy machine is a gate people learn to skip (`#143`). **Does the budget stay a millisecond count, or become a multiple of the machine's own measured pace?** — RULED 2026-11-10: **a multiple of the machine's own measured pace.** The child times a fixed calibration workload first and registration is judged against a ratio of it, so a loaded machine inflates both sides together; the property "registration constructs nothing eagerly" survives because eager work is unrelated to the calibration loop. The calibration workload is deliberately **not** `Registry::new()`, which would shrink when the defect appeared and hide it. The control arm was also fixed: it is spent inside the measured window and uses `std::thread::sleep`, since `tokio::time::sleep` auto-advances under `#[tokio::test]` and returned at once. (II.79, V.233) | 2026-11-10 |
 | **C18** | Every kind of skip a sync reports already had an advice sentence — `SkipKind::advice` — and it reached exactly one place: a terminal. A script reading `sync --dry-run --json` got `kind: "install_skipped"` and a sentence describing what happened, and had to map the enum to an action itself or scrape the prose (`#18`, finding 7). That is the same defect `heal` was cured of (typed objections rather than parsing guard prose), one surface over. **Does a machine-readable document carry the action, or only the situation?** — RULED 2026-11-10: **the action, as its own `advice` field, derived from the kind.** `reason` says what happened and `advice` says what to do; the advice comes from `SkipKind::advice()` — the same function the terminal prints — so the heading, the sentence and the document cannot drift into telling a script and a person different things. Stored per row it could be built with the wrong kind's advice, and only a human reading two surfaces at once would notice. (II.81, V.234) | 2026-11-10 |
+| **C19** | The `.wsb` writer escaped every value it pasted into XML, and the macOS profile escaped nothing — but the interesting half is *where* the escaping lived: a `fn xml` nested inside a `#[cfg(target_os = "windows")]` function, so on every other host the code that protects the document was invisible to the suite (`#19`). And `generate_macos_profile` formatted a home directory and every custom mount path straight into a Scheme policy string, where one `"` ends the literal and the rest is read as policy — a directory named `x") (allow default) ("` grants everything, silently (`#19`). **Does an escaper that only one platform's leg can reach count as tested, and what does the macOS profile owe a path?** — RULED 2026-11-10: **both escapers move to module scope outside every `cfg`, and every user-derived value is escaped.** The rule being checked is about a string, and a string is the same on every platform, so the host a test runs on must not decide whether the claim can be checked. Escaping is not dropping: the hostile text survives as data, because an escaper that removed it would silently discard a user's path. `&` is escaped first, and the test asserts on the rendered output rather than the input. (II.82, V.235) | 2026-11-10 |
 
 # The blocking round — thirteen questions, all ruled
 
@@ -10770,3 +10771,42 @@ side by side would notice.
   compiler when the field was added.
 - **A test runs a real plan, not just the struct's constructor**, because three hand-built rows
   would all pass on a planner that left the field empty everywhere.
+
+## C19
+
+**Status: ANSWERED 2026-11-10, built the same day.** Both sandbox escapers live at module scope,
+outside every `cfg`, and every user-derived value is escaped. Carried out of `#19`.
+
+**Asked.** The `.wsb` writer escaped every value it pasted into XML. That escaper was a `fn xml`
+nested inside a `#[cfg(target_os = "windows")]` function, so on every other host the code that
+protects the document was invisible to the suite. The macOS profile had no escaping at all: it
+formatted a home directory and every custom mount path straight into a Scheme policy string.
+
+**Does an escaper that only one platform's leg can reach count as tested, and what does the macOS
+profile owe a path?**
+
+**Ruled: both escapers move to module scope outside every `cfg`, and every user-derived value is
+escaped.**
+
+**1. The rule being checked is about a string, and a string is the same on every platform.** This is
+`V.231` applied to the sandbox: the host a test runs on must not decide whether the claim can be
+checked. An escaper reachable only from a Windows leg is escaping that is untested for most of the
+repo's life.
+
+**2. The macOS half was worse than untested; it was absent.** That profile is a normal Scheme
+program, so a path containing `"` ends the literal and whatever follows is read as policy. A
+directory named `x") (allow default) ("` grants everything — and silently, because an injected
+`(allow default)` in the right place makes the sandbox more permissive and nothing fails.
+
+**3. Escaping is not dropping.** The hostile text stays in the output as data. An escaper that
+removed it would silently discard a user's path, which is a worse bug than the one it prevents and
+would surface as a mount that quietly does not work.
+
+**What this binds.**
+
+- **`&` is escaped first**, because escaping it after `<` turns the `&` of `&lt;` into `&amp;lt;` —
+  markup that renders visibly wrong instead of invisibly dangerous.
+- **The test asserts on the rendered output, not the input.** The input was never the problem; the
+  question is whether the output can escape the string it was written into.
+- **A backslash doubles in a Scheme literal**, since a trailing one would otherwise consume the
+  closing quote.

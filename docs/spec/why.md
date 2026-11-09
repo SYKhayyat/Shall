@@ -8672,3 +8672,31 @@ only thing that would notice is a person reading two surfaces side by side.
 **`reason` and `advice` stay separate.** A consumer that logs why something did not happen and acts
 on what to do needs both, and a document where the advice repeats the reason offers one field and
 calls it two.
+
+**V.235 — Why an escaper inside a `cfg` is an escaper nothing tests (`#19`, `II.82`).**
+
+The `.wsb` writer escaped every value it pasted into XML, and the macOS profile escaped nothing. The
+first is not the interesting half. The interesting half is *where the escaping lived*: a `fn xml`
+nested inside a `#[cfg(target_os = "windows")]` function, so on every other host the code that
+protects the document was invisible to the suite. Windows-only escaping that only a Windows leg can
+reach is escaping that is, for most of the repo's life, tested by nobody.
+
+**The macOS half was worse than untested; it was absent.** `generate_macos_profile` formats a home
+directory and every custom mount path straight into a Scheme policy string. That profile is a normal
+Scheme program, so a path containing `"` ends the literal and whatever follows is read as policy. A
+directory named `x") (allow default) ("` grants everything, and the only thing that would notice is
+nobody — the profile is generated, applied, and works, because an injected `(allow default)` in the
+right place simply makes the sandbox more permissive.
+
+**So both escapers moved out of every `cfg` and into one module.** The rule being checked is about a
+string, and a string is the same on every platform, which is `V.231`'s point applied to the sandbox:
+the host a test runs on must not decide whether the claim can be checked. The suite now asserts, on
+this host, that a hostile path cannot close its own literal.
+
+**Escaping is not dropping.** The hostile text stays in the output as data. An escaper that removed
+it would be silently discarding a user's path — a worse bug than the one it exists to prevent, and
+one that would surface as a mount that quietly does not work.
+
+**`&` is escaped first, and the order is the property.** Escaping it after `<` turns the `&` of
+`&lt;` into `&amp;lt;`, which renders markup visibly wrong instead of invisibly dangerous. The test
+asserts on the rendered output rather than on the input, because the input was never the problem.

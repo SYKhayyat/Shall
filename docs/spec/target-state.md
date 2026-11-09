@@ -4635,3 +4635,18 @@ it, as its own field.**
 - **A script never has to parse English.** An enumeration that identifies a situation is not an
   answer to "what should I do"; a consumer that must map the enum itself, or scrape the reason
   sentence, is reading prose that was never promised to be stable.
+
+## II.82 A value a sandbox document interpolates is escaped by a function the suite can run (C19, V.235)
+
+**Every user-derived value pasted into a generated policy document is escaped, and the escaper is
+reachable from a test on any host.**
+
+- **A path is user input, and a path is where a quote can be.** The macOS profile is a Scheme
+  program; a mount path containing `"` or `\` closes the string literal it sits in and everything
+  after it is read as policy. A directory named `x") (allow default) ("` grants everything.
+- **The escaper lives at module scope, outside every `cfg`.** An escaper nested inside a
+  `#[cfg(target_os = "windows")]` function is invisible to every test on every other host, so the
+  part of the sandbox that protects the document is the part the suite cannot exercise.
+- **Escaping is not dropping.** The hostile text survives as data inside the literal. An escaper
+  that removed it would be silently discarding a user's path, which is a worse failure than the one
+  it prevents.

@@ -53,6 +53,36 @@ impl Confinement {
 
 pub struct Sandbox;
 
+/// Escaping the two sandbox documents have to do, in one place and outside any `cfg`.
+///
+/// The `.wsb` writer's escaper used to be a `fn xml` nested inside a `#[cfg(target_os =
+/// "windows")]` function, which made it invisible to every test on every other host — so the
+/// escaping that protects the XML was the part of the sandbox this repo could not exercise. The
+/// macOS profile had no escaping at all: it interpolates a home directory and custom mount paths
+/// into a Scheme policy string, where an unbalanced quote ends the string and whatever follows
+/// becomes policy. A path is user input, and a path is exactly where a quote can be.
+pub mod escape {
+    /// XML text and attribute escaping, for Windows Sandbox's `.wsb`.
+    pub fn xml(value: &str) -> String {
+        value
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+            .replace('\'', "&apos;")
+    }
+
+    /// A double-quoted string literal for a macOS sandbox profile (Scheme).
+    ///
+    /// The profile is a normal Scheme program, so a path containing `"` or `\\` would close the
+    /// literal and let the rest of the path be read as policy — a directory named `x") (allow
+    /// default) ("` grants everything. Only those two characters need escaping inside a quoted
+    /// string.
+    pub fn scheme_string(value: &str) -> String {
+        format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+    }
+}
+
 impl Sandbox {
     /// The one place that answers "is a mechanism in force, and if not may this proceed".
     ///
@@ -179,14 +209,6 @@ impl Sandbox {
             }
             format!(r"C:\Users\WDAGUtilityAccount\Desktop\{}", name)
         }
-        fn xml(value: &str) -> String {
-            value
-                .replace('&', "&amp;")
-                .replace('<', "&lt;")
-                .replace('>', "&gt;")
-                .replace('"', "&quot;")
-                .replace('\'', "&apos;")
-        }
 
         let mut wsb = String::from("<Configuration>\n");
 
@@ -224,12 +246,29 @@ impl Sandbox {
                 .map(|(src, target)| (src.clone(), guest_folder_name(target), false)),
         );
         for (src, target, read_only) in mapped {
-            if Path::new(&src).exists() {
+            // **A missing mount is said out loud.** The `.wsb` schema has no way to declare a
+            // folder it cannot see, so dropping one is the only option — but dropping it in
+            // silence means a `custom_mounts` line naming a path that is not there produces a
+            // sandbox missing a directory the user asked for, and the run either fails somewhere
+            // unrelated or quietly works without it. The caller reads stderr; the file is
+            // generated, used, and destroyed.
+            if !Path::new(&src).exists() {
+                tracing::warn!(
+                    "not mapping {}: it does not exist on this host, so the sandbox will not \
+                     have it",
+                    src
+                );
+                continue;
+            }
+            {
                 wsb.push_str("    <MappedFolder>\n");
-                wsb.push_str(&format!("      <HostFolder>{}</HostFolder>\n", xml(&src)));
+                wsb.push_str(&format!(
+                    "      <HostFolder>{}</HostFolder>\n",
+                    escape::xml(&src)
+                ));
                 wsb.push_str(&format!(
                     "      <SandboxFolder>{}</SandboxFolder>\n",
-                    xml(&target)
+                    escape::xml(&target)
                 ));
                 wsb.push_str(&format!(
                     "      <ReadOnly>{}</ReadOnly>\n",
@@ -245,8 +284,8 @@ impl Sandbox {
             for (name, value) in &config.environment {
                 wsb.push_str(&format!(
                     "    <Variable name=\"{}\" value=\"{}\" />\n",
-                    xml(name),
-                    xml(value)
+                    escape::xml(name),
+                    escape::xml(value)
                 ));
             }
             wsb.push_str("  </EnvironmentVariables>\n");
@@ -267,7 +306,10 @@ impl Sandbox {
             .collect::<Vec<_>>()
             .join(" ");
         wsb.push_str("  <LogonCommand>\n");
-        wsb.push_str(&format!("    <Command>{}</Command>\n", xml(&full_cmd)));
+        wsb.push_str(&format!(
+            "    <Command>{}</Command>\n",
+            escape::xml(&full_cmd)
+        ));
         wsb.push_str("  </LogonCommand>\n");
 
         wsb.push_str("</Configuration>");
@@ -288,7 +330,8 @@ impl Sandbox {
             "/usr/bin",
         ];
         for path in ro_paths {
-            profile.push_str(&format!("(allow file-read* (subpath \"{}\"))\n", path));
+            let path = escape::scheme_string(path);
+            profile.push_str(&format!("(allow file-read* (subpath {path}))\n"));
         }
 
         if config.allow_network {
@@ -298,20 +341,22 @@ impl Sandbox {
 
         if config.allow_home {
             if let Some(home) = dirs::home_dir() {
-                let path = home.to_string_lossy();
-                profile.push_str(&format!("(allow file-read* (subpath \"{}\"))\n", path));
+                let path = escape::scheme_string(&home.to_string_lossy());
+                profile.push_str(&format!("(allow file-read* (subpath {path}))\n"));
                 if config.allow_write {
-                    profile.push_str(&format!("(allow file-write* (subpath \"{}\"))\n", path));
+                    profile.push_str(&format!("(allow file-write* (subpath {path}))\n"));
                 }
             }
         }
 
         for (src, _) in &config.custom_read_only_mounts {
-            profile.push_str(&format!("(allow file-read* (subpath \"{}\"))\n", src));
+            let src = escape::scheme_string(src);
+            profile.push_str(&format!("(allow file-read* (subpath {src}))\n"));
         }
         for (src, _) in &config.custom_mounts {
-            profile.push_str(&format!("(allow file-read* (subpath \"{}\"))\n", src));
-            profile.push_str(&format!("(allow file-write* (subpath \"{}\"))\n", src));
+            let src = escape::scheme_string(src);
+            profile.push_str(&format!("(allow file-read* (subpath {src}))\n"));
+            profile.push_str(&format!("(allow file-write* (subpath {src}))\n"));
         }
 
         profile
