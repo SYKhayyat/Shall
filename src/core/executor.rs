@@ -726,6 +726,11 @@ pub struct MockExecutor {
     allow_unmatched: std::sync::atomic::AtomicBool,
     /// Set by a test that means it — see [`MockExecutor::deny_unstubbed`].
     deny_unstubbed: std::sync::atomic::AtomicBool,
+    /// Whether this mock has already reported its fall-throughs in audit mode.
+    ///
+    /// Audit mode reports once per mock rather than once per call, so a run's output stays readable
+    /// and one test cannot flood the log.
+    audited: std::sync::atomic::AtomicBool,
     vfs: Arc<DashMap<PathBuf, String>>,
 }
 
@@ -742,6 +747,7 @@ impl MockExecutor {
             delays: DashMap::new(),
             allow_unmatched: std::sync::atomic::AtomicBool::new(false),
             deny_unstubbed: std::sync::atomic::AtomicBool::new(false),
+            audited: std::sync::atomic::AtomicBool::new(false),
             vfs,
         }
     }
@@ -991,6 +997,31 @@ impl Drop for MockExecutor {
     fn drop(&mut self) {
         if std::thread::panicking() {
             return;
+        }
+        // **Audit mode: report, never fail.** `SHALL_AUDIT_UNSTUBBED=1` turns every fall-through
+        // in the run into one line on stdout instead of a panic, so the suite can be asked "how
+        // many tests still leave a command unanswered?" without a per-test opt-in. It is the
+        // measurement `#40` needs and it deliberately cannot fail a build: the conversion is
+        // incremental and a global deny would redden a quarter of the suite for having no opinion.
+        //
+        // Here rather than inside the assertion below, which returns early for a mock that allowed
+        // unmatched registrations — that early return would have hidden exactly the tests this
+        // measures.
+        //
+        // Printed once per mock so one test cannot flood the log.
+        if std::env::var_os("SHALL_AUDIT_UNSTUBBED").is_some()
+            && !self
+                .audited
+                .swap(true, std::sync::atomic::Ordering::Relaxed)
+        {
+            let unstubbed = self.unstubbed_registrations();
+            if !unstubbed.is_empty() {
+                println!(
+                    "shall-unstubbed-audit: {} command(s) unanswered: {}",
+                    unstubbed.len(),
+                    unstubbed.join(" | ")
+                );
+            }
         }
         self.assert_every_registration_was_used();
     }

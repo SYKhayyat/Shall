@@ -8785,3 +8785,38 @@ fix's clothes.
 observable is that `$EDITOR` was invoked. What must not happen is the class growing back, so the test
 bounds the bare checks relative to the section and requires any new one to be argued into the
 allowance with its reason.
+
+**V.239 — Why the fall-through ledger needed a way to be measured, and what the measurement said
+(`#40`).**
+
+The instrument exists and works: `unstubbed_registrations()` reads the ledger, `deny_unstubbed()`
+makes a fall-through fail at drop, and both are pinned. What was missing was any way to *ask the
+suite the question*. `deny_unstubbed` is per-mock by design — 172 tests legitimately leave a command
+unanswered — so the count of who does could only be found by adding the call to tests one at a time
+and watching which ones failed.
+
+**So audit mode reports instead of failing.** `SHALL_AUDIT_UNSTUBBED=1` prints one line per mock at
+`Drop`. It is placed ahead of every early return, including the one inside
+`assert_every_registration_was_used` that a mock with `allow_unmatched_registrations` takes — that
+early return is precisely where the tests worth measuring go, and an arm placed after it would have
+reported zero and looked like a clean bill of health. The first draft was placed there and did
+report zero.
+
+**The measurement separates two things the audit had been calling one.** Before seeding: 352 tests
+reported at least one unanswered command, and **134 of them reported only existence probes** —
+`command -v btrfs` (189 occurrences), `command -v timeshift` (186). Those are not defects.
+`check_command` answers `true` for an unseeded name on purpose, because a mock that answered `false`
+would have every backend report itself unavailable; a test that has not seeded `btrfs` is
+unopinionated, not wrong. Fading them would redden a quarter of the suite for having no opinion.
+
+**Seeding the fixture is what made the ledger readable.** `tests/mock_providers/mod.rs` seeded
+`brew`, `apt` and `cargo` and nothing else, so the 56 other names the suite probes fell through
+every time. Seeding all 59 states the assumption those tests were already making — the default was
+`true` and the seed is `true` — and it is a change to what the ledger holds rather than to any
+verdict, which is why it was re-measured rather than assumed. After: **228 tests report, and only 10
+report probes alone**; the 218 with a real query unanswered are unchanged, as they should be.
+
+**134 → 10 is the honest reading, and it is the reading the follow-up needs.** The remaining 218 are
+genuine: `brew list --versions` in 19 tests, `sudo -n timeshift --create …` in 12, `cargo install
+--list` in 12. Each is a test asserting against an empty string it never wrote, and converting them
+is a per-test decision about what it meant to assert — not a sweep.

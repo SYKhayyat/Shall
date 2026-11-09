@@ -62,6 +62,7 @@ mod removal_guard_enumeration_tests;
 mod the_class_table_is_read_not_copied_tests;
 mod the_composition_root_is_not_a_service_tests;
 mod the_exit_table_is_generated_not_retyped_tests;
+mod the_fall_through_ledger_can_be_measured;
 mod the_panic_sites_are_counted_and_not_just_read_past;
 mod the_planner_never_reads_the_filesystem_tests;
 mod the_readme_install_promise_matches_reality_tests;

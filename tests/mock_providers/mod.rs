@@ -108,9 +108,78 @@ impl TestKernel {
         let lock_map = Arc::new(DashMap::new());
 
         let mock_executor = Arc::new(MockExecutor::new(vfs.clone()));
-        mock_executor.set_command_exists("brew", true);
+        // **Every manager the suite probes, seeded once.**
+        //
+        // `check_command` answers `true` for an unseeded name and records the probe, so a fixture
+        // that seeded three left ~59 names falling through on every test that asked. Those probes
+        // are not defects — `true` is deliberately what an unopinionated test means — but leaving
+        // them unanswered made the fall-through ledger unreadable: 134 of the 352 tests that
+        // reported at least one unanswered command reported *only* probes, which is noise in the
+        // exact measurement that says which tests are asserting against an empty string they never
+        // wrote (`#40`).
+        //
+        // Seeding here states the assumption the tests were already making. It changes what the
+        // ledger holds, not what any verdict is: `check_command`'s default was `true` and this is
+        // still `true`. Re-measured after `V.239` — see that entry for the counts.
+        mock_executor.set_command_exists("apk", true);
         mock_executor.set_command_exists("apt", true);
+        mock_executor.set_command_exists("asdf", true);
+        mock_executor.set_command_exists("brew", true);
+        mock_executor.set_command_exists("btrfs", true);
+        mock_executor.set_command_exists("bun", true);
+        mock_executor.set_command_exists("cabal", true);
         mock_executor.set_command_exists("cargo", true);
+        mock_executor.set_command_exists("code", true);
+        mock_executor.set_command_exists("composer", true);
+        mock_executor.set_command_exists("conda", true);
+        mock_executor.set_command_exists("dart", true);
+        mock_executor.set_command_exists("dkms", true);
+        mock_executor.set_command_exists("dnf", true);
+        mock_executor.set_command_exists("dotnet", true);
+        mock_executor.set_command_exists("dpkg", true);
+        mock_executor.set_command_exists("emacs", true);
+        mock_executor.set_command_exists("emerge", true);
+        mock_executor.set_command_exists("eopkg", true);
+        mock_executor.set_command_exists("flatpak", true);
+        mock_executor.set_command_exists("gem", true);
+        mock_executor.set_command_exists("go", true);
+        mock_executor.set_command_exists("gsettings", true);
+        mock_executor.set_command_exists("guix", true);
+        mock_executor.set_command_exists("helm", true);
+        mock_executor.set_command_exists("kubectl", true);
+        mock_executor.set_command_exists("kubectl-krew", true);
+        mock_executor.set_command_exists("luarocks", true);
+        mock_executor.set_command_exists("lvs", true);
+        mock_executor.set_command_exists("mise", true);
+        mock_executor.set_command_exists("mix", true);
+        mock_executor.set_command_exists("moss", true);
+        mock_executor.set_command_exists("nimble", true);
+        mock_executor.set_command_exists("nix", true);
+        mock_executor.set_command_exists("npm", true);
+        mock_executor.set_command_exists("opam", true);
+        mock_executor.set_command_exists("pacman", true);
+        mock_executor.set_command_exists("paru", true);
+        mock_executor.set_command_exists("pip", true);
+        mock_executor.set_command_exists("pipx", true);
+        mock_executor.set_command_exists("pixi", true);
+        mock_executor.set_command_exists("pnpm", true);
+        mock_executor.set_command_exists("probe-detect", true);
+        mock_executor.set_command_exists("pwsh", true);
+        mock_executor.set_command_exists("rpm", true);
+        mock_executor.set_command_exists("rustup", true);
+        mock_executor.set_command_exists("slackpkg", true);
+        mock_executor.set_command_exists("snap", true);
+        mock_executor.set_command_exists("spack", true);
+        mock_executor.set_command_exists("stack", true);
+        mock_executor.set_command_exists("systemctl", true);
+        mock_executor.set_command_exists("testinit-detect", true);
+        mock_executor.set_command_exists("timeshift", true);
+        mock_executor.set_command_exists("uv", true);
+        mock_executor.set_command_exists("xbps-install", true);
+        mock_executor.set_command_exists("yarn", true);
+        mock_executor.set_command_exists("yay", true);
+        mock_executor.set_command_exists("zfs", true);
+        mock_executor.set_command_exists("zypper", true);
 
         let executor = CommandExecutor::with_layer(
             true,

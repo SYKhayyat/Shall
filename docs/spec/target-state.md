@@ -4697,3 +4697,20 @@ assertion on what it printed — and the witness names the same subject.**
   smoke test wearing a name that claims more.
 - **The bare share may only shrink.** Three survivors are allowed, each asserting an effect the exit
   status does not carry; a fourth is a question, and the count is bounded relative to the section.
+
+## II.86 A fall-through ledger is readable only when its measurement can be taken (C23, V.239)
+
+**The suite can be asked which tests leave a command unanswered, without any test opting in, and
+the answer separates a probe from a query.**
+
+- **`SHALL_AUDIT_UNSTUBBED=1` reports; it never fails.** The conversion is incremental and a global
+  deny would redden a quarter of the suite for having no opinion. Audit mode exists so the number
+  is measurable at all, at `Drop`, once per mock, ahead of every early return — an arm placed after
+  one is hidden exactly by the tests it measures.
+- **A probe is not a query.** `command -v X` falls through by design: `check_command` answers `true`
+  so an unopinionated test does not report every backend unavailable. `sudo -n timeshift --list`
+  falls through because a test asserted against an empty string it never wrote. Only the second is
+  a defect, and the ledger has to be able to say which is which.
+- **The fixture seeds what the tests assume.** Every probed manager name is seeded once, which
+  states the assumption rather than changing a verdict — and because it changes what the ledger
+  holds, the measurement is retaken afterwards rather than assumed.
