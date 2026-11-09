@@ -8616,3 +8616,35 @@ that is wrong once on the machine that matters.
 
 **The stamp goes before the packages.** A teardown interrupted between the two leaves a session
 nobody claims, rather than one whose pid answers "alive" for rows already removed.
+
+**V.233 — Why a timing budget is a ratio and not a millisecond count (`#143`, `II.79`).**
+
+The startup budget asserted that registering 56 backends takes under 120 ms, measured as the best
+of three fresh processes. Isolated it took ~55 ms and passed three runs in a row. At the end of two
+consecutive full suites it measured **145.8 ms and 148.4 ms** — in suites that themselves took
+480–530 s instead of the usual 260 s, on a machine running three concurrent builds. Nothing about
+the registry had changed. The budget was measuring the machine's load.
+
+The cost of that flake is not the red run. It is that a gate which goes red on a busy developer
+machine is a gate people learn to skip, and a skipped gate costs exactly the coverage it was
+written to protect. It also contradicted `V.231` in the most literal way available: *a test asserts
+the product, never the host*, and a millisecond ceiling is nothing but an assertion about the host.
+
+**So the child times a fixed workload of its own first, and registration is judged against a
+multiple of that.** Both numbers come from the same process, so a loaded machine inflates the
+numerator and the denominator together and cannot fail the test. The property the file was always
+trying to state — that registration constructs nothing eagerly — survives intact: a backend that
+builds an HTTP client in its constructor adds work unrelated to the calibration loop, so it blows
+through the ratio exactly as it blew through the ceiling.
+
+**The calibration workload is deliberately not `Registry::new()`.** A baseline built from the
+registry would shrink when the regression it exists to catch appeared, and the ratio would hide the
+defect it was measuring for. It is allocation and integer arithmetic with a `black_box` term, which
+nothing in the registry influences and no optimiser removes.
+
+**The control stays, and it had to be fixed to keep meaning anything.** It stands in for an eagerly
+constructed expensive object, so it is spent *inside* the measured window, and it is a
+`std::thread::sleep` rather than `tokio::time::sleep` — under `#[tokio::test]` the runtime has no
+other task to run, the clock auto-advances, and the sleep returns at once. The first version spent
+a nominal 240 ms and measured 82.5 ms, which was the sleep being skipped rather than the ratio being
+blind. A control that cannot fail proves nothing about the gate it sits in.

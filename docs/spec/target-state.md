@@ -4600,6 +4600,8 @@ measures the developer's machine.
 - **A step whose failure would cost a whole leg to a rolling index is retried**, because a mirror
   caught mid-rewrite is weather and not a defect — and the arms that are meant to fail loudly keep
   failing loudly.
+- **A timing budget is stated against the machine's own measured pace, not in milliseconds.** A
+  fixed count of milliseconds is a statement about the host (V.233).
 
 ## II.80 A stale session stops protecting and reaps nothing (C16, V.232)
 
