@@ -22,15 +22,19 @@ pub mod saved_plan;
 pub use self::planner::{ChangePlanner, HostBackends, PlanScope, Scope, SyncChanges};
 
 /// One operation a run carried on past, and what its failure was called at the time.
-struct CarriedPast {
-    name: String,
-    retry: Retryability,
+///
+/// **`pub` for the tests' sake.** `owes_a_leftover_sentence` takes a slice of these, and a test
+/// crate links the library without `cfg(test)`, so a private type would make the predicate
+/// untestable from outside — which is how it came to have a surviving mutant.
+pub struct CarriedPast {
+    pub name: String,
+    pub retry: Retryability,
     /// Shall said no to this one, rather than trying it and failing.
     ///
     /// Kept apart from `retry` because it answers a different question. A refusal is
     /// `Permanent`, but so is a name that does not exist, and only one of them owns exit
     /// code 3.
-    refused: bool,
+    pub refused: bool,
 }
 
 /// The one error a partial run raises about everything it carried past.
@@ -386,7 +390,7 @@ impl SyncEngine {
             // them will not have read. Not after a revert (the package is back), and not after
             // a run that carried past a failure (the failures are the report; this is about
             // what *succeeded*).
-            if !reverted && matches!(result.as_deref(), Ok([])) {
+            if owes_a_leftover_sentence(reverted, result.as_deref()) {
                 self.warn_about_leftovers(&changes).await;
             }
 
@@ -1760,6 +1764,32 @@ impl SyncEngine {
         }
         Ok(())
     }
+}
+
+/// **Does this run owe the user a sentence about what its removals left behind?**
+///
+/// Two conditions, and each one has a story behind it:
+///
+/// * **Not after a revert.** The health check failed and the snapshot was restored, so the
+///   package is back — a launcher still on disk is the state the user asked for, and naming it
+///   would accuse the machine of a leftover it does not have.
+/// * **Not after a run that carried past a failure.** A run with failures *is* the report; the
+///   leftovers question is about what **succeeded**. Naming a leftover while four other things
+///   are broken moves the reader's attention off the failures.
+///
+/// Split out of the caller so both arms are assertable. Written inline, the `&&` had a surviving
+/// mutant: flipping it to `||` made the warning fire after a revert and after a carried-past
+/// failure, and no test looked at either arm — every existing one ran a clean, successful
+/// removal, where both spellings agree. That is what `cargo mutants` found on the sync engine's
+/// shard, and it is invisible from the outside until it is not: the sentence is wrong on exactly
+/// the runs a user is already having trouble with.
+///
+/// **`pub` for the tests' sake**, like its neighbours here.
+pub fn owes_a_leftover_sentence(
+    reverted: bool,
+    carried_past: std::result::Result<&[CarriedPast], &Error>,
+) -> bool {
+    !reverted && matches!(carried_past, Ok([]))
 }
 
 /// What to tell a user about an interrupted operation the recovery could not complete.

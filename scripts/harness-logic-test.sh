@@ -1565,7 +1565,11 @@ for _src in $SOURCES; do
             printf 'container-linux-tools-ci 25\n'
             printf 'drift container-linux-tools-ci cabal 2026-08-21\n'
         } > "$_reg"
+        # `tally_unmeasurable` reads both as globals; it reaches this scope through `eval` of the
+        # extracted function, which shellcheck cannot follow, so it reports them unused.
+        # shellcheck disable=SC2034
         FLOOR_FILE="$_reg"
+        # shellcheck disable=SC2034
         HOST_CLASS="container-linux-tools-ci"
         # Prelude that would have failed with them undone: nothing here is ran here.
         : > "$LEDGER/be-life"

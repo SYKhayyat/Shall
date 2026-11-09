@@ -157,6 +157,33 @@ Part II and its reason in Part V.
   the change is `cfg`-gated; `scripts/unix-check.sh` not run because this host compiled the unix
   half natively.
 
+### The second nightly (`42523470970`), and what it found
+
+Dispatched to confirm the first batch. It confirmed `#139`, `#140`, `#142` and `#141` — the
+`github:`/`web:`/`appimage:` statuses, the storage fetch and the mutation ceiling were all
+silent — and then found five more things, four of which were **mine**:
+
+- **`#19`, an unclosed block refused at line 0** — which is not a line in any file. Both parsers
+  carried a bare `nested: bool` instead of the header's origin. And the gated reader's arm, which
+  the audit assumed unreachable, did not fire at all: a truncated `priority` file parsed clean and
+  kept its conditions as global ones. Ruling `C15`, rule II.79, reason V.230.
+- **Two tests that only ever ran on Linux.** `appimage`'s `detect` is `cfg!(target_os = "linux")`,
+  so the leftover-launcher test skipped the backend on macOS and Windows and read the skip message
+  as a missing sentence. `github` deploys to the same directory and exists everywhere. Reason V.231.
+- **A harness scoring a fix as a failure.** `assert_binary_gone`'s caller in the Windows sweep used
+  `gone_ok` for a package the run installed, so nimble's correctly-named leftover read as
+  "still there". Now routed through `assert_binary_gone`.
+- **Two mutation survivors** in `datalock.rs` that `#138`'s work left: `holder_is_this_process` →
+  `true`, and a `&&` → `||` that was measured **unreachable** (recorded in the test rather than
+  faked). The reachable one is caught.
+- **A survivor in the sync engine**, `!reverted && matches!(result, Ok([]))` → `||`: the leftover
+  sentence fired after a revert and after a carried-past failure. Extracted to
+  `owes_a_leftover_sentence` with five tests; the exact mutant is now caught by four.
+- **opensuse's `zypper install` had no retry.** One mirror answered 404 for three packages in one
+  `refresh`, exit 4, whole leg red before a test ran. Wrapped in `retry.sh`, and `retry.sh`'s own
+  header — which said distro package layers are deliberately left to fail loudly — now records the
+  measured exception rather than being quietly contradicted.
+
 ### Where the issue list stands
 
 Closed this session: `#135`, `#136`, `#138` (built previously, pushed at the start of this

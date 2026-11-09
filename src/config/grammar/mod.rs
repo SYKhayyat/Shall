@@ -358,17 +358,21 @@ pub fn strip_comment(line: &str) -> &str {
 pub fn parse_document(file: &Path, body: &str, backends: &dyn BackendNames) -> Result<Document> {
     let body = crate::config::without_bom(body);
     let mut lines = body.lines().enumerate().peekable();
-    let items = parse_items(file, &mut lines, backends, false)?;
+    let items = parse_items(file, &mut lines, backends, None)?;
     Ok(Document { items })
 }
 
 type Lines<'a> = std::iter::Peekable<std::iter::Enumerate<std::str::Lines<'a>>>;
 
+/// `opened` is the header that gave this body its `{`, when there is one. It is carried rather
+/// than a bare `bool` because the body running out is a refusal that has to name **that** line:
+/// a bare flag reported an unclosed block at line 0, which is not a line in the file, so the
+/// one thing the reader needs — where the block started — was the one thing the message lacked.
 fn parse_items(
     file: &Path,
     lines: &mut Lines<'_>,
     backends: &dyn BackendNames,
-    nested: bool,
+    opened: Option<&Origin>,
 ) -> Result<Vec<Item>> {
     let mut items = Vec::new();
 
@@ -380,7 +384,7 @@ fn parse_items(
         }
 
         if line == "}" {
-            if nested {
+            if opened.is_some() {
                 return Ok(items);
             }
             return Err(GrammarError::new(
@@ -402,7 +406,7 @@ fn parse_items(
                     )
                     .with_hint("write `use user:shaul { ... }`."));
                 }
-                let body = parse_items(file, lines, backends, true)?;
+                let body = parse_items(file, lines, backends, Some(&origin))?;
                 for item in body {
                     match item {
                         Item::Statement(mut stmt, stmt_origin) => {
@@ -433,9 +437,9 @@ fn parse_items(
         ));
     }
 
-    if nested {
+    if let Some(open) = opened {
         return Err(
-            GrammarError::new(Origin::new(file, 0), "a `{` block is never closed")
+            GrammarError::new(open.clone(), "this `{` block is never closed")
                 .with_hint("add the matching `}`."),
         );
     }
@@ -486,7 +490,7 @@ fn parse_block(
             )
             .with_hint("modules are lowercase; profiles are Capitalized."));
         }
-        let body = parse_items(file, lines, backends, true)?;
+        let body = parse_items(file, lines, backends, Some(origin))?;
         return Ok(Item::Block(
             Block::Module(name.to_string(), body),
             origin.clone(),
@@ -500,7 +504,7 @@ fn parse_block(
                 "`when` block has no condition",
             ));
         }
-        let body = parse_items(file, lines, backends, true)?;
+        let body = parse_items(file, lines, backends, Some(origin))?;
         return Ok(Item::Block(
             Block::When(pred.to_string(), body),
             origin.clone(),

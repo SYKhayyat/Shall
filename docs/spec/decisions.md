@@ -1,4 +1,4 @@
-﻿# The decision register — 252 entries, none open
+﻿# The decision register — 253 entries, none open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **247** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **248** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 252 are accounted
-for: **247 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 253 are accounted
+for: **248 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, and what a ceiling bounds) — 14
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused) — 15
 
 | | question | answered |
 |---|---|---|
@@ -531,7 +531,8 @@ deliberately no longer has.*
 | **C11** | `shall -y apply nimble:nimjson --delete` reports success, nimble's listing drops the package, and `~/.nimble/bin/nimjson.cmd` still resolves on PATH — a file written by nimble's own Windows install, not by Shall (`#136`, the last red line on the Windows sweep after #112). The issue named three ways out and left the choice to the owner: accept it, delete the launcher the backend knows about, or say it. What does a removal owe when the manager leaves a launcher? — RULED 2026-11-07: **say it, and delete nothing** — after a removal succeeds, every entry in the manager's own executable directories named exactly the package or a dotted extension of it is named with its path and the fact that the name still answers; the leftover is decided by name rather than glob (`pv` must not accuse `pvx.cmd`); said only after a removal that succeeded; the directories are `app::reachable::user_bin_dirs`'s, the same answer the unreachable-install warning uses. Deleting was declined because the Windows file set (wrapper and a copied executable) is unmeasured on a runner, and a deletion that misses the `.exe` claims a cleanup it did not make. The Windows sweep's `removal_leaves_binary` entries stop being `soft` excuses and ASSERT that the removal named the file. (II.75, V.225) | 2026-11-07 |
 | **C12** | The data-lock mutation shard could not finish a nightly: three mutants of the process-wide `held()` count each made every e2e command sleep out `WAIT_SECS`, because a second `flock` handle in one process waits for the first — 15 failures × 120s × retries, and the shard timed out at 825s before it could report a survivor list (`#138`). The count was also wrong when nothing was mutated: a lock on one data directory excused a write to another, because `held()` answered for the process rather than the path. What decides whether this write is already inside the lock? — RULED 2026-11-08: **a fact about the directory, not a count about the process** — every `DataLock` records its directory under its canonical name, `held_on(path)` is a membership question, and `for_this_write` asks it of the directory it is about to write under. The re-entrant write door's acquire is **refused at once by name** when the owner stamp is this pid, rather than slept on; a direct acquire still waits, because another thread of this process may be about to release. No `held()` mutant exists to time out, and a lock on one directory is no longer a lock on another. (II.76, V.226) | 2026-11-08 |
 | **C13** | The nightly of 2026-11-08 reds three legs on one upstream fact: `github:sharkdp/fd` answered `504 Gateway Timeout` and the sweep scored it `a defect, not ecosystem variance`, while the storage image's build met the same weather at `openzfs/zfs` and ran no lifecycle at all. In both cases the ratchet and the section floor then reported *lost coverage*, so one transient failure printed three red lines and two of them named no cause (`#139`). Shall's own answer was `shall-failure-class: unknown`, because the three downloading backends folded every non-success status into `Error::Other`. **What does a download's status mean?** — RULED 2026-11-08: **the status decides, from its code** — a 5xx is the far end failing to serve and is transient, any other non-success status is the request being wrong and is permanent, `429` keeps `RateLimit`'s verdict, and all three backends build the error through one typed constructor so the verdict survives a note and is never re-derived from prose. In the harnesses, **a backend whose install failed for a reason Shall classed as passing counts toward the real-lifecycle floor and is named** — it is not coverage and it is not a collapse, and one 504 must not be able to say both. (II.77, V.227) | 2026-11-08 |
-| **C14** | `Transaction` took its `Semaphore` permit on the coordinator's own loop, before spawning the task. For a graph narrower than `max_concurrent` that is invisible; for a wider one it is self-blocking, because the permits outstanding are held by tasks the loop cannot reach `join_next` for, and the loop is what records the completions that free them — so a run at its ceiling stops doing bookkeeping exactly when it has the most of it (`#18`). Separately, the four files that decide what a user downloads — the build matrix, the release job's asset naming, `install.sh` and `install.ps1` — each reasonable alone and none able to see the others, with the only run that would show a disagreement being the tag push. **What does a ceiling bound, and what does a release have to agree with?** — RULED 2026-11-08: **the ceiling bounds the work and not the scheduler** — the permit is taken inside the spawned task, so the loop reaches `join_next` on the same pass it dispatches and a closed semaphore reports the batch's members as failed rather than running them unbounded; and **the release path is one relationship asserted in every direction** — nothing built that is not published, nothing published that is not built, every installer asking for a published target, and every published target reachable from a documented line. (II.78, V.229) | 2026-11-08 |---
+| **C14** | `Transaction` took its `Semaphore` permit on the coordinator's own loop, before spawning the task. For a graph narrower than `max_concurrent` that is invisible; for a wider one it is self-blocking, because the permits outstanding are held by tasks the loop cannot reach `join_next` for, and the loop is what records the completions that free them — so a run at its ceiling stops doing bookkeeping exactly when it has the most of it (`#18`). Separately, the four files that decide what a user downloads — the build matrix, the release job's asset naming, `install.sh` and `install.ps1` — each reasonable alone and none able to see the others, with the only run that would show a disagreement being the tag push. **What does a ceiling bound, and what does a release have to agree with?** — RULED 2026-11-08: **the ceiling bounds the work and not the scheduler** — the permit is taken inside the spawned task, so the loop reaches `join_next` on the same pass it dispatches and a closed semaphore reports the batch's members as failed rather than running them unbounded; and **the release path is one relationship asserted in every direction** — nothing built that is not published, nothing published that is not built, every installer asking for a published target, and every published target reachable from a documented line. (II.78, V.229) | 2026-11-08 |
+| **C15** | Two parsers refuse a body that runs out — `parse_items` for `{` blocks and `gated` for `when` bodies — and both named **line 0**, which is not a line in any file (`#19`). The cause was a shape: the recursive parser carried a bare `nested: bool`, which says *that* a body is nested and not *which header* nested it, so the opening line was gone by the time the body ran out. Worse, the gated reader's arm **did not fire at all** — it was assumed unreachable because `when` arrives as a block header, so `}` always clears the gate; a test walking the path found a truncated `priority` file parsing clean and keeping every line as normally gated, so conditions meant to be scoped silently became global. **Where is an unclosed block refused?** — RULED 2026-11-08: **at the header that opened it** — the opening origin is carried into the recursion instead of a flag (and kept in the gated reader's own gate tuple), a body that runs out is refused naming that line, and the gated reader refuses rather than accepting a truncated file. A refusal citing a line it does not have is worse than a vague one, because a number looks like knowledge. (II.79, V.230) | 2026-11-08 |---
 
 # The blocking round — thirteen questions, all ruled
 
@@ -10605,3 +10606,41 @@ against the file's stated policy rather than against drift.
 - **The local gate runs it.** `release-check.sh` is the documented "am I ready to ship" command,
   and it ran neither this nor `decision-count.sh --check` — so a local GO could ship a tree whose
   `SPEC.md` and `decisions.md` disagreed. Both are gates in it now.
+
+## C15
+
+**Status: ANSWERED 2026-11-08, built the same day.** An unclosed block is refused at the header
+that opened it. Carried out of the `#19` audit's first finding.
+
+**The question.** Two parsers refuse a body that runs out — `parse_items` for `{` blocks and
+`gated` for `when` bodies — and both named **line 0**, which is not a line in any file. Where
+should a refusal point?
+
+**The cause was a shape, not a typo.** The recursive parser carried a bare `nested: bool`, which
+says *that* a body is nested and not *which header* nested it. By the time the body ran out, the
+opening line was already consumed and gone. A flag is enough to decide whether `}` ends a body or
+closes a block that was never opened; it is not enough to name anything to a reader.
+
+**The gated reader's arm did not fire at all.** It was believed unreachable — a `when` arrives as
+a block header, so the `}` arm always clears the gate before the end of the loop — and the audit
+inherited that belief. A test walking the path found the opposite: a truncated `priority` file
+parsed **clean**, with every line keeping its gate. Conditions that were meant to be scoped
+silently became global, which is the failure direction nobody notices from the output, because the
+file parses and the run proceeds.
+
+**The ruling: a body that runs out is refused at the header that opened it.** The opening origin
+is carried into the recursion in place of the flag (`Option<&Origin>` for the block reader), and
+kept in the gated reader's own gate tuple, whose third field is the line that opened it. A `when`
+whose body runs out refuses rather than accepting the file.
+
+**What this binds.**
+
+- **The line named is the header's, not the last line's.** Pointing at the end of the file sends
+  the reader to a body that is fine, instead of to the `{` that is not. Asserted for an outer
+  block, an inner block (which must name itself and not its parent), and a `when`.
+- **A refusal must cite a line the file has.** Line 0 is deleted rather than fixed: a number that
+  looks like knowledge and is not is worse than a vague sentence, because the reader follows it.
+- **A closed block still parses.** One of the four tests is the other direction, since a parser
+  that refused every block would satisfy the other three.
+- **The gated reader refuses too**, so a truncated `when` cannot keep its conditions as global
+  ones. Both arms were watched red under hand mutation.

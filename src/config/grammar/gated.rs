@@ -78,7 +78,11 @@ fn read_inner(
     // `priority` and `active` both arrive here, so Q22's rule is applied once for both.
     let body = crate::config::without_bom(body);
     let mut out: Vec<GatedLine> = Vec::new();
-    let mut gate: Option<(String, bool)> = None;
+    // The predicate, whether it held, and **the line that opened it** — kept so that a `when`
+    // whose body runs out can be refused at the header. Without it the reader accepted the file:
+    // `when host == laptop {` with no `}` produced every line as normally gated and no error at
+    // all, so a truncated `priority` quietly kept its conditions.
+    let mut gate: Option<(String, bool, usize)> = None;
     // The entry whose `{ }` body is open, and the header it was opened with.
     let mut open_body: Option<(usize, String)> = None;
 
@@ -140,8 +144,8 @@ fn read_inner(
                 out.push(GatedLine {
                     text: name.to_string(),
                     line: idx + 1,
-                    gate: gate.as_ref().map(|(p, _)| p.clone()),
-                    on: gate.as_ref().map(|(_, hit)| *hit).unwrap_or(true),
+                    gate: gate.as_ref().map(|(p, _, _)| p.clone()),
+                    on: gate.as_ref().map(|(_, hit, _)| *hit).unwrap_or(true),
                     options: Options::default(),
                 });
                 open_body = Some((out.len() - 1, name.to_string()));
@@ -168,7 +172,7 @@ fn read_inner(
                     .map_err(|e| GrammarError::new(Origin::new(file, idx + 1), e.to_string()))?,
                 None => true,
             };
-            gate = Some((pred.to_string(), hit));
+            gate = Some((pred.to_string(), hit, idx + 1));
             continue;
         }
 
@@ -182,8 +186,8 @@ fn read_inner(
         out.push(GatedLine {
             text: line.to_string(),
             line: idx + 1,
-            gate: gate.as_ref().map(|(p, _)| p.clone()),
-            on: gate.as_ref().map(|(_, hit)| *hit).unwrap_or(true),
+            gate: gate.as_ref().map(|(p, _, _)| p.clone()),
+            on: gate.as_ref().map(|(_, hit, _)| *hit).unwrap_or(true),
             options: Options::default(),
         });
     }
@@ -195,11 +199,16 @@ fn read_inner(
         )
         .with_hint("add the matching `}`."));
     }
-    if gate.is_some() {
-        return Err(
-            GrammarError::new(Origin::new(file, 0), "a `when` block is never closed")
-                .with_hint("add the matching `}`."),
-        );
+    // **A `when` whose body runs out is refused, at the header that opened it.** The arm that
+    // used to sit here named line 0 — a line that does not exist — and was believed unreachable
+    // until a test walked the path: the reader accepted the truncated file and kept its
+    // conditions, which is worse than refusing at the wrong line.
+    if let Some((_, _, opened_at)) = &gate {
+        return Err(GrammarError::new(
+            Origin::new(file, *opened_at),
+            "this `when` block is never closed",
+        )
+        .with_hint("add the matching `}`."));
     }
     Ok(out)
 }

@@ -1006,6 +1006,10 @@ if [ "$CLASS" = installed ] || [ "$CLASS" = transient ]; then
     fi
     ok "declaring it again takes it back" lx -y apply "$BACKEND:$PKG"
     ok "uninstall $BACKEND:$PKG" lx -y apply "$BACKEND:$PKG" --delete
+    # Kept before anything below overwrites `/tmp/itw.out`: the leftover check asks whether THIS
+    # removal named the file, and a later command's output would pass the check without the
+    # removal ever having said anything.
+    cp /tmp/itw.out /tmp/itw-remove.out 2>/dev/null || : > /tmp/itw-remove.out
     # S36 again, on the package the run did not install. When the host already owned
     # $PKG, absence is not this harness's to demand: the manager may legitimately keep a
     # formula another one depends on, and a second copy may live outside its prefix. The
@@ -1018,8 +1022,29 @@ if [ "$CLASS" = installed ] || [ "$CLASS" = transient ]; then
             PASS=$((PASS + 1)); echo "  PASS  $PKG binary gone after uninstall"
         fi
     else
-        gone_ok "$PKG binary gone after uninstall" pkg-binary \
-            binary_present "$BACKEND" "$PKG" /tmp/itw-life0.out
+        # **Through `assert_binary_gone`, not `gone_ok`.** This is a package the run installed
+        # and took back off, so absence is asserted — but a manager whose own Windows uninstall
+        # leaves the launcher its install wrote (nimble's `.cmd`, measured on `42361477256`) is
+        # not a Shall defect, and #136's fix is that the removal **names the file**. `gone_ok`
+        # only asks "is it gone", so on the Windows sweep it reported the named leftover as
+        # `nimjson binary gone after uninstall (it is still there)` — the fix working, scored as
+        # a failure. `assert_binary_gone` asks the same question the canary section asks: gone,
+        # or still there and named by the removal's own output.
+        _lallowed="$(removal_leaves_binary "$BACKEND")"
+        if [ -n "$_lallowed" ] && binary_present "$BACKEND" "$PKG" /tmp/itw-life0.out; then
+            if [ -s /tmp/itw-remove.out ] && grep -qF -- "$PKG" /tmp/itw-remove.out; then
+                PASS=$((PASS + 1))
+                echo "  PASS  $PKG binary still there after uninstall, and Shall named it — $_lallowed"
+            else
+                FAILC=$((FAILC + 1))
+                FAILED_NAMES="$FAILED_NAMES\n    - $PKG binary still there after uninstall and the removal said nothing about it"
+                echo "  FAIL  $PKG binary still there after uninstall and the removal said nothing about it — $_lallowed"
+            fi
+            soft "$PKG's leftover launcher is its manager's own uninstall, not Shall's removal"
+        else
+            gone_ok "$PKG binary gone after uninstall" pkg-binary \
+                binary_present "$BACKEND" "$PKG" /tmp/itw-life0.out
+        fi
     fi
     if [ -n "$PKG_WAS_HERE" ]; then
         if lx -y apply "$BACKEND:$PKG" >/dev/null 2>&1; then

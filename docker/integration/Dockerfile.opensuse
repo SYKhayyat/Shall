@@ -8,12 +8,23 @@
 FROM opensuse/tumbleweed:latest
 ENV SHALL_IT_IMAGE=opensuse
 # `--no-recommends`: Tumbleweed's recommends pull a desktop stack into a build image.
-RUN zypper --non-interactive --gpg-auto-import-keys refresh \
+#
+# **Retried, through `retry.sh` like every other network step here.** Measured on run
+# `42523470970`: one mirror answered `404` for `python313-platformdirs`, `libctf-nobfd0` and
+# `python313-click` in a single refresh, zypper gave up with exit code 4, and the whole opensuse
+# leg — its coverage, its canary, its reason table — went red before a single test ran. Tumbleweed
+# is a rolling distribution whose repodata is rewritten continuously, so a mirror caught
+# mid-rewrite is ordinary, and one attempt is the wrong number for the same reason it was wrong
+# for the coverage ratchet (#140). The retry re-runs `refresh` too, which is what makes the second
+# attempt see the index the first one got a stale pointer into.
+COPY docker/integration/retry.sh /usr/local/bin/retry
+RUN chmod 0755 /usr/local/bin/retry
+RUN retry 'zypper --non-interactive --gpg-auto-import-keys refresh \
     && zypper --non-interactive install --no-recommends \
        curl gcc make pkg-config libopenssl-devel perl git tar gzip unzip \
        nodejs npm python3-pipx ruby ruby-devel \
        diffutils \
-    && zypper --non-interactive clean --all
+    && zypper --non-interactive clean --all' 
 # `diffutils` is on that list for the harness, not for the build: the shim section asserts the
 # deployed shim is byte-identical to the `shall` binary with `cmp`, and Tumbleweed's minimal set
 # is the one image in this matrix that ships no `cmp` at all. Without it that check failed
@@ -21,10 +32,8 @@ RUN zypper --non-interactive --gpg-auto-import-keys refresh \
 # proves a shim is a copy rather than a file of the right name.
 # Every network install below goes through this. One attempt was the wrong number: a
 # best-effort install that fails once takes its manager out of the image, and `|| true`
-# means nothing says so until the coverage ratchet goes red. See `retry.sh`.
-COPY docker/integration/retry.sh /usr/local/bin/retry
-RUN chmod 0755 /usr/local/bin/retry
-
+# means nothing says so until the coverage ratchet goes red. See `retry.sh` (copied above, with
+# the package install that needs it first).
 RUN retry 'curl --proto =https --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal'
 # Extra managers via their own installers. Tolerant (`|| true`): a build-time network hiccup
 # leaves the image usable; that backend just won't be READY and is auto-skipped by the sweep.

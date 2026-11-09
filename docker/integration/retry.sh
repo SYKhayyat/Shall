@@ -12,10 +12,16 @@
 # attempts, still degrades to `|| true`, and the ratchet still catches the lost coverage. The
 # only thing that changes is that a blip stops costing a nightly.
 #
-# Deliberately not applied to the distro's own `apt-get`/`apk`/`pacman` layers. Those are not
-# best-effort: they fail the build loudly, which is a re-run rather than a silent hole, and
-# wrapping every RUN in a retry is how a build that is genuinely broken takes three times as
-# long to say so.
+# **Not applied blanket-fashion to the distro's own package layers.** Those are not best-effort:
+# they fail the build loudly, which is a re-run rather than a silent hole, and wrapping every RUN
+# in a retry is how a build that is genuinely broken takes three times as long to say so.
+#
+# **One exception, and it is a measured one.** opensuse's `zypper install` *is* wrapped, because
+# Tumbleweed's repodata is rewritten continuously: run `42523470970` met a mirror answering `404`
+# for three packages inside a single `refresh`, zypper exited 4, and the whole leg went red before
+# a test ran. That is not a broken build being retried — it is a rolling index being copied while
+# it moves, which is exactly the blip this script is for. The other distro layers keep failing
+# loudly, and a genuinely broken opensuse build still fails all three attempts.
 #
 # The snippet is one argument, run under `sh -c`, so pipelines and `&&` chains work unchanged:
 #

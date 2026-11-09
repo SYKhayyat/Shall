@@ -8526,3 +8526,58 @@ metadata test — so a local GO could ship a tree whose `SPEC.md` and `decisions
 how many decisions are ruled, or whose release published a target the installers could not ask
 for. A gate that measures less than CI turns a local GO into a red push, which is the asymmetry
 `E3`/`E4` found in `cargo fmt` one file over.
+
+**V.230 — Why an unclosed block is refused where it opened, and why a refusal at line 0 is
+worse than no refusal (`#19`, C15).**
+
+Two parsers refuse a body that runs out: `parse_items` for `{` blocks and `gated` for `when`
+bodies. Both named **line 0**, which is not a line in any file. The cause was a shape rather than
+a typo — the recursive parser carried a bare `nested: bool`, which says *that* a body is nested
+and not *which header* nested it, so by the time the body ran out the opening line was gone. The
+fix is to carry the origin down instead of the flag: `Option<&Origin>` for the block reader, and a
+third field in the gated reader's own gate tuple.
+
+**A refusal that cites a place it does not have is worse than a vague one**, because a number
+looks like knowledge. The reader follows it, finds nothing usable at line 0, and loses trust in
+the rest of the message rather than only in the number.
+
+**And the gated reader did not refuse at all.** The arm that was supposed to catch a `when` whose
+body runs out was believed unreachable — `when` arrives as a block header, so `}` always clears
+the gate — and a test walking the path found the opposite: a truncated `priority` file parsed
+clean, keeping every line as normally gated. Conditions that were meant to be scoped silently
+became global, which is the failure direction nobody would notice from the output. Both readers
+now refuse at the opening header.
+
+The four tests that pin this assert the header's line and not the last line's, because pointing
+at the end of the file would send the reader to a body that is fine instead of to the `{` that is
+not; and one asserts that a closed block still parses, since a parser that refuses every block
+would satisfy the others. Both were watched red under hand mutation.
+
+**V.231 — Why a test that only ever ran one host is a test that measured the host (`#136`, `#19`).**
+
+Something else came out of the same nightly, and it is the more interesting finding: **two tests
+that passed on every Linux host and failed on both macOS and Windows.** Neither was a product
+defect. Both were the same mistake in test form.
+
+`a_removal_names_the_launcher_the_manager_left` picked `appimage` as its backend because
+`appimage` deploys into `[bin_dir]`, which is the test's own directory. `appimage`'s `detect` is
+`cfg!(target_os = "linux")`, so on a macOS or Windows runner the engine skipped the backend — it
+said so, in a log line reading `` `appimage` is not on this machine `` — and the assertion, which
+was looking for a sentence about a leftover launcher, read the skip message and called it missing.
+The test was correct on the one platform it had ever run on and had never been a statement about
+anything else. `github` deploys into the same `[bin_dir]` and exists everywhere, so the fixture
+now tests the rule instead of the host.
+
+**And the harness scored the fix as a failure.** `scripts/integration-windows.sh` asked
+`"$PKG binary gone after uninstall"` through `gone_ok` — "is it gone" — for a package the run
+installed and took off again. For `nimble` the answer is *no, and correctly so*: nimble's own
+Windows uninstall drops the package from its listing and leaves the `.cmd` launcher it wrote, and
+`#136`'s whole point is that the removal **names that file**. So the sweep reported
+`nimjson binary gone after uninstall (it is still there)` while the fix was working. It goes
+through `assert_binary_gone` now — the same question the canary section asks — so the verdict is
+"gone, or still there and named by the removal's own output", and the output it greps is captured
+before any later command overwrites it.
+
+**The rule underneath both.** A test asserts a property of the product, and a fixture that can only
+run on one platform asserts a property of that platform. When a test cannot fail on the machine it
+was written on, that is not coverage — it is a record of what the developer's laptop had installed.

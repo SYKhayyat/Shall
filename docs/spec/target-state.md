@@ -4573,3 +4573,30 @@ must ask what the engine asks, in the engine's order — removals before the ins
 - **A tripped ceiling has a refusal naming its own setting**, so one refusal cannot stand in for
   two, and **a run inside every ceiling says nothing at all** — a guard that refuses a clean run
   blocks every sync.
+
+## II.79 An unclosed block is refused where it opened, and a test measures the product and not the host (C15, V.230, V.231)
+
+**A parser that refuses a body for running out names the header that opened it, and a refusal
+never cites a line the file does not have.**
+
+- **The opening origin travels with the body**, not a flag saying only that it is nested. A
+  `bool` decides whether `}` ends a body; it cannot name anything to a reader.
+- **The line named is the header's, not the last line's** — pointing at the end of the file sends
+  the reader to a body that is fine instead of to the `{` that is not.
+- **Line 0 is not an answer.** A number looks like knowledge, so a refusal citing a line the file
+  does not have costs more trust than a vague sentence would.
+- **A `when` whose body runs out is refused, not accepted.** Accepting it keeps every line's gate
+  as written, so conditions meant to be scoped silently become global — a file that parses and a
+  run that proceeds, which is the failure direction nobody sees.
+
+**A test asserts the product, never the host.** A fixture that can only run where it was written
+measures the developer's machine.
+
+- **A fixture names a backend, a path or a program that exists on every platform the suite runs
+  on**, or the rule it tests is a rule about that platform and says so.
+- **A harness scores a known leftover as named, not as missing.** A manager's own uninstall that
+  leaves its launcher is the manager's behaviour; what the product owes is that the removal names
+  the file, and the verdict asks that question of the removal's own output.
+- **A step whose failure would cost a whole leg to a rolling index is retried**, because a mirror
+  caught mid-rewrite is weather and not a defect — and the arms that are meant to fail loudly keep
+  failing loudly.

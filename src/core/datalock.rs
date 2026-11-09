@@ -376,7 +376,12 @@ impl DataLock {
     /// Only read while the lock is contended, and the stamp is removed when its holder releases
     /// the lock — so a stamp that names this process while somebody holds the lock means the
     /// holder is this process.
-    fn holder_is_this_process(owner_path: &Path) -> bool {
+    ///
+    /// **`pub` for the tests' sake.** `cargo mutants` reported `-> true` as a survivor, and the
+    /// arm it guards refuses at once instead of waiting out `WAIT_SECS` — a two-minute silence in
+    /// place of an immediate, named refusal. A `true` that is never asserted is a two-minute hang
+    /// nobody is watching for.
+    pub fn holder_is_this_process(owner_path: &Path) -> bool {
         let Ok(stamp) = std::fs::read_to_string(owner_path) else {
             return false;
         };

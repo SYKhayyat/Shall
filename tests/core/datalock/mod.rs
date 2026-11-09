@@ -133,3 +133,4 @@ mod both_doors_read_a_busy_lock_the_same_way;
 mod held_is_false_outside_the_lock_and_true_inside;
 mod the_lock_file_names_its_holder;
 mod the_off_runtime_wait_returns_holding_the_lock;
+mod the_owner_stamp_is_compared_to_this_process;

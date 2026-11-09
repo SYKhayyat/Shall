@@ -9,9 +9,17 @@ use super::*;
 /// --delete`, `execute`, `remove-orphans`, `purge-undeclared` and `rollback` all arrive here, so
 /// a sentence written in one verb is a sentence five verbs do not say.
 ///
-/// `appimage` is the backend the sandbox can aim: its executables are deployed into `[bin_dir]`,
-/// which is the test's own directory, so the file the manager "left" is one this test wrote and
-/// the reader is the same one the product uses.
+/// **The backend is `github`, not `appimage`.** This test used `appimage` because its executables
+/// deploy into `[bin_dir]`, which is the test's own directory — and that made the test pass on
+/// every Linux host and fail on both macOS and Windows, where `appimage`'s `detect` is
+/// `cfg!(target_os = "linux")` (in its `detect`) and the removal never runs: the
+/// engine skips a backend that is not on the machine, said so, and the assertion read the skip
+/// message as a missing sentence. Watched red on `aarch64-apple-darwin` and
+/// `x86_64-pc-windows-msvc` in run `42523470970`.
+///
+/// `github` deploys into the same `[bin_dir]` and exists on every platform, so the file the
+/// manager "left" is still one this test wrote, the reader is still the product's own, and the
+/// removal actually runs wherever the test does.
 #[tokio::test]
 async fn a_removal_names_the_launcher_the_manager_left() {
     let sandbox = config_dir("leftover-launcher");
@@ -25,10 +33,7 @@ async fn a_removal_names_the_launcher_the_manager_left() {
 
     let (logs, guard) = log_collector();
     engine
-        .sync(
-            removal_changes(&[("appimage", "nimjson")]),
-            GuardScope::Sync,
-        )
+        .sync(removal_changes(&[("github", "nimjson")]), GuardScope::Sync)
         .await
         .expect("the removal failed");
     drop(guard);
