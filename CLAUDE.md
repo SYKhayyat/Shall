@@ -107,7 +107,13 @@ Two corollaries, both learned the hard way here:
 
 ## Verify
 
-`cargo build --all-targets` → `cargo test --no-fail-fast` →
+**Fast tier (a couple of minutes, while editing):** `./scripts/smoke.sh`. It builds the tree,
+checks the documents against the register, runs the harnesses' own predicates, compares the
+release/install surface with itself, and runs a named set of end-to-end modules — and it prints
+**every check it skipped and why**, so a green banner never covers work that did not happen. Use it
+between full runs; it is not a substitute for the chain below.
+
+**Full chain (before pushing):** `cargo build --all-targets` → `cargo test --no-fail-fast` →
 `cargo clippy --all-targets --all-features --locked -- -D warnings` → `cargo fmt -- --check` →
 `scripts/unix-check.sh`. Report honestly: unverified is not done, and a skipped step is a
 said-so, not a done.

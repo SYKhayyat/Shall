@@ -1,4 +1,4 @@
-﻿# The decision register — 257 entries, none open
+﻿# The decision register — 259 entries, none open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **252** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **254** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 257 are accounted
-for: **252 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 259 are accounted
+for: **254 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested) — 19
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, and how a panic count is kept true) — 21
 
 | | question | answered |
 |---|---|---|
@@ -537,6 +537,8 @@ deliberately no longer has.*
 | **C17** | The startup budget asserted that registering 56 backends takes under **120 ms**, measured as the best of three fresh processes. Isolated it was ~55 ms and passed three runs in a row; at the end of two consecutive full suites it measured **145.8 ms and 148.4 ms**, in suites that also took 480–530 s instead of the usual 260 s. Nothing about the registry had changed — the budget was measuring the machine's load, and a gate that goes red on a busy machine is a gate people learn to skip (`#143`). **Does the budget stay a millisecond count, or become a multiple of the machine's own measured pace?** — RULED 2026-11-10: **a multiple of the machine's own measured pace.** The child times a fixed calibration workload first and registration is judged against a ratio of it, so a loaded machine inflates both sides together; the property "registration constructs nothing eagerly" survives because eager work is unrelated to the calibration loop. The calibration workload is deliberately **not** `Registry::new()`, which would shrink when the defect appeared and hide it. The control arm was also fixed: it is spent inside the measured window and uses `std::thread::sleep`, since `tokio::time::sleep` auto-advances under `#[tokio::test]` and returned at once. (II.79, V.233) | 2026-11-10 |
 | **C18** | Every kind of skip a sync reports already had an advice sentence — `SkipKind::advice` — and it reached exactly one place: a terminal. A script reading `sync --dry-run --json` got `kind: "install_skipped"` and a sentence describing what happened, and had to map the enum to an action itself or scrape the prose (`#18`, finding 7). That is the same defect `heal` was cured of (typed objections rather than parsing guard prose), one surface over. **Does a machine-readable document carry the action, or only the situation?** — RULED 2026-11-10: **the action, as its own `advice` field, derived from the kind.** `reason` says what happened and `advice` says what to do; the advice comes from `SkipKind::advice()` — the same function the terminal prints — so the heading, the sentence and the document cannot drift into telling a script and a person different things. Stored per row it could be built with the wrong kind's advice, and only a human reading two surfaces at once would notice. (II.81, V.234) | 2026-11-10 |
 | **C19** | The `.wsb` writer escaped every value it pasted into XML, and the macOS profile escaped nothing — but the interesting half is *where* the escaping lived: a `fn xml` nested inside a `#[cfg(target_os = "windows")]` function, so on every other host the code that protects the document was invisible to the suite (`#19`). And `generate_macos_profile` formatted a home directory and every custom mount path straight into a Scheme policy string, where one `"` ends the literal and the rest is read as policy — a directory named `x") (allow default) ("` grants everything, silently (`#19`). **Does an escaper that only one platform's leg can reach count as tested, and what does the macOS profile owe a path?** — RULED 2026-11-10: **both escapers move to module scope outside every `cfg`, and every user-derived value is escaped.** The rule being checked is about a string, and a string is the same on every platform, so the host a test runs on must not decide whether the claim can be checked. Escaping is not dropping: the hostile text survives as data, because an escaper that removed it would silently discard a user's path. `&` is escaped first, and the test asserts on the rendered output rather than the input. (II.82, V.235) | 2026-11-10 |
+| **C20** | `release-check.sh` was the only verification command in the repo and it is the shippability gate — a release build, the whole suite, the Docker matrix. That is right before a tag and wrong while editing, so between `cargo check` and a release people ran nothing, and the first time a workflow file had drifted from an installer was on the nightly, after the tag (`#21`). The acceptance criterion was a fast tier that "reports which checks were skipped and why". **What does a fast verification tier owe a reader, and where does the release surface get checked?** — RULED 2026-11-10: **a summary with three numbers — passed, failed, skipped — every skip naming its reason; and the release/install comparison in the fast tier, not only on the nightly.** A check whose module was renamed matches no tests, runs none and exits zero, appearing as neither pass nor failure: the run looks green and covers less than last week. `scripts/smoke.sh` builds the tree, checks the documents against the register, runs the harnesses' own predicates, compares `ci.yml`'s matrix and release job against `install.sh` and `install.ps1` in both directions, and runs a named end-to-end module set — in about eighty seconds. (II.83, V.236) | 2026-11-10 |
+| **C21** | `#21` recorded that "the large number of `unwrap`/`expect` sites in production-adjacent setup and command paths makes it hard to distinguish test-only assertions from user-reachable failure handling" — which is the honest form of it: not "there are too many" but "nobody can tell which ones matter", and a grep cannot answer that because the difference is not in the text. **How does a repo keep an answer to that question true?** — RULED 2026-11-10: **classify, count, and bound it.** `scripts/panic-inventory.sh` classifies every site by whether it is inline test code and prints the production ones with file and line; all 81 were read, and every one is a `Lazy<Regex>` over a literal pattern, a poisoned lock, or a true invariant the types do not express. A test holds the production count at a ceiling, so a new site fails until somebody handles it or raises the ceiling in the same change — a count that only gets printed is read once, and a count with a ceiling has to be answered when it moves. A second test requires the excluded total to be the larger number, because a cutoff that stopped working would fold every inline assertion into the production count and the number would stop meaning anything. (II.84, V.237) | 2026-11-10 |
 
 # The blocking round — thirteen questions, all ruled
 
@@ -10810,3 +10812,81 @@ would surface as a mount that quietly does not work.
   question is whether the output can escape the string it was written into.
 - **A backslash doubles in a Scheme literal**, since a trailing one would otherwise consume the
   closing quote.
+
+## C20
+
+**Status: ANSWERED 2026-11-10, built the same day.** A fast verification tier reports passed, failed
+and skipped with a reason per skip. Carried out of `#21`.
+
+**Asked.** `release-check.sh` was the only verification command in the repo and it is the
+shippability gate: a release build, the whole suite, the Docker matrix. That is the right thing to
+run before a tag and the wrong thing to run while editing, so between `cargo check` and a release
+people ran nothing. The first time a workflow file had drifted from an installer was on the nightly,
+after the tag.
+
+**What does a fast verification tier owe a reader, and where does the release surface get checked?**
+
+**Ruled: a summary with three numbers — passed, failed, skipped, every skip naming its reason; and
+the release/install comparison belongs in the fast tier, not only on the nightly.**
+
+**1. A tier like this fails silently in the direction nobody notices.** A check whose module was
+renamed matches no tests, runs none, exits zero, and appears in the summary as neither a pass nor a
+failure. The run looks green and covers less than it did last week. The number of green checks is a
+claim about the tree only while the number that *ran* is still visible — the integration harnesses
+learned this as `tally_unmeasurable`, and this is the same lesson at the developer's desk.
+
+**2. The release surface is exactly what drifts between tags.** #21's own evidence was that
+release/install behaviour is "especially vulnerable to drift between scripts, workflow YAML, target
+naming, and the binary actually built". A nightly finds that drift; a fast tier finds it while the
+branch is still open. The bidirectional comparison test already existed — what was missing was a
+command people run that includes it.
+
+**3. Eighty seconds is the budget.** A tier that takes as long as the gate it is meant to sit in
+front of is a tier nobody runs, which returns to the state that produced the finding.
+
+**What this binds.**
+
+- **Every skip names its reason**, and the `skip` helper takes both a name and a reason, so a call
+  site cannot report one without the other.
+- **A named module set that matches nothing is a skip, not a pass.** The command says so rather than
+  exiting zero with a green banner.
+- **The smoke set's four property-bearing modules are pinned** — a preview that writes nothing, a
+  refusal that cites a line, a skip the user hears about, and the exit-code policy. Removing one is
+  a decision, not a tidy-up.
+
+## C21
+
+**Status: ANSWERED 2026-11-10, built the same day.** Panic sites are classified, counted, and the
+production count is bounded. Carried out of `#21`.
+
+**Asked.** `#21` recorded that "the large number of `unwrap`/`expect` sites in production-adjacent
+setup and command paths makes it hard to distinguish test-only assertions from user-reachable
+failure handling". That is the honest form of the finding: not "there are too many" but "nobody can
+tell which ones matter".
+
+**How does a repo keep an answer to that question true?**
+
+**Ruled: classify, count, and bound it.**
+
+**1. A triage starts with a list.** A grep cannot separate a poisoned-lock `expect` from a
+refutable assumption on a user's config, and the difference is the whole question. The inventory
+prints file and line so a reader judges each one.
+
+**2. Every site above the floor was read.** All 81 are one of three kinds: a `Lazy<Regex>` over a
+literal pattern (failure is a programming error the first test finds), a poisoned lock (the thread
+already failed the run), or a true invariant the types do not express (`split_first` on an argv that
+function just built). None is a refutable assumption on a value from a user's config, a manager's
+output or a path on disk.
+
+**3. A ceiling is what keeps the answer true.** A count that only gets printed is a count somebody
+reads once. A count with a ceiling has to be answered when it moves: the test fails, and the only
+way past is to handle the site or raise the ceiling in the same change — which is the decision
+written down where the next reader finds it.
+
+**What this binds.**
+
+- **The classification's own health is asserted.** A cutoff that stopped working would fold every
+  inline assertion into the production count and the number would stop meaning anything, so one test
+  requires the excluded total to be the larger one.
+- **A zero is treated as a broken script, not a clean tree.** The inventory finding nothing would
+  otherwise be the most reassuring possible failure.

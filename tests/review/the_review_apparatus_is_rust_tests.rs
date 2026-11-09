@@ -95,6 +95,20 @@ fn every_script_is_run_by_something_or_is_declared_not_to_be_a_gate() {
             "a measuring instrument, run by hand against a real container when a batching \
              claim needs evidence",
         ),
+        (
+            "smoke.sh",
+            "the fast tier a person runs while editing, on purpose not wired into CI: it is the \
+             cheap thing you run before the expensive gate, and running it in CI would make it \
+             one more thing the nightly pays for. Its own contract is pinned by \
+             `the_smoke_tier_reports_what_it_did_not_run`, and the modules it names are run by \
+             `cargo test` anyway",
+        ),
+        (
+            "panic-inventory.sh",
+            "a reading instrument, not a gate: it prints every production panic site for a person \
+             to judge. The numbers it produces are held by \
+             `the_panic_sites_are_counted_and_not_just_read_past`, which is the gate",
+        ),
     ];
 
     let mut scripts = files_in("scripts", &[".sh", ".ps1"]);

@@ -8700,3 +8700,58 @@ one that would surface as a mount that quietly does not work.
 **`&` is escaped first, and the order is the property.** Escaping it after `<` turns the `&` of
 `&lt;` into `&amp;lt;`, which renders markup visibly wrong instead of invisibly dangerous. The test
 asserts on the rendered output rather than on the input, because the input was never the problem.
+
+**V.236 — Why the fast tier reports its skips, and why the release surface is in it (`#21`).**
+
+`release-check.sh` was the only verification command in the repo, and it is the shippability gate:
+a release build, the whole suite, the Docker matrix. That is the right thing to run before a tag and
+the wrong thing to run while editing, so between `cargo check` and a release people ran nothing —
+and the first time a workflow file had drifted from an installer was on the nightly, after the tag.
+
+**The tier itself is the easy half. The reporting is the point.** The acceptance criterion on #21
+was that the command reports which checks were skipped and why, and it is that way round because a
+tier like this fails silently in the direction nobody notices: a check whose module was renamed
+matches no tests, runs none, exits zero, and appears in the summary as neither a pass nor a
+failure. The run looks green and covers less than it did last week. So the summary carries three
+numbers, every skip names its reason, and an all-skipped run refuses to print a clean banner.
+
+**This is the integration harnesses' lesson moved to the developer's desk.** The container harnesses
+learned to tally the arms they could not measure and print them separately, because the number of
+green checks is a claim about the product only while the number of checks that *ran* is still
+visible.
+
+**The release surface belongs in the fast tier and not only on the nightly.** #21's own evidence was
+that release/install behaviour is "especially vulnerable to drift between scripts, workflow YAML,
+target naming, and the binary actually built". A nightly finds that drift; a fast tier finds it while
+the branch is still open. The test that compares the four surfaces in both directions already
+existed — what was missing was a command people run that includes it.
+
+**V.237 — Why the panic sites are counted rather than searched for (`#21`, `II.84`).**
+
+`#21` recorded that "the large number of `unwrap`/`expect` sites in production-adjacent setup and
+command paths makes it hard to distinguish test-only assertions from user-reachable failure
+handling". That is the honest form of the finding: not "there are too many" but "nobody can tell
+which ones matter", and a grep cannot answer it because the difference is not in the text.
+
+**So the question is made askable.** `scripts/panic-inventory.sh` classifies every site by whether
+it sits after a `cfg(test)` module and prints the production ones with file and line. Every one of
+the 81 was then read. All of them are one of three kinds, and none is a refutable assumption on a
+value from a user's config, a manager's output or a path on disk:
+
+* **a `Lazy<Regex>` over a literal pattern** — the pattern is a compile-time constant, so failure is
+  a programming error the first test finds;
+* **a poisoned lock** — a thread that panicked while holding it has already failed the run, and the
+  alternative is pretending the counters are intact;
+* **a true invariant the types do not express** — `split_first` on an argv that function just built,
+  a clone URL on a variant that has one, a builtin row name from the file that declares it. Each
+  says its reason in the expect message.
+
+**The ceiling is what keeps the answer true.** A count that only gets printed is a count somebody
+reads once. A count with a ceiling is a count that has to be answered when it moves: the test fails,
+and the only way past it is to handle the site or raise the ceiling in the same change, which is the
+decision being written down where the next reader finds it.
+
+**The classification's own health is asserted.** A cutoff that stopped working would fold every
+assertion in every inline test module into the production count, the ceiling would read thousands,
+and the number would stop meaning anything — so one test requires the excluded total to be the
+larger one.

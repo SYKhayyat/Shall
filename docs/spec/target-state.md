@@ -4650,3 +4650,32 @@ reachable from a test on any host.**
 - **Escaping is not dropping.** The hostile text survives as data inside the literal. An escaper
   that removed it would be silently discarding a user's path, which is a worse failure than the one
   it prevents.
+
+## II.83 A fast verification tier says what it skipped, and a release surface is checked before the tag (C20, V.236)
+
+**A verification command between a compile check and a release gate reports three numbers — passed,
+failed and skipped — and every skip names its reason.**
+
+- **A silent skip is indistinguishable from a pass in a log nobody reads closely.** The number of
+  checks that *ran* is a claim about the tree; the number that did not is a claim about the run,
+  and a summary reporting only the first cannot tell a clean tier from an empty one.
+- **The release/install surface is compared with itself in the fast tier, not only on the nightly.**
+  A drift between `ci.yml`'s matrix, its release job, `install.sh` and `install.ps1` found on the
+  nightly is found after the tag.
+- **A tier that exercises nothing is not a pass.** When the named module set matches no tests, the
+  command says so rather than exiting zero with a green banner.
+
+## II.84 Panic sites are counted, classified, and the count may only go down (C21, V.237)
+
+**Every `unwrap`/`expect`/`panic!` in `src/` is classified by whether it is inline test code, the
+production count is bounded, and a raise is a written decision rather than a side effect.**
+
+- **A triage starts with a list.** A grep cannot separate a poisoned-lock `expect` from a refutable
+  assumption on a user's config, and the difference is the whole question. The inventory prints
+  file and line so a reader judges each one.
+- **A ceiling, not a target.** Every site above the floor was read and is one of: a `Lazy<Regex>` on
+  a literal pattern, a poisoned lock, or an invariant the types do not express. A new one means a
+  new assumption nobody was asked about, and raising the ceiling in the same change is how the
+  decision gets written down.
+- **A classification that excludes nothing is broken.** The test asserts the excluded total is the
+  larger number, which can only be true while the `cfg(test)` cutoff does something.
