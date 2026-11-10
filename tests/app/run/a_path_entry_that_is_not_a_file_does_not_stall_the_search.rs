@@ -1,3 +1,7 @@
+//! A `PATH` entry that cannot be read to its end does not stall the search.
+//!
+//! Unix-only: a fifo is how this is made deterministic, and it is not a Windows object.
+
 #![cfg(unix)]
 
 use super::*;
