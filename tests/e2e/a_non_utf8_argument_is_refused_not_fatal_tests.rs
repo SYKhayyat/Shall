@@ -116,13 +116,18 @@ fn a_shim_reads_a_non_utf8_argument_without_dying_on_it() {
 
 /// `--config` names a path, and a path is bytes. This door is read from argv *before* clap
 /// parses, for the alias table, so a `String` there aborted the process before any command ran.
+///
+/// **The fixture needs a filesystem that takes the name.** macOS's `open` refuses a filename
+/// that is not valid UTF-8 (`EILSEQ`), so there is no way to place a file there for this path to
+/// name. What remains provable on such a host is the property the test was written for — the
+/// process reads the bytes rather than converting them and aborting.
 #[test]
 fn a_config_path_that_is_not_utf8_is_opened_by_its_bytes() {
     let dir = tempfile::TempDir::new().unwrap();
     let path = dir.path().join(OsStr::from_bytes(b"pref-\xff.toml"));
     // Deliberately not valid: the refusal below is the proof that this file — and not the
     // default location — is the one that was opened. A `String` conversion never gets here.
-    std::fs::write(&path, b"max_parallel = \"four\"\n").unwrap();
+    let named = std::fs::write(&path, b"max_parallel = \"four\"\n").is_ok();
 
     let out = shall(dir.path())
         .arg("--config-dir")
@@ -135,12 +140,21 @@ fn a_config_path_that_is_not_utf8_is_opened_by_its_bytes() {
 
     assert_did_not_panic(&out);
     let text = stderr_of(&out);
-    assert!(
-        text.contains("is not valid TOML"),
-        "the file named by a non-UTF-8 path was not the one read:\n{text}"
-    );
-    assert!(
-        text.contains("pref-"),
-        "the refusal must name the file it read:\n{text}"
-    );
+    if named {
+        assert!(
+            text.contains("is not valid TOML"),
+            "the file named by a non-UTF-8 path was not the one read:\n{text}"
+        );
+        assert!(
+            text.contains("pref-"),
+            "the refusal must name the file it read:\n{text}"
+        );
+    } else {
+        // No file to read, so the run must still have got past its argv into the repo it could
+        // not build — an abort on the argument never reaches this message.
+        assert!(
+            text.contains("priority"),
+            "the run did not get past argv:\n{text}"
+        );
+    }
 }
