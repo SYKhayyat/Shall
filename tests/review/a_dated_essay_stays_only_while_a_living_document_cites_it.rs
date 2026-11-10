@@ -42,7 +42,7 @@ fn dated_essays() -> Vec<String> {
                 .split('-')
                 .nth(1)
                 .is_some_and(|y| y.len() == 4 && y.chars().all(|c| c.is_ascii_digit()));
-            (is_essay && has_date).then(|| name)
+            (is_essay && has_date).then_some(name)
         })
         .collect();
     out.sort();

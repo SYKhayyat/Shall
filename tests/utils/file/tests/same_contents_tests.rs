@@ -25,7 +25,7 @@ async fn equal_and_unequal_copies_are_answered_without_reading_either_whole() {
     );
 
     // Different lengths, and the difference is in a later chunk than the first read.
-    let long: Vec<u8> = std::iter::repeat(b'x').take(200 * 1024).collect();
+    let long: Vec<u8> = std::iter::repeat_n(b'x', 200 * 1024).collect();
     tokio::fs::write(&a, &long).await.unwrap();
     let mut shorter = long.clone();
     shorter.truncate(150 * 1024);
