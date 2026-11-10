@@ -1,6 +1,6 @@
 //! The removal guard: the last check between a plan and a purged system.
 //!
-//! Drift removal is derived from managed state, and managed state can be wrong â€” a
+//! Drift removal is derived from managed state, and managed state can be wrong — a
 //! mis-scoped manifest, a bad adoption, a state file from another machine. When it is
 //! wrong the planner does not produce a *small* mistake; it schedules every managed
 //! package for removal and the engine carries it out one purge at a time.
@@ -25,7 +25,7 @@ use tracing::{debug, warn};
 /// Proof that this guard was consulted, and the only thing an effector will remove without.
 ///
 /// **`README.md:358` promises that every path removing anything goes through one guard. Until
-/// this type existed, that sentence was checked by a regex over source text** â€”
+/// this type existed, that sentence was checked by a regex over source text** —
 /// `removal_guard_enumeration_tests.rs`'s `is_removal_call`, matching `.remove(` with `sudo`
 /// on the line, `.remove_repo(`, `.remove_shim(` and `.deprovision(`. `apply/firewall.rs` closes
 /// a port with `deny_command`, which matches none of them, and the word `guard` appears nowhere
@@ -80,8 +80,8 @@ impl Reaped {
 }
 
 /// Which command is asking. Passed explicitly rather than inferred, so every caller has
-/// to declare itself â€” a new deletion path cannot quietly inherit someone else's
-/// exemption â€” and so a refusal can name what refused.
+/// to declare itself — a new deletion path cannot quietly inherit someone else's
+/// exemption — and so a refusal can name what refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuardScope {
     Apply,
@@ -120,7 +120,7 @@ impl GuardScope {
     }
 
     /// Whether a transaction run under this scope is **reconciling the machine against the
-    /// manifest** â€” which decides whether its rollback may leave a removal in place (`U41`).
+    /// manifest** — which decides whether its rollback may leave a removal in place (`U41`).
     ///
     /// A reconciling run removes a package *because nothing declares it*, and that fact is still
     /// true when the rollback fires. Putting it back hands the next sync the same work, which is
@@ -154,12 +154,12 @@ impl GuardScope {
         }
     }
 
-    /// How a refusal names this run in prose â€” the `(refused during â€¦)` half of a message.
+    /// How a refusal names this run in prose — the `(refused during …)` half of a message.
     ///
     /// Separate from [`as_str`](Self::as_str) because the two answer different questions.
     /// `as_str` is the command to *retype* with a flag on it, so it has to be what the user
     /// typed. This is what the reader needs to understand the refusal, and there the
-    /// difference that matters is **whether anybody was there** â€” `N7` makes an unattended
+    /// difference that matters is **whether anybody was there** — `N7` makes an unattended
     /// `watch` tick revert by default, so "refused during watch" is the one phrasing that
     /// buries the fact worth reporting.
     ///
@@ -192,7 +192,7 @@ pub enum Protection {
     /// The backend reports the OS itself treats this as essential.
     OsEssential(String),
     /// The manager reports a name that cannot be written as a package line, so Shall can
-    /// never declare it â€” and what it cannot be asked to keep, it must not take away.
+    /// never declare it — and what it cannot be asked to keep, it must not take away.
     Undeclarable,
     /// The name declares a resource, not a package: a `service:`, `link:` or `setting:`.
     /// `purge-undeclared` deletes packages nobody declared; a service nobody declared is not
@@ -209,11 +209,11 @@ impl Protection {
             }
             Self::Undeclarable => {
                 "its manager reports a name no line can hold, so Shall cannot manage \
-                 it â€” and removing what you cannot declare is not something you asked for"
+                 it — and removing what you cannot declare is not something you asked for"
                     .to_string()
             }
             Self::NotAPackage(backend) => format!(
-                "`{}:` declares a state, not an installed package â€” undeclaring one is a \
+                "`{}:` declares a state, not an installed package — undeclaring one is a \
                  `sync` of a line you deleted, never a sweep of what you never declared",
                 backend
             ),
@@ -223,12 +223,12 @@ impl Protection {
 
 /// The single decision function: may `name` be removed from `backend`?
 ///
-/// Everything that asks "is this protected?" must route through here â€” the `protected`
+/// Everything that asks "is this protected?" must route through here — the `protected`
 /// command included. When the inspector and the enforcer answer separately they drift
 /// apart, and an inspector that contradicts the guard is worse than none, because it is
 /// believed.
 ///
-/// `backend` is `None` when the caller does not know one â€” `shall protected jq`, where the user
+/// `backend` is `None` when the caller does not know one — `shall protected jq`, where the user
 /// named no manager. The config rules match on the name alone and are answered; the OS's
 /// essential list is keyed by `backend:name` and cannot be, so it is not consulted. **An unknown
 /// backend is this case, never the empty string**: `is_declarable("", "jq")` builds the line
@@ -252,7 +252,7 @@ pub fn protection_of(
     // accident: the declarability test asked whether a *package* line could hold the name,
     // `service:AppMgmt` is not a package line, and so every running service was refused by a
     // check that was not about services and printed a sentence that was false of them. The
-    // moment that sentence was corrected â€” and it was false, `service:AppMgmt` parses â€” the
+    // moment that sentence was corrected — and it was false, `service:AppMgmt` parses — the
     // refusal would have evaporated and `purge-undeclared` could stop and disable every
     // service on the machine. This is that refusal, made on purpose.
     //
@@ -269,7 +269,7 @@ pub fn protection_of(
     }
 
     // One question, one pass. An explicit un-protect entry wins over everything, including
-    // the OS's own essential flag â€” the user saying "I know, I manage this one myself", and
+    // the OS's own essential flag — the user saying "I know, I manage this one myself", and
     // nothing should overrule that, or the escape hatch does not open for exactly the packages
     // someone would need it for. Asking it as two calls meant `protection_rule` re-scanned
     // `unprotected_packages` after `unprotect_rule` had already answered `None` over the same
@@ -311,7 +311,7 @@ pub enum Objection {
         count: usize,
         limit: usize,
     },
-    /// A desired package is on the `deny_packages` list (II.10) â€” never install this.
+    /// A desired package is on the `deny_packages` list (II.10) — never install this.
     Denied {
         key: String,
     },
@@ -337,7 +337,7 @@ pub struct GuardReport {
     ///
     /// **A report that only subtracts cannot say what it let through.** Clearing an objection
     /// and never having raised one produce the same `objections` list, so the only difference
-    /// between "the flag was needed" and "the flag was idle" used to be a `warn!` line â€” and a
+    /// between "the flag was needed" and "the flag was idle" used to be a `warn!` line — and a
     /// line is something a caller has to overhear rather than something it can read. Recorded
     /// here so [`allow_the_count`] announces a value it holds.
     pub allowed_by_flag: Vec<Objection>,
@@ -390,7 +390,7 @@ impl GuardReport {
         }
         if protected.len() > MAX_LISTED {
             out.push_str(&format!(
-                "  - â€¦and {} more protected {}(s)\n",
+                "  - …and {} more protected {}(s)\n",
                 protected.len() - MAX_LISTED,
                 match kind {
                     RemovalKind::Package => "package",
@@ -419,7 +419,7 @@ impl GuardReport {
         }
         if unverified.len() > MAX_LISTED {
             out.push_str(&format!(
-                "  - â€¦and {} more through managers that could not answer\n",
+                "  - …and {} more through managers that could not answer\n",
                 unverified.len() - MAX_LISTED
             ));
         }
@@ -429,7 +429,7 @@ impl GuardReport {
         // for an extra the equivalent act is putting the declaration back.
         match kind {
             RemovalKind::Package => out.push_str(
-                "\nThis usually means managed state has drifted from your manifests â€” run \
+                "\nThis usually means managed state has drifted from your manifests — run \
                  `shall plan` and read it before proceeding.\n\n\
                  What to do:\n  \
                  shall protected <pkg>          why a package is guarded\n  \
@@ -438,7 +438,7 @@ impl GuardReport {
                  [guard] unprotected_packages    exempt a package permanently (preferences.toml)",
             ),
             RemovalKind::Extra => out.push_str(
-                "\nThese are resources a declaration put in place â€” a `link:`, `service:`, \
+                "\nThese are resources a declaration put in place — a `link:`, `service:`, \
                  `setting:`, `shim:`, `schedule:` or `repo:` line that is no longer in any \
                  module. `sync` undoes what is no longer declared.\n\n\
                  What to do:\n  \
@@ -447,12 +447,12 @@ impl GuardReport {
                  <command> --allow-mass-removal carry out this teardown anyway\n  \
                  [guard] unprotected_packages    exempt one permanently (preferences.toml)",
             ),
-            // Never `put the line back`: nobody declared these â€” that is *why* they are closing.
+            // Never `put the line back`: nobody declared these — that is *why* they are closing.
             // The act that keeps a port open is declaring it, which is the opposite instruction.
             RemovalKind::Port => out.push_str(
                 "\nThese ports are open on the machine and no `firewall:` line declares them, \
                  so `sync` closes them (`N1`). A machine you reach over the network is a \
-                 machine this can cut you off from â€” read the list before you clear it.\n\n\
+                 machine this can cut you off from — read the list before you clear it.\n\n\
                  What to do:\n  \
                  shall plan                     see exactly what would be closed\n  \
                  firewall:<port>/<proto>        declare a port you meant to keep open\n  \
@@ -464,14 +464,14 @@ impl GuardReport {
     }
 }
 
-/// What backends answered about OS-essential packages â€” and which could not.
+/// What backends answered about OS-essential packages — and which could not.
 pub struct EssentialAnswers {
     /// `backend:name` pairs the running OS reports as essential, for the backends asked.
     pub names: HashSet<String>,
     /// Backends whose essential question has no answer this run. **A failure is an answer
     /// too**: a removal through one of these cannot be checked against what the OS needs,
     /// and the guard refuses it rather than reading the silence as "nothing here is
-    /// essential" â€” that reading is how the safety rail fails open.
+    /// essential" — that reading is how the safety rail fails open.
     pub unanswered: BTreeSet<String>,
 }
 
@@ -610,20 +610,20 @@ pub async fn inspect(
 /// The one place the mass flags are honoured over a removal report, and the one thing they
 /// clear.
 ///
-/// II.10: a mass flag answers exactly one refusal â€” the count. It used to clear every objection,
+/// II.10: a mass flag answers exactly one refusal — the count. It used to clear every objection,
 /// so the flag meaning "yes, 50 packages is what I meant" also deleted python3. A confirmation
 /// asks; a refusal says no, and protection is a refusal (V.26): nothing overrides it.
 ///
 /// Every removal ceiling answers to `--allow-mass-removal`, because the question it answers is
 /// one question (`Y20`). `max_total_changes` answers to that flag *and* to
-/// `--allow-mass-install`, because a total is made of both (`N8`) â€” and to nothing else, which
+/// `--allow-mass-install`, because a total is made of both (`N8`) — and to nothing else, which
 /// is why this is a match on the setting rather than a blanket retain.
 ///
 /// **What the flag answered is moved, not deleted.** This was a `retain` and a
 /// `before != after` around the `warn!`, whose only observable was the line itself: flipped to
 /// `==`, the announcement went to every run that did *not* need an override and was withheld
 /// from the runs that did, while the report stayed byte for byte the same. A test that read the
-/// `tracing` output was written for it and withdrawn the same day â€” callsite `Interest` is
+/// `tracing` output was written for it and withdrawn the same day — callsite `Interest` is
 /// cached globally and other tests create and drop dispatchers on other threads throughout the
 /// run, so the capture came back empty in 2 of 3 identical Linux runs. Partitioning answers it
 /// without a subscriber: the objections the flag cleared are on the report, so what was allowed
@@ -656,7 +656,7 @@ pub fn allow_the_count(config: &Config, report: &mut GuardReport, scope: GuardSc
     report.allowed_by_flag.extend(allowed);
 }
 
-/// What a run says when a mass flag answered its count â€” `None` when none did.
+/// What a run says when a mass flag answered its count — `None` when none did.
 ///
 /// A function returning the sentence rather than an `if` around the `warn!`, for the same reason
 /// the objections are moved rather than dropped: a condition whose only consequence is whether a
@@ -665,12 +665,12 @@ pub fn allow_the_count(config: &Config, report: &mut GuardReport, scope: GuardSc
 /// test on every other thread.
 ///
 /// **Both halves of the sentence are read off what happened, never off the caller.** The ceiling
-/// comes from each objection's own `setting` â€” [`counted_as`], for the reason its own doc gives â€”
+/// comes from each objection's own `setting` — [`counted_as`], for the reason its own doc gives —
 /// and the flags from the config. Written from the caller's noun and a hardcoded
 /// `--allow-mass-removal`, it told a run that passed only `--allow-mass-install` that a *removal*
 /// count had been allowed by a *removal* flag: a ceiling, a noun and a flag, none of which were
-/// that run's. `shall protected` has always printed the true rule â€” *"either flag answers
-/// `max_total_changes`"* â€” so the guard's own line was the one surface contradicting it (`J9`).
+/// that run's. `shall protected` has always printed the true rule — *"either flag answers
+/// `max_total_changes`"* — so the guard's own line was the one surface contradicting it (`J9`).
 ///
 /// **`pub` so the guard's tests can reach it.** They live in `tests/app/sync/guard/`, which
 /// links the library without `cfg(test)`, and a private item is invisible from there.
@@ -697,19 +697,19 @@ pub fn announcement(allowed: &[Objection], config: &Config, scope: GuardScope) -
         return None;
     }
     Some(format!(
-        "'{}' {} â€” allowed by {}.",
+        "'{}' {} — allowed by {}.",
         scope.as_str(),
         counts.join("; "),
         flags
     ))
 }
 
-/// The mass flags this run actually passed, as a user would type them â€” `None` when it passed
+/// The mass flags this run actually passed, as a user would type them — `None` when it passed
 /// neither, because then nothing was allowed and the sentence has no subject.
 ///
 /// Both are named when both were passed. Attributing one of them instead would mean deciding
-/// which was load-bearing, and for `max_total_changes` â€” the one ceiling either flag answers
-/// (`N8`) â€” either one of them was.
+/// which was load-bearing, and for `max_total_changes` — the one ceiling either flag answers
+/// (`N8`) — either one of them was.
 fn flags_that_allowed(config: &Config) -> Option<&'static str> {
     match (config.allow_mass_removal, config.allow_mass_install) {
         (true, true) => Some("--allow-mass-removal and --allow-mass-install"),
@@ -724,7 +724,7 @@ fn flags_that_allowed(config: &Config) -> Option<&'static str> {
 ///
 /// The package/extra distinction exists because [`protection_of`]'s declarability test asks
 /// "could a package line ever have held this name?", and for an extra the answer is structurally
-/// no â€” a `link:`/`service:`/`setting:` key is not a package line and never parses as one.
+/// no — a `link:`/`service:`/`setting:` key is not a package line and never parses as one.
 /// Running that test over an extra marks every extra `Undeclarable` and refuses every teardown
 /// forever, which is a guard that has stopped being about the user's intent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -764,7 +764,7 @@ pub const TOTAL_KEY: &str = "max_total_changes";
 
 /// What a ceiling counted, as the verb and noun a refusal says it with. Derived from the setting
 /// rather than from the caller, so the sentence and the key it names cannot describe different
-/// things â€” a message reading `removes 40 packages` above `[guard] max_port_closures` is worse
+/// things — a message reading `removes 40 packages` above `[guard] max_port_closures` is worse
 /// than no message.
 fn counted_as(setting: &str) -> (&'static str, &'static str) {
     match setting {
@@ -778,8 +778,8 @@ fn counted_as(setting: &str) -> (&'static str, &'static str) {
 /// What one command has taken away so far, so a ceiling is a budget for the command rather than
 /// for each phase.
 ///
-/// **A sync removes in four places** â€” the transaction's packages, the extras teardown, the
-/// firewall's undeclared ports, and `repo remove` on the imperative path â€” and each used to
+/// **A sync removes in four places** — the transaction's packages, the extras teardown, the
+/// firewall's undeclared ports, and `repo remove` on the imperative path — and each used to
 /// check its own list against the ceiling. `inspect_removals` took an `also_removing: usize` for
 /// exactly this reason, which made the count something every caller assembled by hand: two
 /// passed the right number and **`apply/firewall.rs` passed `0`**, so four packages and four
@@ -796,8 +796,8 @@ fn counted_as(setting: &str) -> (&'static str, &'static str) {
 /// that many, I meant it" is one question.
 ///
 /// **And one count of everything, because a command can pass every per-kind ceiling and still
-/// do more than anyone meant** (`N8`). `additions` is what the per-kind ceilings do not cover â€”
-/// installs and upgrades, resources created, ports opened â€” held here rather than anywhere else
+/// do more than anyone meant** (`N8`). `additions` is what the per-kind ceilings do not cover —
+/// installs and upgrades, resources created, ports opened — held here rather than anywhere else
 /// because `max_total_changes` is a budget for the command, and the command is what owns this.
 #[derive(Debug, Default)]
 pub struct Reaping {
@@ -818,7 +818,7 @@ impl Reaping {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// Everything the command has changed so far, of every kind â€” what `max_total_changes` is
+    /// Everything the command has changed so far, of every kind — what `max_total_changes` is
     /// measured against.
     pub fn changes_so_far(&self) -> usize {
         use std::sync::atomic::Ordering::Relaxed;
@@ -836,7 +836,7 @@ impl Reaping {
             .fetch_add(n, std::sync::atomic::Ordering::Relaxed);
     }
 
-    /// Record changes that are not removals â€” installs and upgrades, resources created, ports
+    /// Record changes that are not removals — installs and upgrades, resources created, ports
     /// opened. They answer to no ceiling of their own beyond `max_installs`, but they are
     /// changes, and `max_total_changes` counts changes.
     pub(crate) fn record_addition(&self, n: usize) {
@@ -856,7 +856,7 @@ impl Reaping {
 /// The `max_total_changes` objection, or `None` when the command still has room.
 ///
 /// One function, called by every gate, because a total assembled at some gates and not others
-/// is a total that reports whichever subset happened to run â€” the `also_removing: usize` shape
+/// is a total that reports whichever subset happened to run — the `also_removing: usize` shape
 /// that `S55` was, one level up.
 ///
 /// **`pub` so the guard's tests can reach it.** They live in `tests/app/sync/guard/`, which
@@ -875,7 +875,7 @@ pub fn too_many_changes(config: &Config, reaping: &Reaping, adding: usize) -> Op
 ///
 /// A package contributes its name and nothing else. An extra whose identity is a path also
 /// contributes that path's final component, so `protected_packages = ["vimrc"]` protects
-/// `link:/home/u/.vimrc` â€” a user names the thing, not the absolute path Shall happens to
+/// `link:/home/u/.vimrc` — a user names the thing, not the absolute path Shall happens to
 /// key it by, and a rule that only matched the full path would silently protect nothing.
 ///
 /// **`pub` so the guard's tests can reach it.** They live in `tests/app/sync/guard/`, which
@@ -897,7 +897,7 @@ pub fn protected_names(kind: RemovalKind, name: &str) -> Vec<&str> {
 ///
 /// **This is the pure half and it stays pure**: it reads the ledger and never writes to it, so a
 /// preview may ask without spending anyone's budget. The `enforce*` family is what records.
-/// Taking the ledger rather than a number is the point â€” `already: usize` was a parameter three
+/// Taking the ledger rather than a number is the point — `already: usize` was a parameter three
 /// callers assembled by hand and one answered with a `0` (`S55`).
 pub async fn inspect_removals(
     config: &Config,
@@ -1031,7 +1031,7 @@ pub async fn enforce_extras(
 ///
 /// **Firewall ports are absent on purpose**: they are computed against the live machine at
 /// apply time, so a plan file cannot hold them and this cannot count them. A perimeter change
-/// can therefore push a run over `max_total_changes` that previewed clean â€” which is the same
+/// can therefore push a run over `max_total_changes` that previewed clean — which is the same
 /// thing `plan` has always said about a machine that moves under it.
 pub async fn preview_refusals(
     config: &Config,
@@ -1057,7 +1057,7 @@ pub async fn preview_refusals(
             refusals.push(report.message(scope, kind));
         }
         // Recorded whether or not it objected. A refused phase stops the engine, so the later
-        // ones would never run â€” but a preview that reported the first refusal and went quiet
+        // ones would never run — but a preview that reported the first refusal and went quiet
         // about the rest would have to be run once per fix.
         reaping.record(kind, pairs.len());
     }
@@ -1097,7 +1097,7 @@ pub async fn enforce_ports(
 ///
 /// **The count comes off the command's [`Reaping`] and goes back onto it here**, which is what
 /// makes the ceiling a budget for the command. Two entry points wrap this rather than one taking
-/// a `RemovalKind`, because a caller choosing the kind is a caller who can choose it wrong â€” a
+/// a `RemovalKind`, because a caller choosing the kind is a caller who can choose it wrong — a
 /// package teardown reported as an extra escapes `protection_of`'s declarability test.
 async fn enforce_kind(
     config: &Config,
@@ -1122,7 +1122,7 @@ async fn enforce_kind(
 ///
 /// [`enforce_kind`]'s decision with the ledger write left out. It exists because a command
 /// may ask before its confirmation prompt while the engine asks again over the same pairs
-/// before carrying them out (`remove-orphans`, `purge-undeclared`). Two asks, one rule â€” and
+/// before carrying them out (`remove-orphans`, `purge-undeclared`). Two asks, one rule — and
 /// one spend: the ask that merely decides must not raise `so_far`, or the engine's ask
 /// measures `N + N` against the ceiling and refuses a set the user already confirmed.
 pub async fn vet(
@@ -1146,20 +1146,20 @@ pub async fn vet(
 
 /// Turn a refusal into the error every command reports.
 ///
-/// **Every guard entry point comes through here**, so `Error::Refused` â€” U21's exit code 3 â€” is
+/// **Every guard entry point comes through here**, so `Error::Refused` — U21's exit code 3 — is
 /// a property of the guard rather than of each caller remembering to pick the right variant.
 /// The install ceiling returned `Error::Other` until this existed, which made the one refusal
 /// in II.10 that is about installs exit 1 while its eight siblings exited 3.
 ///
 /// It does **not** fire `on_guard_refusal`. Announcing a refusal is a side effect, and a side
-/// effect inside a decision function runs wherever the decision is evaluated â€” including in
+/// effect inside a decision function runs wherever the decision is evaluated — including in
 /// tests, which call this with a default `Config` whose `config_root()` is the developer's own
 /// `~/.config/shall`. That would have `cargo test` executing the developer's real hooks. The
 /// event is fired once, where `Error::Refused` becomes an exit code (`finish`), which is the
 /// layer where effects belong.
 ///
 /// **Note what this function is and is not.** It is where every *guard* refusal is built. It is
-/// not where every refusal in the program is built â€” the SEC/T series constructs its own, and
+/// not where every refusal in the program is built — the SEC/T series constructs its own, and
 /// for nine sites those were `Error::Validation`, so they exited 1 and the hook never heard
 /// them. What makes the promise true is the variant, not this function, and what checks it is
 /// `tests/e2e/grader_refusal_exit_code_tests.rs`.
@@ -1168,8 +1168,8 @@ fn refuse<T>(message: String) -> Result<T> {
 }
 
 /// Inspect the *desired* state against the `[guard]` install rules (II.10) that do not need
-/// runtime state: `deny_packages` and `pinned_only`. The two that do â€” `require_snapshot`
-/// and `deny_vulnerable` â€” are enforced by the caller, which holds the snapshot provider and
+/// runtime state: `deny_packages` and `pinned_only`. The two that do — `require_snapshot`
+/// and `deny_vulnerable` — are enforced by the caller, which holds the snapshot provider and
 /// the audit report. Returns one objection per offending package; an empty vec means the
 /// spec-level rules pass.
 pub fn inspect_desired(
@@ -1206,11 +1206,11 @@ pub fn inspect_desired(
 /// violation list. (Removal objections render through [`GuardReport::message`] instead.)
 pub fn describe_objection(o: &Objection) -> String {
     match o {
-        Objection::Denied { key } => format!("{} â€” denied by policy (deny_packages)", key),
+        Objection::Denied { key } => format!("{} — denied by policy (deny_packages)", key),
         Objection::Unpinned { key } => {
-            format!("{} â€” pinned_only requires an explicit @version=", key)
+            format!("{} — pinned_only requires an explicit @version=", key)
         }
-        Objection::Protected { key, reason } => format!("{} â€” {}", key, reason),
+        Objection::Protected { key, reason } => format!("{} — {}", key, reason),
         Objection::TooMany {
             count,
             limit,
@@ -1220,7 +1220,7 @@ pub fn describe_objection(o: &Objection) -> String {
             format!("installs {} packages, over max_installs ({})", count, limit)
         }
         Objection::UnverifiedEssentials { key, backend } => format!(
-            "{} â€” {} cannot currently report which packages the OS needs, so the removal \
+            "{} — {} cannot currently report which packages the OS needs, so the removal \
              cannot be checked against OS-essentials",
             key, backend
         ),
@@ -1231,12 +1231,12 @@ pub fn describe_objection(o: &Objection) -> String {
 /// [`enforce`]: `max_installs` catches a manifest that accidentally globs its way into tens
 /// of thousands of installs. `Ok(())` means the install may proceed.
 ///
-/// The override is `config.allow_mass_install` (`--allow-mass-install`), never `--yes` â€”
+/// The override is `config.allow_mass_install` (`--allow-mass-install`), never `--yes` —
 /// the same rule the removal ceiling follows, and for the same reason: `-y` is what every
 /// script passes.
 ///
-/// Unlike removals, installs have no protection or OS-essential dimension â€” nothing is
-/// *installed* that the system forbids here â€” so the only question is the count, and `0`
+/// Unlike removals, installs have no protection or OS-essential dimension — nothing is
+/// *installed* that the system forbids here — so the only question is the count, and `0`
 /// (unset) disables it.
 pub async fn enforce_installs(
     config: &Config,
@@ -1264,7 +1264,7 @@ pub async fn enforce_installs(
     refuse(format!(
         "{}: refusing this install.\n  \
          - it installs {} packages, over the limit of {} (config: max_installs)\n\n\
-         This usually means a manifest matched more than you meant â€” run `shall plan` and \
+         This usually means a manifest matched more than you meant — run `shall plan` and \
          read the counts before proceeding.\n\n\
          What to do:\n  \
          shall plan                     see exactly what would be installed\n  \
@@ -1276,7 +1276,7 @@ pub async fn enforce_installs(
     ))
 }
 
-/// The gate for changes that take nothing away â€” a resource created or rewritten, a port opened.
+/// The gate for changes that take nothing away — a resource created or rewritten, a port opened.
 ///
 /// They answer to no ceiling of their own: `max_total_changes` is the only number that counts
 /// them, and nothing here can be `protected` (a thing that does not exist yet cannot be a thing
@@ -1319,8 +1319,8 @@ pub fn enforce_total(
     else {
         return Ok(());
     };
-    // Either flag answers it, because both say the same sentence â€” "yes, that many, I meant it"
-    // (`Y20`) â€” and a total is made of removals and installs both. A third flag for the third
+    // Either flag answers it, because both say the same sentence — "yes, that many, I meant it"
+    // (`Y20`) — and a total is made of removals and installs both. A third flag for the third
     // ceiling would be a third way to say one thing.
     if config.allow_mass_removal || config.allow_mass_install {
         if let Some(said) = announcement(
@@ -1339,14 +1339,14 @@ pub fn enforce_total(
     refuse(format!(
         "{}: refusing this {}.\n  \
          - it makes {} changes in total, over the limit of {} ([guard] {})\n\n\
-         This ceiling counts everything one command does â€” installs and upgrades, packages \
+         This ceiling counts everything one command does — installs and upgrades, packages \
          removed, resources torn down or written, ports opened and closed. The per-kind limits \
          each passed; the total did not.\n\n\
          What to do:\n  \
          shall plan                     see exactly what would change\n  \
          [guard] {}       raise or clear the total (preferences.toml)\n  \
          <command> --allow-mass-removal carry out this run anyway\n  \
-         <command> --allow-mass-install the same â€” this total answers to either flag",
+         <command> --allow-mass-install the same — this total answers to either flag",
         scope.as_str(),
         noun,
         count,
@@ -1435,7 +1435,7 @@ fn refusal_for_own_work(report: GuardReport, removals: &[(String, String)]) -> E
     ))
 }
 
-/// Charge a batch of mutations the model cannot name â€” `@undo=` shell commands above all â€”
+/// Charge a batch of mutations the model cannot name — `@undo=` shell commands above all —
 /// against the command's total, then record them.
 ///
 /// These are the one mutation family with no per-kind ceiling to answer, because nothing can
@@ -1460,7 +1460,7 @@ pub fn charge_unmodelled(
 /// Enforce for `purge-undeclared`, where the count is not the question (II.11).
 ///
 /// `max_removals` catches accidents, and this command is the opposite of an accident: you
-/// typed its name and confirmed it. **`protected_packages` and OS-essential still apply** â€”
+/// typed its name and confirmed it. **`protected_packages` and OS-essential still apply** —
 /// those are not "are you sure", and the ratio check (II.11) is what asks whether you meant
 /// it at all.
 pub async fn enforce_deliberate(
@@ -1481,7 +1481,7 @@ pub async fn enforce_deliberate(
     })
 }
 
-/// [`enforce_deliberate`]'s decision with the ledger write left out â€” [`vet`]'s twin for the
+/// [`enforce_deliberate`]'s decision with the ledger write left out — [`vet`]'s twin for the
 /// deliberate scopes, so `purge-undeclared`'s prompt-time ask does not spend against the total
 /// its engine ask is about to measure.
 pub async fn vet_deliberate(

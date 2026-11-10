@@ -30,7 +30,7 @@ fn registers_valid_and_skips_collisions_and_bad_names() {
     let caps = reg.get("paru").expect("paru registered");
     assert!(caps.is_installable());
     assert!(caps.is_queryable());
-    // no search_args â‡’ not searchable; no upgrade_args â‡’ not upgradable
+    // no search_args ⇒ not searchable; no upgrade_args ⇒ not upgradable
     assert!(!caps.is_searchable());
     assert!(!caps.is_upgradable());
     assert!(caps.is_metadata_provider());

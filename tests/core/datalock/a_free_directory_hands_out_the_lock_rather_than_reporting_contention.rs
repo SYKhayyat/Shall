@@ -2,7 +2,7 @@ use super::*;
 
 /// **The door that reports contention has to open when there is none.** `try_acquire`
 /// returning `Ok(None)` unconditionally means a `hook-*` subcommand never records anything
-/// and never says why â€” it reads exactly like the ordinary contended case it was built for.
+/// and never says why — it reads exactly like the ordinary contended case it was built for.
 #[test]
 fn a_free_directory_hands_out_the_lock_rather_than_reporting_contention() {
     let _g = gate();

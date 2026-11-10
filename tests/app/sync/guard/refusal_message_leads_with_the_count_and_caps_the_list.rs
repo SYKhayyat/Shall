@@ -21,5 +21,5 @@ fn refusal_message_leads_with_the_count_and_caps_the_list() {
     let count_line = msg.find("removes 25 packages").expect("count line present");
     let first_pkg = msg.find("apt:pkg0").expect("a package listed");
     assert!(count_line < first_pkg, "the count must lead");
-    assert!(msg.contains("â€¦and 15 more"), "the list must be capped");
+    assert!(msg.contains("…and 15 more"), "the list must be capped");
 }

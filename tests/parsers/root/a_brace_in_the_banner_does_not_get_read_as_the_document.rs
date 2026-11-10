@@ -1,7 +1,7 @@
 use super::*;
 
 /// A banner that itself contains a brace. The first bracket byte fails, and the retry is
-/// anchored to a line start rather than to the next brace along â€” because the next brace
+/// anchored to a line start rather than to the next brace along — because the next brace
 /// along is inside the document, and parsing from there would answer confidently with one
 /// sub-object of the tree.
 #[test]

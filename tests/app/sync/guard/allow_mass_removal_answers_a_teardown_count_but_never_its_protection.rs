@@ -32,6 +32,6 @@ async fn allow_mass_removal_answers_a_teardown_count_but_never_its_protection() 
         )
         .await
         .is_err(),
-        "nothing overrides protection â€” not even --allow-mass-removal"
+        "nothing overrides protection — not even --allow-mass-removal"
     );
 }

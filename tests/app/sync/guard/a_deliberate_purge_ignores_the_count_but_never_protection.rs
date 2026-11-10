@@ -3,7 +3,7 @@ use super::*;
 #[tokio::test]
 async fn a_deliberate_purge_ignores_the_count_but_never_protection() {
     // II.11: `max_removals` catches accidents, and `purge-undeclared` is the opposite of
-    // an accident â€” you typed its name. `protected_packages` and OS-essential still
+    // an accident — you typed its name. `protected_packages` and OS-essential still
     // apply, and the ratio check is what asks whether you meant it at all.
     let reg = Arc::new(BackendRegistry::new());
     let cfg = config_with(2);

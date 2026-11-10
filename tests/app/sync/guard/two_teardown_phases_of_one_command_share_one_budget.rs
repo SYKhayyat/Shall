@@ -1,7 +1,7 @@
 use super::*;
 
-/// **A ceiling is a budget for the command.** A sync tears extras down in two places â€” the
-/// firewall's undeclared ports and the ledger's drift â€” and each used to check only its own
+/// **A ceiling is a budget for the command.** A sync tears extras down in two places — the
+/// firewall's undeclared ports and the ledger's drift — and each used to check only its own
 /// list, so a limit of five could be passed twice by a run that exceeded it once.
 ///
 /// The number is no longer a parameter. `Reaping` carries it, and this test drives the real

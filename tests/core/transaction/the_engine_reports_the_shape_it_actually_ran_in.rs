@@ -8,7 +8,7 @@ use super::*;
 /// `latency.rs` owns the rule; nothing owned the measurement, which is why the class read as
 /// exempt for as long as it did.
 ///
-/// A wide plan must take one wave however many packages are in it â€” that is the assertion a
+/// A wide plan must take one wave however many packages are in it — that is the assertion a
 /// change awaiting the batch in flight before dispatching more would break, while leaving
 /// every package installed and every other test green. Watched failing against exactly that
 /// change: six packages, depth one, six waves.
@@ -32,7 +32,7 @@ async fn the_engine_reports_the_shape_it_actually_ran_in() {
     );
 
     // A chain of three. Serial is the correct schedule here, and the rule must not report
-    // it â€” which is the case a threshold read off a host gets wrong.
+    // it — which is the case a threshold read off a host gets wrong.
     let mut chain = StableDiGraph::new();
     let a = chain.add_node(GraphAction::Install(spec("apt", "libfoo")));
     let b = chain.add_node(GraphAction::Install(spec("apt", "foo-tool")));
@@ -80,7 +80,7 @@ async fn the_engine_reports_the_shape_it_actually_ran_in() {
     // Two independent chains. **This is the case that killed the first version of the
     // rule**, which counted dispatches: `a` and `b` start together, whichever finishes
     // first hands out its child while the other pair is still running, and the pass count
-    // reaches three against a depth of two â€” a violation reported against a scheduler doing
+    // reaches three against a depth of two — a violation reported against a scheduler doing
     // precisely what it should. Counting idle restarts instead, the engine never runs dry
     // here at all.
     let mut chains = StableDiGraph::new();

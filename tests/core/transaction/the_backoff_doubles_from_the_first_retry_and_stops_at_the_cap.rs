@@ -2,7 +2,7 @@ use super::*;
 
 /// The backoff doubles from the first retry, and the cap is a cap.
 ///
-/// Called only with `attempt >= 2`, so attempt 2 â€” the first retry â€” waits `initial`
+/// Called only with `attempt >= 2`, so attempt 2 — the first retry — waits `initial`
 /// exactly. Each value below is one the shift, the exponent or the multiplication would
 /// get wrong on its own.
 #[test]

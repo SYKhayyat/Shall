@@ -3,7 +3,7 @@ use super::*;
 /// Every objection renders a reason that names itself.
 ///
 /// `describe_objection` is the install side's whole explanation of a refusal, and nothing
-/// asserted a word of it â€” replacing the body with `String::new()` and with `"xyzzy"` both
+/// asserted a word of it — replacing the body with `String::new()` and with `"xyzzy"` both
 /// passed the suite. A refusal a user cannot read is a refusal that will be read as a bug
 /// in Shall.
 #[test]

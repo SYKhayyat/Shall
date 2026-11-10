@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn a_permanent_failure_is_not_touched_by_the_retry_count() {
-    // It never entered the retry loop a second time â€” `give_up` breaks on Permanent â€” so
+    // It never entered the retry loop a second time — `give_up` breaks on Permanent — so
     // seeing one here at all would mean something else changed. Pinned so it cannot.
     let e = Error::CommandFailed {
         message: "`scoop` failed: Couldn't find manifest".into(),

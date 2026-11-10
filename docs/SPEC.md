@@ -51,7 +51,7 @@ the binary where S33 lived.
 
 **Build state is not readiness, and this file should stop implying it is.** The register is at
 zero unbuilt items; the *validation* surface is far narrower than the build surface. **64 backends
-exist across all platforms**, and how many have completed a real install â†’ list â†’ binary â†’ remove
+exist across all platforms**, and how many have completed a real install → list → binary → remove
 round trip is measured per host class rather than asserted here — the ratchet in
 [`scripts/lifecycle-floor.txt`](../scripts/lifecycle-floor.txt) is the number, and
 `the_stated_lifecycle_coverage_matches_the_ratchet` fails when a document disagrees with it. The
@@ -157,7 +157,7 @@ already exists". You cannot implement this correctly from a summary.
    **The same rule for a *finding*, and for the same reason.** A review round's output is a diff
    to `target-state.md` plus a test that fails without the fix — not a new dated document.
    Twelve dated review files in nine days is what the other way produced, and F-8 counted what
-   they bought: `cargo fmt --check` went 26 â†’ 0 â†’ 0 â†’ 0 â†’ 12 â†’ 60 across them, closed at the
+   they bought: `cargo fmt --check` went 26 → 0 → 0 → 0 → 12 → 60 across them, closed at the
    mechanism and the mechanism never run; `G-4` was closed with a mutation test its author
    watched go red and reopened two days later, same ID, same defect; *"a check that cannot
    fail"* appears in all seven grade rounds. **The finding was written down every time. Writing
@@ -170,9 +170,9 @@ already exists". You cannot implement this correctly from a summary.
 8. **Report honestly.** If tests fail, say so and paste the output. If you skipped a step,
    say that. If you're unsure something works, say you're unsure. Never describe unverified
    work as done.
-9. **A âœ… is earned by a command, not by a belief.** Rule 8 was already here, in these words,
+9. **A ✅ is earned by a command, not by a belief.** Rule 8 was already here, in these words,
    and **Phases 0 and 1 were both marked ✅ while untrue anyway** — so the rule is not
-   enough on its own. **Before writing âœ… on a phase, re-run that phase's Exit criterion and
+   enough on its own. **Before writing ✅ on a phase, re-run that phase's Exit criterion and
    paste the result.** Before *trusting* one, re-run it. **A phase that deletes things is
    done when the greps are quiet, not when the new thing works** — Phase 0 and Phase 1 both
    failed exactly here: the replacement was built, the replaced was left standing, the tests
@@ -185,7 +185,7 @@ already exists". You cannot implement this correctly from a summary.
     cannot see the plan. They do not know Phase 0 asked for a deletion, that II.6 asked for
     three verbs and got two, or that the grammar was supposed to *replace* the eight parsers
     rather than become the ninth. **Nothing in this document is verified by `cargo test`** —
-    every âœ… that turned out false was green when it was written. So green is a floor, not a
+    every ✅ that turned out false was green when it was written. So green is a floor, not a
     finding: it says you broke nothing that was already covered, which is the least
     interesting thing you could report and never the thing that was asked. **The question is
     never "do the tests pass?" It is "did I do what the plan said, in full?"** — and that is
@@ -208,7 +208,7 @@ already exists". You cannot implement this correctly from a summary.
   them. Phase 1's Exit is the one that reads like tests — "unit tests for every grammar rule
   above, including every error case" — and note that it names a *surface to cover*, not a
   result to observe; note also that **Phase 1 is one of the two phases that was falsely marked
-  âœ….** Its tests were written and they passed. The phase still wasn't done, because covering
+  ✅.** Its tests were written and they passed. The phase still wasn't done, because covering
   the new grammar was never the same as unifying the parsers onto it.
 - `cargo test` and `cargo clippy` must be green at every commit outside Phase 2's interior.
   Necessary, nowhere near sufficient: a phase can be green and untouched.

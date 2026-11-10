@@ -16,7 +16,7 @@ async fn six_independent_installs_are_one_command() {
     assert_eq!(
         h.counters[0].calls.load(Ordering::SeqCst),
         1,
-        "six packages, one manager, no edges between them â€” that is one command"
+        "six packages, one manager, no edges between them — that is one command"
     );
     assert_eq!(h.counters[0].widest.load(Ordering::SeqCst), 6);
     assert_eq!(results.len(), 6, "every package still gets its own result");

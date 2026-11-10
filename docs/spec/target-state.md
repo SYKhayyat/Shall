@@ -1,4 +1,4 @@
-﻿# Part II â€” The target state
+﻿# Part II — The target state
 
 *[Shall v7](../SPEC.md) — the map is there; this is one part of it.*
 
@@ -268,8 +268,8 @@ already a legible refusal and stays one.
 
 ```
 apt:jq@version=1.6                    ok
-apt:jq@version=>=1.0,<2.0             ERROR â†’ "commas need the block form"
-apt:curl@2.0                          ERROR â†’ "did you mean @version=2.0?"
+apt:jq@version=>=1.0,<2.0             ERROR → "commas need the block form"
+apt:curl@2.0                          ERROR → "did you mean @version=2.0?"
 ```
 
 **Block form.** Everything after the first `=` to end of line is the value: **verbatim,
@@ -294,15 +294,15 @@ apt:nginx {
 lines. Anything else is a declaration; its body is options.
 
 ```
-module fancy {          keyword â†’ body is lines
+module fancy {          keyword → body is lines
   apt:neovim
 }
 
-when os == linux {      keyword â†’ body is lines
+when os == linux {      keyword → body is lines
   apt:htop
 }
 
-apt:nginx {             declaration â†’ body is options
+apt:nginx {             declaration → body is options
   after_install = ./setup.sh
 }
 ```
@@ -336,7 +336,7 @@ fallback above exists to prevent in the other direction.
 | key | meaning |
 |---|---|
 | `version` | exact or range |
-| `hold` | never upgrade. **`@hold` + `@version=` is a contradiction â†’ error** |
+| `hold` | never upgrade. **`@hold` + `@version=` is a contradiction → error** |
 | `expires` | **absolute** datetime. Present now, absent after |
 | `until` | **absolute** datetime, on `absent:` only. Absent now, present after |
 | `requires` | `BACKEND:NAME` — install that first. **A bare name is an error** |
@@ -406,7 +406,7 @@ by-hand path (`@size` shrinking, `@classic` narrowing) — never ignored. **An o
 omits manages nothing**: absence is not a declaration of the default, or every config that never
 mentioned a key acquires refusals it never asked for (V.107, V.108).
 
-**The proof is per option, not per backend.** A lifecycle is install â†’ list â†’ remove and never
+**The proof is per option, not per backend.** A lifecycle is install → list → remove and never
 edits a declaration, which is exactly how five options stayed dead through thousands of green
 checks.
 
@@ -577,7 +577,7 @@ survives a version bump where an exact name does not). When the pattern still ma
 the same tie-break applies. **`@asset=all` installs every match** rather than choosing.
 
 **One artifact is deployed under the repo's name; several each keep their own.** A line that
-resolves to one file puts it on `PATH` as the repo is called (`github:sharkdp/fd` â†’ `fd`), and
+resolves to one file puts it on `PATH` as the repo is called (`github:sharkdp/fd` → `fd`), and
 `@bin=` overrides that as it always has. A line that resolves to several cannot: one name
 cannot hold two files. Each then keeps the name of the program found inside it, and **two that
 would land on the same name is an error naming both files** — never one overwriting the other.
@@ -611,7 +611,7 @@ drift it was meant to catch. **V.151.**
 ## II.3 Modules
 
 - A module is a **list of lines**.
-- **The filename is the module name, lowercased.** `Editors.txt` â†’ module `editors`. A file
+- **The filename is the module name, lowercased.** `Editors.txt` → module `editors`. A file
   with no `module` block is one module named after the file. Anything outside a block
   belongs to the file's own module.
 - **A module can `use` other modules. A module can NEVER reference a profile.** The layering
@@ -780,11 +780,11 @@ write is deleted (II.17), because two stores could disagree about what this mach
 
 | | | state |
 |---|---|---|
-| version | `apt:curl â†’ 7.81.0` | **built** (`locks/versions.json`) |
+| version | `apt:curl → 7.81.0` | **built** (`locks/versions.json`) |
 | **hook script hash** | `fonts:after_install → sha256:a3f1…` | **built** (`locks/hooks.toml`) |
 | **resolved artifact** | `sharkdp/fd → fd-…-linux-gnu.tar.gz`, its URL, format and hash | **built** (`locks/github.toml`) |
-| **resolved backend for an unpinned name** | `ripgrep â†’ cargo` | **built** (`locks/bare.HOST.toml`) |
-| **regex expansion** | `re:^texlive- â†’ [312 names]` | **built** (`locks/regex.toml`) |
+| **resolved backend for an unpinned name** | `ripgrep → cargo` | **built** (`locks/bare.HOST.toml`) |
+| **regex expansion** | `re:^texlive- → [312 names]` | **built** (`locks/regex.toml`) |
 | **`exec:` script content already run here** | `sha256:… → 1` | **built** (`locks/exec.toml`). Keyed by **content**, while `locks/hooks.toml` is keyed by declared path — the two answer different questions (*has this already run?* vs *is this allowed to run?*), so a script edited after approval is both unapproved and un-run, which is the pair you want |
 | **applied extras** | `service:nginx`, `link:<destination>`, `repo:apt:ppa:x/y` | **built** (`locks/extras.toml`). It is what makes *removing* a `service:`/`link:`/`shim:`/`repo:` line undo it — without a record of what was applied, deleting the last extra line is a change with nothing to diff against |
 
@@ -939,7 +939,7 @@ no working file changes meaning, only errors become answers. The fallback is wha
 
 ### One contract, three providers
 
-**A provider produces `name â†’ value`. That is the whole interface**, which is why this is one
+**A provider produces `name → value`. That is the whole interface**, which is why this is one
 feature and not several:
 
 | provider | filename | what it is |
@@ -1032,12 +1032,12 @@ first pass because a `vars` file names no backend.
 
 ## II.7 Resolution
 
-0. **Detect facts, then resolve `vars` â†’ the variables, exactly once** (II.6b). This is before
+0. **Detect facts, then resolve `vars` → the variables, exactly once** (II.6b). This is before
    everything else because `active` itself may carry `when $role`, and the once-per-invocation
    rule is what keeps `plan` honest when a provider reads the clock or the network. The resolved
    set rides on the facts for the rest of resolution and freezes into a saved plan.
-1. Read `active` â†’ the profile names, unioned.
-2. Resolve profiles â†’ the module set. Profiles may reference profiles; modules may not.
+1. Read `active` → the profile names, unioned.
+2. Resolve profiles → the module set. Profiles may reference profiles; modules may not.
 3. Parse **only** the modules reached. Apply `when`.
 4. Resolve each line. A line that pins one manager is that manager. Anything else asks its
    candidates in order (II.7b), honouring this host's lock when the line still accepts what it
@@ -1073,7 +1073,7 @@ dispatched to nothing is a build failure**, and `repo:` is excluded from "work a
 because it is phase 1, not because anybody remembered to leave it out (V.144).
 
 **A plan states what it was computed over, and that decides what it may remove** *(Y12)*. The
-removal set is `managed âˆ’ desired`, so it is only as good as `desired`: a caller that hands the
+removal set is `managed − desired`, so it is only as good as `desired`: a caller that hands the
 planner something narrower than the machine's whole declaration set gets a removal planned for
 everything outside it. **`None` used to mean both "do not filter" and "everything missing is
 drift"** — unrelated facts, and one of them is a decision about deleting software — and five of
@@ -1244,8 +1244,8 @@ every module and profile in the folders, so a loop nobody activated is still fou
 this host's facts like everything else, so a `when` arm written for another machine is parsed and
 not walked.
 
-**Ordering is the planner's job, never the file layout's.** Repos first â†’ refresh indexes â†’
-packages (`@requires` edges) â†’ things depending on packages (services, shims, links).
+**Ordering is the planner's job, never the file layout's.** Repos first → refresh indexes →
+packages (`@requires` edges) → things depending on packages (services, shims, links).
 
 **Within packages, the only ordering Shall imposes is the one you wrote.** A manager resolves
 and installs its own dependency closure at install time, so Shall does not ask what a package
@@ -1467,7 +1467,7 @@ so**. A normal line you can read and delete. **Never implicit.**
 there's nothing for it to come back to. Did you mean a plain uninstall?"*
 
 **`--backend` is allowed on read-only and upgrade; REFUSED on anything that removes.**
-`plan`, `list`, `upgrade` â†’ yes. `sync`, `purge-undeclared` â†’ error: *"scoping a removal
+`plan`, `list`, `upgrade` → yes. `sync`, `purge-undeclared` → error: *"scoping a removal
 isn't safe; use a profile."*
 
 **`remove-orphans` goes through the guard** — ask the backend what it intends, check the list
@@ -2052,7 +2052,7 @@ alternative is a machine-wide destructive default nobody typed.
 
 ## II.12 Hooks and the supply chain
 
-**The lock is the approval.** `locks/` records each hook script's hash. Hash mismatch â†’
+**The lock is the approval.** `locks/` records each hook script's hash. Hash mismatch →
 **stop**:
 
 ```
@@ -2118,7 +2118,7 @@ nobody while the one beside it opens `#!`; what gates every hook is the approval
 hooks live in the `[hooks]` config block (`before_sync`/`after_sync`, target `*`, run once
 around the entire sync). Per-package hooks are attached to a declaration
 (`apt:nginx { after_install = ./setup.sh }`) and fire inside the engine for that one package,
-keyed per package (`after_install:nginx` â‰  `after_install:redis`). These are **not duplicates**
+keyed per package (`after_install:nginx` ≠ `after_install:redis`). These are **not duplicates**
 — a per-package hook cannot express "before the whole sync", so `[hooks]` stays (owner ruling
 2026-07-17; that is why it is not on II.17's delete list).
 
@@ -2458,7 +2458,7 @@ line:
 and `why` on a matched package says *"matched by `re:^fonts-` at modules/dev.txt:3"* rather than
 sending the reader to a line that does not contain the package.
 
-**(measured)** `apt:re:^python3-.*` â†’ 4,447. `apt:re:^lib` â†’ 30,207.
+**(measured)** `apt:re:^python3-.*` → 4,447. `apt:re:^lib` → 30,207.
 
 **Residual hole, accepted:** `texlive-foo` renamed to `tex-foo` silently drops one package.
 One package, recoverable, snapshot has your back.
@@ -2730,7 +2730,7 @@ about what someone already has, and the honest promise here is that this is the 
 
 **The install path is a tested path.** `install.sh` and `install.ps1` end by offering to take
 over the machine, and that step must name a command that exists — both called `migrate`, which
-**II.17 lists as deleted** (â†’ `adopt`), so the documented first run installed the binary and
+**II.17 lists as deleted** (→ `adopt`), so the documented first run installed the binary and
 then failed on the only step that makes it useful. A rename sweeps the scripts and the docs in
 the same change as the source, or it is not done.
 

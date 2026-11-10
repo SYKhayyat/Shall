@@ -1,6 +1,6 @@
 use super::*;
 
-/// A batch of mutations the model cannot name â€” `@undo=` shell commands â€” answers the
+/// A batch of mutations the model cannot name — `@undo=` shell commands — answers the
 /// same total ceiling everything else answers, and what it is allowed to run is recorded
 /// so whatever runs behind it counts it too.
 #[tokio::test]

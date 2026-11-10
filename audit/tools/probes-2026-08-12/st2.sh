@@ -21,7 +21,7 @@ rc=$?
 echo "  exit code            : $rc"
 echo "  Status line          : $(grep -m1 'Status:' /tmp/o1.txt || echo '(none)')"
 echo "  Installs line        : $(grep -m1 'Installs:' /tmp/o1.txt || echo '(none)')"
-echo "  task marks           : $(grep -cE 'âœ—' /tmp/o1.txt) failed, $(grep -cE 'âœ“' /tmp/o1.txt) ok"
+echo "  task marks           : $(grep -cE '✗' /tmp/o1.txt) failed, $(grep -cE '✓' /tmp/o1.txt) ok"
 
 echo
 echo "### CASE 2: same, WITHOUT --keep-going"

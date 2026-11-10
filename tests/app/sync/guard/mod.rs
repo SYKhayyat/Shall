@@ -98,20 +98,20 @@ fn ports(specs: &[&str]) -> Vec<(String, String)> {
 //
 // Measured rather than asserted: a Linux binary carrying the first mutation was built and
 // run against a clean one on the same image and scenario. The clean binary refused with
-// exit 3 and five protections â€” `tar`, `sed`, `grep`, `gzip`, `findutils`. The mutant was
+// exit 3 and five protections — `tar`, `sed`, `grep`, `gzip`, `findutils`. The mutant was
 // silent, exited 1, and attempted the removal. **The machine survived only because apt
-// refuses to remove its own `Essential: yes` packages** â€” a second line of defence Shall
+// refuses to remove its own `Essential: yes` packages** — a second line of defence Shall
 // does not own, does not check for, and cannot assume of every backend.
 //
 // **Nothing in this repository caught it.** Not the 1,814 lib tests, not the 535
-// integration tests, and not the 425-check container harness â€” the mutant binary swept the
+// integration tests, and not the 425-check container harness — the mutant binary swept the
 // `tools` image at 424 pass / 1 fail, the same single failure the clean binary has. Even
 // `protected includes a system essential`, which the harness greps, passes: that command
 // reports the *static* config rules and is byte-identical between the two binaries.
 //
 // **The reason is a missing input, not a missing assertion.** The suite is hermetic and no
 // mock had ever reported an essential set, so `essential_names` returned empty in every test
-// that has ever run â€” and a function that always returns empty is indistinguishable from one
+// that has ever run — and a function that always returns empty is indistinguishable from one
 // hard-coded to. `Essentials` below is that input.
 
 /// A backend that answers the essential query, which no other test fixture in the tree does.
@@ -119,7 +119,7 @@ struct Essentials {
     name: String,
     essential: Vec<String>,
     /// The audit's case: a manager having a bad day. `true` and the query errors instead
-    /// of answering â€” the shape a real `apt` produces exactly when its answer matters most.
+    /// of answering — the shape a real `apt` produces exactly when its answer matters most.
     fails: bool,
     listings: shall::core::installed::InstalledListings,
 }

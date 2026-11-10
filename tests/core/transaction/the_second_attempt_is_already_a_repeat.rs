@@ -3,7 +3,7 @@ use super::*;
 /// Two attempts is the experiment; one is not.
 ///
 /// The tests above use three attempts and one, and `attempts < 2` reads `<= 2` without
-/// either of them noticing â€” which quietly raises the bar to three, so the *second*
+/// either of them noticing — which quietly raises the bar to three, so the *second*
 /// identical failure stops counting as evidence. Two is the smallest number of attempts
 /// that can show a failure repeating, and it is the only value at which the two spellings
 /// disagree.

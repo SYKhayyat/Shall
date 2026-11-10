@@ -3,7 +3,7 @@ use super::*;
 /// The ceiling triggers **above** `max_removals`, not at it.
 ///
 /// The second finding in the same mutation run: three of the six survivors were
-/// numeric-boundary mutations, and `too_many_changes`'s `>`â†’`>=` is the behavioural one â€”
+/// numeric-boundary mutations, and `too_many_changes`'s `>`→`>=` is the behavioural one —
 /// it moves the refusal to fire *at* the limit instead of past it. It errs safe, which is
 /// why it is a boundary test and not a bug report, and it says the same thing about the
 /// other two: the thresholds were tested for "well over" and "well under" and never at the

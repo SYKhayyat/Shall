@@ -5,7 +5,7 @@ use super::*;
 /// **Asserted on the list, because the caller cannot see it.** `inspect_removals` runs
 /// `find_map` over the result, so a redundant candidate is invisible there: a duplicate name
 /// answers the same question twice and an empty string matches no rule. Both guards in this
-/// function are therefore unfalsifiable one level up â€” which is exactly how
+/// function are therefore unfalsifiable one level up — which is exactly how
 /// `base != name && !base.is_empty()` came to survive being read as `||`.
 #[test]
 fn a_removal_offers_a_basename_only_when_it_has_one_to_offer() {

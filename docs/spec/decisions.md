@@ -424,7 +424,7 @@ wrong is corrected here rather than quietly in the code.*
 
 ### H — the grading round of 2026-08-13 (GRADE-2026-08-13) — 8
 
-*`docs/GRADE-2026-08-13.md` graded Bugs at Dâˆ’, Verification at D+, and refused the release. It
+*`docs/GRADE-2026-08-13.md` graded Bugs at D−, Verification at D+, and refused the release. It
 raised three questions it deliberately did not answer in code (Q-A, Q-B, Q-C), and the work on
 F10 raised a fourth. **The owner ruled all four on 2026-08-13, by delegation**: asked to choose,
 he declined to adjudicate them one by one and gave the principle instead — that a feature in this
@@ -767,7 +767,7 @@ for both. Three candidate answers, and they are not equally good:
    which is the wrong shape.
 
 *Recommendation:* **2**, with a default per statement kind that matches what the underlying store
-does anyway (`gsettings` â†’ user, registry â†’ `HKCU`, `apt` â†’ system). **Answer this before 7e is
+does anyway (`gsettings` → user, registry → `HKCU`, `apt` → system). **Answer this before 7e is
 written**, because whatever the registry adapter picks becomes the convention by precedent and
 then spreads to macOS `defaults`.
 
@@ -1720,13 +1720,13 @@ plane.
 **Status: ANSWERED — ruled 2026-07-24.**
 
 **D13 — Changing a `channel` — refresh or reinstall?** `snap refresh --channel=edge` is not
-`snap remove && snap install`, and moving `edge â†’ stable` is usually a downgrade. **A downgrade
+`snap remove && snap install`, and moving `edge → stable` is usually a downgrade. **A downgrade
 is a removal-shaped event and the guard should see it.** *Recommendation:* refresh where the
 backend supports it, and route the downgrade case through the plan and the guard like any other
 destructive change.
 
 
-**RULED (owner, 2026-07-24): refresh, and route a downgrade through the guard.** Changing a `channel` refreshes in place where the backend supports it (`snap refresh --channel=`), and the downgrade case (`edge â†’ stable`) goes through the plan and the guard like any destructive change, because a downgrade is removal-shaped.
+**RULED (owner, 2026-07-24): refresh, and route a downgrade through the guard.** Changing a `channel` refreshes in place where the backend supports it (`snap refresh --channel=`), and the downgrade case (`edge → stable`) goes through the plan and the guard like any destructive change, because a downgrade is removal-shaped.
 
 **RULED, NOT YET BUILT (2026-07-24).** Refresh where the backend supports it; route a channel downgrade through the plan and guard. Queued rather than built: it needs the planner to detect a *channel change* (query the installed channel, compare to the declared one — the planner currently checks version, not channel) AND a notion of channel ordering to tell a downgrade from an upgrade, both of which touch the change-detection core. Deferred to avoid a risky half-change there; the ruling is settled for when it is built.
 ---
@@ -2270,7 +2270,7 @@ by the guard.** Decided in one place before the commands that use it. **BUILT th
 (`core::exit`), and it exposed a real gap: the guard refused through `Error::Other`, so a refusal
 was indistinguishable from a crash and no script could avoid retrying one. It has its own
 `Error::Refused` now, `check` returns `Error::Differences`, and one mapping point in `main`
-turns both into codes. Verified on the binary: findings â†’ 2, clean â†’ 0, bad argument â†’ 1.
+turns both into codes. Verified on the binary: findings → 2, clean → 0, bad argument → 1.
 
 ---
 
@@ -3216,7 +3216,7 @@ naming the fix.
 
 **W4 — Where in resolution does `vars` load?** It has to be parsed and resolved before any file
 containing `when` is evaluated, including `active` — which means before profiles are known. And
-`vars` itself contains `when` over detected facts. So: detect facts â†’ resolve `vars` â†’ everything
+`vars` itself contains `when` over detected facts. So: detect facts → resolve `vars` → everything
 else. *Recommendation:* state this as a fixed phase in II.7, because getting it wrong produces an
 ordering bug that will look like an intermittent one. **BUILT (2026-07-20):** vars resolve once
 per invocation, before any `when` is evaluated (`resolve_model`), and the resolved set is carried
@@ -3352,7 +3352,7 @@ rather than presenting a hundred unexplained removals. **CORE SATISFIED by const
 
 **RULED (owner, 2026-07-20, fifth session): the plan shows a run-level note, not per-package
 attribution.** The three options were a run-level note (compare the plan's frozen vars to this
-run's and print *"Variables changed: role (travel â†’ desktop)"* above the removals), per-package
+run's and print *"Variables changed: role (travel → desktop)"* above the removals), per-package
 attribution (resolve twice and diff the gating, so each removed package names the variable that
 dropped it), or nothing. The owner chose the note. It is decoupled from the W11/W8 gating-side
 tracking entirely — the plan already freezes its resolved vars (Stage 5), so the note is a diff
@@ -3654,7 +3654,7 @@ The rule is in **II.8**; the reason is in **V.92**.
 are tested instead, and nothing ships until they are.**
 
 The proposal — from the readiness review, and recommended by its author — was to split the
-backend list into *supported* (has passed a real install â†’ list â†’ binary â†’ remove round-trip in
+backend list into *supported* (has passed a real install → list → binary → remove round-trip in
 an automated gate) and *experimental* (everything else), and to say so in `check health`, in the
 `priority` file `init` writes, and in the readme. 52 backends are registered and 22 have ever
 been run against the real tool; every defect the review found lives in that remainder.
@@ -4233,7 +4233,7 @@ manager in priority order; the same fixture with `cargo:ripgrep` is 0.2s.
 The options:
 
 - **(a) Reserve them.** A bare word that is a known keyword is a parse error naming the form the
-  user probably meant (`link` â†’ *"did you mean `link:PATH`?"*). Costs anyone whose package really is
+  user probably meant (`link` → *"did you mean `link:PATH`?"*). Costs anyone whose package really is
   called `end` the need to write `cargo:end`.
 - **(b) Warn and continue.** Declare it, but say so once per line. Keeps every name declarable and
   puts a sentence between the typo and the install — but a warning on a `sync` that is about to do
@@ -4279,7 +4279,7 @@ a release blocker, and this one says how the remaining coverage is obtained.
 
 **Q17 — How does a backend that mutates the real machine get its first real lifecycle?**
 
-Twenty of the sixty registered backends had never completed a real install â†’ list â†’ binary â†’
+Twenty of the sixty registered backends had never completed a real install → list → binary →
 remove in any harness, and twelve of those were in **neither** the canary table nor the
 exemption table of either sweep — no coverage and no stated reason. Three of them, `winget`,
 `choco` and `psresource`, were excused in writing on the grounds that they *"install machine-wide
@@ -4534,8 +4534,8 @@ changed option field rewrites the fstab entry, where before it kept yesterday's 
 every sync and every reboot.
 
 **Run, not argued — on a real logical volume, `docker/integration/run-in-container.sh` §14b.**
-The storage image goes **`pass=274 fail=0 soft=7` â†’ `pass=279 fail=0 soft=7`**, and the five are
-these; the real-lifecycle ratchet holds at 5 â‰¥ 5 (`btrfs`, `lvm` both on real devices, `zfs`
+The storage image goes **`pass=274 fail=0 soft=7` → `pass=279 fail=0 soft=7`**, and the five are
+these; the real-lifecycle ratchet holds at 5 ≥ 5 (`btrfs`, `lvm` both on real devices, `zfs`
 still short a kernel module):
 
 ```
@@ -4554,7 +4554,7 @@ mode is a comparison that reports a change on every sync for ever, and a harness
 cannot see it. `btrfs:` and `zfs:` did not run here — the kernel that run borrowed had neither
 module — so `@quota` re-apply is argv-and-unit-tested and not yet executed. **The `zfs:` half of
 that sentence stopped being about Q4's release blocker on 2026-08-18**: the `storage` leg drives
-a real `zfs` install â†’ list â†’ uninstall â†’ gone in CI (run 32132445664), which empties the set Q4
+a real `zfs` install → list → uninstall → gone in CI (run 32132445664), which empties the set Q4
 counts. What remains here is narrower and still true — that leg creates and destroys a pool, so
 the *re-apply* of `@quota` on a dataset that already carries one is not what it measures.
 
@@ -4594,12 +4594,12 @@ it.
 back.** The only way from classic to strict is remove-and-reinstall — a removal, of a package the
 user declared, to satisfy an option. That is the guard's decision and not a backend's, so:
 
-- **`@classic=true` on a strictly-confined snap** â†’ `snap refresh --classic`. Automatic, and
+- **`@classic=true` on a strictly-confined snap** → `snap refresh --classic`. Automatic, and
   nothing is destroyed.
-- **`@classic=false` on a classic snap** â†’ **refused by name**, with the message saying snapd
+- **`@classic=false` on a classic snap** → **refused by name**, with the message saying snapd
   cannot narrow confinement and naming the by-hand path. The same shape as `Q19`'s shrink
   refusal, and for the same reason: the direction that removes something says so out loud.
-- **No `@classic` at all** â†’ **unmanaged**, exactly as a dropped `@quota` is. A line that says
+- **No `@classic` at all** → **unmanaged**, exactly as a dropped `@quota` is. A line that says
   nothing about confinement is not asking for strict, so it can never schedule that removal. This
   is what keeps the refusal above from firing on configs nobody edited.
 
@@ -4642,7 +4642,7 @@ is the defect `Q18` existed to prevent, arriving one layer in. So:
 
 - **Changing an option changes the machine**, or the line is refused with a reason. There is no
   third outcome, and "nothing happens" is not one of them.
-- **The proof is per option, not per backend.** A lifecycle is install â†’ list â†’ remove, which by
+- **The proof is per option, not per backend.** A lifecycle is install → list → remove, which by
   construction never edits a declaration — which is exactly why all five sat dead through
   thousands of green checks. A backend with a real lifecycle is *not* covered for this.
 - **Where the change cannot be applied, it is refused by name** with the by-hand path
@@ -4793,7 +4793,7 @@ and every removal was its own DAG node and every node called its backend with a 
 slice, so installing 50 apt packages was 50 `apt-get install <one>` invocations. Measured in a
 disposable Ubuntu container: six declared packages produced six `apt` processes and 12,465 ms,
 against 3,161 ms for `apt install` of *eight* packages as one command. One at a time, the same
-packages scaled 1 â†’ 2,131 ms, 2 â†’ 4,017 ms, 4 â†’ 7,372 ms, 8 â†’ **31,901 ms**.
+packages scaled 1 → 2,131 ms, 2 → 4,017 ms, 4 → 7,372 ms, 8 → **31,901 ms**.
 
 **RULED: batch.** Everything ready at the same moment, for the same manager, with no edge
 between any two of them, goes on one command line. Rule in **II.19**, reason in **V.115**.
@@ -4966,12 +4966,12 @@ to gate on these numbers in CI. Deliberately not built now — nothing consumes 
 
 **Y6 — May a manager's answer outlive the run that asked for it?** `Y1`–`Y5` took every
 question Shall asks in one run down to one ask, overlapped: `shall list` puts 19.5 s of manager
-work into ~3.2 s, 6.2Ã—, and the floor is `winget list` at 2.35 s. There is nothing left to
+work into ~3.2 s, 6.2×, and the floor is `winget list` at 2.35 s. There is nothing left to
 overlap. The next `shall list` then asks all 24 managers the same question again, about a
 machine that in the ordinary case nothing has touched since.
 
 **RULED: yes, and off by default.** `installed_cache_secs` (0 = never) reuses a manager's
-installed listing across runs. Measured on this Windows box: **3.99 s â†’ 0.68 s**, with one child
+installed listing across runs. Measured on this Windows box: **3.99 s → 0.68 s**, with one child
 command surviving instead of 24. Rule in **II.19**, reason in **V.120**.
 
 **What the ruling binds:**
@@ -5150,7 +5150,7 @@ is the first question here answered by reading Shall's own report rather than by
 **RULED: ask every manager the run will ask, at once.** Rule in **II.19**, reason in **V.122**.
 A command that crawls the whole machine warms every listing before its first section runs
 (`App::warm_installed`); a plan asks each manager it consults once, before it asks anything
-about a package. **9.13 s â†’ 3.9 s, overlap 2.7Ã— â†’ 5.4Ã—, every listing starting inside a 0.26 s
+about a package. **9.13 s → 3.9 s, overlap 2.7× → 5.4×, every listing starting inside a 0.26 s
 window instead of spread over 5.4 s, and the report identical line for line.**
 
 **What the ruling binds:**
@@ -5197,8 +5197,8 @@ vscode and xbps.
 
 **Measured, both sides, in the Arch integration image with `pacman` behind a counting shim**
 (`docker/integration/measure-batching.sh`). Six declared packages: **8 `pacman` invocations
-â†’ 2**, of which **6 â†’ 0** were dependency queries; summed child time **3.70 s â†’ 1.20 s**; wall
-clock **1.58 s â†’ 1.33 s**. The wall clock moves least because the six queries ran concurrently
+→ 2**, of which **6 → 0** were dependency queries; summed child time **3.70 s → 1.20 s**; wall
+clock **1.58 s → 1.33 s**. The wall clock moves least because the six queries ran concurrently
 — Rust's fan-out was hiding the waste rather than avoiding it. A sync is now two commands: ask
 the manager what it has, install the difference in one line.
 
@@ -5400,8 +5400,8 @@ site-packages is how a system python stops booting. What a user saw was pip's ow
 addressed to somebody typing `pip install` rather than to somebody who wrote a line in a
 manifest.
 
-It surfaced as coverage: the ubuntu, alpine and openSUSE lifecycle ratchets each fell 7 â†’ 6,
-because the images had moved and pip could no longer complete a real install â†’ list â†’ remove.
+It surfaced as coverage: the ubuntu, alpine and openSUSE lifecycle ratchets each fell 7 → 6,
+because the images had moved and pip could no longer complete a real install → list → remove.
 
 **RULED (owner, 2026-08-10): the refusal names `pipx:`, and `@system=true` is the per-line
 escape hatch.**
@@ -5489,9 +5489,9 @@ minutes. It would not extend the same courtesy to the package manager's.
 **RULED (owner, 2026-08-10): it should not fail there at all. Wait for it.**
 
 1. **The three states are three answers, and the machine is asked which one it is in.** The
-   manager's message is the same either way; `/proc` is what knows. *Held by something live* â†’
-   wait, announcing the holder. *On disk with nothing holding it* â†’ fail at once and name `shall
-   heal`, because waiting on a corpse never ends. *Free* â†’ the holder let go mid-retry, which is
+   manager's message is the same either way; `/proc` is what knows. *Held by something live* →
+   wait, announcing the holder. *On disk with nothing holding it* → fail at once and name `shall
+   heal`, because waiting on a corpse never ends. *Free* → the holder let go mid-retry, which is
    an ordinary race and gets the ordinary backoff.
 2. **Bounded, and the bound is one budget across the whole retry loop** — `manager_lock_wait_secs`,
    default 300. Sized for the *other* manager's transaction, not for Shall's patience: a `dnf
@@ -5832,7 +5832,7 @@ sound escape hatch and a weak policy for absorbing the future.
 - **Is computation closed** — no more logic keywords, no fourth `vars` provider, no `repl`?
   `generate:` genuinely covers this. *Recommended: yes.*
 - **Is the resource-kind set closed** — never another `foo:` prefix? Nothing absorbs the twelfth
-  kind if that is wrong, and extensibility grades Aâˆ’ precisely because the backend mechanism is
+  kind if that is wrong, and extensibility grades A− precisely because the backend mechanism is
   open. *Recommended: no.*
 
 **Either way, the motivation has a better cure than a ban.** Part II has three times failed to
@@ -6366,7 +6366,7 @@ answers are *no such verb* — which is information, not an omission:
 |---|---|---|
 | **composer** | `global outdated --format=json` — **wired** | container, with a real global package |
 | bun | `bun outdated` reports a *workspace's* dependencies; Shall manages bun **globals** | container |
-| yarn | `yarn global outdated` â†’ `error Invalid subcommand` | container |
+| yarn | `yarn global outdated` → `error Invalid subcommand` | container |
 | uv | no such verb (`upgrade --dry-run` does not exist) | container |
 | pipx | `upgrade` / `upgrade-all` only — nothing that *lists* | container |
 | pixi | `global update` only — nothing that lists | container |
@@ -6504,7 +6504,7 @@ too, and those are not replies at all.
 
 Measured, without Shall in the picture: 16 concurrent `winget list` from a cold start, 3 of them
 exit `0x8A150001` in ~310ms having written **zero bytes to either stream**. Through Shall that
-became `Ok("")` â†’ a parser finding no packages â†’ `list_installed` answering `Ok(vec![])`. Nothing
+became `Ok("")` → a parser finding no packages → `list_installed` answering `Ok(vec![])`. Nothing
 in the chain believed anything had failed:
 
 ```
@@ -6815,8 +6815,8 @@ run shows that was only part of it.
 
 **The family, and it is not only `1056`:**
 
-- `sc start` on a running service â†’ `1056`, desired state.
-- `sc stop` on a stopped service â†’ `1062` (`ERROR_SERVICE_NOT_ACTIVE`), also the desired state, and
+- `sc start` on a running service → `1056`, desired state.
+- `sc stop` on a stopped service → `1062` (`ERROR_SERVICE_NOT_ACTIVE`), also the desired state, and
   `stop = [["sc", "stop", "{name}"]]` has the same shape.
 - Unelevated, the same convergence returns `5` (access denied) instead — measured here on
   `Spooler`. That one is a real failure and should stay one, but it means an unelevated `adopt`
@@ -6978,7 +6978,7 @@ site it named, and understated: it found one of four, and the one it missed is t
 **Y12 — When a plan is asked what to remove, what is it comparing against?** Whatever the caller
 handed it, and until now the caller had no way to say what that was.
 
-`ChangePlanner::plan` computes removals as `managed âˆ’ desired`. The signature took
+`ChangePlanner::plan` computes removals as `managed − desired`. The signature took
 `Option<Scope>`, and `None` carried two facts that have nothing to do with each other: *do not
 filter the desired set*, and *reap every backend on the box*. Five of the eight call sites passed
 `None`. Four of the five wanted only the first.
@@ -7120,7 +7120,7 @@ something reasonable in the file in front of them. So the duplication itself fai
 The review's headline is *"the name is the mechanism"*. Checked, and it is not:
 
 - **The convergence decision is already shared, in exactly two places, and neither is in the four
-  bodies the review read.** On the package path `ChangePlanner` computes `desired âˆ’ present` and
+  bodies the review read.** On the package path `ChangePlanner` computes `desired − present` and
   asks `is_drifted` — one comparison covering `@quota`, `@size`, `@mount`, `@mount_options`,
   `@channel` and `@classic` across zfs, lvm, btrfs and snap. A converged declaration never reaches
   the trait. On the dependent path `Dependents::apply` asks `extras::in_effect` and skips anything
@@ -7521,7 +7521,7 @@ machine as drifted and adopts nothing. The louder answer is the correct one.
 
 `4d4a890` (2026-08-05) diagnosed the whole chain and fixed four links of it:
 
-> *"Through Shall that became `Ok("")` â†’ **a parser finding nothing** â†’ `list_installed`
+> *"Through Shall that became `Ok("")` → **a parser finding nothing** → `list_installed`
 > answering `Ok(vec![])`. Nothing in the chain believed anything had failed."*
 
 `run_output`, `info`, `list` and `hook-reconcile` were fixed. **The parser — the link the commit
@@ -7799,7 +7799,7 @@ value it can substitute: `--{setting.scope|system}` where `scope` is `system` or
 cannot be written into a flag name without the placeholder growing a conditional form, and a
 template language in argv rows is how a data path stops being data.
 
-1. **`scope = "user" | "system"`, and `user` stops being read.** â† taken. NO-LEGACY says the old
+1. **`scope = "user" | "system"`, and `user` stops being read.** ← taken. NO-LEGACY says the old
    key goes in the same change, and the silent-drift risk that would create is answered by
    refusing the old key by name.
 2. **Keep `user`, give the placeholder a conditional form.** Cheap today, and it is the first line
@@ -8799,7 +8799,7 @@ delete that would fix it.
 
 **What was built.** One table, `READS_THE_DATABASE_OF` (then in `backends/capability.rs`,
 now in `backends/shared_database.rs`), naming the
-client and the backend whose database it reads (`yay â†’ pacman`, `paru â†’ pacman`), and three
+client and the backend whose database it reads (`yay → pacman`, `paru → pacman`), and three
 functions over it. Adopt keys candidates on the database rather than the client; the crawl and
 `list` collapse rows the same way; `--absent` collapses holders. The claim is made **before** the
 already-declared filter, not after, because that filter is what let the clients through:

@@ -1,6 +1,6 @@
 use super::*;
 
-/// A removal rollback reinstated must not be reported as gone â€” the machine has the
+/// A removal rollback reinstated must not be reported as gone — the machine has the
 /// package back, whatever the history says.
 #[tokio::test]
 async fn a_removal_that_was_not_intended_is_treated_as_reinstated() {

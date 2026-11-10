@@ -1,7 +1,7 @@
 use super::*;
 
 /// **`U41`, both halves, as one question.** Rollback does not undo work that moved the
-/// machine toward the declared state â€” an install that succeeded of something still
+/// machine toward the declared state — an install that succeeded of something still
 /// declared, or a removal that succeeded of something still undeclared. The install arm had
 /// this rule and the removal arm did not, and nothing in the register said the pair had
 /// come apart.
@@ -26,7 +26,7 @@ async fn one_rollback_rule_answers_both_directions() {
         "an install of something still declared is the goal reached early"
     );
     // The removal arm: nothing declares `vim`, which is why it was removed, and that fact
-    // has not changed â€” so the reinstate that would compensate it is skipped.
+    // has not changed — so the reinstate that would compensate it is skipped.
     assert_eq!(
         tx.plan_intends_present("apt", "vim"),
         Some(false),

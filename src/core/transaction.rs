@@ -87,7 +87,7 @@ pub struct TransactionConfig {
     /// What a batch does after its command fails for a passing reason.
     pub batch_recovery: BatchRecovery,
     /// Remove also destroys configuration (`[remove] purge`, or `uninstall --purge`). A
-    /// backend that draws no such distinction removes as usual â€” the decision cannot be
+    /// backend that draws no such distinction removes as usual — the decision cannot be
     /// per-package because a removal happens after the line that carried it is gone.
     pub purge: bool,
     /// How long to wait for another package manager that holds its own lock. Zero does not
@@ -165,7 +165,7 @@ pub enum GraphAction {
 ///
 /// Rollback compensates by putting this back, so it has to be a fact rather than an
 /// assumption. Compensating an `Install` with a removal is right only when the package was
-/// absent to begin with â€” and it often is not: a `@version=` or `@channel=` change schedules an
+/// absent to begin with — and it often is not: a `@version=` or `@channel=` change schedules an
 /// `Install` node for a package that is already there, so removing it uninstalls software the
 /// user had instead of reverting a version.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -175,7 +175,7 @@ pub enum Prior {
     /// It was installed, at this version when the manager reported one.
     Present(Option<String>),
     /// The manager could not be asked, or has no query capability. Nothing is inferred from
-    /// this â€” "I could not tell" is not "it was not there".
+    /// this — "I could not tell" is not "it was not there".
     Unknown,
 }
 
@@ -187,7 +187,7 @@ pub struct TaskResult {
     pub node_index: NodeIndex,
     pub backend_name: String,
     pub package_name: String,
-    /// How many times this node was *retried* â€” 0 on a first-try success. Named for what it
+    /// How many times this node was *retried* — 0 on a first-try success. Named for what it
     /// holds: it fed a parameter called `retry_count` while being called `attempt`, so the
     /// arithmetic below reads like an off-by-one to everyone who checks it.
     pub retries: u32,
@@ -199,7 +199,7 @@ pub struct TaskResult {
     /// How many packages the single manager command that covered this one carried.
     ///
     /// `1` unless this node was batched. Reported, because six packages sharing one `apt
-    /// install` produce six identical durations â€” and six identical durations under a heading
+    /// install` produce six identical durations — and six identical durations under a heading
     /// that says "Parallel Task Breakdown" is exactly how a serialised run read as a parallel
     /// one for as long as it did. Now they are identical for a reason the output states.
     pub batch_size: usize,
@@ -213,12 +213,12 @@ pub struct Transaction {
     diagnostics: Arc<FailureDiagnosticEngine>,
     config: TransactionConfig,
     /// The user's configuration, for the removal guard. A rollback's compensating removals are
-    /// issued here, at execution time, and never pass the plan-time gate in `sync` â€” so this is
+    /// issued here, at execution time, and never pass the plan-time gate in `sync` — so this is
     /// the only place they can be checked, and a guard on one path is a guard on nothing.
     app_config: Arc<crate::config::Config>,
     /// Optional lifecycle hooks. When set, `before_install` fires for every member of a batch
     /// before the batch runs and `after_install` for every member that installed, both fanned
-    /// out at `max_concurrent` â€” a hook is about its own package, not about the batch.
+    /// out at `max_concurrent` — a hook is about its own package, not about the batch.
     ///
     /// A failing `before_install` takes that one package out of the batch and leaves the rest
     /// of the command alone; a failing `after_install` is logged and undoes nothing, because
@@ -234,7 +234,7 @@ pub struct Transaction {
     ///
     /// `None` until [`Transaction::guarded_by`] is called, and a graph carrying a removal node
     /// **refuses to execute without it**. The guard runs at plan time, in the engine, over the
-    /// whole plan at once â€” which is where it has to run, because `max_removals` is a ceiling
+    /// whole plan at once — which is where it has to run, because `max_removals` is a ceiling
     /// over a plan and cannot be checked one argv at a time. What was missing was any way for
     /// the executor to know it had happened; a plan built by some other path and handed
     /// straight here would have removed packages with nothing in between.
@@ -244,19 +244,19 @@ pub struct Transaction {
     /// contains a removal, which is a larger change than this finding earns. The five effectors
     /// **are** compile-enforced; this is the seam that hands them their token.
     reaped: Option<crate::app::sync::guard::Reaped>,
-    /// **What this plan intends the machine to end up holding**, as `backend:name` â€” the
+    /// **What this plan intends the machine to end up holding**, as `backend:name` — the
     /// `Install` nodes of the graph being executed.
     ///
     /// **Rollback consults it in both directions, and that is one rule, not two** (`U41`,
     /// amended 2026-08-09). *Rollback does not undo work that moved the machine toward the
     /// declared state.*
     ///
-    /// - **An install that succeeded, of something still declared,** is not failed work â€” it is
+    /// - **An install that succeeded, of something still declared,** is not failed work — it is
     ///   the goal, reached early. `Prior::Absent` says the package was not here before this run;
     ///   it does not say nobody wants it, and the manifest holds the second fact. Removing it
     ///   hands the next `sync` the same work to do again.
     /// - **A removal that succeeded, of something still undeclared,** is the same event seen
-    ///   from the other side. The fact that authorised the removal â€” nothing declares this â€” is
+    ///   from the other side. The fact that authorised the removal — nothing declares this — is
     ///   still true when the rollback fires, and it is knowable the same way it was knowable
     ///   then: the package is not in this set. Re-installing it un-converges exactly as
     ///   symmetrically.
@@ -267,12 +267,12 @@ pub struct Transaction {
     /// not the version, so a `Prior` that outlived the process would be the alternative and it
     /// is deferred, not rejected (`U41`).
     ///
-    /// `None` for a transaction that is not reconciling against a manifest â€” see
+    /// `None` for a transaction that is not reconciling against a manifest — see
     /// [`GuardScope::reconciles`](crate::app::sync::guard::GuardScope::reconciles). There the
     /// old behaviour is right in both arms: a `rebuild`'s removal phase is half of a reinstall
     /// of declared packages, and a hand-typed `uninstall` was not derived from anything.
     pub declared: Option<Arc<std::collections::HashSet<String>>>,
-    /// What the last execution's scheduling actually looked like â€” packages, graph depth, and
+    /// What the last execution's scheduling actually looked like — packages, graph depth, and
     /// the number of times the engine went idle and handed out more work.
     ///
     /// Recorded rather than only logged, because the shape rule for `Mutating` is otherwise
@@ -284,7 +284,7 @@ pub struct Transaction {
 /// How serially one execution actually ran, against how serial its graph forced it to be.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Scheduling {
-    /// Nodes this run had left to do â€” the whole graph, less anything a resume had finished.
+    /// Nodes this run had left to do — the whole graph, less anything a resume had finished.
     pub packages: usize,
     /// The longest dependency chain among them, which is the fewest waves any correct scheduler
     /// could take.
@@ -348,7 +348,7 @@ impl Transaction {
 
     /// Hand the executor proof that this plan's removals passed the guard.
     ///
-    /// Required before executing any graph that contains a `Remove` node â€” see the `reaped`
+    /// Required before executing any graph that contains a `Remove` node — see the `reaped`
     /// field. A graph of pure installs needs nothing, which is why this is a builder step
     /// rather than a constructor argument: an install-only plan should not have to produce a
     /// removal authorisation it has no removals for.
@@ -360,7 +360,7 @@ impl Transaction {
     /// Tell rollback what the manifest still asks for, as `backend:name`.
     ///
     /// See the `declared` field. Without it, rollback compensates work that succeeded and is
-    /// still wanted, and `auto_rollback: true` â€” the default at `transaction.rs` â€” becomes an
+    /// still wanted, and `auto_rollback: true` — the default at `transaction.rs` — becomes an
     /// anti-convergent step. `heal`, whose entire job is the same failure shape, sets
     /// `auto_rollback: false`; nothing explained the split, and this is what it was standing in
     /// for.
@@ -388,7 +388,7 @@ impl Transaction {
     ///
     /// **Snapshotted so that [`close_stranded`](Self::close_stranded) can tell the two kinds of
     /// open entry apart.** An entry left open by an *earlier* run is the record that a process
-    /// died holding it, and it is the only thing that tells `heal` a real crash happened â€”
+    /// died holding it, and it is the only thing that tells `heal` a real crash happened —
     /// closing it would erase the recovery state this log exists to keep.
     async fn open_before_this_run(&self) -> std::collections::HashSet<String> {
         self.journal
@@ -403,13 +403,13 @@ impl Transaction {
     /// Close every entry *this* run opened and then abandoned.
     ///
     /// **A batch that is aborted never reaches either of the calls that close its entry.** Both
-    /// ways out of a failed run kill their workers â€” `abort_all` on the first failure, and the
-    /// `JoinSet` being dropped on the way out â€” so a task that had called `record_start` and was
+    /// ways out of a failed run kill their workers — `abort_all` on the first failure, and the
+    /// `JoinSet` being dropped on the way out — so a task that had called `record_start` and was
     /// still inside the manager's command dies with its entry `InProgress`.
     ///
     /// That state means "a process died holding this". Left behind by a run Shall itself
     /// stopped, it makes [`Journal::needs_recovery`] answer yes for ever and sends `heal`
-    /// looking for a crash that never happened â€” the same class of defect as reporting that
+    /// looking for a crash that never happened — the same class of defect as reporting that
     /// nothing is wrong, pointing the other way. Shall aborted these and knows it did, so it
     /// says so.
     ///
@@ -542,8 +542,8 @@ impl Transaction {
         let semaphore = Arc::new(Semaphore::new(self.config.max_concurrent));
 
         // How many unfinished dependencies each node still has. Decremented as they finish,
-        // instead of rescanning every node and every incoming edge on every pass â€” which was
-        // O(VÂ·(V+E)) over a run, or ~100k redundant edge checks for 300 packages, and it only
+        // instead of rescanning every node and every incoming edge on every pass — which was
+        // O(V·(V+E)) over a run, or ~100k redundant edge checks for 300 packages, and it only
         // gets worse as the batching below makes the graph wide enough to notice.
         let mut pending_deps: HashMap<NodeIndex, usize> = self
             .graph
@@ -590,7 +590,7 @@ impl Transaction {
                 ContinuePast::AnyFailure => 1,
                 ContinuePast::Nothing | ContinuePast::ClassifiedPassing => Self::MAX_BATCH,
             };
-            // **A wave is work handed out after the engine went quiet â€” not every pass that
+            // **A wave is work handed out after the engine went quiet — not every pass that
             // dispatched something.** Counting passes looks equivalent and is not: two
             // independent chains finishing at different moments produce a pass per completion,
             // which is the scheduler dispatching *eagerly*, and a rule that counted those would
@@ -604,7 +604,7 @@ impl Transaction {
             // **An empty batch is not work, and dispatching one looks exactly like progress.**
             // `execute_batch_with_retry` returns at once for a batch with no members, so the
             // join below succeeds, completes nothing, and the loop comes round to dispatch
-            // another â€” for ever, against a `total_timeout` measured in hours. `batches` cannot
+            // another — for ever, against a `total_timeout` measured in hours. `batches` cannot
             // produce one; the filter is what stops it *mattering* whether that stays true,
             // because with nothing dispatched the pass falls through to the stall report a few
             // lines down and says so in milliseconds. The sweep found this the expensive way:
@@ -738,7 +738,7 @@ impl Transaction {
 
                     // `debug!`, not `error!`. This failure is returned below and printed once,
                     // as itself, by `main`. Printing it here as well said the same thing twice
-                    // and called the package a "Node" â€” the DAG's word for it, which no user
+                    // and called the package a "Node" — the DAG's word for it, which no user
                     // asked about. The suggestions below are the part worth keeping.
                     debug!(
                         "Node {}:{} FAILED: {}",
@@ -782,7 +782,7 @@ impl Transaction {
                 if self.config.continue_past.carries_on(every_failure_passing) {
                     // A failed node is terminal: it will not be retried and nothing waiting on
                     // it can run, so both it and everything downstream come off the board here
-                    // â€” otherwise the loop below never reaches `total_nodes` and reports a
+                    // — otherwise the loop below never reaches `total_nodes` and reports a
                     // cycle that does not exist.
                     for (idx, named) in failed_now {
                         in_progress.remove(&idx);
@@ -816,7 +816,7 @@ impl Transaction {
                 // **Nothing was joined, which can only mean the pool was already empty.**
                 // `join_next` answers `None` for an empty `JoinSet` and for nothing else, so
                 // reaching here says every task ever dispatched has been joined and accounted
-                // for â€” every node of them removed from `in_progress` or returned on â€” and that
+                // for — every node of them removed from `in_progress` or returned on — and that
                 // this pass dispatched nothing to replace them. The loop's own condition says
                 // there is still work. That is a graph no scheduler can advance.
                 //
@@ -832,7 +832,7 @@ impl Transaction {
         }
         // Only on the path where the loop ran to closure. A transaction that returned early
         // went idle fewer times than its graph has levels, so measuring it reports a shape no
-        // run had â€” and `waves <= depth` being unfalsifiable there is exactly why the number is
+        // run had — and `waves <= depth` being unfalsifiable there is exactly why the number is
         // not worth keeping.
         self.last_scheduling = Some(Scheduling {
             packages: remaining,
@@ -865,7 +865,7 @@ impl Transaction {
         Ok(telemetry_results)
     }
 
-    /// Every node that can only be reached through `failed` â€” the work a failure has just made
+    /// Every node that can only be reached through `failed` — the work a failure has just made
     /// impossible. Excludes `failed` itself, which the caller has already accounted for.
     fn unreachable_from(&self, failed: NodeIndex) -> Vec<NodeIndex> {
         let mut out = Vec::new();
@@ -916,17 +916,17 @@ impl Transaction {
     ///
     /// A bound on argv, not on ambition: `cmd.exe` caps a command line at 8191 characters and
     /// every manager has some limit. A hundred names is far below any of them and far above
-    /// the point where batching has taken the win â€” the cost this removes is per *invocation*,
+    /// the point where batching has taken the win — the cost this removes is per *invocation*,
     /// so the second hundred saves almost nothing the first did not.
     pub const MAX_BATCH: usize = 100;
-    /// â€¦and a byte bound, because package names are not all short. `github:owner/repo@â€¦`
+    /// …and a byte bound, because package names are not all short. `github:owner/repo@…`
     /// spends far more per name than `jq` does.
     const MAX_BATCH_BYTES: usize = 6000;
 
     /// Split a ready set into the commands it becomes.
     ///
     /// Everything in one batch shares a manager and a kind of change, and no two of them have
-    /// an edge between them â€” they are ready at the same moment, which is what "ready" means.
+    /// an edge between them — they are ready at the same moment, which is what "ready" means.
     /// Batches come out in node order so a plan runs the same way twice.
     ///
     /// **Every edge in this graph is an `@requires` somebody wrote** (`Y9`). The planner used
@@ -936,7 +936,7 @@ impl Transaction {
     /// `max_batch` is a cap the caller chooses rather than [`Self::MAX_BATCH`] outright,
     /// because **batching and `--keep-going` are in direct contradiction and batching used to
     /// win silently.** One name no repository carries fails the whole `apt install`, so a run
-    /// with `--keep-going` â€” whose help promises to "finish the packages that still can" â€”
+    /// with `--keep-going` — whose help promises to "finish the packages that still can" —
     /// installed none of the good packages sharing that command line (B1). A flag whose entire
     /// purpose is taking what it can get does not want them on one command line; it wants each
     /// package to succeed or fail on its own. That costs invocations, and invocations are what
@@ -1002,15 +1002,15 @@ impl Transaction {
     ///
     /// **A batch is one command, not one package.** Every node here is ready at the same
     /// moment, goes to the same manager, and is the same kind of change, with no `@requires`
-    /// edge between any two of them â€” which is precisely the set that manager's own command
+    /// edge between any two of them — which is precisely the set that manager's own command
     /// line was built to take. Measured on Ubuntu, six declared packages produced six separate `apt install`
     /// processes and 12,465 ms; `apt install <8 packages>` as one command took 3,161 ms. Eight
-    /// packages one at a time took 31,901 ms â€” superlinear, because each invocation re-reads
+    /// packages one at a time took 31,901 ms — superlinear, because each invocation re-reads
     /// the package cache, re-takes the dpkg lock and re-resolves a dependency graph the batch
     /// resolves once.
     ///
     /// Every backend in this tree already accepts multiple names on one command line, and
-    /// `generic::install_group` was already written to batch â€” it partitions `@unverified`
+    /// `generic::install_group` was already written to batch — it partitions `@unverified`
     /// specs into their own command and accumulates names across specs. It had never been
     /// handed more than one.
     ///
@@ -1021,7 +1021,7 @@ impl Transaction {
     /// **That last clause is only harmless because of who is allowed to batch.** Without
     /// `--keep-going` any node failure rolls the whole transaction back, so the packages
     /// sharing a failed command line were going to be undone regardless. With it, they were
-    /// not â€” and batching quietly took the good packages down with the bad name, under a flag
+    /// not — and batching quietly took the good packages down with the bad name, under a flag
     /// promising the opposite (B1). `batches` caps at one package per command in that mode, so
     /// nothing reaching here shares a fate it did not have to.
     #[allow(clippy::too_many_arguments)]
@@ -1133,7 +1133,7 @@ impl Transaction {
         };
 
         // The WAL, per package and before the manager is invoked. Recovery depends on every
-        // entry reaching disk first, and batching does not change that â€” `record_starts`
+        // entry reaching disk first, and batching does not change that — `record_starts`
         // writes all of them and flushes once, so each is durable before this returns. What it
         // changes is the price: the loop this replaces called `record_start` per member, and
         // that is one physical flush per package, serialised, under the journal mutex, on the
@@ -1157,7 +1157,7 @@ impl Transaction {
                     // **Nothing to close.** The batch is all-or-nothing: a failure here left
                     // neither the file nor the in-memory map touched, so there is no entry
                     // stuck at `InProgress` to send `heal` looking for a crash that never
-                    // happened â€” which the per-entry loop had to clean up by hand.
+                    // happened — which the per-entry loop had to clean up by hand.
                     drop(j);
                     for i in 0..members.len() {
                         refused.push(stillborn(
@@ -1173,14 +1173,14 @@ impl Transaction {
         };
 
         // `before_install` fires per package, before any install attempt. A failing pre-hook
-        // takes that package out of the batch â€” its declared prerequisites were not met â€” and
+        // takes that package out of the batch — its declared prerequisites were not met — and
         // leaves the rest of the command alone.
         let mut keep: Vec<usize> = Vec::with_capacity(members.len());
         if is_install {
             if let Some(h) = &hooks {
                 // **Fanned out, because each hook is about a different package.** The field
                 // doc on `hooks` has always said these fire "interleaved with parallel
-                // execution"; they did not â€” both loops were sequential and bracketed the one
+                // execution"; they did not — both loops were sequential and bracketed the one
                 // part that was made concurrent, so a batch of *k* paid *2k* serial hook
                 // invocations around it. Each is a process spawn, an mlua eval or a Rhai eval
                 // that can block on HTTP. `before_install` must precede *its own* package's
@@ -1254,7 +1254,7 @@ impl Transaction {
 
         // **A compensating install carries a version nobody declared** (`Q53`). Rollback
         // reads what a package was on before the transaction touched it and puts that back,
-        // so a version reaches this point on a manager the planner never got to vet â€” and
+        // so a version reaches this point on a manager the planner never got to vet — and
         // on a manager that cannot be asked for one there is nothing to send.
         //
         // Stripped and **named**, not refused: refusing would end a rollback with the
@@ -1262,8 +1262,8 @@ impl Transaction {
         // offers and saying which version could not be restored. The declared case is the
         // one that gets refused, and it is refused at plan time.
         //
-        // Before this, `brew.rs` answered the same situation by building `pkg-a@1.0` â€” a
-        // formula name that does not exist â€” so the rollback failed on a real Mac and
+        // Before this, `brew.rs` answered the same situation by building `pkg-a@1.0` — a
+        // formula name that does not exist — so the rollback failed on a real Mac and
         // passed in every test, because a mock matches any string.
         let specs: Vec<PackageSpec> = if is_install
             && backend_cap
@@ -1276,7 +1276,7 @@ impl Transaction {
                     match spec.options.one("version").map(str::to_string) {
                         Some(v) if crate::backends::concrete_version(&v) => {
                             warn!(
-                                "{}:{} was on {} and `{}` cannot be asked for a version â€” \
+                                "{}:{} was on {} and `{}` cannot be asked for a version — \
                                  putting it back at whatever `{}` offers.{}",
                                 b_name,
                                 spec.name,
@@ -1462,7 +1462,7 @@ impl Transaction {
         let mut options = crate::config::grammar::Options::default();
         if let Some(v) = version {
             // Without this the reinstall takes whatever is newest, so a rolled-back removal
-            // silently loses its pin â€” the package comes back at a version nobody declared.
+            // silently loses its pin — the package comes back at a version nobody declared.
             options.set("version", v.clone());
         }
         h.install(
@@ -1485,7 +1485,7 @@ impl Transaction {
     /// `abort_all` only *requests* cancellation; the dropped worker's guard sends SIGTERM and,
     /// being a `Drop`, cannot stay to watch. A manager takes up to the termination grace after
     /// that signal to release its package database, and every command the rollback is about to
-    /// issue competes for exactly those locks â€” a rollback started here without this wait fails
+    /// issue competes for exactly those locks — a rollback started here without this wait fails
     /// on wounds this engine itself inflicted. Windows has no graceful stop to wait out, but a
     /// killed process still needs a moment before its locks are gone.
     /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
@@ -1509,7 +1509,7 @@ impl Transaction {
     /// Read after a failed run: `history` records every action that completed, but not all
     /// of them still hold. Rollback reinstates a completed removal unless the plan itself
     /// intended the package gone (`U41`), and one whose target was never there changed
-    /// nothing â€” so only what survives both tests may be reported as gone. This is what lets
+    /// nothing — so only what survives both tests may be reported as gone. This is what lets
     /// a caller summarise a run that died part-way instead of telling the user
     /// all-or-nothing.
     pub fn executed_removals(&self) -> Vec<(String, String)> {
@@ -1528,7 +1528,7 @@ impl Transaction {
 
     async fn rollback(&mut self) -> Result<()> {
         debug!("reverting modification history");
-        // A compensating action that itself fails leaves the system in a partial state â€”
+        // A compensating action that itself fails leaves the system in a partial state —
         // most dangerously, a package the user HAD, that this transaction removed, and that
         // the reinstall could not bring back. Swallowing that error (the old `let _ =`) is
         // the worst place in the codebase to be quiet (H2): the user is told the transaction
@@ -1566,7 +1566,7 @@ impl Transaction {
                 GraphAction::Install(spec) => {
                     match prior {
                         // It was already there. Undoing an upgrade is putting the old version
-                        // back â€” removing the package uninstalls software the user had, which
+                        // back — removing the package uninstalls software the user had, which
                         // is the opposite of a rollback.
                         Prior::Present(version) => {
                             if version.is_none() {
@@ -1602,12 +1602,12 @@ impl Transaction {
                             // package was not here before this run; it does not say nobody wants
                             // it. If the manifest still declares it, this install is the goal
                             // reached early, and compensating it hands the next `sync` the same
-                            // work to do again â€” the transaction's own comment at `:637` claims
+                            // work to do again — the transaction's own comment at `:637` claims
                             // rollback "puts this back", and removing something nothing asked it
                             // to remove is the opposite.
                             if self.plan_intends_present(&spec.backend, &spec.name) == Some(true) {
                                 info!(
-                                    "rollback is leaving {}:{} installed â€” it succeeded and the \
+                                    "rollback is leaving {}:{} installed — it succeeded and the \
                                      manifest still declares it, so removing it would only give \
                                      the next sync the same work to do again.",
                                     spec.backend, spec.name
@@ -1620,7 +1620,7 @@ impl Transaction {
                                 // "incomplete" anyway when it cannot finish; leaving software
                                 // installed is its safe direction, never removing blind.
                                 error!(
-                                    "rollback will not remove {}:{} â€” `{}` cannot currently \
+                                    "rollback will not remove {}:{} — `{}` cannot currently \
                                      report which packages the OS needs, so the protection \
                                      check is unavailable. It stays installed.",
                                     spec.backend, spec.name, spec.backend
@@ -1638,7 +1638,7 @@ impl Transaction {
                                 &answers.names,
                             ) {
                                 error!(
-                                    "rollback will not remove {}:{} â€” {}. It stays installed, \
+                                    "rollback will not remove {}:{} — {}. It stays installed, \
                                      and this transaction is left partly applied.",
                                     spec.backend,
                                     spec.name,
@@ -1673,7 +1673,7 @@ impl Transaction {
                                 spec.backend, spec.name
                             );
                             failures.push(format!(
-                                "{}:{} (left installed â€” prior state unknown)",
+                                "{}:{} (left installed — prior state unknown)",
                                 spec.backend, spec.name
                             ));
                         }
@@ -1686,17 +1686,17 @@ impl Transaction {
                     }
                     // **The install arm's rule, from the other side** (`U41`). This removal
                     // happened because nothing in the plan intends the package to be present,
-                    // and that fact is still true â€” it is the same set that authorised the
+                    // and that fact is still true — it is the same set that authorised the
                     // removal, asked the same way. Re-installing it would hand the next sync
                     // the same work to do again, which is the un-convergence the install arm
                     // already refuses to cause.
                     //
                     // `declared` is `None` for the runs where a removal is not a reconciliation
-                    // â€” a `rebuild`'s down phase, a hand-typed `uninstall` â€” and there the
+                    // — a `rebuild`'s down phase, a hand-typed `uninstall` — and there the
                     // reinstate below is exactly right.
                     if self.plan_intends_present(&backend, &name) == Some(false) {
                         info!(
-                            "rollback is leaving {}:{} removed â€” nothing declares it, so putting \
+                            "rollback is leaving {}:{} removed — nothing declares it, so putting \
                              it back would only give the next sync the same work to do again. \
                              `shall history` and the pre-sync snapshot are how it comes back.",
                             backend, name
@@ -1710,7 +1710,7 @@ impl Transaction {
                     if let Err(e) = self.reinstate(&backend, &name, &version).await {
                         error!(
                             "rollback could not reinstall {}:{} that this \
-                             run removed â€” it is now MISSING: {}",
+                             run removed — it is now MISSING: {}",
                             backend, name, e
                         );
                         failures.push(format!("{}:{} (now missing)", backend, name));
@@ -1783,7 +1783,7 @@ impl Transaction {
             Ok(())
         } else {
             Err(Error::Transaction(format!(
-                "rollback was incomplete â€” {} compensating action(s) failed: {}",
+                "rollback was incomplete — {} compensating action(s) failed: {}",
                 failures.len(),
                 failures.join(", ")
             )))
@@ -1804,7 +1804,7 @@ pub enum LockWait {
 
 /// How much of `manager_lock_wait_secs` a batch has left to spend waiting for another manager.
 ///
-/// **One budget across the whole retry loop, not one per attempt** â€” a queue of holders taking
+/// **One budget across the whole retry loop, not one per attempt** — a queue of holders taking
 /// the lock in turn is a real machine state, and three full waits in a row would be three times
 /// the bound the setting promises. Written as a type for the reason [`backoff_for`] was written
 /// as a function: the running total was a `Duration` accumulated at one site and subtracted at
@@ -1836,7 +1836,7 @@ impl LockBudget {
     }
 
     /// What is left to wait with. Saturating, because a wait that overran its share leaves
-    /// nothing rather than a negative bound â€” and zero is the value `lock_wait_verdict` reads as
+    /// nothing rather than a negative bound — and zero is the value `lock_wait_verdict` reads as
     /// "do not wait", which is the right answer once the budget is gone.
     pub fn remaining(&self) -> Duration {
         self.total.saturating_sub(self.spent)
@@ -1899,7 +1899,7 @@ pub fn lock_wait_verdict(
         }
         crate::app::stale_lock::Held::Stale(path) => LockWait::Hopeless(Error::CommandFailed {
             message: format!(
-                "`{backend}` cannot run: {} is on disk and nothing holds it â€” a run of this \
+                "`{backend}` cannot run: {} is on disk and nothing holds it — a run of this \
                  manager was killed and left its lock behind. Waiting will not clear it. \
                  `shall heal` removes exactly this, after proving again that no manager is \
                  running.",
@@ -1918,7 +1918,7 @@ pub fn lock_wait_verdict(
 /// ending without that happening, and it says which of the two ways it ended.
 ///
 /// **A wait with no reason given is indistinguishable from a hang**, and a hang is what people
-/// kill â€” which is how a machine ends up with the interrupted transaction this whole module is
+/// kill — which is how a machine ends up with the interrupted transaction this whole module is
 /// about. It announces once, up front, the way the data-directory lock does.
 pub async fn wait_for_manager_lock(
     backend: &str,
@@ -1927,7 +1927,7 @@ pub async fn wait_for_manager_lock(
     cancel_token: &CancellationToken,
 ) -> std::result::Result<Duration, Error> {
     eprintln!(
-        "shall: waiting for {who} to finish â€” it holds the lock `{backend}` needs \
+        "shall: waiting for {who} to finish — it holds the lock `{backend}` needs \
          (up to {}s; `manager_lock_wait_secs` sets that)",
         wait.as_secs()
     );
@@ -1956,7 +1956,7 @@ pub async fn wait_for_manager_lock(
         message: format!(
             "`{backend}` cannot run: {who} has held the manager's lock for {}s, which is all \
              `manager_lock_wait_secs` allows. It is still running, so nothing here is broken and \
-             nothing needs clearing â€” run this again when it has finished, or raise that setting.",
+             nothing needs clearing — run this again when it has finished, or raise that setting.",
             wait.as_secs()
         ),
         retry: Retryability::Exhausted,
@@ -1985,7 +1985,7 @@ pub fn wal_failure_reason(cancelled: bool, error: &Error) -> String {
 ///
 /// `attempt` counts from 1, so a batch that succeeded first time reports nought. Written out
 /// because three `TaskResult` constructions computed it inline, and a copy of an expression is
-/// a copy of its blind spot â€” the mutation sweep found the same subtraction three times over
+/// a copy of its blind spot — the mutation sweep found the same subtraction three times over
 /// and nothing in the suite could tell any of them from `attempt + 1`.
 pub fn retries_behind(attempt: u32) -> u32 {
     attempt - 1
@@ -1996,7 +1996,7 @@ pub fn retries_behind(attempt: u32) -> u32 {
 /// Only ever called from inside `attempt > 1`, so the first retry waits `initial` exactly and
 /// the exponent cannot go negative. Written out for the same reason as [`retries_behind`], with
 /// more to answer for: a shift inside a multiplication inside a `min` inside a match arm is
-/// three separate numbers, and all three survived â€” `<<` read as `>>`, and `attempt - 2` read
+/// three separate numbers, and all three survived — `<<` read as `>>`, and `attempt - 2` read
 /// as both `attempt + 2` and `attempt / 2`, without failing anything.
 pub fn backoff_for(attempt: u32, initial: Duration, max: Duration) -> Duration {
     std::cmp::min(initial * (1 << (attempt - 2)), max)
@@ -2005,7 +2005,7 @@ pub fn backoff_for(attempt: u32, initial: Duration, max: Duration) -> Duration {
 /// A failure that survived its own retries is not transient, whatever the string said.
 ///
 /// `Retryability::Transient` is a claim: *a second attempt could differ*. The container harness
-/// proves that claim the only way it can be proved â€” it retries once and calls a repeat a
+/// proves that claim the only way it can be proved — it retries once and calls a repeat a
 /// defect. The product asserted it from a substring and never checked, so `luarocks install
 /// luafilesystem` on a machine whose `wget` is a scoop shim matched `"failed downloading"`,
 /// was called transient, and told the user `sync` would try it again. It fails identically
@@ -2015,7 +2015,7 @@ pub fn backoff_for(attempt: u32, initial: Duration, max: Duration) -> Duration {
 /// The evidence was already being collected and thrown away. This loop retries a transient
 /// failure with backoff, so by the time it gives up it **has** re-run the command and seen the
 /// same answer. That is the experiment; this records its result. `Unknown` rather than
-/// `Permanent`, because "we tried and it did not differ" is not "this can never work" â€” the
+/// `Permanent`, because "we tried and it did not differ" is not "this can never work" — the
 /// wget on the PATH could be fixed tomorrow. Withdrawing a declaration is not this function's
 /// to trigger either way: that reads `Error::says_a_name_is_absent`, and no amount of repeating
 /// turns "the download failed" into "the rock does not exist".
@@ -2031,7 +2031,7 @@ pub fn falsify_transience(err: Error, attempts: u32) -> Error {
         } => Error::CommandFailed {
             message: format!(
                 "{} (tried {} times; the failure did not change, so a further retry will not \
-                 help â€” this is not the transient failure its output looks like)",
+                 help — this is not the transient failure its output looks like)",
                 message, attempts
             ),
             retry: Retryability::Exhausted,

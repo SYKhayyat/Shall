@@ -3,7 +3,7 @@ use super::*;
 /// A budget that has been overrun is spent, not negative.
 ///
 /// `lock_wait_verdict` reads a zero wait as "the user opted out", which is the right answer
-/// once there is nothing left â€” and it is reached by saturating rather than by a subtraction
+/// once there is nothing left — and it is reached by saturating rather than by a subtraction
 /// that would panic on the way past.
 #[test]
 fn a_spent_budget_is_zero_rather_than_a_negative_one() {

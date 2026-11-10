@@ -4,9 +4,9 @@ use super::*;
 ///
 /// **`batches` had no direct test at all.** Every batching test above drives it through the
 /// async harness and asks how many *commands* ran; none asks where the split fell, and the
-/// difference is the whole of the arithmetic. Six mutants lived in five lines of it â€” both
+/// difference is the whole of the arithmetic. Six mutants lived in five lines of it — both
 /// `name.len() + 1` costs, the `bytes + cost` sum, the `bytes += cost` accumulation, and the
-/// `>` that compares them â€” and a run that batches 61 packages into 2 commands does that
+/// `>` that compares them — and a run that batches 61 packages into 2 commands does that
 /// under every one of them.
 ///
 /// The lengths are picked so each mutation moves the answer, which is the only reason this
@@ -47,7 +47,7 @@ fn the_byte_bound_splits_exactly_where_the_cost_says() {
             .collect::<Vec<_>>()
     };
 
-    // Exactly on the bound: 60 Ã— 100 bytes is 6000, and 6000 is not *over* 6000.
+    // Exactly on the bound: 60 × 100 bytes is 6000, and 6000 is not *over* 6000.
     assert_eq!(
         sizes(installs(99, 60), 10_000),
         vec![60],
@@ -60,7 +60,7 @@ fn the_byte_bound_splits_exactly_where_the_cost_says() {
         "the sixty-first name is the one that does not fit"
     );
 
-    // One byte per name wider, and the batch is one name shorter â€” which is what says the
+    // One byte per name wider, and the batch is one name shorter — which is what says the
     // separator is being counted at all.
     assert_eq!(
         sizes(installs(100, 60), 10_000),

@@ -3,7 +3,7 @@
 //! Shall is not the only thing that starts Shall: the package-manager hooks it installs
 //! (`DPkg::Post-Invoke` and its siblings) spawn a reconcile on every ordinary `apt install`,
 //! typed by someone who has never heard of this tool. `registry.json`, the journal and the
-//! `locks/` ledgers are written whole, and two whole writes are last-one-wins â€” the entry
+//! `locks/` ledgers are written whole, and two whole writes are last-one-wins — the entry
 //! that loses is a managed package nothing declares, which is drift, and drift is removed.
 //!
 //! The lock covers the directory rather than one file: those files must agree with each
@@ -62,7 +62,7 @@ pub fn classify_lock_failure(error: std::io::Error) -> LockFailure {
 /// How long a waiting run gives the holder before it says so instead.
 ///
 /// 120s: long enough to outlast the longest wait a holder can legitimately make before it
-/// starts doing work â€” the rate-limit ceiling, 30s by default â€” with room for the install it
+/// starts doing work — the rate-limit ceiling, 30s by default — with room for the install it
 /// then performs. It is not meant to outlast a whole sync: past this point the honest answer is
 /// that someone else is writing, not a longer silence (S27).
 pub const WAIT_SECS: u64 = 120;
@@ -70,7 +70,7 @@ pub const WAIT_SECS: u64 = 120;
 /// The data directories this process is inside.
 ///
 /// **`flock` is per open file description, not per process**, so a second handle opened in a
-/// process that already holds the lock does not re-enter â€” it waits for itself, for ever. Every
+/// process that already holds the lock does not re-enter — it waits for itself, for ever. Every
 /// door that takes the lock records its directory here, and every door that might take it asks
 /// here first. **Per directory, not per process**: a process-wide flag excused a write to one
 /// data directory because a lock was held on another.
@@ -108,14 +108,14 @@ pub const GENERATION_FILE: &str = "shall.gen";
 /// What a reader saw of the writers, at one instant.
 ///
 /// Two observations that compare equal, with no writer holding the lock at either, mean no
-/// writer committed anything in between â€” which is what makes a multi-file read one moment
+/// writer committed anything in between — which is what makes a multi-file read one moment
 /// rather than several. See [`crate::core::stable`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Generation {
     /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
     /// test crate links the library without `cfg(test)`, so a private item is invisible there.
     /// Bumped once by every writer that finishes. `None` when the file could not be read or
-    /// did not parse â€” see [`observe`].
+    /// did not parse — see [`observe`].
     pub count: Option<u64>,
     /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
     /// test crate links the library without `cfg(test)`, so a private item is invisible there.
@@ -124,13 +124,13 @@ pub struct Generation {
     pub writer_active: bool,
 }
 
-/// Read the writer generation. Two small reads of tiny files, and no lock of any kind â€” a
+/// Read the writer generation. Two small reads of tiny files, and no lock of any kind — a
 /// reader must never wait on a writer, which is the whole reason this exists.
 pub fn observe(data_dir: &Path) -> Generation {
     // **An unreadable counter is `None`, not `0`.** `0` is a *lower* number than any real
     // generation, so two observations straddling a crashed writer compared equal and
     // `spans_one_moment` said yes to a read that spanned two. A file that has never been
-    // written is a genuine `0` â€” nothing has committed yet â€” and that case is kept apart from
+    // written is a genuine `0` — nothing has committed yet — and that case is kept apart from
     // the torn one on purpose.
     let count = match std::fs::read_to_string(data_dir.join(GENERATION_FILE)) {
         Ok(s) => s.trim().parse::<u64>().ok(),
@@ -182,7 +182,7 @@ impl DataLock {
     /// manager mid-transaction; if the directory is locked, the run holding it is the run that
     /// is going to record what the manager just did, so waiting two minutes to be told so
     /// costs the transaction two minutes and changes nothing. This returns `None` instead,
-    /// and says nothing â€” contention is the ordinary case here, not a fault.
+    /// and says nothing — contention is the ordinary case here, not a fault.
     pub fn try_acquire(data_dir: &Path, command: &str) -> Result<Option<Self>> {
         let (file, owner_path) = Self::open_lock_file(data_dir)?;
         match file.try_lock_exclusive() {
@@ -231,7 +231,7 @@ impl DataLock {
 
     /// Take the lock for one write, unless this process is already inside it.
     ///
-    /// **The door for code that cannot know whether its caller holds the lock** â€” a ledger
+    /// **The door for code that cannot know whether its caller holds the lock** — a ledger
     /// save reached from `sync` is covered by the run's own lock, and the same save reached
     /// from `check` is covered by nothing. Asking the caller to pass a token down twenty call
     /// sites answers this at compile time, which is the wrong time: `Deferred` releases the
@@ -250,7 +250,7 @@ impl DataLock {
     /// Take the lock, waiting up to `timeout` for whoever holds it.
     ///
     /// Waiting with no reason given is indistinguishable from hanging, so the wait announces
-    /// the holder â€” the lock file carries the pid and the command that took it.
+    /// the holder — the lock file carries the pid and the command that took it.
     pub fn acquire(data_dir: &Path, command: &str, timeout: Duration) -> Result<Self> {
         Self::take(data_dir, command, timeout, false)
     }
@@ -295,7 +295,7 @@ impl DataLock {
                         )));
                     }
                     eprintln!(
-                        "shall: waiting for the data directory â€” held by {}",
+                        "shall: waiting for the data directory — held by {}",
                         Self::holder(&owner_path)
                     );
                     let deadline = Instant::now() + timeout;
@@ -316,7 +316,7 @@ impl DataLock {
                         if Instant::now() >= deadline {
                             // S27: the old text ended "remove shall.lock if nothing is running", and
                             // that advice is never right. The lock is an OS lock on an open handle,
-                            // released when the holding process exits â€” so a lock that is still
+                            // released when the holding process exits — so a lock that is still
                             // contended after the wait proves a live holder, and deleting the file
                             // takes the lock away from it rather than from a corpse.
                             return Err(Error::Other(format!(
@@ -412,14 +412,14 @@ impl Drop for DataLock {
         // itself: this counter says "a writer committed something", and a run that wrote
         // nothing has nothing for a reader to detect. Writing it anyway would also be a
         // preview leaving a file behind, which is the defect the whole dry-run rule exists to
-        // prevent â€” `a_preview_leaves_the_config_byte_identical` caught exactly that here.
+        // prevent — `a_preview_leaves_the_config_byte_identical` caught exactly that here.
         if !crate::core::dry_run::active() {
             // Atomically, through the writer this repo requires everywhere else. The one raw
-            // `fs::write` in the tree was this one, and a crash inside it left a torn file â€”
+            // `fs::write` in the tree was this one, and a crash inside it left a torn file —
             // which is the whole of why the read above has to distinguish torn from absent.
             //
             // From an unreadable counter there is no right number, only a number unlikely to
-            // equal one a reader has already seen â€” and the whole point of the bump is that the
+            // equal one a reader has already seen — and the whole point of the bump is that the
             // value *moves*. `u64::MAX` is that; guessing `1` is a value a young data directory
             // really has.
             let next = observe(&self.data_dir)

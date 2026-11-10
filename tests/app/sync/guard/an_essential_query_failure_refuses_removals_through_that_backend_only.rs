@@ -1,7 +1,7 @@
 use super::*;
 
 /// **The fail-open hole.** A backend whose essential query fails used to contribute
-/// nothing â€” which to the guard reads exactly like "nothing here is essential" â€” so the
+/// nothing — which to the guard reads exactly like "nothing here is essential" — so the
 /// whole run lost its OS-essential protection, `purge-undeclared` included. Now the
 /// failure is an answer too: removals through *that* backend are refused until it can
 /// answer, while removals through backends that did answer are judged normally. The

@@ -6,7 +6,7 @@ use super::*;
 /// **A torn generation file is unknown, not zero.**
 ///
 /// It was read with `.ok().unwrap_or(0)`, and `0` is *lower* than any real generation
-/// rather than an error â€” so two observations straddling a crashed writer compared equal
+/// rather than an error — so two observations straddling a crashed writer compared equal
 /// and `spans_one_moment` said a multi-file read saw one moment when it had not. A file
 /// that has never been written is still a real `0`: nothing has committed yet.
 #[test]

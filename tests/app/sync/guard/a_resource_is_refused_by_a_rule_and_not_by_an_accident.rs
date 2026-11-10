@@ -1,7 +1,7 @@
 use super::*;
 
 /// `purge-undeclared` sweeps everything Shall does not manage, and it builds its list from
-/// `list_installed` â€” which for `service` is every running service. The only thing that
+/// `list_installed` — which for `service` is every running service. The only thing that
 /// ever stopped it was the declarability test asking a question about *package* lines and
 /// getting the right answer for the wrong reason. Correcting that sentence would have
 /// handed the sweep 155 Windows services; this is the refusal made on purpose instead.
@@ -32,7 +32,7 @@ fn a_resource_is_refused_by_a_rule_and_not_by_an_accident() {
         let reason = p.unwrap().reason();
         assert!(
             !reason.contains("no line can hold"),
-            "`{backend}:{name}` parses â€” saying no line can hold it is false: {reason}"
+            "`{backend}:{name}` parses — saying no line can hold it is false: {reason}"
         );
     }
 

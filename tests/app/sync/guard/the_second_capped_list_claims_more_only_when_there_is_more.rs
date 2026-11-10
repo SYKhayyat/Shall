@@ -39,7 +39,7 @@ fn the_second_capped_list_claims_more_only_when_there_is_more() {
     // `> → ==` mutant prints "…and 0 more", and the `> → >=` mutant prints the same.
     let exactly = unverified(MAX_LISTED).message(GuardScope::Sync, RemovalKind::Package);
     assert!(
-        !exactly.contains("â€¦and"),
+        !exactly.contains("…and"),
         "ten packages that could not be checked all fit under a cap of ten, so there is no \
          remainder to announce:\n{exactly}"
     );
@@ -52,7 +52,7 @@ fn the_second_capped_list_claims_more_only_when_there_is_more() {
     // not a count a reader can check.
     let one_over = unverified(MAX_LISTED + 1).message(GuardScope::Sync, RemovalKind::Package);
     assert!(
-        one_over.contains("â€¦and 1 more through managers that could not answer"),
+        one_over.contains("…and 1 more through managers that could not answer"),
         "eleven against a cap of ten leaves exactly one unlisted, and the message must say so:\n\
          {one_over}"
     );
@@ -63,7 +63,7 @@ fn the_second_capped_list_claims_more_only_when_there_is_more() {
     // for us.
     for n in [MAX_LISTED, MAX_LISTED + 1, MAX_LISTED + 7, 40] {
         let message = unverified(n).message(GuardScope::Sync, RemovalKind::Package);
-        if let Some(rest) = message.split("â€¦and ").nth(1) {
+        if let Some(rest) = message.split("…and ").nth(1) {
             let announced: usize = rest
                 .split_whitespace()
                 .next()

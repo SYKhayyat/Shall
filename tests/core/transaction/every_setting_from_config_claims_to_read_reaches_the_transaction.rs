@@ -5,7 +5,7 @@ use super::*;
 /// The doc comment on `from_config` records why it exists: `max_concurrent` had been left
 /// at the `patient()` default and nobody noticed, because a field that silently falls back
 /// to a sensible number looks exactly like a field that was read. `..Self::patient()` makes
-/// that the failure mode for every line in the struct â€” deleting `max_concurrent`, `purge`
+/// that the failure mode for every line in the struct — deleting `max_concurrent`, `purge`
 /// or `manager_lock_wait` left the suite green, which is the same defect the constructor
 /// was written to prevent, three more times.
 ///
@@ -60,7 +60,7 @@ fn every_setting_from_config_claims_to_read_reaches_the_transaction() {
     );
 
     // Purge is an OR of a persistent setting and a this-run flag, and each half must be
-    // able to turn it on alone â€” `&&` reads identically until you ask one of them by itself.
+    // able to turn it on alone — `&&` reads identically until you ask one of them by itself.
     let mut persistent = base();
     persistent.remove.purge = true;
     assert!(

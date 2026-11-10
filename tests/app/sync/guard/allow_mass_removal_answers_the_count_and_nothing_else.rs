@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn allow_mass_removal_answers_the_count_and_nothing_else() {
-    // II.10: `--allow-mass-removal` is the answer to ONE refusal â€” the count. It used
+    // II.10: `--allow-mass-removal` is the answer to ONE refusal — the count. It used
     // to clear every objection, so the flag meaning "yes, 50 is what I meant" also
     // deleted python3. A confirmation asks; a refusal says no (V.26).
     let reg = Arc::new(BackendRegistry::new());
@@ -34,7 +34,7 @@ async fn allow_mass_removal_answers_the_count_and_nothing_else() {
         )
         .await
         .is_err(),
-        "nothing overrides protection â€” not even --allow-mass-removal"
+        "nothing overrides protection — not even --allow-mass-removal"
     );
 
     // And a big removal that also touches a protected package is still refused.

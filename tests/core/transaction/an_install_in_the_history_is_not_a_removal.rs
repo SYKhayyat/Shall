@@ -1,6 +1,6 @@
 use super::*;
 
-/// Installs are not this method's business â€” its callers summarise removals.
+/// Installs are not this method's business — its callers summarise removals.
 #[tokio::test]
 async fn an_install_in_the_history_is_not_a_removal() {
     let mut graph = StableDiGraph::new();

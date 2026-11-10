@@ -3,9 +3,9 @@ use super::*;
 /// The same boundary, asked of the function the boundary lives in.
 ///
 /// [`the_removal_ceiling_fires_past_the_limit_and_not_at_it`] was written to kill
-/// `too_many_changes`'s `>`â†’`>=`, and did not: it sets `max_removals`, which is a
-/// *per-kind* ceiling checked elsewhere, so `too_many_changes` â€” which reads
-/// `max_total_changes` and nothing else â€” never saw a total equal to its limit. The mutant
+/// `too_many_changes`'s `>`→`>=`, and did not: it sets `max_removals`, which is a
+/// *per-kind* ceiling checked elsewhere, so `too_many_changes` — which reads
+/// `max_total_changes` and nothing else — never saw a total equal to its limit. The mutant
 /// was still alive nine days later. A boundary test has to be pointed at the comparison it
 /// names, not at a ceiling that sounds like it.
 #[test]

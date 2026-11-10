@@ -5,7 +5,7 @@ use super::*;
 /// The three states this distinguishes look identical from the objection list alone: an
 /// objection that was never raised, one that was raised and cleared, and one that was raised
 /// and stands. Two of the three end with the same empty list, which is why the only witness
-/// used to be a `warn!` â€” and a line nothing can read is a fact nothing can check.
+/// used to be a `warn!` — and a line nothing can read is a fact nothing can check.
 #[tokio::test]
 async fn a_mass_flag_moves_the_count_onto_the_report_rather_than_deleting_it() {
     let reg = Arc::new(BackendRegistry::new());
@@ -38,7 +38,7 @@ async fn a_mass_flag_moves_the_count_onto_the_report_rather_than_deleting_it() {
     );
 
     // With it: the same objection is answered, and the report says which one and how far
-    // over it was â€” the numbers, so a permutation of the list cannot pass for a clearance.
+    // over it was — the numbers, so a permutation of the list cannot pass for a clearance.
     cfg.allow_mass_removal = true;
     let mut report = inspect_removals(
         &cfg,

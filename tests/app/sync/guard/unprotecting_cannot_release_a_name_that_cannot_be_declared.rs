@@ -11,7 +11,7 @@ fn unprotecting_cannot_release_a_name_that_cannot_be_declared() {
         },
         ..Default::default()
     };
-    // Quotable now, so `*` really does release it â€” the escape hatch works on every name
+    // Quotable now, so `*` really does release it — the escape hatch works on every name
     // the user could have written.
     assert!(protection_of(&cfg, Some("winget"), "Some Program 1.0", &HashSet::new()).is_none());
     // And still refuses on the one class no `*` can reach.

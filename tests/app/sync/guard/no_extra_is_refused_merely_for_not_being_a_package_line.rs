@@ -3,7 +3,7 @@ use super::*;
 #[tokio::test]
 async fn no_extra_is_refused_merely_for_not_being_a_package_line() {
     // The trap this kind exists to avoid: `protection_of`'s declarability test asks whether
-    // a package line could hold the name, and no extras key can â€” `link:/home/u/.vimrc` is
+    // a package line could hold the name, and no extras key can — `link:/home/u/.vimrc` is
     // not a package line and never parses as one. Running that test over extras marks all
     // six kinds `Undeclarable` and refuses every teardown on every machine forever, which
     // is a guard that has stopped being about what the user asked for.

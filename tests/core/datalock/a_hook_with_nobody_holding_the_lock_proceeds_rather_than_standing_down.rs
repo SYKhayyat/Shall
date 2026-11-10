@@ -4,7 +4,7 @@ use super::*;
 /// `try_acquire` with the data directory resolved for the caller, and it is reached only
 /// from `main`'s `acquire_data_lock`: `Ok(None)` there is `LockedRun::StandDown`, so a
 /// mutant returning it always makes every manager hook do nothing and exit zero. The hook
-/// tests assert that hooks *stand down* under contention and cannot see it â€” standing down
+/// tests assert that hooks *stand down* under contention and cannot see it — standing down
 /// is what they want. Nothing asserted a hook proceeds when the lock is free.
 #[test]
 fn a_hook_with_nobody_holding_the_lock_proceeds_rather_than_standing_down() {

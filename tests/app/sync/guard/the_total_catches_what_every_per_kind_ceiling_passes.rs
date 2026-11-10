@@ -41,7 +41,7 @@ async fn the_total_catches_what_every_per_kind_ceiling_passes() {
     assert!(msg.contains("max_total_changes"), "{msg}");
     assert!(
         !msg.contains("max_port_closures"),
-        "three ports are inside the port ceiling â€” naming it would send the reader to a \
+        "three ports are inside the port ceiling — naming it would send the reader to a \
              number that is not the problem: {msg}"
     );
 }

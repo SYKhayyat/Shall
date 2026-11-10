@@ -4,8 +4,8 @@ use super::*;
 ///
 /// Both halves used to come from somewhere else: the flag was the literal
 /// `--allow-mass-removal` whatever was passed, and the noun was the caller's, so a run of
-/// `sync --allow-mass-install` â€” which answers `max_total_changes` and nothing else (`N8`) â€”
-/// read *"the removal count â€¦ was allowed by --allow-mass-removal"*, naming a ceiling it had
+/// `sync --allow-mass-install` — which answers `max_total_changes` and nothing else (`N8`) —
+/// read *"the removal count … was allowed by --allow-mass-removal"*, naming a ceiling it had
 /// not cleared and a flag it had not been given (`J9`).
 ///
 /// **Asserted with `!contains` in both directions.** A sentence that names both flags every

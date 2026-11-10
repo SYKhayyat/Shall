@@ -7,7 +7,7 @@ fn a_name_no_line_can_hold_is_never_removed() {
     // `purge-undeclared` candidate through no fault of its owner.
     //
     // **Y7 moved the boundary, and this test is what says where it is now.** A name with a
-    // space in it â€” `ARP\Machine\X64\Android Studio`, which is what `winget list` answers â€”
+    // space in it — `ARP\Machine\X64\Android Studio`, which is what `winget list` answers —
     // is declarable today, because it can be quoted. What is still beyond a line is a name
     // carrying a quote or a control character, and those are what keep this branch alive.
     let cfg = Config::default();

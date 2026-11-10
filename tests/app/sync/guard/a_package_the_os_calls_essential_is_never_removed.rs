@@ -9,7 +9,7 @@ use super::*;
 #[tokio::test]
 async fn a_package_the_os_calls_essential_is_never_removed() {
     let registry = registry_reporting("apt", &["tar", "sed", "grep", "gzip", "findutils"]);
-    // No `protected_packages` rule covers these â€” the static config list is a different
+    // No `protected_packages` rule covers these — the static config list is a different
     // mechanism and the container measurement turned specifically on the five it misses.
     let cfg = Config::default();
     let reaping = Reaping::new();

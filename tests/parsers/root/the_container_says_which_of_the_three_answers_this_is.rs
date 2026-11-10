@@ -2,7 +2,7 @@ use super::*;
 
 /// The three answers a structured reader has to keep apart, asserted as three.
 ///
-/// The arm this replaces lived inside `or_unrecognised` and returned `Ok(found)` â€” empty â€”
+/// The arm this replaces lived inside `or_unrecognised` and returned `Ok(found)` — empty —
 /// for anything whose output held a parseable JSON document, whether or not the reader had
 /// got a single package out of it. That is `Some(n)` and `None` both collapsed into
 /// `Some(0)`, which is the collapse the whole `LX-1` type exists to prevent.

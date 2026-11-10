@@ -1,6 +1,6 @@
 use super::*;
 
-/// The preview is the enforcer's question, asked without spending anything â€” including the
+/// The preview is the enforcer's question, asked without spending anything — including the
 /// total, which is what a two-list preview with a hand-written `also_removing` could never
 /// get right.
 #[tokio::test]

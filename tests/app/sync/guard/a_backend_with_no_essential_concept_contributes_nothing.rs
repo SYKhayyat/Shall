@@ -1,6 +1,6 @@
 use super::*;
 
-/// A backend that reports nothing essential contributes nothing â€” the control that makes the
+/// A backend that reports nothing essential contributes nothing — the control that makes the
 /// test above a measurement rather than a coincidence.
 #[tokio::test]
 async fn a_backend_with_no_essential_concept_contributes_nothing() {

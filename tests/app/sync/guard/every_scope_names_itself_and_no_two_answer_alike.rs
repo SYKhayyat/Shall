@@ -5,8 +5,8 @@ use super::*;
 /// **This is the assertion that would have caught the dead round trip.** The firewall
 /// teardown converted its scope to a string and back through two functions whose
 /// vocabularies did not overlap: the producer emitted `"an unattended watch tick"` and the
-/// consumer matched `"watch"`, so both named arms were unreachable and every teardown â€”
-/// including `N7`'s unattended tick, which reverts by default with nobody watching â€” was
+/// consumer matched `"watch"`, so both named arms were unreachable and every teardown —
+/// including `N7`'s unattended tick, which reverts by default with nobody watching — was
 /// guarded and reported as `sync`. The scope is passed as the enum now, and this holds the
 /// two labels apart so a catch-all arm cannot quietly reintroduce the collapse.
 #[test]
@@ -37,7 +37,7 @@ fn every_scope_names_itself_and_no_two_answer_alike() {
         );
         assert!(
             prose.insert(scope.during()),
-            "{:?} shares `during` with another scope â€” a catch-all arm has collapsed them, \
+            "{:?} shares `during` with another scope — a catch-all arm has collapsed them, \
                  which is how the label this replaced answered `sync` for nine of twelve",
             scope
         );

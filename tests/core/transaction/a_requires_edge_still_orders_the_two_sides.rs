@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn a_requires_edge_still_orders_the_two_sides() {
-    // A batch is made of what is ready *at the same moment*, so an edge splits it â€”
+    // A batch is made of what is ready *at the same moment*, so an edge splits it —
     // otherwise a package would go on the same command line as the thing it requires.
     // Only a written `@requires` produces one (`Y9`); a native dependency the manager
     // resolves for itself does not, and the two used to be indistinguishable here.

@@ -231,7 +231,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   have no row in the index. (High — **BUILT**: the register holds 243 (238 ANSWERED) where the
   docs said 241 (236 ANSWERED); `C5` and `C6` are ruled in the body — II.68/II.69, V.218/V.219 —
   with no row in the index, and the `C` heading said 4 where the series holds 6. **And the title
-  line said 228, which the checker could not see**, because the dash in it is a mojibake `â€”`
+  line said 228, which the checker could not see**, because the dash in it is a mojibake `—`
   rather than an em dash: a stale figure hidden behind a broken byte pair. Two index rows, four
   numbers, one dash. The same step printed `_credit_section: command not found` four times,
   because the lifted scoring helpers credit a section the sandbox does not have; the credit is a
@@ -271,7 +271,12 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 - [ ] #147 a non-UTF-8 argv panics (`std::env::args`, `src/main.rs:66,104,978`); shims cannot forward one. (Medium)
 - [ ] #148 shim detection reads whole files — every file in `~/.local/bin`, every `shall run` target; sibling `link:` compare skips the length check. (Medium, perf)
 - [ ] #146 every preferences.toml parse error says "the key no longer exists" (`config.rs:1414`). (Medium)
-- [ ] #144 mojibake (`â€”`) in guard/transaction/datalock messages, pinned by tests; add a review test. (Medium)
+- [x] #144 mojibake (`—`) in guard/transaction/datalock messages, pinned by tests; add a review test.
+  (**Medium, BUILT 2026-11-10** — 508 runs across 67 files re-decoded, four of them `src/`
+  literals the user reads at the worst moment: the guard's refusal, the rollback report, the
+  lock wait. `tests/review/no_tracked_text_carries_cp1252_mojibake_tests.rs` is the gate, and
+  it defines the defect rather than listing the sequences: text that, encoded to cp1252 and
+  decoded as UTF-8, changes is text that came through that round trip.)
 - [ ] #149 schedule.log rotation runs unlocked on every command; remove+rename race deletes a rotated log. (Low)
 - [x] #130 the `schedule` verb edits a line then converges the whole machine — the C7 class, on the
   sibling verb the ruling did not cover. (**High, BUILT 2026-11-02** — `handle_schedule` ended in

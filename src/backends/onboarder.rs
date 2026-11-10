@@ -405,7 +405,7 @@ pub struct CustomBackendDef {
     /// definition said before XIII.12 split the two.
     pub binary: Option<String>,
     /// The program that removes, when it is a separate binary from `binary` (OpenBSD installs
-    /// with `pkg_add` and removes with `pkg_delete`). Absent â‡’ removal uses `binary`.
+    /// with `pkg_add` and removes with `pkg_delete`). Absent ⇒ removal uses `binary`.
     pub remove_binary: Option<String>,
     #[serde(default)]
     pub install_args: Vec<String>,
@@ -510,7 +510,7 @@ pub struct CustomBackendDef {
     // empty; a `re:` against it is refused, not expanded to nothing. That distinction is the
     // whole point: "not configured" and "none" are different answers, and conflating them is
     // how a custom backend silently under-reports.
-    /// Config-destroying removal (Debian's `purge`). Absent â‡’ `--purge` on this backend is
+    /// Config-destroying removal (Debian's `purge`). Absent ⇒ `--purge` on this backend is
     /// refused rather than quietly doing an ordinary removal.
     pub purge_args: Option<Vec<String>>,
     /// Args that report the packages the OS treats as essential, for the removal guard.
@@ -538,22 +538,22 @@ pub struct CustomBackendDef {
     /// Querying a package's dependencies (reverse-dependency reports, `why`). `{name}` is the
     /// package, and it must be an argument of its own so the terminator can precede it.
     pub depends_args: Option<Vec<String>>,
-    /// Emptying this manager's download cache, for `shall clean-cache`. Absent â‡’ it has none,
+    /// Emptying this manager's download cache, for `shall clean-cache`. Absent ⇒ it has none,
     /// which is what the verb reports rather than pretending it cleaned something.
     pub clean_cache_args: Option<Vec<String>>,
     /// Binary for `clean_cache_args`, when the cache is emptied by a different program than
     /// the one that installs (Void's is `xbps-remove`).
     pub clean_cache_binary: Option<String>,
     /// A dry run of the manager's own orphan verb, so `sync` can remove what it *would*
-    /// remove. Absent â‡’ this backend cannot say, and a removal it cannot enumerate it does
+    /// remove. Absent ⇒ this backend cannot say, and a removal it cannot enumerate it does
     /// not make.
     pub orphan_dry_run: Option<OrphanDryRunDef>,
     /// How this backend reports the *manually* installed set, so `adopt` takes what the user
-    /// chose and not the dependency graph. Absent â‡’ adoption skips this backend (the safe
+    /// chose and not the dependency graph. Absent ⇒ adoption skips this backend (the safe
     /// default that every custom backend had before U2).
     pub manual: Option<ManualListingDef>,
 
-    /// The one command that names everything with an update available (`Q44`). Absent â‡’ this
+    /// The one command that names everything with an update available (`Q44`). Absent ⇒ this
     /// backend cannot say, and `list --outdated` asks it about each package separately — which
     /// is the slow answer, not a wrong one.
     ///
@@ -1190,7 +1190,7 @@ pub fn fixture_disagreements_with(
 
 /// Turns one definition into a fully-wired [`BackendCapabilities`] over the generic
 /// backend machinery. Capabilities are attached only for the operations the definition
-/// actually specifies (e.g. no `search_args` â‡’ not searchable).
+/// actually specifies (e.g. no `search_args` ⇒ not searchable).
 /// **`pub` for the integration tests' sake.** The mirror constructs capabilities directly to
 /// assert each optional custom-backend capability without duplicating the builder.
 pub fn build_capabilities_with(

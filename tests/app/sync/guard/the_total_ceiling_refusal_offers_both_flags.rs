@@ -6,7 +6,7 @@ use super::*;
 /// It named `--allow-mass-removal` alone, which is the more expensive half of `J9`: this is
 /// the instruction someone reads while blocked, so a pure-install run was told that the way
 /// to get its installs through was to authorize mass deletion. `shall protected` has printed
-/// the true rule all along â€” the guard's own refusal was the surface contradicting it.
+/// the true rule all along — the guard's own refusal was the surface contradicting it.
 #[test]
 fn the_total_ceiling_refusal_offers_both_flags() {
     let mut cfg = config_with(10);
