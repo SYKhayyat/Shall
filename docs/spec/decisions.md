@@ -1,4 +1,4 @@
-﻿# The decision register — 261 entries, none open
+﻿# The decision register — 262 entries, none open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **256** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **257** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 261 are accounted
-for: **256 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 262 are accounted
+for: **257 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, and how a ledger is made measurable) — 23
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay) — 24
 
 | | question | answered |
 |---|---|---|
@@ -541,6 +541,7 @@ deliberately no longer has.*
 | **C21** | `#21` recorded that "the large number of `unwrap`/`expect` sites in production-adjacent setup and command paths makes it hard to distinguish test-only assertions from user-reachable failure handling" — which is the honest form of it: not "there are too many" but "nobody can tell which ones matter", and a grep cannot answer that because the difference is not in the text. **How does a repo keep an answer to that question true?** — RULED 2026-11-10: **classify, count, and bound it.** `scripts/panic-inventory.sh` classifies every site by whether it is inline test code and prints the production ones with file and line; all 81 were read, and every one is a `Lazy<Regex>` over a literal pattern, a poisoned lock, or a true invariant the types do not express. A test holds the production count at a ceiling, so a new site fails until somebody handles it or raises the ceiling in the same change — a count that only gets printed is read once, and a count with a ceiling has to be answered when it moves. A second test requires the excluded total to be the larger number, because a cutoff that stopped working would fold every inline assertion into the production count and the number would stop meaning anything. (II.84, V.237) | 2026-11-10 |
 | **C22** | The container harness runs its whole body against a do-nothing `shall` stub, so a check that survives an executable which installs nothing, removes nothing and rebuilds nothing is measuring the image rather than the product. About fifty command-surface checks had that shape — `search finds something`, `info reads a package's metadata`, `export writes native manifests`, `config show prints the active configuration` — gated on exit 0 while their names claimed what was *printed*, and worse, the verdict moved with the host: `PASS` where the image shipped the package, `FAIL` on a clean runner. A prior batch fixed the mirror-image class (a survival claim for something never seen arrive); this half was left open. **How does a check whose name claims an effect stay honest across six backends?** — RULED 2026-11-10: **the effect is looked for, on the next check, and the witness names the same subject.** A pattern is read off the real binary and checked to hold on every backend, since `search`, `info`, `why` and `lock` answer differently on `apt`, `dnf`, `pacman`, `apk`, `xbps` and `emerge`. Where the effect is not printed — `activate` writes a file and says nothing — the witness is the file's content, not a grep matching the empty string. Three survivors stay, each asserting an effect the exit status does not carry; a test bounds the bare checks relative to the section and requires any new one to be argued into the allowance with its reason. (II.85, V.238) | 2026-11-10 |
 | **C23** | The un-asserted oracle from `#40` — the `unstubbed` ledger — was wired by `C4`, but `deny_unstubbed()` is per-mock by design, so the count of tests that leave a command unanswered could only be found by adding the call one test at a time and watching which ones failed. The owner recorded 172 such tests and left the issue open on exactly that: "the instrument exists" and "the 66 are converted" are different claims. **How does a suite make its own fall-through ledger measurable, and what does the measurement separate?** — RULED 2026-11-10: **audit mode reports where deny fails, and the report teases a probe from a query.** `SHALL_AUDIT_UNSTUBBED=1` prints one line per mock at `Drop`, placed ahead of every early return — including the `allow_unmatched_registrations` one, which is where the tests worth measuring go; the first draft sat behind it and reported zero. Measured: 352 tests reported, of which **134 only existence probes** (`command -v btrfs`, `command -v timeshift`), which are not defects because `check_command` answers `true` deliberately. Seeding the fixture's 59 probed names — the assumption the tests already made — moved probe-only tests 134 → **10** and left the 218 real ones unchanged. Those 218 are the follow-up. (II.86, V.239) | 2026-11-10 |
+| **C24** | `#41` measured the Markdown and found `docs/spec/` at 68% of it, with `decisions.md`/`why.md` at 44% of every documented byte, and proposed distilling both into a one-line-per-entry log. That is ruled against already: `Y21` considered exactly it and kept full text, because *"`decisions.md` is the ruling — an event outside the tree, with a person and a date on it — and that is the one artifact git cannot reconstruct"*, and `why.md` is mandatory reading before a rule changes with 247 entries cited by Part II and by Rust doc comments. But the 26 dated `AUDIT-`/`GRADE-`/`HANDOFF-` essays (622 KB) are the family `Y21`'s cut missed, written for a reader with sessions — the same reasoning that deleted `history.md`. **Which records stay, and what keeps one?** — RULED 2026-11-10: **a citation from a living document.** Deleted 23 of 26, recoverable from git at the commit before the cut and said so in `docs/README.md`. The test has to be transitive: a first pass kept 16 because HANDOFFs cite their predecessors, so the family was keeping itself alive; asking which essays the register, the bug list or a review test cites kept three. A chain of records citing each other is not readership. (II.87, V.240) | 2026-11-10 |
 
 # The blocking round — thirteen questions, all ruled
 
@@ -10963,3 +10964,34 @@ The 218 with a real query unanswered did not move, which is the point — those 
 - A fall-through audit may never fail a build. It is a measurement, and a global deny would redden a
   quarter of the suite for having no opinion.
 - The report names the commands, not just a count, because the triage is per command.
+
+## C24
+
+**Status: ANSWERED 2026-11-10, built the same day.** A dated record stays only while a living
+document cites it. Carried out of `#41`.
+
+**Asked.** `#41` measured 3.0 MB of Markdown against 7.3 MB of Rust and proposed distilling
+`decisions.md` and `why.md` — 44% of every documented byte between them — into a one-line-per-entry
+log.
+
+**Which records stay, and what keeps one?**
+
+**Ruled: a citation from a living document. The register and the rationale stay at full fidelity.**
+
+**1. The largest number in the audit is the one item that must not move.** `Y21` considered
+distilling `decisions.md` to a status line in August and refused, because it is *the ruling — an
+event outside the tree, with a person and a date on it*, which git cannot reconstruct. `why.md` is
+mandatory reading in `CLAUDE.md` before a rule changes, and its entries are cited by Part II rules
+and by Rust doc comments with a ceiling on the unattached ones.
+
+**2. The dated essays are the family `Y21`'s cut missed.** `AUDIT-`/`GRADE-`/`HANDOFF-` files are
+organised by session, and `Y21` deleted `history.md` for naming the same unit as its organising
+principle. The cut simply did not reach them.
+
+**3. The citation test must be transitive.** A first pass kept sixteen, because HANDOFFs cite their
+predecessors and the family was keeping itself alive. Asking which essays a *living* document cites
+— the register, the bug list, a review test — kept three and cut twenty-three.
+
+**4. Deletion is recoverable, and the note says how.** `docs/README.md` names the commit before the
+cut and the `git checkout` that restores a file, so a record is cut from the tree and not from
+history.

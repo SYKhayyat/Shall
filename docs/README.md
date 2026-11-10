@@ -44,9 +44,16 @@ work on this repo without reading any of them.
 | `BUILDER.md` | The brief for an agent implementing work orders (`B1`, `B2`, …). |
 | `GRADER.md` | The brief for an agent doing adversarial review — the reviewer is told to be the adversary, not the author. |
 | `GRADE-<date>.md` | What a grading round found, with measurements. Useful as a record of what has actually been driven versus merely argued. |
-| `HANDOFF-<date>.md` | End-of-session state, so the next session resumes without re-deriving. The newest one is the current position. |
 | `attic/lessons.md` | Residue of shipped defects. Its own header says it is for a person, once. |
 | `attic/README-2026-08-12.md` | The user-facing manual as it stood on 12 August 2026, recovered from a working tree that was about to be deleted. Its section list is longer than today's README's and its headings are the ones this README's contents still links to. |
 
 If you want a sense of where the real risk sits, the newest `GRADE-*.md` is the most useful thing
 in this list: it is written by someone trying to break the program and it says where it succeeded.
+
+**The `HANDOFF-<date>.md` essays are gone, and that is `Y21` finishing.** Twenty-three of them —
+session notes, and grade and audit rounds — were written for a reader who has sessions, which an
+agent does not, and none was cited by anything a maintainer reads. `Y21` cut `docs/archive/`,
+`docs/spec/proposals/`, `history.md` and `INEFFICIENCIES.md` for exactly this reason and missed this
+family; `#41` found it. **All twenty-three are recoverable from git** at the commit before
+`18b3928b`: `git checkout <sha> -- docs/HANDOFF-2026-08-17.md`. The three that a living document
+cites are still here, because a citation is a reader being sent somewhere.

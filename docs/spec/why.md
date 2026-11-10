@@ -8820,3 +8820,33 @@ report probes alone**; the 218 with a real query unanswered are unchanged, as th
 genuine: `brew list --versions` in 19 tests, `sudo -n timeshift --create …` in 12, `cargo install
 --list` in 12. Each is a test asserting against an empty string it never wrote, and converting them
 is a per-test decision about what it meant to assert — not a sweep.
+
+**V.240 — Why the dated essays went and the register did not (`#41`, `II.87`).**
+
+`#41` measured the prose: 3.0 MB of Markdown against 7.3 MB of Rust, with `docs/spec/` at 68% of it
+and `decisions.md` plus `why.md` at 44% of every documented byte. It proposed distilling those two
+into a one-line-per-entry log.
+
+**That proposal is ruled against, by `Y21`, in this repo.** The owner considered exactly it in
+August and kept the full text, naming the reason: *"`decisions.md` is the ruling — an event outside
+the tree, with a person and a date on it — and that is the one artifact git cannot reconstruct, so
+it is kept at full fidelity rather than compressed to a status line."* `why.md` was kept because
+`CLAUDE.md` makes it mandatory reading before a rule is changed, and 247 of its entries are cited by
+Part II rules and by Rust doc comments, with a test that holds a ceiling on unattached ones. So the
+largest number in the audit is the one item in it that must not move.
+
+**What `#41` is right about is the family `Y21` missed.** Twenty-six `AUDIT-`/`GRADE-`/`HANDOFF-`
+essays, 622 KB, written for a reader with sessions — the same reasoning `Y21` used to delete
+`history.md`, whose organising unit it named as *"the Session (94 headings against 36 commit dates).
+A human maintainer does not have sessions."* `Y21`'s cut did not reach them.
+
+**The test for which stay is a citation, and it has to be transitive.** A first pass kept anything
+cited by anything, which kept 16: most HANDOFFs cite their predecessors, so the family was keeping
+itself alive. Asking instead *which essays does a living document cite* — the register, the bug
+list, a review test — kept three and cut twenty-three. A chain of records citing each other is not
+readership.
+
+**Deletion is recoverable, and the note says how.** The essays are in git at the commit before the
+cut, and `docs/README.md` names that commit and the checkout command. Cutting a record from the tree
+is not the same as cutting it from history, and a reader who wants one should not have to know that
+on their own.

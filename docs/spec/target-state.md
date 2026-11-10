@@ -4714,3 +4714,17 @@ the answer separates a probe from a query.**
 - **The fixture seeds what the tests assume.** Every probed manager name is seeded once, which
   states the assumption rather than changing a verdict — and because it changes what the ledger
   holds, the measurement is retaken afterwards rather than assumed.
+
+## II.87 A record nobody reads is cut, and a citation is what keeps one (C24, V.240)
+
+**A dated session, grade or audit essay stays only while a living document cites it.**
+
+- **`Y21`'s economics, one family further on.** A record organised by session is for a reader who
+  has sessions; an agent does not. `Y21` cut `docs/archive/`, `docs/spec/proposals/`,
+  `history.md` and `INEFFICIENCIES.md` on that reasoning and missed the dated essays, which are the
+  same kind of file.
+- **A citation is a reader being sent somewhere.** Twenty-three of twenty-six were cited only by
+  each other, which is a chain of readers sending each other to nothing. The three cited from
+  `docs/spec/decisions.md`, `docs/spec/bugs.md` or a review test stay.
+- **Deletion is recoverable and says so.** The essays are in git; the note that removes them names
+  the commit and the command, so a record is cut from the tree and not from history.
