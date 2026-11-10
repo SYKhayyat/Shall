@@ -300,7 +300,11 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   lock wait. `tests/review/no_tracked_text_carries_cp1252_mojibake_tests.rs` is the gate, and
   it defines the defect rather than listing the sequences: text that, encoded to cp1252 and
   decoded as UTF-8, changes is text that came through that round trip.)
-- [ ] #149 schedule.log rotation runs unlocked on every command; remove+rename race deletes a rotated log. (Low)
+- [x] #149 schedule.log rotation runs unlocked on every command; remove+rename race deletes a
+  rotated log. (**Low, BUILT 2026-11-10** — rotation takes a non-blocking exclusive lock on
+  its own `schedule.log.lock` and gives up when another process holds it; the rename is the
+  only step, because `fs::rename` replaces the destination on both platforms and the
+  `remove_file` was the whole of the loss. The notice is `-v` only.)
 - [x] #130 the `schedule` verb edits a line then converges the whole machine — the C7 class, on the
   sibling verb the ruling did not cover. (**High, BUILT 2026-11-02** — `handle_schedule` ended in
   `handle_sync`, so `shall schedule remove tidy` created a pending `dir:` on its way past, and on a

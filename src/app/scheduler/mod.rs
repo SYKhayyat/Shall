@@ -90,22 +90,58 @@ pub const UNIT_SEPARATOR: &str = "\n#--- shall: timer ---\n";
 /// the disk noticed. Called from `main` before anything else runs, because every writer of
 /// this file is a shall process. One `.1` generation keeps yesterday's failure readable
 /// after a rotation; deeper history is what the journal is for.
-pub fn rotate_log_if_large() {
+///
+/// **This is the one file every Shall process touches, and it is touched from `main` before
+/// the data lock**, so rotation takes a lock of its own and gives up when somebody else holds
+/// it. Two runs started together — a timer and a person typing `shall plan` — both saw a log
+/// over the cap; the old code's `remove_file(schedule.log.1)` then deleted the generation the
+/// other process had just set aside, and the loser's `rename` failed and printed
+/// `could not rotate schedule.log` on a command that had nothing to do with the log.
+///
+/// **`rename` alone replaces the destination** on POSIX and on Windows alike (Rust's
+/// `fs::rename` is `MoveFileEx` with `MOVEFILE_REPLACE_EXISTING` there), so the `remove_file`
+/// was never needed — it was the whole of the loss.
+///
+/// The notice is `-v` only: a rotation is bookkeeping, and it used to arrive on the stderr of
+/// whichever command happened to run first, most often an interactive `shall search`.
+pub fn rotate_log_if_large(verbose: bool) {
     const MAX_BYTES: u64 = 10 * 1024 * 1024;
-    let log = crate::utils::safe_data_dir().join("schedule.log");
+    let data_dir = crate::utils::safe_data_dir();
+    let log = data_dir.join("schedule.log");
     let Ok(meta) = std::fs::metadata(&log) else {
         return;
     };
     if meta.len() <= MAX_BYTES {
         return;
     }
+    // A separate file, not the log: the lock has to outlive the rename that moves the log's
+    // inode, and on Windows an open handle on the file being renamed is a sharing violation.
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(data_dir.join("schedule.log.lock"))
+        .ok();
+    let Some(lock) = lock else {
+        return;
+    };
+    // Non-blocking: a process already rotating this log is doing the work this call exists
+    // for, and a `shall plan` that waits on it is a reader waiting on bookkeeping.
+    if fs2::FileExt::try_lock_exclusive(&lock).is_err() {
+        return;
+    }
     let rotated = log.with_extension("log.1");
-    let _ = std::fs::remove_file(&rotated);
     match std::fs::rename(&log, &rotated) {
-        Ok(()) => eprintln!(
-            "schedule.log passed 10 MiB and was set aside as schedule.log.1 (the old .1 is gone)"
-        ),
-        Err(e) => eprintln!("could not rotate schedule.log: {e}"),
+        Ok(()) => {
+            if verbose {
+                eprintln!("schedule.log passed 10 MiB and was set aside as schedule.log.1");
+            }
+        }
+        Err(e) => {
+            if verbose {
+                eprintln!("could not rotate schedule.log: {e}");
+            }
+        }
     }
 }
 

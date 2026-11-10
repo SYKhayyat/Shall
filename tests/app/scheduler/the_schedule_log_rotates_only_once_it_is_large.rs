@@ -16,14 +16,14 @@ fn the_schedule_log_rotates_only_once_it_is_large() {
     // Small file: left alone.
     let log = dir.join("schedule.log");
     std::fs::write(&log, vec![b'x'; 1024]).unwrap();
-    rotate_log_if_large();
+    rotate_log_if_large(false);
     assert!(log.exists());
     assert!(!dir.join("schedule.log.1").exists());
 
     // Over the cap: becomes .1, and a pre-existing .1 is replaced.
     std::fs::write(dir.join("schedule.log.1"), b"old generation").unwrap();
     std::fs::write(&log, vec![b'x'; 11 * 1024 * 1024]).unwrap();
-    rotate_log_if_large();
+    rotate_log_if_large(false);
     assert!(!log.exists(), "the large log should have been renamed away");
     let rotated = std::fs::read(dir.join("schedule.log.1")).unwrap();
     assert_eq!(rotated.len(), 11 * 1024 * 1024, "the new generation wins");
