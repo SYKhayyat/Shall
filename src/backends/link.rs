@@ -940,11 +940,17 @@ impl Installable for LinkInstallable {
                 // `<target>.shall-backup` and wrote the file again, under a summary
                 // reading `already up to date`.
                 if exists && !is_symlink {
-                    if let (Ok(from), Ok(to)) = (
-                        tokio::fs::read(&source).await,
-                        tokio::fs::read(&target_path).await,
+                    // **Length first.** This runs on every sync for every declared `link:`, and
+                    // it used to read both files whole to answer a question the sizes settle
+                    // for every copy that differs — a large declared file was read twice per
+                    // sync even when it had changed.
+                    if let (Ok(from_meta), Ok(to_meta)) = (
+                        tokio::fs::metadata(&source).await,
+                        tokio::fs::metadata(&target_path).await,
                     ) {
-                        if from == to {
+                        if from_meta.len() == to_meta.len()
+                            && crate::utils::file::same_contents(&source, &target_path).await
+                        {
                             apply_declared_owner(&target_path, spec, &self.core.executor).await?;
                             debug!("Link: {:?} already matches {:?}", target_path, source);
                             continue;

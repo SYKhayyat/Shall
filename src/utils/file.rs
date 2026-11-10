@@ -606,6 +606,47 @@ pub async fn remove_deployed_path(path: impl AsRef<Path>) -> std::result::Result
     }
 }
 
+/// How much of each file a comparison holds at once.
+const COMPARE_CHUNK: usize = 64 * 1024;
+
+/// Whether two files hold the same bytes, compared a chunk at a time and abandoned at the first
+/// difference.
+///
+/// **The two callers are the two places this program asked "is this the same file?" by reading
+/// both whole.** `link:` compares a declared source with the copy at its destination on every
+/// sync, and the shim check compares a deployed copy with the running binary — which is 348 MB
+/// in a debug build, and was loaded twice per question. Length first at both call sites, then
+/// this: equal-length files that differ in their first block cost one block each.
+pub async fn same_contents(a: &Path, b: &Path) -> bool {
+    use tokio::io::AsyncReadExt;
+
+    let (Ok(mut left), Ok(mut right)) = (
+        tokio::fs::File::open(a).await,
+        tokio::fs::File::open(b).await,
+    ) else {
+        return false;
+    };
+    let mut left_buf = vec![0u8; COMPARE_CHUNK];
+    let mut right_buf = vec![0u8; COMPARE_CHUNK];
+    loop {
+        let (l, r) = match (
+            left.read(&mut left_buf).await,
+            right.read(&mut right_buf).await,
+        ) {
+            (Ok(l), Ok(r)) => (l, r),
+            _ => return false,
+        };
+        // A short read on one side and a full one on the other is already a difference; the
+        // comparison below would otherwise read past the shorter file's end.
+        if l != r || left_buf[..l] != right_buf[..r] {
+            return false;
+        }
+        if l == 0 {
+            return true;
+        }
+    }
+}
+
 /// Copy `from` over `to`, whatever `to` currently is, and name the path if it cannot.
 ///
 /// Two things `tokio::fs::copy` alone does not do. It cannot open a read-only destination for

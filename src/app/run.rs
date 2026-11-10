@@ -242,10 +242,12 @@ pub async fn real_program_on(command: &str, path: Option<std::ffi::OsString>) ->
     };
     for dir in std::env::split_paths(&path) {
         for candidate in program_candidates(&dir, command) {
-            if !tokio::fs::try_exists(&candidate).await.unwrap_or(false) {
+            // One `stat` answers existence and is what the shim check needs anyway; asking
+            // `try_exists` first was a second call on every `PATH` entry.
+            let Ok(metadata) = tokio::fs::symlink_metadata(&candidate).await else {
                 continue;
-            }
-            if crate::app::ShimManager::is_deployed_shim(&candidate).await {
+            };
+            if crate::app::ShimManager::is_deployed_shim_with(&candidate, Some(&metadata)).await {
                 debug!("skipping the shim at {:?} — it is this binary", candidate);
                 continue;
             }

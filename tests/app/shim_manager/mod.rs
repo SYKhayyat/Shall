@@ -5,6 +5,8 @@ pub use std::path::{Path, PathBuf};
 use tempfile::tempdir;
 use tokio::fs;
 pub use tracing::{debug, info};
+mod a_file_larger_than_any_shall_build_is_not_opened_whole;
+mod a_marker_that_straddles_a_read_is_still_found;
 mod a_named_accounts_shim_lands_in_that_accounts_own_bin_directory;
 mod a_shim_deployed_for_an_account_is_owned_by_that_account;
 mod a_shim_for_an_account_that_does_not_exist_is_refused_by_name;

@@ -281,7 +281,14 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   the twin forwarder and had the same `env::args()`. The old release binary aborted with
   rc=134 on `search $\xff`; the new one exits 1 with clap's "invalid UTF-8", per `Q3`.
   `no_source_reads_argv_as_utf8_tests` keeps `env::args()` out of `src/`.)
-- [ ] #148 shim detection reads whole files — every file in `~/.local/bin`, every `shall run` target; sibling `link:` compare skips the length check. (Medium, perf)
+- [x] #148 shim detection reads whole files — every file in `~/.local/bin`, every `shall run`
+  target; sibling `link:` compare skips the length check. (**Medium, perf, BUILT
+  2026-11-10** — metadata first: regular-file, inode, then a length floor, and only then a
+  64 KiB-chunked marker scan with an overlapped tail, so a marker split across reads is
+  still found. The byte-identical compare runs only when the lengths match, chunked and
+  abandoned at the first difference. `link:` got the same treatment through one shared
+  `utils::file::same_contents`. A `PATH` entry that is a fifo used to block the search for
+  ever; it now costs a `stat`.)
 - [x] #146 every preferences.toml parse error says "the key no longer exists" (`config.rs:1414`).
   (**Medium, BUILT 2026-11-10** — the hint is now asked of the `toml` error rather than
   assumed: unknown field keeps the delete-the-line advice, a wrong type says the key exists

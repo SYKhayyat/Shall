@@ -18,5 +18,6 @@ fn deployed_name(name: &str) -> String {
     }
 }
 mod a_command_that_names_a_path_is_left_exactly_as_written;
+mod a_path_entry_that_is_not_a_file_does_not_stall_the_search;
 mod a_path_with_only_the_shim_on_it_falls_back_to_the_bare_name;
 mod a_shim_on_path_is_never_what_the_runner_spawns;

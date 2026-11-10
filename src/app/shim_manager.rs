@@ -11,17 +11,53 @@ use tracing::{debug, info};
 /// what keeps the constant in the binary's read-only data across builds and optimizations.
 pub const SHIM_MARKER: &[u8] = b"SHALL::DEPLOYED-SHIM::9f2c41e7::v1";
 
-/// Whether the file at `path` carries [`SHIM_MARKER`].
-async fn bytes_contain_marker(path: &Path) -> bool {
+/// How much of a candidate file is held at once while looking for [`SHIM_MARKER`].
+///
+/// **The bound is the point.** `bin_dir` is shared with every other tool that installs there
+/// (`uv`, `bun`, `deno`, `node`, language servers — 50 to 150 MB each), and deciding whether a
+/// file is a shim used to read it whole: one `list_shims` read all of them into memory, and
+/// every `shall run <tool>` read its target in full before running it.
+const MARKER_SCAN_CHUNK: usize = 64 * 1024;
+
+/// A file smaller than this cannot be a Shall build. The floor exists so a directory full of
+/// scripts and symlink-sized files costs one `stat` each rather than a scan.
+///
+/// It is a *lower* bound only: a shim deployed by an older build has a different length from the
+/// running one, which is exactly why the marker exists and why length can never be the test.
+const MIN_SHALL_BINARY_BYTES: u64 = 1024 * 1024;
+
+/// Whether the file at `path` carries [`SHIM_MARKER`], read in fixed-size chunks.
+async fn bytes_contain_marker(path: &Path, len: u64) -> bool {
+    use tokio::io::AsyncReadExt;
+
     // The black box is load-bearing for future binaries; today's binary also contains the
     // marker because this very function names it.
     std::hint::black_box(SHIM_MARKER);
-    match fs::read(path).await {
-        Ok(bytes) => {
-            bytes.len() >= SHIM_MARKER.len()
-                && bytes.windows(SHIM_MARKER.len()).any(|w| w == SHIM_MARKER)
+    if len < SHIM_MARKER.len() as u64 || len < MIN_SHALL_BINARY_BYTES {
+        return false;
+    }
+    let Ok(file) = fs::File::open(path).await else {
+        return false;
+    };
+    let mut reader = tokio::io::BufReader::with_capacity(MARKER_SCAN_CHUNK, file);
+    let mut buf = vec![0u8; MARKER_SCAN_CHUNK];
+    // A marker can straddle two reads, so the tail of each chunk is carried into the next.
+    let overlap = SHIM_MARKER.len() - 1;
+    let mut carry: Vec<u8> = Vec::with_capacity(MARKER_SCAN_CHUNK + overlap);
+    loop {
+        let read = match reader.read(&mut buf).await {
+            Ok(0) => return false,
+            Ok(n) => n,
+            Err(_) => return false,
+        };
+        carry.extend_from_slice(&buf[..read]);
+        if carry.windows(SHIM_MARKER.len()).any(|w| w == SHIM_MARKER) {
+            return true;
         }
-        Err(_) => false,
+        if carry.len() > overlap {
+            let keep_from = carry.len() - overlap;
+            carry.drain(..keep_from);
+        }
     }
 }
 
@@ -88,38 +124,63 @@ impl ShimManager {
     /// `pub(crate)` for one caller beyond this file: the runner has to know a shim when it sees
     /// one on `PATH`, because running a shim is how a shim re-enters Shall for ever.
     pub(crate) async fn is_deployed_shim(path: &Path) -> bool {
-        if bytes_contain_marker(path).await {
-            return true;
+        Self::is_deployed_shim_with(path, None).await
+    }
+
+    /// [`is_deployed_shim`](Self::is_deployed_shim) for a caller that has already taken the
+    /// file's metadata — a directory listing, or a `PATH` search that just asked whether the
+    /// candidate exists. One `stat`, not three, and no read at all for the ordinary file.
+    ///
+    /// **The order is the fix.** A shim is the Shall binary: a regular file, at least as large
+    /// as the marker, whose inode is either this binary's or a copy of it. Everything that can
+    /// be answered from metadata is answered first, and only a file that could be a Shall
+    /// binary has its bytes read — streamed, so a stray 150 MB tool costs a scan and no
+    /// allocation to match.
+    pub(crate) async fn is_deployed_shim_with(
+        path: &Path,
+        metadata: Option<&std::fs::Metadata>,
+    ) -> bool {
+        let own_meta;
+        let shim_meta = match metadata {
+            Some(m) => m,
+            None => match tokio::fs::symlink_metadata(path).await {
+                Ok(m) => {
+                    own_meta = m;
+                    &own_meta
+                }
+                Err(_) => return false,
+            },
+        };
+        // A shim is a hard link or a copy — never a symlink (create_shim documents why), and
+        // never a device, socket or fifo: those are not files this program deployed.
+        if !shim_meta.file_type().is_file() {
+            return false;
         }
         let Ok(current_exe) = std::env::current_exe() else {
             return false;
         };
-        let (Ok(shim_meta), Ok(exe_meta)) = (
-            tokio::fs::symlink_metadata(path).await,
-            tokio::fs::metadata(&current_exe).await,
-        ) else {
-            return false;
-        };
-        // A shim is a hard link or a copy — never a symlink (create_shim documents why).
-        if shim_meta.file_type().is_symlink() || shim_meta.len() != exe_meta.len() {
-            return false;
-        }
+        // The hard-link case is free: one inode comparison and no read on either side.
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
-            if shim_meta.dev() == exe_meta.dev() && shim_meta.ino() == exe_meta.ino() {
-                return true;
+            if let Ok(exe_meta) = tokio::fs::metadata(&current_exe).await {
+                if shim_meta.dev() == exe_meta.dev() && shim_meta.ino() == exe_meta.ino() {
+                    return true;
+                }
             }
         }
-        // Same size but not the same inode: either the copy fallback, or an unrelated file
-        // that happens to match. Only the bytes can tell them apart.
-        match (
-            tokio::fs::read(path).await,
-            tokio::fs::read(&current_exe).await,
-        ) {
-            (Ok(a), Ok(b)) => a == b,
-            _ => false,
+        if bytes_contain_marker(path, shim_meta.len()).await {
+            return true;
         }
+        // No marker: only a byte-identical copy of *this* build can still be a shim, and the
+        // length settles that without opening either file.
+        let Ok(exe_meta) = tokio::fs::metadata(&current_exe).await else {
+            return false;
+        };
+        if shim_meta.len() != exe_meta.len() {
+            return false;
+        }
+        crate::utils::file::same_contents(path, &current_exe).await
     }
 
     /// Where a shim for this name lives. One definition, because a second copy of the `.exe`
@@ -259,7 +320,9 @@ impl ShimManager {
 
             if metadata.is_file() {
                 if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-                    if name != "shall" && name != "shall.exe" && Self::is_deployed_shim(&path).await
+                    if name != "shall"
+                        && name != "shall.exe"
+                        && Self::is_deployed_shim_with(&path, Some(&metadata)).await
                     {
                         #[cfg(windows)]
                         {
