@@ -270,7 +270,11 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 ## Phase 3 — Correctness Mediums
 - [ ] #147 a non-UTF-8 argv panics (`std::env::args`, `src/main.rs:66,104,978`); shims cannot forward one. (Medium)
 - [ ] #148 shim detection reads whole files — every file in `~/.local/bin`, every `shall run` target; sibling `link:` compare skips the length check. (Medium, perf)
-- [ ] #146 every preferences.toml parse error says "the key no longer exists" (`config.rs:1414`). (Medium)
+- [x] #146 every preferences.toml parse error says "the key no longer exists" (`config.rs:1414`).
+  (**Medium, BUILT 2026-11-10** — the hint is now asked of the `toml` error rather than
+  assumed: unknown field keeps the delete-the-line advice, a wrong type says the key exists
+  and the value does not fit, a duplicate key says it is written twice, and anything else is
+  the file's syntax. "is not readable" became "is not valid TOML" — the bytes were read.)
 - [x] #144 mojibake (`—`) in guard/transaction/datalock messages, pinned by tests; add a review test.
   (**Medium, BUILT 2026-11-10** — 508 runs across 67 files re-decoded, four of them `src/`
   literals the user reads at the worst moment: the guard's refusal, the rollback report, the

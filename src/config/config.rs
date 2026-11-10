@@ -1413,10 +1413,10 @@ impl Config {
         // this is the first thing a returning user meets.
         let mut config: Self = toml::from_str(super::without_bom(&content)).map_err(|e| {
             Error::Config(format!(
-                "{} is not readable:\n{}\nDelete the line it names — the key no longer \
-                 exists, and Shall refuses a setting it would otherwise silently ignore.",
+                "{} is not valid TOML:\n{}\n{}",
                 path.display(),
-                e
+                e,
+                Self::parse_hint(&e)
             ))
         })?;
         config.preferences_file = path.to_path_buf();
@@ -1427,6 +1427,29 @@ impl Config {
         }
         validate_safety_settings(&config, path)?;
         Ok(config)
+    }
+
+    /// What to do about a file that did not parse — asked of the error, never assumed.
+    ///
+    /// One hint for every failure was worse than none at all: a wrong type and a duplicate key
+    /// were both met with "the key no longer exists, delete the line", and following that
+    /// advice silently drops a setting the user meant to keep. The parser already knows which
+    /// of these it found, and the message is the only place a person is told what to do next.
+    fn parse_hint(error: &toml::de::Error) -> &'static str {
+        let message = error.message();
+        if message.contains("unknown field") {
+            "Delete the line it names — the key no longer exists, and Shall refuses a setting \
+             it would otherwise silently ignore."
+        } else if message.starts_with("invalid type") {
+            "The key exists and the value does not fit it. The type it wants is named above — \
+             correct the value and keep the line."
+        } else if message.contains("duplicate key") {
+            "The key is written twice. Delete one of the two lines; which of them should win is \
+             not something Shall will guess."
+        } else {
+            "That is the file's syntax rather than a setting Shall does not know: fix the line \
+             above."
+        }
     }
 
     /// Returns whether the bytes reached the disk; a preview writes none.
