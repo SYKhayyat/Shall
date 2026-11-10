@@ -61,6 +61,26 @@ fn a_syntax_error_does_not_ask_for_a_line_to_be_deleted() {
     );
 }
 
+/// A word that is not one of the accepted ones is the same complaint as a wrong type — the key
+/// is right and the value is not — and it must not be answered with "the file's syntax".
+#[test]
+fn a_value_that_is_not_an_accepted_word_is_not_a_syntax_error() {
+    let message = refusal_for("[exec]\ntrust = \"bogus\"\n");
+    assert!(
+        !message.contains("no longer exists"),
+        "the key exists; the word is what is wrong:\n{message}"
+    );
+    assert!(
+        !message.contains("syntax"),
+        "a variant list is not a syntax error, and saying so sends the reader to the wrong \
+         place:\n{message}"
+    );
+    assert!(
+        message.contains("does not fit"),
+        "the hint must say the value is the problem:\n{message}"
+    );
+}
+
 /// The sibling in the same sentence: the file was opened and read, so calling it unreadable
 /// sends the user looking for a permission bit instead of at the line the parser quoted.
 #[test]

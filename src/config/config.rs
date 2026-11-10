@@ -1440,15 +1440,22 @@ impl Config {
         if message.contains("unknown field") {
             "Delete the line it names — the key no longer exists, and Shall refuses a setting \
              it would otherwise silently ignore."
-        } else if message.starts_with("invalid type") {
-            "The key exists and the value does not fit it. The type it wants is named above — \
+        } else if message.starts_with("invalid type")
+            || message.starts_with("unknown variant")
+            || message.starts_with("invalid value")
+        {
+            // One branch, because a wrong type and a word that is not one of the accepted ones
+            // are one complaint: the key is right and the value is not. `trust = "bogus"` is
+            // answered with a list of the words that would work, not with advice to fix the
+            // file's syntax.
+            "The key exists and the value does not fit it. What it wants is named above — \
              correct the value and keep the line."
         } else if message.contains("duplicate key") {
             "The key is written twice. Delete one of the two lines; which of them should win is \
              not something Shall will guess."
         } else {
-            "That is the file's syntax rather than a setting Shall does not know: fix the line \
-             above."
+            "That is the file's syntax, or a required setting that is missing, rather than a \
+             setting Shall does not know — the message above names it."
         }
     }
 
