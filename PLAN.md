@@ -19,6 +19,7 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 - [x] #37 proven-by-default polarity flip. (High)
 
 ## Phase 2 — Safety Criticals/Highs
+- [ ] #145 a closed stdout mid-transaction exits 0: the broken-pipe panic hook (`src/main.rs:37`) reports success and skips rollback/destructors. (High)
 - [x] #133 the Windows unconfined path runs every command through `start` without `/wait`, so
   `shall run` returns before its child and reports `start`'s exit status. (**High, BUILT
   2026-11-02** — `cmd /c start "" /low /b …` returned as soon as the process was created, on
@@ -267,6 +268,11 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   container legs have been green since.)
 
 ## Phase 3 — Correctness Mediums
+- [ ] #147 a non-UTF-8 argv panics (`std::env::args`, `src/main.rs:66,104,978`); shims cannot forward one. (Medium)
+- [ ] #148 shim detection reads whole files — every file in `~/.local/bin`, every `shall run` target; sibling `link:` compare skips the length check. (Medium, perf)
+- [ ] #146 every preferences.toml parse error says "the key no longer exists" (`config.rs:1414`). (Medium)
+- [ ] #144 mojibake (`â€”`) in guard/transaction/datalock messages, pinned by tests; add a review test. (Medium)
+- [ ] #149 schedule.log rotation runs unlocked on every command; remove+rename race deletes a rotated log. (Low)
 - [x] #130 the `schedule` verb edits a line then converges the whole machine — the C7 class, on the
   sibling verb the ruling did not cover. (**High, BUILT 2026-11-02** — `handle_schedule` ended in
   `handle_sync`, so `shall schedule remove tidy` created a pending `dir:` on its way past, and on a
