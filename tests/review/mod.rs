@@ -53,6 +53,7 @@ mod id_namespaces_do_not_collide_tests;
 mod lifecycle_coverage_union_tests;
 mod named_commands_exist_tests;
 mod no_comment_says_the_same_thing_twice_tests;
+mod no_source_reads_argv_as_utf8_tests;
 mod no_tracked_text_carries_cp1252_mojibake_tests;
 mod os_native_argv_coverage_tests;
 mod output_is_sanitized_tests;

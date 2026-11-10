@@ -14,8 +14,8 @@ use std::env;
 use tracing::warn;
 use tracing_subscriber::EnvFilter;
 
-fn argv(parts: &[&str]) -> Vec<String> {
-    parts.iter().map(|s| s.to_string()).collect()
+fn argv(parts: &[&str]) -> Vec<std::ffi::OsString> {
+    parts.iter().map(std::ffi::OsString::from).collect()
 }
 mod a_long_flag_is_never_read_letter_by_letter;
 mod an_attached_short_value_is_not_scored_for_verbosity;

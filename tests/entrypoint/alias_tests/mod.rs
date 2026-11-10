@@ -15,8 +15,8 @@ use std::env;
 use tracing::warn;
 use tracing_subscriber::EnvFilter;
 
-fn argv(parts: &[&str]) -> Vec<String> {
-    parts.iter().map(|s| s.to_string()).collect()
+fn argv(parts: &[&str]) -> Vec<std::ffi::OsString> {
+    parts.iter().map(std::ffi::OsString::from).collect()
 }
 fn verbs(pairs: &[(&str, &[&str])]) -> HashMap<String, Vec<String>> {
     pairs

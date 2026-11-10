@@ -245,8 +245,12 @@ pub enum Commands {
         // line — and `command` was a single positional, so clap refused the invocation with
         // *unexpected argument* for anything the shimmed program was given. A user typing
         // `shall run -p jq -- jq -r .name` met the same refusal.
+        // `OsString`, not `String`: these are forwarded to somebody else's program, and a
+        // `String` here makes clap refuse — with a usage error — an argument the target would
+        // have taken. A shim exists to be transparent, so it must not be narrower than the
+        // program behind it.
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-        args: Vec<String>,
+        args: Vec<std::ffi::OsString>,
     },
 
     /// Recover the system from an interrupted or crashed transaction (WAL)

@@ -268,7 +268,13 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   container legs have been green since.)
 
 ## Phase 3 — Correctness Mediums
-- [ ] #147 a non-UTF-8 argv panics (`std::env::args`, `src/main.rs:66,104,978`); shims cannot forward one. (Medium)
+- [x] #147 a non-UTF-8 argv panics (`std::env::args`, `src/main.rs:66,104,978`); shims cannot forward one.
+  (**Medium, BUILT 2026-11-10** — `args_os()` once in `main`, and every reader takes
+  `OsString`: the log level, both pre-clap flag peeks, alias expansion, the verb planner,
+  `exec_shim`, `shall run`'s trailing argv and the sandbox wrappers. `src/bin/shim.rs` is
+  the twin forwarder and had the same `env::args()`. The old release binary aborted with
+  rc=134 on `search $\xff`; the new one exits 1 with clap's "invalid UTF-8", per `Q3`.
+  `no_source_reads_argv_as_utf8_tests` keeps `env::args()` out of `src/`.)
 - [ ] #148 shim detection reads whole files — every file in `~/.local/bin`, every `shall run` target; sibling `link:` compare skips the length check. (Medium, perf)
 - [x] #146 every preferences.toml parse error says "the key no longer exists" (`config.rs:1414`).
   (**Medium, BUILT 2026-11-10** — the hint is now asked of the `toml` error rather than

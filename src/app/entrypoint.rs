@@ -1,11 +1,20 @@
 use clap::{CommandFactory, Parser};
 use std::collections::{HashMap, HashSet};
+use std::ffi::OsString;
 
 /// How much Shall says about itself, from argv alone.
-pub fn log_level_from_argv(argv: &[String]) -> &'static str {
+///
+/// Every reader here takes `OsString`, because `std::env::args()` panics on the first argument
+/// that is not UTF-8 and this process is the one a shim re-enters with somebody else's argv.
+/// A token that is not UTF-8 cannot be one of these spellings, so it is skipped rather than
+/// converted — decoding it lossily first would let a mangled byte pretend to be `--quiet`.
+pub fn log_level_from_argv(argv: &[OsString]) -> &'static str {
     let mut verbosity = 0u8;
     for arg in argv.iter().skip(1) {
-        match arg.as_str() {
+        let Some(arg) = arg.to_str() else {
+            continue;
+        };
+        match arg {
             "--quiet" => return "error",
             "--verbose" => verbosity += 1,
             "--" => break,
@@ -55,11 +64,15 @@ pub fn global_value_flags() -> HashSet<String> {
 }
 
 /// Index of the subcommand token in argv, skipping leading global flags and their values.
-pub fn find_subcommand_index(argv: &[String]) -> Option<usize> {
+pub fn find_subcommand_index(argv: &[OsString]) -> Option<usize> {
     let value_flags = global_value_flags();
     let mut i = 1;
     while i < argv.len() {
-        let a = &argv[i];
+        // Not a flag spelling, so it cannot be a flag or a flag's value: it is the subcommand
+        // slot, and whatever it is gets handed on untouched.
+        let Some(a) = argv[i].to_str() else {
+            return Some(i);
+        };
         if a == "--" {
             return if i + 1 < argv.len() {
                 Some(i + 1)
@@ -68,7 +81,7 @@ pub fn find_subcommand_index(argv: &[String]) -> Option<usize> {
             };
         }
         if a.starts_with('-') {
-            if value_flags.contains(a.as_str()) {
+            if value_flags.contains(a) {
                 i += 2;
             } else {
                 i += 1;
@@ -82,21 +95,25 @@ pub fn find_subcommand_index(argv: &[String]) -> Option<usize> {
 
 /// Rewrite argv by expanding a user command alias in the subcommand slot.
 pub fn expand_command_aliases(
-    argv: Vec<String>,
+    argv: Vec<OsString>,
     aliases: &HashMap<String, String>,
     known: &HashSet<String>,
-) -> Vec<String> {
+) -> Vec<OsString> {
     let Some(idx) = find_subcommand_index(&argv) else {
         return argv;
     };
-    let cmd = &argv[idx];
+    // An alias name is a UTF-8 key in a config file, so a token that is not UTF-8 cannot name
+    // one — and comparing it through a lossy view would let a mangled byte match an alias.
+    let Some(cmd) = argv[idx].to_str() else {
+        return argv;
+    };
     if known.contains(cmd) {
         return argv;
     }
     if let Some(expansion) = aliases.get(cmd) {
         let mut out = Vec::with_capacity(argv.len() + 2);
         out.extend(argv[..idx].iter().cloned());
-        out.extend(expansion.split_whitespace().map(|s| s.to_string()));
+        out.extend(expansion.split_whitespace().map(OsString::from));
         out.extend(argv[idx + 1..].iter().cloned());
         return out;
     }
@@ -105,27 +122,35 @@ pub fn expand_command_aliases(
 
 /// Plan a user-defined verb into the per-step argv it runs.
 pub fn plan_user_verb(
-    argv: &[String],
+    argv: &[OsString],
     verbs: &HashMap<String, Vec<String>>,
     known: &HashSet<String>,
-) -> Option<Result<Vec<Vec<String>>, String>> {
+) -> Option<Result<Vec<Vec<OsString>>, String>> {
     let idx = find_subcommand_index(argv)?;
-    let cmd = &argv[idx];
+    let cmd = argv[idx].to_str()?;
     if known.contains(cmd) {
         return None;
     }
     let steps = verbs.get(cmd)?;
     if argv.len() > idx + 1 {
+        let given: Vec<String> = argv[idx + 1..]
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
         return Some(Err(format!(
             "the verb `{}` takes no arguments, but `{}` was given.\n  \
              A verb is a fixed sequence of built-in commands (U35). To vary a step, edit the \
              `[verbs]` entry.",
             cmd,
-            argv[idx + 1..].join(" ")
+            given.join(" ")
         )));
     }
 
     let leading = &argv[1..idx];
+    let leading_words: Vec<String> = leading
+        .iter()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
     let mut planned = Vec::with_capacity(steps.len());
     for step in steps {
         let tokens: Vec<String> = step.split_whitespace().map(|s| s.to_string()).collect();
@@ -155,7 +180,7 @@ pub fn plan_user_verb(
                 if leading.is_empty() {
                     String::new()
                 } else {
-                    format!(" {}", leading.join(" "))
+                    format!(" {}", leading_words.join(" "))
                 },
                 cmd
             )));
@@ -163,7 +188,7 @@ pub fn plan_user_verb(
         let mut one = Vec::with_capacity(1 + leading.len() + tokens.len());
         one.push(argv[0].clone());
         one.extend(leading.iter().cloned());
-        one.extend(tokens.clone());
+        one.extend(tokens.iter().map(OsString::from));
         if let Err(e) = crate::cli::Cli::try_parse_from(&one) {
             return Some(Err(format!(
                 "the verb `{}` step `{}` is not a valid command line: {e}",

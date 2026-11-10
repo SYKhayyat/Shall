@@ -370,7 +370,7 @@ impl Sandbox {
     /// does not claim an isolation it is not building.
     pub fn wrap(
         cmd: &str,
-        args: &[String],
+        args: &[std::ffi::OsString],
         config: &SandboxConfig,
         settings: &SandboxSettings,
         decided: &Confinement,
@@ -420,7 +420,11 @@ impl Sandbox {
     }
 
     #[cfg(target_os = "linux")]
-    fn wrap_linux(cmd: &str, args: &[String], config: &SandboxConfig) -> Result<Command> {
+    fn wrap_linux(
+        cmd: &str,
+        args: &[std::ffi::OsString],
+        config: &SandboxConfig,
+    ) -> Result<Command> {
         // Reached only for a `Confinement::By` verdict. A mechanism that has gone missing between
         // the decision and here is an error rather than a fallback: the caller has already told
         // the user this command is confined.
@@ -571,7 +575,10 @@ impl Sandbox {
     /// type-checks `cfg(windows)` and executes none of it, which is how the flag went missing.
     /// `tests/app/sandbox/the_unconfined_windows_launch_waits_for_its_child.rs` compares the
     /// whole line, because a test that looks for one word passes on an argv that runs nothing.
-    pub fn windows_unconfined_argv(cmd: &str, args: &[String]) -> Vec<String> {
+    /// The argv is `String` because `cmd.exe` re-parses what it is handed as text: there is no
+    /// byte-string argv on this platform, so a non-UTF-8 argument is lost at this boundary
+    /// whichever type carries it. Naming the loss here keeps it out of the other three paths.
+    pub fn windows_unconfined_argv(cmd: &str, args: &[std::ffi::OsString]) -> Vec<String> {
         let mut argv = vec![
             "/c".to_string(),
             "start".to_string(),
@@ -581,14 +588,18 @@ impl Sandbox {
             "/b".to_string(),
             cmd.to_string(),
         ];
-        argv.extend(args.iter().cloned());
+        argv.extend(args.iter().map(|a| a.to_string_lossy().into_owned()));
         argv
     }
 
     /// Windows' unconfined launch: the argv [`Sandbox::windows_unconfined_argv`] explains,
     /// spawned by `cmd` with an empty environment.
     #[cfg(target_os = "windows")]
-    fn low_integrity_windows(cmd: &str, args: &[String], config: &SandboxConfig) -> Command {
+    fn low_integrity_windows(
+        cmd: &str,
+        args: &[std::ffi::OsString],
+        config: &SandboxConfig,
+    ) -> Command {
         let mut command = Command::new("cmd");
         command.args(Self::windows_unconfined_argv(cmd, args));
         // **The environment starts EMPTY** (same ruling as the bwrap path): additive env
@@ -606,7 +617,7 @@ impl Sandbox {
     /// Executes a command under the confinement `decided` describes.
     pub fn run(
         cmd: &str,
-        args: &[String],
+        args: &[std::ffi::OsString],
         config: &SandboxConfig,
         settings: &SandboxSettings,
         decided: &Confinement,

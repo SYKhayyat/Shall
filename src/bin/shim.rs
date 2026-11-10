@@ -10,8 +10,12 @@ use std::process::{exit, Command};
 /// 2. Automatic profile/environment swapping.
 /// 3. Transparent delegation to the 'shall run' orchestrator.
 fn main() {
-    // 1. Collect arguments passed to the shim
-    let args: Vec<String> = env::args().collect();
+    // 1. Collect arguments passed to the shim.
+    //
+    // `args_os`, never `args`: this binary forwards **arbitrary** user arguments to another
+    // program, so reading them through `String` both panics on the first non-UTF-8 one and
+    // makes this shim narrower than the tool it stands in for.
+    let args: Vec<std::ffi::OsString> = env::args_os().collect();
 
     // 2. Identify the intended binary name (the name of this shim)
     let binary_name = env::current_exe()

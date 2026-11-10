@@ -22,14 +22,18 @@ pub async fn handle_run(
     runner: crate::app::Runner,
     packages: &[String],
     command: &str,
-    trailing: &[String],
+    trailing: &[std::ffi::OsString],
 ) -> Result<()> {
-    let mut parts: Vec<String> = command.split_whitespace().map(str::to_string).collect();
+    let mut parts: Vec<std::ffi::OsString> = command.split_whitespace().map(Into::into).collect();
     parts.extend(trailing.iter().cloned());
     let Some((bin, args)) = parts.split_first() else {
         return Err(
             crate::core::Error::Validation("`shall run` needs a command to run".into()).into(),
         );
     };
-    runner.run(packages, bin, args).await.map_err(|e| e.into())
+    let bin = bin.to_string_lossy();
+    runner
+        .run(packages, bin.as_ref(), args)
+        .await
+        .map_err(|e| e.into())
 }

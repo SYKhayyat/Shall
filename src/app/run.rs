@@ -84,7 +84,12 @@ impl Runner {
     /// Primary execution driver: Ensures environment is ready and spawns process.
     ///
     #[instrument(skip(self, packages, args))]
-    pub async fn run(&self, packages: &[String], command: &str, args: &[String]) -> Result<()> {
+    pub async fn run(
+        &self,
+        packages: &[String],
+        command: &str,
+        args: &[std::ffi::OsString],
+    ) -> Result<()> {
         info!("Provisioning environment for command '{}'...", command);
 
         let mut sandbox_requested = false;
@@ -158,7 +163,7 @@ impl Runner {
     async fn execute_standard(
         &self,
         command: &str,
-        args: &[String],
+        args: &[std::ffi::OsString],
     ) -> Result<std::process::ExitStatus> {
         let command = real_program(command).await;
         debug!("Spawning process: {} {:?}", command, args);
@@ -202,7 +207,11 @@ impl Runner {
         })
     }
 
-    pub async fn exec_shim(&self, shim_name: &str, args: &[String]) -> Result<()> {
+    /// `args` are `OsString` because they are **somebody else's** argv: a shim forwards whatever
+    /// it was handed, and `jq` behind one has to accept a filename that is not UTF-8 exactly as
+    /// the real `jq` would. Converting them to `String` on the way in refuses arguments the
+    /// target would have taken.
+    pub async fn exec_shim(&self, shim_name: &str, args: &[std::ffi::OsString]) -> Result<()> {
         debug!("Shim redirection for identity '{}'...", shim_name);
         let packages = vec![self.shim_spec(shim_name).await?];
         self.run(&packages, shim_name, args).await

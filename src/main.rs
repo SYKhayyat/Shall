@@ -63,7 +63,7 @@ async fn main() -> Result<()> {
     // shall::verbs::apply` and an RFC3339 stamp are addressed to whoever is debugging
     // Shall, and the person reading them typed a package name — the sentence is for them, the
     // provenance is not. Both come back at `-v`, where somebody has asked for the internals.
-    let argv: Vec<String> = std::env::args().collect();
+    let argv: Vec<std::ffi::OsString> = std::env::args_os().collect();
     let level = log_level_from_argv(&argv);
     let filter = || EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level));
     let verbose = level.contains("debug") || level.contains("trace");
@@ -94,14 +94,14 @@ async fn main() -> Result<()> {
     settle_data_dir(&argv)?;
 
     // 2. Shim hijack
-    if let Some(res) = attempt_shim_hijack().await? {
+    if let Some(res) = attempt_shim_hijack(&argv).await? {
         return res;
     }
 
     // 3. CLI & Config Bootstrap
     // Expand user-defined command aliases (config `[command_aliases]`) BEFORE clap parses, so
     // an alias `up` can stand in for `upgrade --all`. Built-in subcommands always win.
-    let raw_argv: Vec<String> = std::env::args().collect();
+    let raw_argv = argv.clone();
     let prefs = preferences_path_from_argv(&raw_argv)
         .and_then(|p| shall::config::Config::from_file(&p).ok());
     let aliases = prefs
@@ -127,7 +127,7 @@ async fn main() -> Result<()> {
     }
 
     let cli = if aliases.is_empty() {
-        parse_or_exit(Cli::try_parse())
+        parse_or_exit(Cli::try_parse_from(&raw_argv))
     } else {
         let known = known_subcommands();
         parse_or_exit(Cli::try_parse_from(expand_command_aliases(
@@ -746,15 +746,22 @@ pub(crate) async fn handle_self_upgrade(git: Option<&str>, check: bool) -> Resul
 /// Command aliases are expanded before clap runs, so this pre-parse cannot ask clap where the
 /// repo is. It peeks at the flags and hands them to the same resolver the app uses — peeking
 /// is unavoidable here, resolving a second time is not.
-pub(crate) fn flag_from_argv(argv: &[String], names: &[&str]) -> Option<String> {
+pub(crate) fn flag_from_argv<'a>(
+    argv: &'a [std::ffi::OsString],
+    names: &[&str],
+) -> Option<&'a std::ffi::OsStr> {
     let mut it = argv.iter();
     while let Some(a) = it.next() {
-        if names.contains(&a.as_str()) {
-            return it.next().cloned();
+        // A flag spelling is UTF-8 by definition; a token that is not cannot be one of these.
+        let Some(a) = a.to_str() else {
+            continue;
+        };
+        if names.contains(&a) {
+            return it.next().map(|v| v.as_os_str());
         }
         for n in names {
             if let Some(rest) = a.strip_prefix(&format!("{}=", n)) {
-                return Some(rest.to_string());
+                return Some(std::ffi::OsStr::new(rest));
             }
         }
     }
@@ -777,7 +784,7 @@ pub(crate) fn flag_from_argv(argv: &[String], names: &[&str]) -> Option<String> 
 ///
 /// Both variables are checked for absoluteness at this one point, because the readers above
 /// return a `PathBuf` and cannot refuse anything (AU2).
-fn settle_data_dir(argv: &[String]) -> Result<()> {
+fn settle_data_dir(argv: &[std::ffi::OsString]) -> Result<()> {
     use shall::config::settings::absolute_or_refuse;
 
     if let Some(flag) = flag_from_argv(argv, &["--data-dir"]) {
@@ -797,7 +804,9 @@ fn settle_data_dir(argv: &[String]) -> Result<()> {
 /// `--config` names the file; otherwise `locate` answers with `--config-dir`,
 /// `$SHALL_CONFIG_DIR`, the settings file, then the default — the one resolution, so the
 /// aliases come out of the file the rest of the run will read (X.6).
-pub(crate) fn preferences_path_from_argv(argv: &[String]) -> Option<std::path::PathBuf> {
+pub(crate) fn preferences_path_from_argv(
+    argv: &[std::ffi::OsString],
+) -> Option<std::path::PathBuf> {
     if let Some(p) = flag_from_argv(argv, &["-c", "--config"]) {
         return Some(std::path::PathBuf::from(p));
     }
@@ -910,7 +919,7 @@ fn apply_process_wide_config(config: &shall::config::Config) {
 /// that may install or remove; now that each step parses to a `Commands`, the sequence can be
 /// asked instead. A verb of five readers stops holding the writer lock, and a verb whose third
 /// step syncs takes it before the first step runs rather than partway through.
-pub(crate) async fn run_user_verb(steps: Vec<Vec<String>>) -> Result<()> {
+pub(crate) async fn run_user_verb(steps: Vec<Vec<std::ffi::OsString>>) -> Result<()> {
     // `plan_user_verb` validates every step before this runs; a caller that arrives without
     // it must not fall back to clap's own error exit, whose code means something else here.
     let parsed: Vec<Cli> = steps
@@ -918,9 +927,13 @@ pub(crate) async fn run_user_verb(steps: Vec<Vec<String>>) -> Result<()> {
         .map(|s| match Cli::try_parse_from(s) {
             Ok(cli) => cli,
             Err(e) => {
+                let shown: Vec<String> = s[1..]
+                    .iter()
+                    .map(|a| a.to_string_lossy().into_owned())
+                    .collect();
                 eprintln!(
                     "the verb step `{}` is not a valid command line: {e}",
-                    s[1..].join(" ")
+                    shown.join(" ")
                 );
                 std::process::exit(shall::core::Exit::Failed.code());
             }
@@ -953,7 +966,7 @@ pub(crate) async fn run_user_verb(steps: Vec<Vec<String>>) -> Result<()> {
 // KERNEL HELPERS
 // ============================================================================
 
-pub(crate) async fn attempt_shim_hijack() -> Result<Option<Result<()>>> {
+pub(crate) async fn attempt_shim_hijack(argv: &[std::ffi::OsString]) -> Result<Option<Result<()>>> {
     let current_name = env::current_exe()
         .ok()
         .and_then(|p| p.file_name().map(|s| s.to_string_lossy().into_owned()))
@@ -975,7 +988,7 @@ pub(crate) async fn attempt_shim_hijack() -> Result<Option<Result<()>>> {
         let app = App::new(config).await?;
         return Ok(Some(
             app.runner()
-                .exec_shim(&bare, &env::args().collect::<Vec<_>>()[1..])
+                .exec_shim(&bare, argv.get(1..).unwrap_or_default())
                 .await
                 .map_err(|e| e.into()),
         ));

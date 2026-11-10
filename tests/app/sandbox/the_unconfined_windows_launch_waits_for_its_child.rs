@@ -16,7 +16,7 @@ use super::*;
 /// and runs none of it, which is how the missing flag survived.
 #[test]
 fn the_unconfined_windows_launch_waits_for_its_child() {
-    let args = vec!["--version".to_string(), "a b".to_string()];
+    let args: Vec<std::ffi::OsString> = vec!["--version".into(), "a b".into()];
 
     assert_eq!(
         Sandbox::windows_unconfined_argv("cargo", &args),
