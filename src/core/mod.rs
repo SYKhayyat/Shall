@@ -39,6 +39,7 @@ pub mod size;
 pub mod snapshot;
 pub mod stable;
 pub mod state;
+pub mod stdio;
 pub mod sudo;
 pub mod supervise;
 pub mod timing;

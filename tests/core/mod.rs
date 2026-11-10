@@ -40,6 +40,7 @@ mod size;
 mod snapshot;
 mod stable;
 mod state;
+mod stdio;
 mod sudo;
 mod timing;
 mod tool_help;

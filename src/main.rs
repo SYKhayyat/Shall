@@ -32,21 +32,26 @@ use shall::verbs::{
 async fn main() -> Result<()> {
     // A closed output pipe (e.g. `shall search x | head`) makes `println!` fail with
     // EPIPE, which under `panic = "abort"` becomes a core dump ("Aborted"). Intercept
-    // that one panic and exit quietly — the wanted output was already delivered. This
-    // leaves SIGPIPE ignored for sockets, so network writes are unaffected.
+    // that one panic and leave instead. Which panic, and with which status, is
+    // `core::stdio`'s decision — a substring match on any payload, exiting 0, was the
+    // defect: a mutating run cut off halfway reported success. This leaves SIGPIPE
+    // ignored for sockets, so network writes are unaffected.
     let default_panic_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let is_broken_pipe = info.to_string().contains("Broken pipe")
-            || info
-                .payload()
-                .downcast_ref::<String>()
-                .is_some_and(|s| s.contains("Broken pipe"))
-            || info
-                .payload()
-                .downcast_ref::<&str>()
-                .is_some_and(|s| s.contains("Broken pipe"));
-        if is_broken_pipe {
-            std::process::exit(0);
+        let payload = info
+            .payload()
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| info.payload().downcast_ref::<&str>().map(|s| s.to_string()))
+            .unwrap_or_else(|| info.to_string());
+        if shall::core::stdio::is_closed_stdout(&payload) {
+            // `process::exit` runs no destructor, so the on-disk half of the lock's ending is
+            // done by name here. The flock is the kernel's and goes with the process.
+            shall::core::datalock::release_stamps_without_dropping();
+            std::process::exit(
+                shall::core::stdio::closed_stdout_exit(shall::core::stdio::changes_the_machine())
+                    .code(),
+            );
         }
         default_panic_hook(info);
     }));
@@ -134,6 +139,10 @@ async fn main() -> Result<()> {
             raw_argv, &aliases, &known,
         )))
     };
+    // What a closed stdout means is decided by whether this run changes the machine, and the
+    // program already answers that once for the lock. Asked here, before any verb can print,
+    // so the hook never has to guess from a name.
+    shall::core::stdio::set_changes_the_machine(cli.command.writes());
     // Before the config is read, because loading it can already run an external vars provider
     // — and a breakdown that starts after the first child has nothing to say about it.
     if cli.timings {
@@ -948,6 +957,7 @@ pub(crate) async fn run_user_verb(steps: Vec<Vec<std::ffi::OsString>>) -> Result
     // the first one does. Taking it per step would release it between two commands that have
     // to agree about the same registry.
     let commands: Vec<&Commands> = parsed.iter().map(|c| &c.command).collect();
+    shall::core::stdio::set_changes_the_machine(commands.iter().any(|c| c.writes()));
     let _data_lock = match acquire_data_lock(&commands).await? {
         LockedRun::Proceed(lock) => lock,
         LockedRun::StandDown => return Ok(()),

@@ -152,6 +152,25 @@ impl Generation {
     }
 }
 
+/// The stamp beside the lock that names its holder. A file rather than a lock, so it outlives
+/// the process only when nothing removes it — which is what [`release_stamps_without_dropping`]
+/// exists for.
+const OWNER_FILE: &str = "shall.lock.owner";
+
+/// Remove the owner stamp of every data directory this process still holds.
+///
+/// **For a process that leaves through `std::process::exit`, which runs no destructor.** The
+/// flock is the kernel's and goes with the process; the stamp is a file, and a reader that sees
+/// it reports `writer_active` — so two equal generations stop counting as one moment, for ever,
+/// on a directory no writer is holding. `main`'s closed-stdout hook is the caller: it is the
+/// one exit that is neither a return nor a crash.
+pub fn release_stamps_without_dropping() {
+    let held = held_dirs();
+    for dir in held.iter() {
+        let _ = std::fs::remove_file(dir.join(OWNER_FILE));
+    }
+}
+
 /// Held for the mutating part of a command. Dropping it releases the lock.
 pub struct DataLock {
     file: File,
@@ -203,7 +222,7 @@ impl DataLock {
     fn open_lock_file(data_dir: &Path) -> Result<(File, PathBuf)> {
         crate::utils::file::ensure_dir(data_dir)?;
         let path = data_dir.join("shall.lock");
-        let owner_path = data_dir.join("shall.lock.owner");
+        let owner_path = data_dir.join(OWNER_FILE);
         let file = OpenOptions::new()
             .read(true)
             .write(true)

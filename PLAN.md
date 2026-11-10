@@ -19,7 +19,13 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 - [x] #37 proven-by-default polarity flip. (High)
 
 ## Phase 2 — Safety Criticals/Highs
-- [ ] #145 a closed stdout mid-transaction exits 0: the broken-pipe panic hook (`src/main.rs:37`) reports success and skips rollback/destructors. (High)
+- [x] #145 a closed stdout mid-transaction exits 0: the broken-pipe panic hook (`src/main.rs:37`)
+  reports success and skips rollback/destructors. (**High, BUILT 2026-11-10** — the hook
+  now matches only the standard library's *stdout* refusal (`core::stdio`), and the status
+  depends on the run: 1 when the command writes and is not a preview, 0 when it only read.
+  `process::exit` still runs no destructor, so the one that has an on-disk effect — the
+  lock's owner stamp — is released by name (`datalock::release_stamps_without_dropping`).
+  Measured before: `shall init | true` exited 0 and left `shall.lock.owner` behind.)
 - [x] #133 the Windows unconfined path runs every command through `start` without `/wait`, so
   `shall run` returns before its child and reports `start`'s exit status. (**High, BUILT
   2026-11-02** — `cmd /c start "" /low /b …` returned as soon as the process was created, on
