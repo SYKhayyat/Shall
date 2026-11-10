@@ -493,7 +493,7 @@ impl Sandbox {
     #[cfg(target_os = "macos")]
     fn wrap_macos(
         cmd: &str,
-        args: &[String],
+        args: &[std::ffi::OsString],
         config: &SandboxConfig,
         settings: &SandboxSettings,
     ) -> Result<Command> {
@@ -526,7 +526,11 @@ impl Sandbox {
     }
 
     #[cfg(target_os = "windows")]
-    fn wrap_windows(cmd: &str, args: &[String], config: &SandboxConfig) -> Result<Wrapped> {
+    fn wrap_windows(
+        cmd: &str,
+        args: &[std::ffi::OsString],
+        config: &SandboxConfig,
+    ) -> Result<Wrapped> {
         // As `wrap_linux`: reached only for a `Confinement::By` verdict.
         if !Path::new(Self::WSB_EXE).exists() {
             return Err(Error::UnsupportedPlatform(
@@ -535,7 +539,14 @@ impl Sandbox {
         }
 
         info!("Sandboxing (Windows): Launching hardware-isolated environment (.wsb)");
-        let wsb_content = Self::generate_wsb_config(cmd, args, config);
+        // The `.wsb` is a text document whose `LogonCommand` Windows re-parses as a command
+        // line, so a non-UTF-8 argument is lost at this boundary whichever type carries it —
+        // the same loss, and the same reason, as `windows_unconfined_argv`.
+        let printable: Vec<String> = args
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        let wsb_content = Self::generate_wsb_config(cmd, &printable, config);
         let mut tmp_file = NamedTempFile::new().map_err(Error::from)?;
         tmp_file
             .write_all(wsb_content.as_bytes())
