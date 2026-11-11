@@ -255,6 +255,28 @@ pub trait TaskProvisioner: Send + Sync {
         name: &str,
         target: &TaskTarget,
     ) -> Reading;
+
+    /// The schedules this scheduler holds **that Shall itself put there**, by declared name.
+    ///
+    /// Every other question here starts from a declaration and asks the machine about it. This
+    /// is the reverse question, and it exists because a unit can outlive its declaration: the
+    /// owner's `shall-nightly` timer kept firing at 03:00 for a week after the `schedules` file
+    /// that created it was gone, and nothing in the program could see it — `sync` converges what
+    /// the files say and has no way to notice what they stopped saying (#158).
+    ///
+    /// **`None` is not `Some(vec![])`.** A scheduler that could not be asked must not be read
+    /// as "this machine holds nothing", or a converge would walk away from units it simply
+    /// could not see — `Reading::Unreadable`'s rule, one question over.
+    ///
+    /// **The prefix is the safety argument, not the directory.** `shall-`, `com.shall.` and
+    /// `Shall_` are what Shall writes, and only a name carrying one of them may ever be removed
+    /// by this route: a task a person wrote by hand is not a candidate however similar its name
+    /// looks.
+    async fn installed(
+        &self,
+        executor: &CommandExecutor,
+        target: &TaskTarget,
+    ) -> Option<Vec<String>>;
 }
 
 pub struct SchedulerManager {
@@ -321,6 +343,19 @@ impl SchedulerManager {
     ) -> Result<()> {
         let target = TaskTarget::resolve(user)?;
         self.provisioner.remove_task(executor, name, &target).await
+    }
+
+    /// Every schedule this machine holds that Shall put there, by declared name.
+    ///
+    /// `None` when the scheduler could not be asked. The caller must treat that as "unknown",
+    /// never as "nothing" — see [`TaskProvisioner::installed`].
+    pub async fn installed(
+        &self,
+        executor: &CommandExecutor,
+        user: Option<&str>,
+    ) -> Option<Vec<String>> {
+        let target = TaskTarget::resolve(user).ok()?;
+        self.provisioner.installed(executor, &target).await
     }
 
     /// How this machine stands against one declaration — the read-back half of `schedule:`.
@@ -698,6 +733,23 @@ impl TaskProvisioner for LinuxSystemdProvisioner {
         })
     }
 
+    /// A directory scan, because systemd's user units *are* the directory — `systemctl list`
+    /// would answer about the units it has loaded and not the files on disk, and the file is
+    /// what survives (and what `read_task` reads).
+    async fn installed(
+        &self,
+        _executor: &CommandExecutor,
+        target: &TaskTarget,
+    ) -> Option<Vec<String>> {
+        let dir = Self::unit_dir(target)?;
+        // A directory walk is a blocking call on a runtime worker; `off_the_runtime` is the
+        // door this tree puts those behind (II.52).
+        crate::core::blocking::off_the_runtime(move || units_in(&dir))
+            .await
+            .ok()
+            .flatten()
+    }
+
     async fn add_task(
         &self,
         executor: &CommandExecutor,
@@ -856,6 +908,70 @@ pub struct MacLaunchdProvisioner;
 ///
 /// By token: a character-level replace turned `10` into `1Sun` and read ranges as glue.
 /// 7 is Sunday in cron and out of the table's range, hence the mod.
+/// The schedules a systemd unit directory holds, by declared name — the filter behind
+/// [`TaskProvisioner::installed`], written out so the rule can be read and tested without a
+/// scheduler: **only a `shall-` name is a candidate**, and both halves of one job are one name.
+///
+/// **`None` is not `Some(vec![])`.** A directory that does not exist holds nothing; one that
+/// cannot be read might hold anything, and reporting it as empty is how a converge walks away
+/// from units it simply could not see.
+///
+/// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
+/// crate links the library without `cfg(test)`, so a private item is invisible there.
+pub fn units_in(dir: &Path) -> Option<Vec<String>> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Some(Vec::new()),
+        Err(_) => return None,
+    };
+    let mut names: Vec<String> = Vec::new();
+    for entry in entries.flatten() {
+        let file = entry.file_name();
+        let Some(file) = file.to_str() else { continue };
+        // Both halves of one job carry the stem; the `@reboot` shape has a service only.
+        let Some(stem) = file
+            .strip_suffix(".service")
+            .or_else(|| file.strip_suffix(".timer"))
+        else {
+            continue;
+        };
+        let Some(name) = stem.strip_prefix("shall-") else {
+            continue;
+        };
+        if !names.iter().any(|n| n == name) {
+            names.push(name.to_string());
+        }
+    }
+    names.sort();
+    Some(names)
+}
+
+/// The same question for `LaunchAgents`, where the label is `com.shall.<name>.plist`.
+/// **`pub` for the tests' sake**, and `None` means the same thing it means one function up.
+pub fn agents_in(dir: &Path) -> Option<Vec<String>> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        // No `LaunchAgents` directory is a machine that holds no agents; one that cannot be read
+        // might hold anything, and is not the same answer.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Some(Vec::new()),
+        Err(_) => return None,
+    };
+    let mut names: Vec<String> = Vec::new();
+    for entry in entries.flatten() {
+        let file = entry.file_name();
+        let Some(file) = file.to_str() else { continue };
+        let Some(stem) = file.strip_suffix(".plist") else {
+            continue;
+        };
+        let Some(name) = stem.strip_prefix("com.shall.") else {
+            continue;
+        };
+        names.push(name.to_string());
+    }
+    names.sort();
+    Some(names)
+}
+
 fn map_vixie_dow_to_names(field: &str) -> String {
     const NAMES: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     let name = |tok: &str| -> String {
@@ -1114,6 +1230,22 @@ impl TaskProvisioner for MacLaunchdProvisioner {
             )));
         }
         Ok(())
+    }
+
+    /// A directory scan of `LaunchAgents`, for the same reason the systemd one is: the plist is
+    /// the unit, and `launchctl list` also names agents that are not files here.
+    async fn installed(
+        &self,
+        _executor: &CommandExecutor,
+        target: &TaskTarget,
+    ) -> Option<Vec<String>> {
+        // The directory is `plist_path`'s, without a name — one path decides where plists live.
+        let probe = Self::plist_path("probe", target)?;
+        let dir = probe.parent()?.to_path_buf();
+        crate::core::blocking::off_the_runtime(move || agents_in(&dir))
+            .await
+            .ok()
+            .flatten()
     }
 
     async fn remove_task(
@@ -1772,6 +1904,39 @@ impl TaskProvisioner for WindowsTaskProvisioner {
             Some(held) => Reading::Holds(held),
             None => Reading::Unreadable,
         }
+    }
+
+    /// `schtasks /Query` over the whole task store, filtered to the prefix Shall writes.
+    ///
+    /// There is no directory to scan on Windows: the store belongs to the scheduler, so the only
+    /// listing is the query. `Shall_` is stripped to recover the declared name, and a query that
+    /// fails is `None` — an unreadable store is not an empty one.
+    async fn installed(
+        &self,
+        executor: &CommandExecutor,
+        _target: &TaskTarget,
+    ) -> Option<Vec<String>> {
+        let out = executor
+            .run("schtasks", &["/Query", "/FO", "CSV", "/NH"], false)
+            .await
+            .ok()?;
+        let text = crate::utils::text::sanitize(&String::from_utf8_lossy(&out.stdout));
+        let mut names: Vec<String> = Vec::new();
+        for line in text.lines() {
+            // `"\\Shall_nightly","N/A","Ready"` — the task name is the first field, quoted, and
+            // may carry a folder prefix (`\` or `\SomeFolder\`).
+            let Some(field) = line.split(',').next() else {
+                continue;
+            };
+            let field = field.trim().trim_matches('"');
+            let task = field.rsplit('\\').next().unwrap_or(field);
+            let Some(name) = task.strip_prefix("Shall_") else {
+                continue;
+            };
+            names.push(name.to_string());
+        }
+        names.sort();
+        Some(names)
     }
 
     async fn add_task(

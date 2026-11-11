@@ -435,6 +435,37 @@ impl TaskProvisioner for MockTaskProvisioner {
             None => Reading::Absent,
         }
     }
+
+    /// The reverse question, and the mock has to answer it rather than declining: a provisioner
+    /// that only ever hears about declarations is what let an orphaned unit outlive its line
+    /// unnoticed (#158). The names it holds are the keys it has registered for this target.
+    async fn installed(
+        &self,
+        _executor: &CommandExecutor,
+        target: &TaskTarget,
+    ) -> Option<Vec<String>> {
+        let map = self.active_tasks.lock().await;
+        let suffix = match &target.account {
+            None => String::new(),
+            Some(account) => format!("@user={}", account.name()),
+        };
+        let mut names: Vec<String> = map
+            .keys()
+            .filter_map(|key| {
+                let name = match suffix.is_empty() {
+                    true => key.as_str(),
+                    false => key.strip_suffix(&suffix)?,
+                };
+                // A key belonging to another account's target is not this one's.
+                if name.contains("@user=") {
+                    return None;
+                }
+                Some(name.to_string())
+            })
+            .collect();
+        names.sort();
+        Some(names)
+    }
 }
 
 #[allow(dead_code)]

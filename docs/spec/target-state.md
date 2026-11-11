@@ -4744,3 +4744,22 @@ line is read, naming the file and line and the spelling that works.
 - **No provisioner has to know.** systemd renders `ExecStart=<binary> <run>`, launchd the
   `ProgramArguments` array and Task Scheduler `/TR <run>`, so all three prepend the program; a rule
   enforced in the model is enforced for all three at once.
+
+## II.89 A schedule the files stopped declaring is taken off the machine (owner ruling, 2026-11-10, `#158`, V.242)
+
+**`sync` asks the scheduler what it holds, and removes the ones Shall wrote that no `schedule:`
+line names any more.** Every other arm of the schedules phase starts from a line and asks the
+machine about it; a unit whose line is gone is invisible to all of them.
+
+- **Only what Shall wrote.** The provisioner lists by its own prefix — `shall-` on systemd,
+  `com.shall.` on launchd, `Shall_` on Task Scheduler — so a task a person registered by hand is
+  never a candidate, however similar its name looks.
+- **A scheduler that could not be asked contributes nothing.** An unreadable listing is not an
+  empty one, or a converge would walk away from units it simply could not see — the rule
+  `Reading::Unreadable` already states for one declaration, asked of the whole set.
+- **The removal asks the guard.** A schedule that starts a service is not a smaller removal than
+  a package: the keys go through `enforce_extras`, and the removal happens only if the token
+  authorises the whole set.
+- **Said out loud, at the level a change is said at.** `warn!` when it happens and `would_warn!`
+  in a preview, the pair `extras.rs` uses for the same kind of change — a real removal reported
+  below the default log level is the defect `#153` was.

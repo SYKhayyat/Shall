@@ -72,6 +72,9 @@ fn the_binary_refuses_a_typo_in_the_flag() {
         .current_dir(dir.path())
         .env("SHALL_DATA_DIR", dir.path().join("data"))
         .env("SHALL_CONFIG_DIR", dir.path().join("config"))
+        .env("HOME", &dir.path())
+        .env("XDG_CONFIG_HOME", dir.path().join("xdg-config"))
+        .env("XDG_DATA_HOME", dir.path().join("xdg-data"))
         .stdin(std::process::Stdio::null())
         .output()
         .expect("the binary should run");
@@ -111,6 +114,9 @@ fn the_binary_accepts_a_named_file_that_exists() {
         .current_dir(dir.path())
         .env("SHALL_DATA_DIR", dir.path().join("data"))
         .env("SHALL_CONFIG_DIR", &config_dir)
+        .env("HOME", &config_dir)
+        .env("XDG_CONFIG_HOME", &config_dir.join("xdg-config"))
+        .env("XDG_DATA_HOME", &config_dir.join("xdg-data"))
         .stdin(std::process::Stdio::null())
         .output()
         .expect("the binary should run");

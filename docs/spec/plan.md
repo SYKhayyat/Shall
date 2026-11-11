@@ -1616,6 +1616,16 @@ under `HANDOFF.md`.
     the desktop notification was about. The completions are generated into a buffer and printed
     now, so the closed stdout is the one the hook already answers.
 
+    **And the harness's own fixtures were writing to the operator's machine** (`#158`). The old
+    `grep_ok` piped into `grep -q`; separately, `tests/e2e/dry_run_tests.rs` ran `schedule add`
+    for real inside a fixture that redirected `SHALL_CONFIG_DIR`/`SHALL_DATA_DIR` and nothing
+    else, while a unit goes to `dirs::config_dir()` — so every run of the suite installed a real
+    `shall-nightly.service` in the owner's `~/.config/systemd/user`. Thirty fixtures had the same
+    shape; all thirty now name `HOME`/`XDG_*`, and `review::a_fixture_that_redirects_one_root_redirects_them_all`
+    is the gate that keeps the thirty-first from repeating it. The two fixtures that snapshot a
+    tree were found by the suite going red on `adopt` writing cargo's own config under `HOME`:
+    the home is isolated *beside* the fixture now, not inside it.
+
     **Not in this batch, and it is the larger half of the issue**: section 16's content claims
     (`profile create scaffolds one`, `module show reads it back`, `export writes native
     manifests`, `bundle packs the config`, `search finds something` and about forty more) still

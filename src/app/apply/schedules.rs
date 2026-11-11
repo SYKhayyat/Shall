@@ -1,5 +1,6 @@
 use crate::app::scheduler::Standing;
 use crate::core::Result;
+use std::collections::BTreeSet;
 use tracing::info;
 
 /// Schedules holds only what it uses. It is built from an [`App`](crate::app::App) by
@@ -8,6 +9,10 @@ pub struct Schedules<'a> {
     pub(crate) config: &'a std::sync::Arc<crate::config::Config>,
     pub(crate) executor: &'a crate::core::CommandExecutor,
     pub(crate) scheduler: &'a std::sync::Arc<crate::app::scheduler::SchedulerManager>,
+    /// The guard asks a backend's own registry for the OS-essential set, and a schedule is not a
+    /// package — but the token it mints is the one every removal path takes, and a converge that
+    /// took units off the machine without asking is exactly what `guard::Reaped` exists to stop.
+    pub(crate) registry: &'a std::sync::Arc<crate::verbs::prelude::BackendRegistry>,
 }
 
 impl Schedules<'_> {
@@ -62,6 +67,86 @@ impl Schedules<'_> {
             );
             self.scheduler.provision(self.executor, &cfg).await?;
         }
+        self.remove_what_is_no_longer_declared(state).await
+    }
+
+    /// Take off this machine a schedule the files no longer declare (`#158`).
+    ///
+    /// Every other arm of this phase starts from a line and asks the machine about it; a unit
+    /// whose line is gone is invisible to all of them, which is how the owner's
+    /// `shall-nightly.timer` kept firing at 03:00 for a week after its `schedules` file had been
+    /// deleted — the machine still ran a job the files did not describe, and nothing said so.
+    ///
+    /// **Only what Shall wrote.** The provisioner lists by its own prefix (`shall-`,
+    /// `com.shall.`, `Shall_`), so a task a person registered by hand is not a candidate; a
+    /// scheduler that could not be asked contributes nothing rather than emptying the machine
+    /// (`TaskProvisioner::installed`).
+    ///
+    /// **Through the guard, like every other removal.** The token is asked for with the keys
+    /// being taken and the removal happens only if it authorises the whole set — a schedule that
+    /// starts a service is not a smaller removal than a package, and the guard is what makes
+    /// "Shall decided" a fact about the size of the ask.
+    async fn remove_what_is_no_longer_declared(
+        &self,
+        state: &crate::model::DesiredState,
+    ) -> Result<()> {
+        let declared: BTreeSet<String> = state
+            .schedules()
+            .map(|(name, _, _)| name.to_string())
+            .collect();
+        let Some(held) = self.scheduler.installed(self.executor, None).await else {
+            // Unreadable is not empty: claiming this machine holds no schedules because the
+            // scheduler could not be asked is the false convergence this whole module refuses.
+            return Ok(());
+        };
+        let orphans: Vec<String> = held.into_iter().filter(|n| !declared.contains(n)).collect();
+        if orphans.is_empty() {
+            return Ok(());
+        }
+        // `warn!` and `would_warn!`, the pair `extras.rs` uses for the same kind of change: what
+        // the files stopped declaring is not routine progress, and it must be visible at the
+        // default log level — the defect `#153` was a real change reported below that floor.
+        if self.config.dry_run {
+            crate::would_warn!(
+                "would remove {} schedule(s) this machine still runs and the files no longer \
+                 declare: {}",
+                orphans.len(),
+                orphans.join(", ")
+            );
+            return Ok(());
+        }
+
+        let keys: Vec<(String, String)> = orphans
+            .iter()
+            .map(|name| ("schedule".to_string(), name.clone()))
+            .collect();
+        let reaped = crate::app::sync::guard::enforce_extras(
+            self.config,
+            self.registry,
+            &keys,
+            &crate::app::sync::guard::Reaping::new(),
+            crate::app::sync::guard::GuardScope::Sync,
+        )
+        .await?;
+        if !reaped.authorises(orphans.len()) {
+            return Err(crate::core::Error::Refused(format!(
+                "{} schedule(s) are no longer declared and the guard did not clear their \
+                 removal: {}",
+                orphans.len(),
+                orphans.join(", ")
+            )));
+        }
+        for name in &orphans {
+            self.scheduler
+                .deprovision(self.executor, name, None, reaped.clone())
+                .await?;
+        }
+        tracing::warn!(
+            "Schedule: removed {} schedule(s) this machine still ran and the files no longer \
+             declare: {}. Shall put them there and its records did not name them any more.",
+            orphans.len(),
+            orphans.join(", ")
+        );
         Ok(())
     }
 }

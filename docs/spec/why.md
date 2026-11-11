@@ -8865,3 +8865,18 @@ provisioner prepends the binary, and did so before this rule existed — so the 
 reading the option as a shell command line, which is how anyone who has written a crontab reads it.
 Refusing it is not a convenience: the alternative spelling is one word shorter and the accepted one
 cannot work, so there is nothing to preserve.
+
+**V.242 — Why a schedule the files stopped declaring is taken off the machine (`#158`, `II.89`).**
+The owner's box ran `shall-nightly.timer` at 03:00 every night for at least a week, failing, while
+`~/.config/shall` held **no schedules at all**. The line that created it had been deleted; the unit
+had not. Every question `sync` asked started from a line, so the only thing that ever noticed was
+systemd — through a desktop notification, which is where a schedule's failures go when nobody is
+watching the log.
+
+**A declaration is a claim about the machine, and a machine still running what the files do not
+describe is the drift `sync` exists to remove** (`II.72`: the whole-machine converge is `sync`'s).
+The reverse question had no answer because nothing recorded what Shall had put there — so the
+listing is asked of the scheduler, filtered to the prefix Shall writes, and the guard stands in
+front of the removal exactly as it does for a package. Two rules carry the safety: a name without
+the prefix is not a candidate, and a scheduler that cannot be asked is not a scheduler that holds
+nothing.

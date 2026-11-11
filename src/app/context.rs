@@ -412,6 +412,7 @@ impl App {
             config: &self.config,
             executor: &self.executor,
             scheduler: &self.scheduler,
+            registry: &self.registry,
         }
     }
 

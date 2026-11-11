@@ -51,6 +51,16 @@ const LEDGER: &[Accounted] = &[
         guarded_by: "`Reaped` required by every effector (the trait signature); remove/purge \
                      run under the plan the guard enforced in sync's preflight, per M3",
     },
+    // `#158`: a `schedule:` the files stopped declaring is taken off the machine by `sync`, which
+    // is a removal path that did not exist when this ledger was last counted — and the gate is
+    // why it did not ship unguarded. The token is asked for with the orphan keys and the removal
+    // runs only if it authorises the whole set; the listing is prefixed so nothing Shall did not
+    // write is ever a candidate.
+    Accounted {
+        file: "src/app/apply/schedules.rs",
+        guarded_by: "guard::enforce_extras over the orphan set, `reaped.authorises(n)` before any \
+                     `deprovision` — the same token the `schedule:` teardown takes (II.89)",
+    },
     Accounted {
         file: "src/app/apply/extras.rs",
         guarded_by: "guard::enforce_extras over the whole drift set before \

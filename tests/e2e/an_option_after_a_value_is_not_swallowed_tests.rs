@@ -34,6 +34,9 @@ fn config_with(name: &str, line: &str) -> PathBuf {
     let status = Command::new(shall())
         .arg("init")
         .env("SHALL_CONFIG_DIR", &dir)
+        .env("HOME", &dir)
+        .env("XDG_CONFIG_HOME", &dir.join("xdg-config"))
+        .env("XDG_DATA_HOME", &dir.join("xdg-data"))
         .env("SHALL_DATA_DIR", dir.join("data"))
         .output()
         .expect("init");
@@ -46,6 +49,9 @@ fn eval(dir: &Path) -> (String, bool) {
     let out = Command::new(shall())
         .arg("eval")
         .env("SHALL_CONFIG_DIR", dir)
+        .env("HOME", &dir)
+        .env("XDG_CONFIG_HOME", dir.join("xdg-config"))
+        .env("XDG_DATA_HOME", dir.join("xdg-data"))
         .env("SHALL_DATA_DIR", dir.join("data"))
         .output()
         .expect("eval");
@@ -152,6 +158,9 @@ fn a_hold_written_after_a_version_reaches_the_hold_list() {
     let out = Command::new(shall())
         .arg("hold")
         .env("SHALL_CONFIG_DIR", &dir)
+        .env("HOME", &dir)
+        .env("XDG_CONFIG_HOME", &dir.join("xdg-config"))
+        .env("XDG_DATA_HOME", &dir.join("xdg-data"))
         .env("SHALL_DATA_DIR", dir.join("data"))
         .output()
         .expect("hold");

@@ -287,12 +287,25 @@ fn bin() -> &'static str {
 }
 
 fn run(dir: &Path, args: &[&str]) -> (String, i32) {
+    // **The home is isolated, and it is *beside* the fixture rather than inside it.** Isolated,
+    // because anything the OS scheduler provisions goes to `dirs::config_dir()` — a directory no
+    // `SHALL_CONFIG_DIR` moves — and a real `shall-nightly.service` in the operator's home is what
+    // #158 was (#158). Beside, because a child that writes its own config under `HOME` (cargo
+    // does, on `adopt`) would then be counted by the snapshot as the command changing the config
+    // repo, which is a different assertion and one this test must not make by accident.
+    let home = dir.with_file_name(format!(
+        "{}-home",
+        dir.file_name().unwrap_or_default().to_string_lossy()
+    ));
     let out = Command::new(bin())
         .args(args)
         // In the fixture, so a verb writing relative to the working directory writes where the
         // snapshot looks rather than into the repo.
         .current_dir(dir)
         .env("SHALL_CONFIG_DIR", dir.join("config"))
+        .env("HOME", &home)
+        .env("XDG_CONFIG_HOME", home.join("xdg-config"))
+        .env("XDG_DATA_HOME", home.join("xdg-data"))
         .env("SHALL_DATA_DIR", dir.join("data"))
         .stdin(std::process::Stdio::null())
         .output()

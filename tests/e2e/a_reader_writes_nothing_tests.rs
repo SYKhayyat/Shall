@@ -95,10 +95,20 @@ fn bin() -> &'static str {
 }
 
 fn run(dir: &Path, args: &[&str]) -> (String, i32) {
+    // Isolated so nothing lands in the operator's home, and *beside* the fixture so that a child
+    // writing its own config under `HOME` is not counted as this command changing the tree it was
+    // asked to leave alone (#158).
+    let home = dir.with_file_name(format!(
+        "{}-home",
+        dir.file_name().unwrap_or_default().to_string_lossy()
+    ));
     let out = Command::new(bin())
         .args(args)
         .current_dir(dir)
         .env("SHALL_CONFIG_DIR", dir.join("config"))
+        .env("HOME", &home)
+        .env("XDG_CONFIG_HOME", home.join("xdg-config"))
+        .env("XDG_DATA_HOME", home.join("xdg-data"))
         .env("SHALL_DATA_DIR", dir.join("data"))
         .stdin(std::process::Stdio::null())
         .output()

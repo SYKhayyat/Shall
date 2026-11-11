@@ -33,6 +33,19 @@ impl Fresh {
             .args(args)
             .env("SHALL_CONFIG_DIR", self.dir.join("config"))
             .env("SHALL_DATA_DIR", self.dir.join("data"))
+            // **`SHALL_CONFIG_DIR` is not the whole of where a run writes.** The OS scheduler's
+            // units go to `dirs::config_dir()` — `$XDG_CONFIG_HOME`, else `$HOME`, and the
+            // `FOLDERID`/`Library` directories on the other two platforms — so the control case
+            // below, which really does `schedule add`, provisioned a user-level systemd timer on
+            // the operator's machine every time the suite ran. Measured: `shall-nightly.service`
+            // in the owner's `~/.config/systemd/user`, firing at 03:00 and failing, with the
+            // `StandardOutput=` path naming this fixture as the culprit (#158). A fixture that
+            // redirects one root and not the others is not hermetic.
+            .env("HOME", &self.dir)
+            .env("XDG_CONFIG_HOME", self.dir.join("xdg-config"))
+            .env("XDG_DATA_HOME", self.dir.join("xdg-data"))
+            .env("APPDATA", self.dir.join("appdata"))
+            .env("LOCALAPPDATA", self.dir.join("localappdata"))
             .stdin(std::process::Stdio::null())
             .output()
             .expect("the binary should run");
