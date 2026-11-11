@@ -4728,3 +4728,19 @@ the answer separates a probe from a query.**
   `docs/spec/decisions.md`, `docs/spec/bugs.md` or a review test stay.
 - **Deletion is recoverable and says so.** The essays are in git; the note that removes them names
   the commit and the command, so a record is cut from the tree and not from history.
+
+## II.88 A schedule runs Shall with its arguments, and a `run` that names the program is refused (owner ruling, 2026-11-10, `#158`, V.241)
+
+**`run =` is the argument list the OS scheduler hands to the Shall binary.** A `run` whose first
+word *is* the program — `shall`, `shall.exe`, or a path ending in either — is refused where the
+line is read, naming the file and line and the spelling that works.
+
+- **The same place and the same argument as `cron`.** A bad expression is refused at parse time so
+  it names the file and line rather than surfacing when the scheduler runs it (`II.16`), and a
+  command that can never run is the identical failure one option over. It sits beside
+  `never_unattended` (`K13`), which is the other rule about what a `run` may say.
+- **It is the word, not the line.** `shall-notify` and `notify-shall` are other programs, and a
+  quoted path with a space in it is one word because the quote is what the scheduler would see.
+- **No provisioner has to know.** systemd renders `ExecStart=<binary> <run>`, launchd the
+  `ProgramArguments` array and Task Scheduler `/TR <run>`, so all three prepend the program; a rule
+  enforced in the model is enforced for all three at once.

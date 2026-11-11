@@ -77,6 +77,35 @@ fn a_writing_run_that_loses_its_reader_fails_and_leaves_no_writer_stamp() {
     );
 }
 
+/// **The third panic shape: a dependency's own `expect()`.**
+///
+/// `clap_complete::generate` writes to the handle it is handed and `expect()`s each write, so
+/// `shall completions bash | head -1` panicked with `failed to write completion file: … Broken
+/// pipe`. That message is not the standard library's "failed printing to stdout", so the hook
+/// did not answer it and the release profile's `panic = "abort"` made it a SIGABRT — a core dump
+/// on the operator's machine for every harness pipe that closed on the first line, which is what
+/// the desktop notification was about. The completions are generated into a buffer and printed
+/// now, so this is the same closed stdout the rest of the program already answers.
+#[test]
+fn completions_that_lose_their_reader_is_an_exit_and_not_a_core_dump() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let out = with_a_dead_reader(isolated(dir.path()).args(["completions", "bash"]));
+
+    assert!(
+        !stderr_of(&out).contains("failed to write completion file"),
+        "the generator's own `expect()` reached the default hook, so this aborted instead of \
+         leaving an exit code:\n{}",
+        stderr_of(&out)
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "`shall completions bash | head -1` is a reading run whose reader went away: it must \
+         leave 0, not be killed:\n{}",
+        stderr_of(&out)
+    );
+}
+
 /// The case the hook was written for keeps its quiet exit.
 #[test]
 fn a_reading_run_that_loses_its_reader_is_still_success() {

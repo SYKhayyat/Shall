@@ -22,6 +22,7 @@ mod a_jitter_is_a_duration_and_a_bounded_one;
 mod a_missing_cron_is_an_error_that_names_the_line;
 mod a_missing_run_is_an_error;
 mod a_name_that_prefixes_another_is_not_a_match;
+mod a_run_that_names_the_binary_is_refused;
 mod a_timer_may_not_run_rebuild_or_purge_undeclared_out_of_the_box;
 mod add_line_writes_a_block_and_refuses_a_duplicate_name;
 mod an_empty_cron_value_is_treated_as_missing;

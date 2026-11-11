@@ -282,7 +282,14 @@ fn pid_alive_here(pid: u32) -> bool {
 fn pid_alive_here(pid: u32) -> bool {
     use winapi::um::handleapi::CloseHandle;
     use winapi::um::processthreadsapi::{GetExitCodeProcess, OpenProcess};
-    use winapi::um::winnt::{ERROR_ACCESS_DENIED, PROCESS_QUERY_LIMITED_INFORMATION};
+    use winapi::um::winnt::PROCESS_QUERY_LIMITED_INFORMATION;
+
+    // `ERROR_ACCESS_DENIED`, spelled the way `STILL_ACTIVE` below is and for the same reason:
+    // the constant lives in a `winapi` module this crate does not enable (`um::winerror` is not
+    // in `Cargo.toml`'s feature list, and `um::winnt` does not carry it either). **Neither fact is
+    // visible to any local gate** — this block is `cfg(windows)` and every local step compiles
+    // Linux — so both were found by `cargo check --target x86_64-pc-windows-gnu` (E0432).
+    const ERROR_ACCESS_DENIED: i32 = 5;
 
     // `STILL_ACTIVE`, which is `STATUS_PENDING` (259). Spelled out because the constant lives in
     // a `winapi` feature this crate does not enable, and one comparison is not worth a feature.
@@ -298,8 +305,7 @@ fn pid_alive_here(pid: u32) -> bool {
         let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
         if handle.is_null() {
             // A process we may not query still exists. Same reason as `EPERM` above.
-            return std::io::Error::last_os_error().raw_os_error()
-                == Some(ERROR_ACCESS_DENIED as i32);
+            return std::io::Error::last_os_error().raw_os_error() == Some(ERROR_ACCESS_DENIED);
         }
         let mut code: u32 = 0;
         let asked = GetExitCodeProcess(handle, &mut code);

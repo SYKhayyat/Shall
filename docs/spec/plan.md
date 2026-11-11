@@ -1591,6 +1591,31 @@ under `HANDOFF.md`.
       extra softs are the two proofs that correctly report themselves unmeasured when adopt took
       no row and nothing was installed.
 
+    **Batch 2 — the crash direction, and the reason it is the same defect** (`#157`, 2026-11-10).
+    Batch 1 asked whether a check can see the product absent; this asks whether it can see the
+    product **crash**. `grep_ok` asserted a sentence and took the status from the pipeline's last
+    command, so a `shall` that printed its first line and then died — exit 1, 3, or 124 — scored a
+    PASS. The predicate now requires an ANSWER (`answered`: 0 or 2, named once and shared with
+    `answers`), and the checks that meant *refused* became a third word, `refuses_saying`
+    (exit 3 **and** the sentence), because `refuses_with_3` cannot see the reason and `nok_saying`
+    accepts a crash that printed the right words. Both harnesses, plus `harness-logic-test.sh`
+    driving six cases per file — and one of them found a bug in the fix: the new capture file was
+    `/tmp/it.out`, which the `repo list` check passes to itself as `cat /tmp/it.out`, so the
+    predicate truncated the file its own command was reading and `void` went red on a sentence the
+    product had printed. It captures into `/tmp/it.grep.out` now and the case is pinned.
+    **Measured on `void`, full run:** 356 checks, `pass=356 fail=1 soft=7` before the fix, the one
+    failure being `repo list` above; after it, the only rc-shaped failure in the sweep was the
+    unadopted-machine ratio (exit 3 asserted as an answer), now `refuses_saying`. No section
+    tally moved.
+
+    **And the instrument was dumping cores on the operator's machine** (`#159`). The old `grep_ok`
+    piped into `grep -q`, which closes the pipe on the first match; `shall completions <shell>`
+    writes through `clap_complete`, which `expect()`s every write, so that closed pipe panicked
+    with a message `core::stdio` does not recognise — and `panic = "abort"` made it a SIGABRT.
+    Five core dumps in one session of harness runs, on the host's systemd-coredump, which is what
+    the desktop notification was about. The completions are generated into a buffer and printed
+    now, so the closed stdout is the one the hook already answers.
+
     **Not in this batch, and it is the larger half of the issue**: section 16's content claims
     (`profile create scaffolds one`, `module show reads it back`, `export writes native
     manifests`, `bundle packs the config`, `search finds something` and about forty more) still

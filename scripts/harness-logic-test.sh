@@ -768,13 +768,19 @@ for _src in $SOURCES; do
         # Both stubs are lifted too: the point is that `install_delivered` asks them, and a stub
         # here that the real body does not call would make this test pass for the wrong reason.
         _ok="$(lift grep_ok "$_src")"
+        # `grep_ok` asks `answered` whether the code it got is an answer, so lifting the
+        # predicate without its dependency leaves it calling a command that is not there — a
+        # 127, read as "no answer", and the listing half of this gate fails for a reason that
+        # has nothing to do with the gate. Measured: exactly this, two `BAD` lines, the first
+        # time `grep_ok` grew a second predicate.
+        _ans="$(lift answered "$_src")"
         _abr="$(lift assert_binary_reachable "$_src")"
         _lcs="$(lift list_cannot_show "$_src")"
         # **The body under test is eval'd here, not just its stubs.** The first version of this
         # lifted the three helpers and forgot the gate, so every case reported
         # `install_delivered: command not found` and the run failed for the wrong reason — which
         # is the same discarded-evidence shape as the control in #106.
-        eval "$_body"; eval "$_ok"; eval "$_abr"; eval "$_lcs"
+        eval "$_body"; eval "$_ok"; eval "$_ans"; eval "$_abr"; eval "$_lcs"
 
         _bad=0
         # Read by the `eval`'d body, which shellcheck cannot see across the boundary. These are
@@ -844,6 +850,88 @@ for _src in $SOURCES; do
     )
     if [ $? -eq 0 ]; then
         echo "  ok    $(basename "$_src") asks whether an install DELIVERED, not whether it returned 0"
+    else
+        BAD=$((BAD + 1))
+    fi
+done
+
+# `grep_ok` — the mirror of the gate above, and the hole #157 is about.
+#
+# `install_delivered` asks "did anything arrive"; `grep_ok` is the predicate that asks "did
+# Shall *say* this", and it was a pipeline, so `$?` was `grep`'s and the command's was thrown
+# away. A command that printed its first line and then died scored a PASS — measured: `lx
+# --dry-run upgrade` printing its preview and exiting 1. **A crash prints whatever it printed
+# first**, which is why output alone cannot tell the product from a crash any more than it can
+# tell the product from a stub.
+#
+# The answer set is asserted here as code, not as a comment: 0 (converged) and 2 (differences)
+# pass; 1 (failed), 3 (refused on purpose) and 124 (never ran) do not.
+for _src in $SOURCES; do
+    TOTAL=$((TOTAL + 1))
+    (
+        PASS=0; FAILC=0; SOFTC=0
+        _credit_section() { :; }
+        excerpt() { :; }
+        _ans="$(lift answered "$_src")"
+        _gk="$(lift grep_ok "$_src")"
+        if [ -z "$_ans" ] || [ -z "$_gk" ]; then
+            echo "  BAD   $(basename "$_src") has no answered()/grep_ok() to test"
+            exit 1
+        fi
+        eval "$_ans"
+        eval "$_gk"
+        _bad=0
+        # A stub that prints the sentence the check looks for and exits with the code under
+        # test — the shape of a command that said something and then died half-way.
+        _says() { printf '%s\n' "the sentence the check looks for"; return "$1"; }
+        _silent() { return 0; }
+        case_in() { # rc  want(pass|fail)  what
+            _cr="$1"; _want="$2"; _what="$3"
+            _p=$PASS; _f=$FAILC
+            grep_ok "$_what" "the sentence" _says "$_cr" >/dev/null 2>&1
+            if [ "$PASS" -gt "$_p" ]; then _got=pass; else _got=fail; fi
+            if [ "$_got" != "$_want" ]; then
+                echo "  BAD   grep_ok: $_what -> $_got (wanted $_want)"
+                _bad=1
+            fi
+        }
+        case_in 0   pass "the line, exit 0"
+        case_in 2   pass "the line, exit 2: it found differences"
+        # (7) The command READS the file the other predicates capture into. Capturing into the
+        # same name truncates it before `cat` opens it, and the check fails over output the
+        # product printed — measured on `void` at `repo list says which backends cannot
+        # enumerate`, which is the one site that does this.
+        case "$(basename "$_src")" in
+            integration-windows.sh) _capt=/tmp/itw.out ;;
+            *)                     _capt=/tmp/it.out  ;;
+        esac
+        printf '%s\n' "the sentence the check looks for" > "$_capt"
+        _p=$PASS
+        grep_ok "reads the file it would capture into" "the sentence" cat "$_capt" >/dev/null 2>&1
+        if [ "$PASS" -le "$_p" ]; then
+            echo "  BAD   grep_ok clobbers a capture file its own command reads"
+            _bad=1
+        fi
+        case_in 1   fail "THE LINE, THEN EXIT 1 (a crash is not an answer)"
+        case_in 3   fail "the line, then a refusal (exit 3 is a refusal, not this check's answer)"
+        case_in 124 fail "the line, then a timeout"
+        # And the other half: an answer with no line is still a failure.
+        _p=$PASS; _f=$FAILC
+        grep_ok "silent" "the sentence" _silent >/dev/null 2>&1
+        if [ "$FAILC" -le "$_f" ]; then
+            echo "  BAD   grep_ok: exit 0 without the line -> pass"
+            _bad=1
+        fi
+        for _c in 0 2; do
+            answered "$_c" || { echo "  BAD   answered $_c is false"; _bad=1; }
+        done
+        for _c in 1 3 124 126 127; do
+            ! answered "$_c" || { echo "  BAD   answered $_c is true"; _bad=1; }
+        done
+        exit "$_bad"
+    )
+    if [ $? -eq 0 ]; then
+        echo "  ok    $(basename "$_src") scores output AND the answer, so a crash cannot pass a grep"
     else
         BAD=$((BAD + 1))
     fi
@@ -1639,6 +1727,49 @@ else
     echo "  BAD   ok_without does not enforce both halves"; BAD=$((BAD + 1))
 fi
 TOTAL=$((TOTAL + 1))
+
+# `refuses_saying` — the third word, and the one #157 needed.
+#
+# It exists because a check that means "this exact rule refused" was written as `grep_ok`, which
+# asserted the sentence and discarded the exit code. Both neighbouring words pass a strictly
+# weaker property, so both are driven as controls: `refuses_with_3` alone passes case (2) — the
+# right code for the wrong reason — and `nok_saying` alone passes case (3), a crash that happens
+# to print the right words.
+for _src in $SOURCES; do
+    TOTAL=$((TOTAL + 1))
+    (
+        PASS=0; FAILC=0; SOFTC=0; FAILED_NAMES=""
+        _credit_section() { :; }
+        excerpt() { :; }
+        never_ran() { [ "$1" = 127 ] || [ "$1" = 126 ] || [ "$1" = 124 ]; }
+        _body="$(lift refuses_saying "$_src")"
+        if [ -z "$_body" ]; then
+            echo "  BAD   $(basename "$_src") has no refuses_saying — a refusal check there can only assert one half"
+            exit 1
+        fi
+        eval "$_body"
+        _bad=0
+        # (1) Refused on purpose and said which rule: the only shape that passes.
+        refuses_saying "the ratio refused" "allow-mass-purge" sh -c 'echo "Run adopt first, or --allow-mass-purge"; exit 3' >/dev/null
+        [ "$PASS" -eq 1 ] || { echo "  BAD   a refusal that named its rule was not scored a pass"; _bad=1; }
+        # (2) Refused on purpose, for a reason it did not state — what `refuses_with_3` alone cannot see.
+        refuses_saying "wrong reason" "allow-mass-purge" sh -c 'echo "something else entirely"; exit 3' >/dev/null
+        [ "$FAILC" -eq 1 ] || { echo "  BAD   a refusal for some other reason was scored a pass (only the exit code was checked)"; _bad=1; }
+        # (3) The words, from a command that FAILED rather than refused — the hole `grep_ok` had.
+        refuses_saying "a crash with the right words" "allow-mass-purge" sh -c 'echo "Run adopt first, or --allow-mass-purge"; exit 1' >/dev/null
+        [ "$FAILC" -eq 2 ] || { echo "  BAD   exit 1 with the refusal's words was scored a pass"; _bad=1; }
+        # (4) And success is not a refusal, however it reads.
+        refuses_saying "succeeded saying it refused" "allow-mass-purge" sh -c 'echo "Run adopt first, or --allow-mass-purge"; exit 0' >/dev/null
+        [ "$FAILC" -eq 3 ] || { echo "  BAD   a success quoting the refusal was scored a pass"; _bad=1; }
+        [ "$PASS" -eq 1 ] || { echo "  BAD   an unrelated case credited a pass (PASS=$PASS)"; _bad=1; }
+        exit "$_bad"
+    )
+    if [ $? -eq 0 ]; then
+        echo "  ok    $(basename "$_src") asserts a refusal's REASON and its exit code together"
+    else
+        echo "  BAD   $(basename "$_src")'s refuses_saying enforces only half of it"; BAD=$((BAD + 1))
+    fi
+done
 
 echo "--------------------------------------------------------------"
 echo " harness predicates: $((TOTAL - BAD))/$TOTAL ok"

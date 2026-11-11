@@ -74,6 +74,7 @@ pub fn schedule_config(
     })?;
     let command = required(name, options, "run", origin)?;
     refuse_unattended(name, &command, origin, never_unattended)?;
+    refuse_self_named(name, &command, origin)?;
     let notification = options.one("notify").map(str::to_string);
 
     Ok(ScheduleConfig {
@@ -180,6 +181,45 @@ fn refuse_unattended(
         )));
     }
     Ok(())
+}
+
+/// Refuse a `run` that names the program itself (owner ruling, 2026-11-10, `#158`).
+///
+/// `run` is the **arguments**: the OS carries out `ExecStart=<shall> <run>` (systemd), the
+/// `ProgramArguments` array (launchd) and `/TR <run>` (Task Scheduler), so `run = shall sync`
+/// renders a command that asks Shall to run a subcommand called `shall` and dies in argument
+/// parsing on every firing. Measured on the owner's machine: a unit with
+/// `ExecStart=/…/shall shall sync` that had failed at 03:00 every night since it was written,
+/// with nothing anywhere saying why. `cron` is validated here for exactly this reason — a bad
+/// declaration names the file and line rather than surfacing when the scheduler runs it — and
+/// the command half had no such check.
+fn refuse_self_named(name: &str, command: &str, origin: &Origin) -> Result<()> {
+    // A program path with a space in it arrives quoted, and the quote is part of the word the
+    // split sees — `"C:\Program Files\Shall\shall.exe" sync` is one program and one argument.
+    let command = command.trim();
+    let head = match command
+        .strip_prefix('"')
+        .or_else(|| command.strip_prefix('\''))
+    {
+        Some(rest) => rest.split(['"', '\'']).next().unwrap_or(rest),
+        None => command.split_whitespace().next().unwrap_or(""),
+    };
+    let stem = head.rsplit(['/', '\\']).next().unwrap_or(head);
+    let stem = stem.strip_suffix(".exe").unwrap_or(stem);
+    if stem != "shall" {
+        return Ok(());
+    }
+    Err(GrammarError::new(
+        origin.clone(),
+        format!(
+            "`schedule:{}` has `run = {}`, and Shall already runs itself",
+            name, command
+        ),
+    )
+    .with_hint(
+        "`run` is the arguments the scheduler hands to Shall, not the program: write \
+         `run = sync`, not `run = shall sync`.",
+    ))
 }
 
 fn required(name: &str, options: &Options, key: &str, origin: &Origin) -> Result<String> {

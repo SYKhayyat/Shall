@@ -44,10 +44,18 @@ use clap::Command;
 ///
 /// Usage: `shall completions <shell>`
 pub fn generate_completions(shell: args::Shell, cmd: &mut Command) {
-    let mut out = std::io::stdout();
+    // **Generated into a buffer, then printed.** `clap_complete::generate` writes straight to the
+    // handle it is given and `expect()`s every write, so `shall completions bash | head -1` — or
+    // any reader that goes away, or a full disk — panicked with `failed to write completion
+    // file`, which is not the standard library's "failed printing to stdout" and so is not the
+    // panic `core::stdio` answers. The release profile is `panic = "abort"`: that panic was a
+    // SIGABRT and a core dump, and every harness pipe that closed on the first line left one on
+    // the operator's machine (#159). `print!` here reports a closed stdout the way the hook reads.
+    let mut buf: Vec<u8> = Vec::new();
     match shell.builtin() {
-        Some(builtin) => clap_complete::generate(builtin, cmd, "shall", &mut out),
+        Some(builtin) => clap_complete::generate(builtin, cmd, "shall", &mut buf),
         // NuShell's generator lives in its own crate but plugs into the same API.
-        None => clap_complete::generate(clap_complete_nushell::Nushell, cmd, "shall", &mut out),
+        None => clap_complete::generate(clap_complete_nushell::Nushell, cmd, "shall", &mut buf),
     }
+    print!("{}", String::from_utf8_lossy(&buf));
 }

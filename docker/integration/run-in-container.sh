@@ -146,6 +146,14 @@ ok() {
     fi
 }
 
+# Is this exit code an ANSWER? 0 (converged) and 2 (differences) are two answers; 1 (failed),
+# 3 (refused on purpose) and 124/126/127 (never ran) are three other facts.
+#
+# Named once because it is asked from three predicates and used to be written out in each:
+# `answers`, `grep_ok`, and whatever the next one is. The twin of `conflicts_reported` drifted
+# from its copy in `scripts/integration-windows.sh` for exactly as long as nobody shared it (#54).
+answered() { [ "$1" = 0 ] || [ "$1" = 2 ]; }
+
 # answers "desc" cmd...  — passes when cmd gives an ANSWER: 0 (converged) or 2
 # (differences). Fails on 1 (failed) and 3 (refused).
 #
@@ -156,7 +164,7 @@ ok() {
 answers() {
     desc="$1"; shift
     "$@" >/tmp/it.out 2>&1; rc=$?
-    if [ "$rc" = 0 ] || [ "$rc" = 2 ]; then
+    if answered "$rc"; then
         PASS=$((PASS + 1)); _credit_section; echo "  PASS  $desc (rc=$rc)"; return 0
     else
         FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES\n    - $desc (rc=$rc)"
@@ -289,14 +297,63 @@ refuses_with_3() { # description command...
     excerpt; return 1
 }
 
-# grep_ok "desc" pattern cmd... — passes when cmd's output contains pattern.
+# refuses_saying "desc" pattern cmd... — refused on purpose (exit 3) AND said why.
+#
+# `refuses_with_3` cannot tell a refusal made for the stated reason from one made for another
+# reason, and `nok_saying` accepts any non-zero — a crash that happens to print the same words
+# passes it. The checks that assert *which* rule refused need both halves, and until this word
+# existed they were written as `grep_ok`, which asserted the sentence and threw the exit code
+# away (#157). It is the sibling `nok_saying` would have had if 3 had been distinguishable from
+# 1 when `nok` was written.
+refuses_saying() { # description pattern command...
+    desc="$1"; pat="$2"; shift 2
+    "$@" >/tmp/it.out 2>&1; rc=$?
+    if [ "$rc" = 3 ] && grep -q "$pat" /tmp/it.out; then
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  $desc (refused on purpose, saying so)"; return 0
+    fi
+    FAILC=$((FAILC + 1))
+    if [ "$rc" = 3 ]; then
+        _rw="refused on purpose, but nothing said /$pat/"
+    elif [ "$rc" = 0 ]; then
+        _rw="it succeeded"
+    elif never_ran "$rc"; then
+        _rw="rc=$rc: the command never ran"
+    else
+        _rw="rc=$rc: a failure, not the documented refusal (README.md: 3 means refused on purpose)"
+    fi
+    FAILED_NAMES="$FAILED_NAMES\n    - $desc ($_rw)"
+    echo "  FAIL  $desc ($_rw)"; excerpt; return 1
+}
+
+# grep_ok "desc" pattern cmd... — passes when cmd ANSWERS and the answer contains pattern.
+#
+# **Both halves, because a crash still prints whatever it printed first.** This was a pipeline,
+# so `$?` was `grep`'s and the command's was discarded: `lx` could exit 1, 3, 124, or die after
+# its first line, and the check passed on that line. Measured: `lx --dry-run upgrade` printing
+# its preview and then exiting 1 scored a PASS (#157). "Shall printed the sentence" and "Shall
+# answered" are different facts, and U21's exit table is where the difference lives.
+#
+# A site that means *refused* is spelled `refuses_with_3`, and one that means *failed, saying* is
+# `nok_saying`. Neither is this, and neither is a `grep_ok` whose command refuses on purpose.
+# **Its own capture file, because a check may be run against a file this predicate already
+# wrote.** The `repo list` check below runs `grep_ok … cat /tmp/it.out` when the command said
+# no, and capturing into `/tmp/it.out` truncates it before `cat` opens it — measured on `void`:
+# `repo list says which backends cannot enumerate` FAILED with "output missing" over a sentence
+# the product had printed. Every other predicate here captures to `/tmp/it.out` and none of them
+# is ever handed it as an input; this one is, so it gets a name of its own.
 grep_ok() {
     desc="$1"; pat="$2"; shift 2
-    if "$@" 2>&1 | grep -q "$pat"; then
+    "$@" >/tmp/it.grep.out 2>&1; rc=$?
+    if ! answered "$rc"; then
+        FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES\n    - $desc (rc=$rc: it did not answer)"
+        echo "  FAIL  $desc (rc=$rc: it did not answer — only 0 and 2 are answers)"
+        excerpt /tmp/it.grep.out; return 1
+    fi
+    if grep -q "$pat" /tmp/it.grep.out; then
         PASS=$((PASS + 1)); _credit_section; echo "  PASS  $desc"; return 0
     else
         FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES\n    - $desc (missing /$pat/)"
-        echo "  FAIL  $desc (output missing /$pat/)"; return 1
+        echo "  FAIL  $desc (output missing /$pat/)"; excerpt /tmp/it.grep.out; return 1
     fi
 }
 
@@ -1078,7 +1135,7 @@ refuses_with_3 "purge-undeclared is refused on a machine Shall has not adopted" 
 # WHICH rule refused matters: a `nok` that accepts any non-zero exit accepts a panic
 # and an unknown flag just as happily. Before adopt the ratio rule is the one that
 # fires, and it says so by name.
-grep_ok "and it is the unadopted-machine ratio that refused" \
+refuses_saying "and it is the unadopted-machine ratio that refused" \
     "adopt\|allow-mass-purge" lx -y purge-undeclared
 
 # --- 5. Imperative install -> list -> coherence ---------------------------
@@ -1325,7 +1382,7 @@ refuses_with_3 "purge-undeclared is still not a silent mass-delete after adopt" 
 # could take on this image: where it adopted well the protected set decides, where it
 # adopted little the ratio still does. Both are named answers; "some error" is not, and
 # that is what a bare `nok` would accept.
-grep_ok "and the refusal after adopt still names its rule" \
+refuses_saying "and the refusal after adopt still names its rule" \
     "protected\|essential\|allow-mass-removal\|allow-mass-purge" lx -y purge-undeclared
 
 # --- 10. Remove -------------------------------------------------------------
@@ -1351,8 +1408,11 @@ if ! on_path git; then
     # answer. On an image with no git every history verb must SAY SO — `git log`
     # printing "no commits" here is a machine that can never have any.
     nok "git init refuses when git is not installed" lx git init
-    grep_ok "and says git is what is missing" "git is not installed" lx git init
-    grep_ok "git log refuses too, not an empty history" "git is not installed" \
+    # `nok_saying` and not `refuses_saying`: a missing tool is a failure (exit 1, and the
+    # message says `shall-failure-class: unknown`), not the documented refusal U21 reserves
+    # exit 3 for. Measured on this binary with git off PATH: rc=1 and this sentence.
+    nok_saying "and says git is what is missing" "git is not installed" lx git init
+    nok_saying "git log refuses too, not an empty history" "git is not installed" \
         lx git log --limit 10
     soft "the history and rollback checks — this image has no git"
 else
@@ -2901,7 +2961,7 @@ fi
 # A container has no container runtime, which is exactly `try`'s refusal path —
 # and the one a developer's own machine (which has docker) can never exercise.
 refuses_with_3 "try refuses when there is no container runtime" lx try
-grep_ok "try's refusal names what is missing" "podman" lx try
+refuses_saying "try's refusal names what is missing" "podman" lx try
 ok "check unmanaged lists what Shall does not manage" lx check unmanaged
 grep_ok "path prints the config repo" "$SHALL_CONFIG_DIR" lx path
 grep_ok "path --explain says which source won" 'source\|\S' lx path --explain
@@ -2926,7 +2986,7 @@ grep_ok "check approvals is clean with no hooks" "approv" lx check approvals
 # report without complaining about.
 grep_ok "adapters names every surface it knows" "firewall" lx adapters
 grep_ok "adapters says an unextended machine has extended nothing" "extended nothing" lx adapters
-grep_ok "adapters refuses a name that is not a surface, and lists the real ones" "is not an extension surface" lx adapters nosuchsurface
+nok_saying "adapters refuses a name that is not a surface, and lists the real ones" "is not an extension surface" lx adapters nosuchsurface
 # **The failure a plugin system has that a built-in does not**: a file that is present,
 # approved, valid TOML and read by nobody, because the array key is `backends` and the reader
 # wants `backend`. Every other signal says fine. `rows in force` is the only one that does not.
@@ -3151,7 +3211,7 @@ ok "edit opens a file in \$EDITOR" env EDITOR=true VISUAL=true $TO "$SHALL" edit
 # reset deletes the registry. The command is exercised through the refusal it owes
 # a machine that still has a config repo — running it for real would end the run.
 refuses_with_3 "reset refuses while a config repo still exists" lx reset
-grep_ok "and says --force is what overrides it" "force" lx reset
+refuses_saying "and says --force is what overrides it" "force" lx reset
 
 # self-upgrade --check only reports; it rebuilds nothing.
 grep_ok "self-upgrade --check reports the version and source" 'version' lx self-upgrade --check

@@ -8850,3 +8850,18 @@ readership.
 cut, and `docs/README.md` names that commit and the checkout command. Cutting a record from the tree
 is not the same as cutting it from history, and a reader who wants one should not have to know that
 on their own.
+
+**V.241 — Why a `run` that names the program is refused (`#158`, `II.88`).** The owner's machine
+had a `shall-nightly.service` whose unit read `ExecStart=/home/shaul/shall/target/debug/shall shall
+sync`. It failed at 03:00 every night for at least a week — `error: unrecognized subcommand
+'shall'` — and the only thing that ever said so was a desktop notification from systemd, because
+the unit's output went to a log file nobody opens. **A schedule is the one declaration whose
+failure is delivered to a place a person is not looking**, so the rule it breaks has to be refused
+where the line is written, while the author is still there: exactly the argument `cron` was given
+when a bad expression stopped being a surprise at firing time.
+
+The rule is about the *first word* and nothing else. `run =` is the argument list — every
+provisioner prepends the binary, and did so before this rule existed — so the mistake is one of
+reading the option as a shell command line, which is how anyone who has written a crontab reads it.
+Refusing it is not a convenience: the alternative spelling is one word shorter and the accepted one
+cannot work, so there is nothing to preserve.

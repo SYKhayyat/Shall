@@ -245,13 +245,18 @@ ok() {
         echo "  FAIL  $desc (rc=$rc)"; excerpt; return 1
     fi
 }
+# Is this exit code an ANSWER? 0 (converged) and 2 (differences) are two answers; 1 (failed),
+# 3 (refused on purpose) and 124/126/127 (never ran) are three other facts. Twin of the
+# predicate in `docker/integration/run-in-container.sh`, and shared by the same three callers
+# for the reason that copy exists: a rule written out twice is a rule that can disagree (#54).
+answered() { [ "$1" = 0 ] || [ "$1" = 2 ]; }
 # For a command whose 2 means "answered, and here is what I found" rather than "failed":
 # the aggregate `check` reports findings that way, and a machine with unmanaged packages
 # is the ordinary case, not a broken run.
 answers() {
     desc="$1"; shift
     "$@" >/tmp/itw.out 2>&1; rc=$?
-    if [ "$rc" = 0 ] || [ "$rc" = 2 ]; then
+    if answered "$rc"; then
         PASS=$((PASS + 1)); echo "  PASS  $desc (rc=$rc)"; return 0
     else
         FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES\n    - $desc (rc=$rc)"
@@ -356,13 +361,59 @@ refuses_with_3() { # description command...
     echo "  FAIL  $desc ($_rw)"
     excerpt; return 1
 }
+# refuses_saying "desc" pattern cmd... — refused on purpose (exit 3) AND said why.
+#
+# `refuses_with_3` cannot tell a refusal made for the stated reason from one made for another
+# reason, and `nok_saying` accepts any non-zero — a crash that happens to print the same words
+# passes it. The checks that assert *which* rule refused need both halves, and until this word
+# existed they were written as `grep_ok`, which asserted the sentence and threw the exit code
+# away (#157).
+refuses_saying() { # description pattern command...
+    desc="$1"; pat="$2"; shift 2
+    "$@" >/tmp/itw.out 2>&1; rc=$?
+    if [ "$rc" = 3 ] && grep -q "$pat" /tmp/itw.out; then
+        PASS=$((PASS + 1)); echo "  PASS  $desc (refused on purpose, saying so)"; return 0
+    fi
+    FAILC=$((FAILC + 1))
+    if [ "$rc" = 3 ]; then
+        _rw="refused on purpose, but nothing said /$pat/"
+    elif [ "$rc" = 0 ]; then
+        _rw="it succeeded"
+    elif never_ran "$rc"; then
+        _rw="rc=$rc: the command never ran"
+    else
+        _rw="rc=$rc: a failure, not the documented refusal (README.md: 3 means refused on purpose)"
+    fi
+    FAILED_NAMES="$FAILED_NAMES\n    - $desc ($_rw)"
+    echo "  FAIL  $desc ($_rw)"; excerpt; return 1
+}
+# grep_ok "desc" pattern cmd... — passes when cmd ANSWERS and the answer contains pattern.
+#
+# **Both halves, because a crash still prints whatever it printed first.** This was a pipeline,
+# so `$?` was `grep`'s and the command's was discarded: `lx` could exit 1, 3, 124, or die after
+# its first line, and the check passed on that line. "Shall printed the sentence" and "Shall
+# answered" are different facts, and U21's exit table is where the difference lives (#157).
+#
+# A site that means *refused* is spelled `refuses_with_3`, and one that means *failed, saying* is
+# `nok_saying`. Neither is this, and neither is a `grep_ok` whose command refuses on purpose.
+# **Its own capture file, because a check may be run against a file this predicate already
+# wrote.** The `repo list` check below runs `grep_ok … cat /tmp/itw.out` when the command said
+# no, and capturing into `/tmp/itw.out` truncates it before `cat` opens it — the same defect the
+# container twin was measured with. Every other predicate here captures to `/tmp/itw.out` and
+# none of them is ever handed it as an input; this one is, so it gets a name of its own.
 grep_ok() {
     desc="$1"; pat="$2"; shift 2
-    if "$@" 2>&1 | grep -q "$pat"; then
+    "$@" >/tmp/itw.grep.out 2>&1; rc=$?
+    if ! answered "$rc"; then
+        FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES\n    - $desc (rc=$rc: it did not answer)"
+        echo "  FAIL  $desc (rc=$rc: it did not answer — only 0 and 2 are answers)"
+        excerpt /tmp/itw.grep.out; return 1
+    fi
+    if grep -q "$pat" /tmp/itw.grep.out; then
         PASS=$((PASS + 1)); echo "  PASS  $desc"; return 0
     else
         FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES\n    - $desc (missing /$pat/)"
-        echo "  FAIL  $desc (output missing /$pat/)"; return 1
+        echo "  FAIL  $desc (output missing /$pat/)"; excerpt; return 1
     fi
 }
 soft() { SOFTC=$((SOFTC + 1)); echo "  soft  $1"; }
@@ -941,7 +992,7 @@ ok "install --dry-run shows a plan" lx --dry-run apply "$BACKEND:$PKG"
 # nearly all managed, so the ratio it exists to catch never fires.
 echo "[4] purge-undeclared, before adopt"
 refuses_with_3 "purge-undeclared is refused on a machine Shall has not adopted" lx -y purge-undeclared
-grep_ok "and it is the unadopted-machine ratio that refused" \
+refuses_saying "and it is the unadopted-machine ratio that refused" \
     "adopt\|allow-mass-purge" lx -y purge-undeclared
 
 # --- 5. Install -> list -> remove (real, reversible on scoop) --------------
@@ -1153,7 +1204,7 @@ if [ -n "$VICTIM" ]; then
     echo "        protecting an undeclared package by name: $VICTIM"
     refuses_with_3 "purge-undeclared refuses a sweep that would take a protected package" \
         lx -y purge-undeclared
-    grep_ok "and the refusal names the protection rather than some other failure" \
+    refuses_saying "and the refusal names the protection rather than some other failure" \
         "protected" lx -y purge-undeclared
     if [ -f "$PREFS.beforeguard" ]; then
         mv "$PREFS.beforeguard" "$PREFS"
@@ -2031,7 +2082,7 @@ fi
 # survey must report without complaining about.
 grep_ok "adapters names every surface it knows" "firewall" lx adapters
 grep_ok "adapters says an unextended machine has extended nothing" "extended nothing" lx adapters
-grep_ok "adapters refuses a name that is not a surface, and lists the real ones" "is not an extension surface" lx adapters nosuchsurface
+nok_saying "adapters refuses a name that is not a surface, and lists the real ones" "is not an extension surface" lx adapters nosuchsurface
 # **The failure a plugin system has that a built-in does not**: a file that is present,
 # approved, valid TOML and read by nobody, because the array key is `backends` and the reader
 # wants `backend`. Every other signal says fine. `rows in force` is the only one that does not.
@@ -2067,7 +2118,7 @@ ok "sbom emits a bill of materials" lx sbom
 # answer is a refusal on every host: with no runtime it refuses for want of one, with a
 # runtime it refuses for want of the image — and neither spends ten minutes building.
 refuses_with_3 "try refuses to rehearse on an image that is not there" lx try --image shall-it-no-such-image
-grep_ok "try's refusal says what it refused" "refusing to rehearse" lx try --image shall-it-no-such-image
+refuses_saying "try's refusal says what it refused" "refusing to rehearse" lx try --image shall-it-no-such-image
 # `add` vendors a source's modules. A local path is the network-free case: it copies the
 # module in and reports it. The line names the package this run already manages, so
 # vendoring it declares nothing new.
@@ -2182,7 +2233,7 @@ ok "edit opens a file in \$EDITOR" env EDITOR=true VISUAL=true $TO "$SHALL" edit
 # reset deletes the registry. The command is exercised through the refusal it owes a
 # machine that still has a config repo — running it for real would end the run.
 refuses_with_3 "reset refuses while a config repo still exists" lx reset
-grep_ok "and says --force is what overrides it" "force" lx reset
+refuses_saying "and says --force is what overrides it" "force" lx reset
 
 ok "self-upgrade --check reports the version and source" lx self-upgrade --check
 
