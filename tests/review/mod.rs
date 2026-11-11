@@ -76,3 +76,70 @@ mod the_stated_lifecycle_coverage_matches_the_ratchet_tests;
 mod wal_enumeration_tests;
 mod why_entries_are_attached_to_something_tests;
 mod windows_ci_runs_nimble_canary_tests;
+
+// ---- what the gates below share ---------------------------------------------------------
+//
+// Both of these exist because one gate was fixed twice, one file at a time, and the second fix
+// found the bug still live beside the first. A review gate is a program that reads the tree, so
+// it inherits the tree's portability problems — and it inherits them *only on the platform the
+// gate's author is not using*, which is why they arrive as red jobs rather than as red tests.
+
+use std::path::PathBuf;
+
+/// The tree these gates read.
+pub fn repo() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+/// `rel`, normalised to `\n`.
+///
+/// **A source file is CRLF on a Windows clone unless `.gitattributes` says otherwise, and it says
+/// so for `*.sh`, `*.md`, `ci.yml` and the fixtures but not for `*.rs` (#156).** A gate that finds
+/// a function by searching for `"\n}\n"` then finds nothing and reports the function as missing —
+/// a message that blames the file for losing something it never lost. Normalising at the one place
+/// the text enters the gate means the next gate over cannot rediscover this, which is the same
+/// reason the marker lives in one module rather than at sixty-eight call sites.
+pub fn read_source(rel: &str) -> String {
+    normalise(std::fs::read_to_string(repo().join(rel)).unwrap_or_else(|e| panic!("{rel}: {e}")))
+}
+
+/// Fold CRLF to LF, so a search for `"\n}\n"` means the same thing on every checkout.
+pub fn normalise(text: String) -> String {
+    text.replace("\r\n", "\n")
+}
+
+/// A `bash` that can run a script from `scripts/` on this host.
+///
+/// **Not the bare name.** On a Windows runner `bash.exe` resolves to `System32\bash.exe`, which is
+/// the WSL launcher; with no distribution installed it answers in UTF-16 and the gate sees an exit
+/// code, an empty string, and no interpreter — three gates read that as "the inventory found no
+/// sites" (#155). Git Bash is the shell these scripts are written for, so it is asked for by path,
+/// and a host that has neither gets a message naming what was looked for rather than the word
+/// `failed:` with nothing after it.
+pub fn bash() -> PathBuf {
+    if cfg!(windows) {
+        let mut candidates: Vec<PathBuf> = [
+            r"C:\Program Files\Git\bin\bash.exe",
+            r"C:\Program Files\Git\usr\bin\bash.exe",
+            r"C:\Program Files (x86)\Git\bin\bash.exe",
+        ]
+        .into_iter()
+        .map(PathBuf::from)
+        .collect();
+        if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+            candidates.push(PathBuf::from(local).join(r"Programs\Git\bin\bash.exe"));
+        }
+        for candidate in candidates {
+            if candidate.is_file() {
+                return candidate;
+            }
+        }
+        panic!(
+            "no Git Bash found, so a gate that runs `scripts/` cannot run: looked for \
+             C:\\Program Files\\Git\\bin\\bash.exe, C:\\Program Files\\Git\\usr\\bin\\bash.exe \
+             and %LOCALAPPDATA%\\Programs\\Git\\bin\\bash.exe. The `bash` on PATH here is \
+             System32's WSL launcher, which cannot read a POSIX path"
+        );
+    }
+    PathBuf::from("bash")
+}

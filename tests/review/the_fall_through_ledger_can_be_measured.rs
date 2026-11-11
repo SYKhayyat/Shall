@@ -17,7 +17,10 @@ fn repo() -> PathBuf {
 }
 
 fn executor() -> String {
-    std::fs::read_to_string(repo().join("src/core/executor.rs")).expect("src/core/executor.rs")
+    // Normalised before the searches: they anchor on a newline-and-brace sequence, and a
+    // `core.autocrlf=true` checkout writes `\r\n`, so the gate would report the `Drop` impl as
+    // missing (#156).
+    super::read_source("src/core/executor.rs")
 }
 
 /// **The audit arm is ahead of the early return that would hide the tests it measures.**
@@ -67,6 +70,27 @@ fn the_audit_reports_before_any_early_return_can_hide_it() {
         !helper_body[..helper_end].contains("SHALL_AUDIT_UNSTUBBED"),
         "the audit arm is back inside `assert_every_registration_was_used`, behind the \
          `allow_unmatched_registrations` early return that made it report zero"
+    );
+}
+
+/// **A CRLF checkout is the same program, and the gate has to agree.** Every search in this file
+/// anchors on a newline sequence; `.gitattributes` pins `*.sh`, `*.md` and `ci.yml` to LF and does
+/// not pin `*.rs`, so on a Windows clone `src/core/executor.rs` arrives with `\r\n` on every line
+/// and `find("\n}\n")` finds nothing — the gate then reported "the Drop impl's close" about a file
+/// whose impl was there (#156). Asserted on the anchor itself rather than on a mock, because the
+/// anchor is the thing that was invisible.
+#[test]
+fn a_crlf_checkout_reads_the_same_anchors() {
+    let crlf = "impl Drop for MockExecutor {\r\n}\r\n";
+    assert!(
+        !crlf.contains("\n}\n"),
+        "the fixture must be CRLF, or this test asserts nothing"
+    );
+    let normalised = super::normalise(crlf.to_string());
+    assert!(
+        normalised.contains("\n}\n"),
+        "a CRLF file still does not offer the anchor the searches use, so every gate reading \
+         `.rs` as text goes dark on a Windows clone"
     );
 }
 

@@ -58,7 +58,7 @@ const PRODUCTION_CEILING: usize = 81;
 /// the tree is clean", which is the most reassuring possible failure.
 #[test]
 fn the_inventory_sees_the_sites_it_was_written_for() {
-    let out = Command::new("bash")
+    let out = Command::new(super::bash())
         .arg(repo().join("scripts/panic-inventory.sh"))
         .arg("--summary")
         .current_dir(repo())
@@ -90,7 +90,7 @@ fn the_inventory_sees_the_sites_it_was_written_for() {
 /// site is a bug.
 #[test]
 fn no_new_panic_site_appears_without_somebody_reading_it() {
-    let out = Command::new("bash")
+    let out = Command::new(super::bash())
         .arg(repo().join("scripts/panic-inventory.sh"))
         .arg("--summary")
         .current_dir(repo())
@@ -122,7 +122,7 @@ fn no_new_panic_site_appears_without_somebody_reading_it() {
 /// excluded total is the larger number, which can only be true while the cutoff is doing something.
 #[test]
 fn the_test_sites_are_excluded_from_the_production_count() {
-    let out = Command::new("bash")
+    let out = Command::new(super::bash())
         .arg(repo().join("scripts/panic-inventory.sh"))
         .arg("--summary")
         .current_dir(repo())
