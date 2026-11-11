@@ -24,9 +24,15 @@
 //!    it ran.
 //!
 //! **Unanswerable means alive.** A container whose process table the owner cannot read, a shared
-//! data directory, a platform with no `/proc` — each of those treats the row as live, which is
+//! data directory, a stamp with no pid in it — each of those treats the row as live, which is
 //! the status quo. That means this cannot fix such a host; saying so is better than a check that
 //! guesses in the direction that deletes something.
+//!
+//! **"A platform with no `/proc`" used to be on that list, and it was not true.** The answer to
+//! "is this pid alive" was `/proc/<pid>`, so on macOS and Windows every live session read as
+//! stale — the guessing direction this paragraph forbids, done by the one function the paragraph
+//! trusted. `pid_alive` asks the platform's own question now (#152), so a platform without
+//! `/proc` is answered rather than excused.
 
 use std::path::Path;
 

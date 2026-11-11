@@ -219,13 +219,14 @@ pub fn is_zombie(proc_dir: &Path) -> bool {
         .is_some_and(|state| state == "Z")
 }
 
-/// The real answer, from `/proc`. Nothing else has to be installed — `pgrep` is absent from
-/// several of the images these managers run on.
+/// The real answer, from the OS. Nothing else has to be installed — `pgrep` is absent from
+/// several of the images these managers run on, and asking a *process* whether a process exists
+/// would put a fork on the path of every session-stamped row of every `sync`.
 pub struct ProcFs;
 
 impl Processes for ProcFs {
     fn pid_alive(&self, pid: u32) -> bool {
-        Path::new(&format!("/proc/{pid}")).is_dir()
+        pid_alive_here(pid)
     }
 
     fn any_named(&self, name: &str) -> bool {
@@ -242,6 +243,68 @@ impl Processes for ProcFs {
                     .is_ok_and(|comm| comm.trim() == name)
                 && !is_zombie(&e.path())
         })
+    }
+}
+
+/// **Is this pid alive, on this platform?**
+///
+/// `/proc` was the only answer, and it is Linux's: everywhere else the question was answered
+/// "no" — so session protection (`C16`, II.80) existed on Linux alone, and a package a live
+/// shell held was planned for removal on macOS and Windows (#152). The witness is one line of
+/// test: `a_live_session_keeps_its_package_and_the_skip_names_the_session` stamps the test's
+/// **own** pid and asks a preview to name the session, and the preview named nothing on
+/// `aarch64-apple-darwin` and on MSVC while passing on `x86_64-apple-darwin` — an architectural
+/// accident of which syscall a build happened to use, not a property of the machine.
+///
+/// The two portable questions are asked directly rather than through `ps` or `tasklist`, for the
+/// reason above: this is per stamped row, and a fork per row is not a check, it is a load.
+#[cfg(target_os = "linux")]
+fn pid_alive_here(pid: u32) -> bool {
+    Path::new(&format!("/proc/{pid}")).is_dir()
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+fn pid_alive_here(pid: u32) -> bool {
+    if pid == 0 {
+        // `kill(0, …)` means "every process in my group", not "process zero". No stamp is
+        // ever pid 0, and answering "alive" for it would protect nothing in particular.
+        return false;
+    }
+    // SAFETY: signal 0 is the POSIX question — nothing is sent, and the answer is whether the
+    // pid is signalable at all.
+    let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
+    // `EPERM` is a "yes": the process is there and belongs to somebody else. Reading it as "no"
+    // would clear protection on every package a root-owned session stamped.
+    rc == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
+#[cfg(windows)]
+fn pid_alive_here(pid: u32) -> bool {
+    use winapi::um::handleapi::CloseHandle;
+    use winapi::um::processthreadsapi::{GetExitCodeProcess, OpenProcess};
+    use winapi::um::winnt::{ERROR_ACCESS_DENIED, PROCESS_QUERY_LIMITED_INFORMATION};
+
+    // `STILL_ACTIVE`, which is `STATUS_PENDING` (259). Spelled out because the constant lives in
+    // a `winapi` feature this crate does not enable, and one comparison is not worth a feature.
+    // Its one wrong answer is a process that *exited* with 259, which reads as alive — the safe
+    // direction: protection stays rather than a live shell's package being removed.
+    const STILL_ACTIVE: u32 = 259;
+
+    if pid == 0 {
+        return false;
+    }
+    // SAFETY: a plain FFI call taking a pid; every handle that opens is closed below.
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle.is_null() {
+            // A process we may not query still exists. Same reason as `EPERM` above.
+            return std::io::Error::last_os_error().raw_os_error()
+                == Some(ERROR_ACCESS_DENIED as i32);
+        }
+        let mut code: u32 = 0;
+        let asked = GetExitCodeProcess(handle, &mut code);
+        CloseHandle(handle);
+        asked != 0 && code == STILL_ACTIVE
     }
 }
 
