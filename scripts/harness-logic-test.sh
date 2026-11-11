@@ -1602,6 +1602,44 @@ for _src in $SOURCES; do
     fi
 done
 
+# **"Succeeds without saying X" is two assertions, and the one that gets dropped is the exit
+# status.** `ok_without` was added for `shall update`, whose property is that it succeeded and
+# reported no failure — and it replaced a `nok_saying`, which demanded the opposite exit status
+# (see #150). A predicate like this passes trivially if it only greps, so both halves are driven
+# here, plus the case a grep-only version would score as a pass.
+echo "== a success-without-a-pattern predicate fails both ways"
+_ow_src="$(cd "$(dirname "$0")/.." && pwd)/docker/integration/run-in-container.sh"
+(
+    PASS=0; FAILC=0; SOFTC=0; FAILED_NAMES=""
+    _credit_section() { :; }
+    excerpt() { :; }
+    _body="$(lift ok_without "$_ow_src")"
+    if [ -z "$_body" ]; then
+        echo "  BAD   run-in-container.sh has no ok_without — the update check is back to asserting a failure"
+        exit 1
+    fi
+    eval "$_body"
+    _bad=0
+    # (1) It succeeded and said nothing: the property holds.
+    ok_without "silent success" "failed" sh -c 'exit 0' >/dev/null
+    [ "$PASS" -eq 1 ] || { echo "  BAD   a silent success was not scored a pass (PASS=$PASS)"; _bad=1; }
+    # (2) It succeeded and its output said the forbidden word: the property does not hold, and a
+    # grep-only predicate would still call this a pass because the pattern matched what it looks for.
+    ok_without "succeeded saying failed" "failed" sh -c 'echo "update failed"; exit 0' >/dev/null
+    [ "$FAILC" -eq 1 ] || { echo "  BAD   a success that reported a failure was scored a pass"; _bad=1; }
+    # (3) It failed: the exit-status half, which is the half `nok_saying` used to invert.
+    ok_without "failed quietly" "failed" sh -c 'exit 1' >/dev/null
+    [ "$FAILC" -eq 2 ] || { echo "  BAD   a non-zero exit was scored a pass because its output was clean"; _bad=1; }
+    [ "$PASS" -eq 1 ] || { echo "  BAD   an unrelated case credited a pass (PASS=$PASS)"; _bad=1; }
+    exit "$_bad"
+)
+if [ $? -eq 0 ]; then
+    echo "  ok    ok_without requires the exit status and the absence of the pattern"
+else
+    echo "  BAD   ok_without does not enforce both halves"; BAD=$((BAD + 1))
+fi
+TOTAL=$((TOTAL + 1))
+
 echo "--------------------------------------------------------------"
 echo " harness predicates: $((TOTAL - BAD))/$TOTAL ok"
 [ "$BAD" = 0 ] || { echo " FAILED"; exit 1; }

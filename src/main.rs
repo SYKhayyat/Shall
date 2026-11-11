@@ -70,7 +70,13 @@ async fn main() -> Result<()> {
     // provenance is not. Both come back at `-v`, where somebody has asked for the internals.
     let argv: Vec<std::ffi::OsString> = std::env::args_os().collect();
     let level = log_level_from_argv(&argv);
-    let filter = || EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level));
+    // Preview lines are kept visible at the default verbosity, which is `warn`: they are the
+    // answer a `--dry-run` was asked for, and a preview that prints nothing is indistinguishable
+    // from a command that did nothing (#153). One directive, because the alternative was every
+    // `would!` call site deciding for itself and 46 of them deciding `info`.
+    let directives = shall::core::dry_run::with_previews_visible(level);
+    let filter =
+        || EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&directives));
     let verbose = level.contains("debug") || level.contains("trace");
     // Asked, rather than left to `tracing-subscriber`'s default, which is colour-always. Without
     // this line `shall apply nosuchpkg 2>&1 | grep` came back carrying escape codes and a run
@@ -1011,12 +1017,18 @@ pub(crate) async fn load_and_merge_config(cli: &Cli) -> Result<shall::config::Co
     // then the default. This has to resolve BEFORE `preferences.toml` is opened, because
     // that file lives inside the root it would otherwise have to announce.
     let located = shall::app::locate::locate(cli.config_dir.as_deref())?;
-    let path = cli
-        .config
+    // A path the user named is held to a different standard than the one Shall picks: the flag
+    // exists to name a file, and a file that is not there is a mistake to report rather than a
+    // default to fall back on (#154).
+    let named = cli.config.clone();
+    let path = named
         .clone()
         .unwrap_or_else(|| located.path.join(shall::config::PREFERENCES_FILE_NAME));
-    let mut config =
-        tokio::task::spawn_blocking(move || shall::config::Config::from_file(&path)).await??;
+    let mut config = tokio::task::spawn_blocking(move || match named {
+        Some(named) => shall::config::Config::from_named_file(&named),
+        None => shall::config::Config::from_file(&path),
+    })
+    .await??;
     config.config_root = located.path;
     config.merge_cli_overrides(shall::config::CliOverrides {
         dry_run: cli.dry_run,

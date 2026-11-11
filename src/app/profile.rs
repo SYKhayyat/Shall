@@ -159,6 +159,16 @@ impl ProfileManager {
         let facts = self.facts().await?;
         let edit = remove_from_active(&file, &body, names, &facts)?;
 
+        // The preview answers with the sentence the run would earn, and it is built from the
+        // same edit the run would apply — so a preview cannot describe a different change from
+        // the one the command performs. Returning here rather than falling through to
+        // `persist_off_the_runtime`, whose refusal is generic ("would write <path>") and says
+        // nothing about which profiles or blocks would go.
+        if crate::core::dry_run::active() {
+            self.preview_deactivation(&file, &edit, names, &facts);
+            return Ok(());
+        }
+
         for r in &edit.removed {
             match &r.gate {
                 Some(pred) => info!(
@@ -195,10 +205,7 @@ impl ProfileManager {
             return Ok(());
         }
 
-        if !crate::utils::file::persist_off_the_runtime(&file, &edit.body).await? {
-            crate::would!("would deactivate {}.", names.join(", "));
-            return Ok(());
-        }
+        crate::utils::file::persist_off_the_runtime(&file, &edit.body).await?;
 
         let now = self.active_profiles().await?;
         info!(
@@ -210,6 +217,74 @@ impl ProfileManager {
             }
         );
         self.sync_now().await
+    }
+
+    /// What `--dry-run deactivate` says: the answer, at the default verbosity.
+    ///
+    /// Three outcomes, and all three are answers: something would leave, something would leave
+    /// that this host does not run, or nothing would change because the name was not active. The
+    /// last one is the case the harness exercises and the case that used to print nothing — an
+    /// `info!` below the default level, so a preview was indistinguishable from a no-op (#153).
+    fn preview_deactivation(
+        &self,
+        file: &std::path::Path,
+        edit: &crate::model::profiles::ActiveEdit,
+        names: &[String],
+        facts: &crate::config::parser::HostFacts,
+    ) {
+        if !edit.changed() {
+            for name in &edit.absent {
+                crate::would!(
+                    "would deactivate nothing: {} was not active in {}.",
+                    name,
+                    file.display()
+                );
+            }
+            for e in &edit.elsewhere {
+                crate::would!(
+                    "would leave {} to the block on line {} that activates it {} — `active` is \
+                     shared, so this host does not edit another host's arm.",
+                    e.name,
+                    e.line,
+                    describe_gate(&e.predicate, facts)
+                );
+            }
+            if edit.absent.is_empty() && edit.elsewhere.is_empty() {
+                crate::would!(
+                    "would deactivate nothing: {} are not in {}.",
+                    names.join(", "),
+                    file.display()
+                );
+            }
+            return;
+        }
+
+        let leaving: Vec<String> = edit
+            .removed
+            .iter()
+            .map(|r| match &r.gate {
+                Some(pred) => format!(
+                    "{} (in the {} block on line {})",
+                    r.name,
+                    describe_gate(pred, facts),
+                    r.line
+                ),
+                None => r.name.clone(),
+            })
+            .collect();
+        crate::would!(
+            "would deactivate {}: {} would leave {}, then sync.",
+            names.join(", "),
+            leaving.join(", "),
+            file.display()
+        );
+        for b in &edit.emptied {
+            crate::would!(
+                "  the now-empty {} block on line {} would go with it.",
+                describe_gate(&b.predicate, facts),
+                b.line
+            );
+        }
     }
 
     pub async fn list_profiles(&self) -> Result<Vec<String>> {

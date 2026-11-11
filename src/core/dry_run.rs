@@ -35,12 +35,36 @@ static DRY_RUN: AtomicBool = AtomicBool::new(false);
 /// file and nowhere else in `src/`.
 pub const MARKER: &str = "[DRY-RUN]";
 
-/// Report an action a preview did not take. `tracing::info!`, which is the default level, so
-/// the line is seen.
+/// The tracing target every preview line carries, so the verbosity it needs is one directive
+/// rather than a decision made at each call site.
+///
+/// **`info!` is not the default level.** This module asserted that it was, and the default is
+/// `warn` (`entrypoint::log_level_from_argv`): so all 46 `would!` sites printed nothing unless
+/// `-v` was passed, and `shall --dry-run deactivate X` answered a request for a preview with
+/// complete silence (#153). The level is right — a preview is information, not a warning — so the
+/// *filter* keeps this target visible instead of every call site escalating to `warn` and making
+/// the vocabulary say "warning" about work nobody did.
+pub const TARGET: &str = "shall::dry_run";
+
+/// The filter directives for this run's verbosity, with previews kept visible.
+///
+/// `--quiet` is honoured: a user who asked for error-only output does not get a preview printed
+/// under it. Every other level includes this target, so the marker appears at the verbosity the
+/// run was invoked with and at higher ones.
+pub fn with_previews_visible(level: &str) -> String {
+    if level == "error" {
+        level.to_string()
+    } else {
+        format!("{},{}={}", level, TARGET, "info")
+    }
+}
+
+/// Report an action a preview did not take. Visible at the default verbosity, because the line
+/// *is* the answer a `--dry-run` was asked for.
 #[macro_export]
 macro_rules! would {
     ($($arg:tt)*) => {
-        tracing::info!("{} {}", $crate::core::dry_run::MARKER, format_args!($($arg)*))
+        tracing::info!(target: $crate::core::dry_run::TARGET, "{} {}", $crate::core::dry_run::MARKER, format_args!($($arg)*))
     };
 }
 
@@ -50,7 +74,7 @@ macro_rules! would {
 #[macro_export]
 macro_rules! would_warn {
     ($($arg:tt)*) => {
-        tracing::warn!("{} {}", $crate::core::dry_run::MARKER, format_args!($($arg)*))
+        tracing::warn!(target: $crate::core::dry_run::TARGET, "{} {}", $crate::core::dry_run::MARKER, format_args!($($arg)*))
     };
 }
 

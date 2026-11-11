@@ -243,6 +243,33 @@ nok_saying() { # description pattern command...
     excerpt; return 1
 }
 
+# ok_without "desc" pattern cmd... — passes when cmd SUCCEEDS and never said pattern.
+#
+# The positive twin of `nok_saying`, and it exists because the negative one was used where the
+# sentence meant "and it did not report a failure": `nok_saying` demands a non-zero exit, so a
+# `shall update` that did exactly what the check's name claims was scored as a defect on all
+# seven images (#150). "Succeeds quietly" is a property with two halves and both are asserted
+# here — the exit status, and the absence of the word that would contradict the description.
+#
+# **A stub that does nothing passes this**, and that is the honest limit of the property: there
+# is no output to require from a command that some backends print nothing for. What a broken
+# Shall cannot do is pass it, because the failure it reports is the pattern.
+ok_without() { # description pattern command...
+    desc="$1"; pat="$2"; shift 2
+    "$@" >/tmp/it.out 2>&1; rc=$?
+    if [ "$rc" != 0 ]; then
+        FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES
+    - $desc (rc=$rc: it did not succeed)"
+        echo "  FAIL  $desc (rc=$rc: it reported a failure of its own)"; excerpt; return 1
+    fi
+    if grep -q "$pat" /tmp/it.out; then
+        FAILC=$((FAILC + 1)); FAILED_NAMES="$FAILED_NAMES
+    - $desc (exited 0, but the output said /$pat/)"
+        echo "  FAIL  $desc (exit 0, but its output said /$pat/)"; excerpt; return 1
+    fi
+    PASS=$((PASS + 1)); _credit_section; echo "  PASS  $desc"; return 0
+}
+
 refuses_with_3() { # description command...
     desc="$1"; shift
     "$@" >/tmp/it.out 2>&1; rc=$?
@@ -3025,9 +3052,10 @@ else
         binary_present "$BACKEND" "$PKG" /tmp/it-life0.out
 fi
 # `update` succeeds silently on some backends and prints a line on others, so the thing that is
-# actually checkable is that it did not report a failure — `nok_saying` refuses a refusal, which a
-# do-nothing stub cannot satisfy.
-nok_saying "update refreshes repository metadata without failing" "failed" lx update
+# actually checkable is that it did not report a failure — which is `ok_without`, and it used
+# to be `nok_saying`, whose first requirement is a non-zero exit. That asserted the opposite of
+# the sentence above it, so a working `update` was scored a defect on every image (#150).
+ok_without "update refreshes repository metadata without failing" "failed\|Failed\|error" lx update
 # `watch` is a loop, and `--once` is the promise that one pass happens and it stops. The sentence
 # it prints at the end of that pass is the only evidence it ran the reconcile rather than exiting.
 grep_ok "watch --once runs a single unattended reconcile" "in sync\|reconcil" lx -y watch --once
@@ -3049,7 +3077,24 @@ grep_ok "remove-orphans previews without removing" "orphan" lx --dry-run remove-
 # the content and not the exit status.
 ok "activate converges onto the named profiles" lx -y activate Main
 grep_ok "activate made Main the active profile" "Main" cat "$SHALL_CONFIG_DIR/active"
-grep_ok "deactivate previews dropping one" "DRY-RUN\|would\|deactivat" lx --dry-run deactivate HarnessProfile
+# **`deactivate --dry-run` printed nothing, and this check said so on every image for as long as
+# it has existed (#153).** It had a preview arm all along — a `tracing::info!`, and the default
+# level is `warn`, so it was below the floor of a run with no `-v`. The predicate was also loose
+# enough to accept a `WARN` line about anything (`DRY-RUN|would|deactivat`), so it could not have
+# told a preview from a crash. Both halves are asserted now, in the two states a deactivation can
+# be in: the profile this section created is NOT active, so the answer is "nothing would change and
+# here is why" — and with it active, the answer names it and leaves the file alone.
+grep_ok "deactivate previews a name that is not active" "would deactivate nothing: HarnessProfile" \
+    lx --dry-run deactivate HarnessProfile
+ok "activate HarnessProfile so the preview has something to drop" lx -y activate -a HarnessProfile
+grep_ok "the preview names the profile it would drop" "would deactivate HarnessProfile" \
+    lx --dry-run deactivate HarnessProfile
+grep_ok 'and the preview left `active` as it was' "HarnessProfile" cat "$SHALL_CONFIG_DIR/active"
+ok "deactivate drops it for real" lx -y deactivate HarnessProfile
+nok 'deactivate removed it from `active` for real' grep -q HarnessProfile "$SHALL_CONFIG_DIR/active"
+# `nok` above scores any non-zero exit, including an `active` that no longer exists — so the
+# file is asserted to still hold the profile the earlier check put there.
+grep_ok 'and `active` still names Main' "Main" cat "$SHALL_CONFIG_DIR/active"
 grep_ok "hold pins a package against bulk upgrade" "Held\|held\|hold" lx hold "$PKG"
 grep_ok "unhold releases it" "Releas\|releas\|unhold" lx unhold "$PKG"
 grep_ok "teleport previews moving a package between managers" "DRY-RUN\|would\|teleport" lx --dry-run teleport "$PKG" cargo

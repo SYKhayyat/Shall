@@ -1,6 +1,7 @@
 mod a_closed_stdout_is_not_a_successful_run_tests;
 mod a_failed_sync_fails_under_every_flag_tests;
 mod a_non_utf8_argument_is_refused_not_fatal_tests;
+mod a_previewed_deactivation_says_what_it_would_do;
 mod a_reader_writes_nothing_tests;
 mod a_rehearsal_asks_the_guard_the_act_asks_tests;
 mod a_schedule_edit_converges_only_its_own_line_tests;
