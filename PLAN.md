@@ -19,6 +19,39 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 - [x] #37 proven-by-default polarity flip. (High)
 
 ## Phase 2 — Safety Criticals/Highs
+- [ ] #152 session protection never applies off Linux: `pid_alive` answers "dead" where there is no
+  `/proc`, so a live shell's package is planned for removal. (**High, OPEN — needs the owner's
+  ruling before code**, because making it work off Linux changes what a user sees on macOS and
+  Windows. The witness is one line: `a_live_session_keeps_its_package_and_the_skip_names_the_session`
+  stamps the test's **own** pid — alive by construction — and the preview names no session on
+  `aarch64-apple-darwin` and on MSVC, while `x86_64-apple-darwin` passes it, so the off-Linux answer
+  is architecture-dependent as well as absent. Red on 42615161590, 42803332525 and 42920247419.)
+- [ ] #151 Integration (void): after a SIGKILL the heal sync exits 0 with declared packages still
+  missing (`crash/open`, `crash/completed`), and `two-writers` never recovers after the holder
+  released. (**High, OPEN — intermittent and pre-existing.** Exit 0 while `pv`/`ncdu` are absent is
+  the one thing `Q3`/`U21` forbid, and the journal above it reports the interrupted operations
+  recovered, so either the run's definition of success or the harness's readout is wrong. Absent on
+  the runs either side of 42648535899, which is part of the report.)
+- [ ] #155 the panic inventory is dark on Windows: `Command::new("bash")` reaches WSL's
+  `System32\bash.exe`, which has no distribution installed, so three `the_panic_sites…` gates fail on
+  UTF-16 garbage and `PRODUCTION_CEILING` has been unwatched on MSVC since at least 42615161590.
+  (**High for the gate, OPEN** — a gate that cannot run is worse than one that fails, and this one
+  fails with a message that looks like an empty program.)
+- [ ] #156 review gates read `.rs` as *text* with `\n`-anchored searches, and `.gitattributes` pins no
+  `*.rs` to LF, so `the_fall_through_ledger_can_be_measured` panics on "the Drop impl's close" on any
+  `core.autocrlf=true` checkout — a file that lost nothing, blamed for losing it. (**Medium, OPEN —
+  the family is five `find("\n}\n")` sites; the two whose fallback is `unwrap_or` would scan past the
+  function rather than fail, which is the worse half.**)
+- [ ] #150 the Docker harness scores a successful `shall update` as a failure: `nok_saying` demands a
+  non-zero exit *and* the word `failed`, while the check's own comment says the property is that it
+  did **not** report one. (**High for the CI signal, OPEN** — all seven fast integration jobs are red
+  on every push, which is where #151 and #153 hide.)
+- [ ] #153 `shall --dry-run deactivate <profile>` prints nothing at all — exit 0, empty stdout, empty
+  stderr — so the harness scores it a failure on every image. (**Medium, OPEN**: a preview that says
+  nothing cannot be told apart from a command that did nothing.)
+- [ ] #154 `--config` naming a file that does not exist is silently ignored, so a one-character typo
+  applies no preferences at all. (**High, OPEN** — `Config::from_file` treats `NotFound` as "use the
+  defaults", which is right for the default location and wrong for a path the user typed out.)
 - [x] #145 a closed stdout mid-transaction exits 0: the broken-pipe panic hook (`src/main.rs:37`)
   reports success and skips rollback/destructors. (**High, BUILT 2026-11-10** — the hook
   now matches only the standard library's *stdout* refusal (`core::stdio`), and the status
