@@ -1407,11 +1407,45 @@ impl Config {
             }
             Err(e) => return Err(Error::Config(format!("Failed to read config file: {}", e))),
         };
+        Self::from_text(path, &content)
+    }
+
+    /// A preferences file the user named on the command line, which has to exist.
+    ///
+    /// `from_file` answers a missing file with the built-in defaults, and for the *default*
+    /// location that is right: a machine with no `preferences.toml` works out of the box. It is
+    /// wrong for `--config`, where the user typed a path. `--config prefrences.toml` then ran
+    /// on defaults that were not the file they named, and nothing in the output distinguished
+    /// that from a file of settings that happened to agree with the defaults (#154).
+    ///
+    /// The read is the check. Asking `Path::exists` first would be a second question answered a
+    /// moment before the first, and the gap between them is the bug the `from_file` comment
+    /// above already refuses.
+    pub fn from_named_file(path: &Path) -> Result<Self> {
+        match fs::read_to_string(path) {
+            Ok(content) => Self::from_text(path, &content),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(Error::Config(format!(
+                "`--config {}` names a file that does not exist, so there was nothing to read.\n  \
+                 A path given on the command line has to exist: a typo in this flag used to leave \
+                 every setting at its built-in default with no line saying so.\n  Correct the \
+                 path, or drop the flag to use the preferences file Shall finds on its own.",
+                path.display()
+            ))),
+            Err(e) => Err(Error::Config(format!(
+                "`--config {}` could not be read: {}",
+                path.display(),
+                e
+            ))),
+        }
+    }
+
+    /// The half both readers share: what the file said, once it has been read.
+    fn from_text(path: &Path, content: &str) -> Result<Self> {
         // Named, because this refusal stops every command Shall has and the bare TOML error
         // says only "line 17" — of which of several files, it does not say. A key deleted in
         // the rewrite (NO LEGACY) is still on disk in configs written by an older build, so
         // this is the first thing a returning user meets.
-        let mut config: Self = toml::from_str(super::without_bom(&content)).map_err(|e| {
+        let mut config: Self = toml::from_str(super::without_bom(content)).map_err(|e| {
             Error::Config(format!(
                 "{} is not valid TOML:\n{}\n{}",
                 path.display(),
