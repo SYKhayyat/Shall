@@ -25,6 +25,69 @@ use shall::core::PackageSpec;
 
 use crate::mock_providers::TestKernel;
 
+/// **What the machine holds outside `brew`, stated instead of fallen through.**
+///
+/// `priority` here is `apt`, `brew`, `cargo`, and two of the questions Shall asks on this
+/// fixture are not about the test's own package at all: a bare `absent:` name is hunted across
+/// every manager the machine has, and a mutating run offers the snapshot provider a pre-sync
+/// snapshot. Both are real queries, and an unstubbed one answers with an empty string nobody
+/// wrote — the defect `#40`'s ledger exists to find, counted in `#162`.
+///
+/// So each test names the listings it provokes. `Nothing` is the honest answer on this fixture
+/// — `apt`, `cargo` and `pacman` hold nothing, and there are no snapshots — and stating it is
+/// not bookkeeping: a test that reached one of these and *meant* it to return something was
+/// reading a silence it never wrote.
+fn other_managers(kernel: &TestKernel, asked: &[Listing]) {
+    for listing in asked {
+        // Two of the answers carry a package name, so they are taken before the shared match:
+        // `brew info` for a formula Homebrew has never heard of is `Ok(None)`, which is what an
+        // empty body means, and a `brew install` the test is watching for is a success.
+        match listing {
+            Listing::BrewKnowsNothingAbout(name) => {
+                kernel.mock_executor.set_response(
+                    &format!("brew info --json=v1 -- {name}"),
+                    Ok(DryRunOutput::default().into()),
+                );
+                continue;
+            }
+            Listing::BrewInstalls(name) => {
+                kernel.mock_executor.set_response(
+                    &format!("brew install -- {name}"),
+                    Ok(DryRunOutput::default().into()),
+                );
+                continue;
+            }
+            _ => {}
+        }
+        let cmd = match listing {
+            Listing::Cargo => "cargo install --list",
+            Listing::Apt => "dpkg-query -W -f=${db:Status-Status} ${Package} ${Version}\\n",
+            Listing::Pacman => "pacman -Qmq",
+            Listing::SnapshotTaken => "sudo -n timeshift --create --comments pre_sync --tags D",
+            Listing::SnapshotsListed => "sudo -n timeshift --list",
+            _ => unreachable!("handled below"),
+        };
+        kernel
+            .mock_executor
+            .set_response(cmd, Ok(DryRunOutput::default().into()));
+    }
+}
+
+/// The listings `other_managers` can state. A name rather than a string at the call site, so a
+/// typo is a compile error instead of a test that silently registers nothing.
+enum Listing {
+    Cargo,
+    Apt,
+    Pacman,
+    SnapshotTaken,
+    SnapshotsListed,
+    /// `brew info --json=v1` for a formula this fixture's brew does not know — the not-found
+    /// answer bare-name resolution reads.
+    BrewKnowsNothingAbout(&'static str),
+    /// A `brew install` the test performs and watches, stated as the success it is.
+    BrewInstalls(&'static str),
+}
+
 fn spec(name: &str) -> PackageSpec {
     PackageSpec {
         name: name.into(),
@@ -342,6 +405,15 @@ async fn uninstalling_a_package_shall_does_not_own_says_so_instead_of_succeeding
 #[tokio::test]
 async fn absent_removes_a_package_shall_does_not_own_and_declares_it_gone() {
     let kernel = TestKernel::new().await;
+    other_managers(
+        &kernel,
+        &[
+            Listing::Pacman,
+            Listing::SnapshotTaken,
+            Listing::SnapshotsListed,
+        ],
+    );
+    other_managers(&kernel, &[Listing::BrewKnowsNothingAbout("orphan-pkg")]);
     std::fs::write(kernel.tmp.path().join("profiles/Main"), "brew:orphan-pkg\n").unwrap();
     brew_holds(&kernel, &["orphan-pkg"]);
     kernel.mock_executor.set_response(
@@ -397,6 +469,17 @@ async fn absent_removes_a_package_shall_does_not_own_and_declares_it_gone() {
 async fn absent_names_the_manager_that_actually_holds_a_bare_name() {
     let kernel = TestKernel::new().await;
     brew_holds(&kernel, &["orphan-pkg"]);
+    other_managers(
+        &kernel,
+        &[
+            Listing::Cargo,
+            Listing::Apt,
+            Listing::Pacman,
+            Listing::SnapshotTaken,
+            Listing::SnapshotsListed,
+        ],
+    );
+    other_managers(&kernel, &[Listing::BrewKnowsNothingAbout("orphan-pkg")]);
     kernel.mock_executor.set_response(
         "brew uninstall -- orphan-pkg",
         Ok(DryRunOutput::default().into()),
@@ -429,6 +512,7 @@ async fn absent_names_the_manager_that_actually_holds_a_bare_name() {
 async fn absent_refuses_a_bare_name_no_manager_holds() {
     let kernel = TestKernel::new().await;
     brew_holds(&kernel, &[]);
+    other_managers(&kernel, &[Listing::Cargo, Listing::Apt, Listing::Pacman]);
 
     let err = shall::verbs::apply::handle_apply(
         &confirming(&kernel),
@@ -485,6 +569,14 @@ fn absent_and_temp_cannot_be_combined() {
 #[tokio::test]
 async fn uninstalling_a_package_shall_owns_is_unaffected() {
     let kernel = TestKernel::new().await;
+    other_managers(
+        &kernel,
+        &[
+            Listing::SnapshotTaken,
+            Listing::SnapshotsListed,
+            Listing::BrewKnowsNothingAbout("owned-pkg"),
+        ],
+    );
     std::fs::write(kernel.tmp.path().join("profiles/Main"), "brew:owned-pkg\n").unwrap();
     {
         let mut state = kernel.app.state.lock().await;
@@ -526,6 +618,14 @@ async fn uninstalling_a_package_shall_owns_is_unaffected() {
 #[tokio::test]
 async fn a_bare_name_shall_owns_costs_no_listing_either() {
     let kernel = TestKernel::new().await;
+    other_managers(
+        &kernel,
+        &[
+            Listing::SnapshotTaken,
+            Listing::SnapshotsListed,
+            Listing::BrewKnowsNothingAbout("owned-pkg"),
+        ],
+    );
     std::fs::write(kernel.tmp.path().join("profiles/Main"), "brew:owned-pkg\n").unwrap();
     {
         let mut state = kernel.app.state.lock().await;
@@ -728,6 +828,10 @@ async fn recovery_answers_the_total_ceiling_a_sync_answers() {
     let kernel = TestKernel::new().await;
     declares(&kernel, "brew:o1\nbrew:o2\n");
     brew_holds(&kernel, &["o1", "o2"]);
+    other_managers(
+        &kernel,
+        &[Listing::BrewInstalls("o1"), Listing::BrewInstalls("o2")],
+    );
     {
         let mut j = kernel.app.journal.lock().await;
         for name in ["o1", "o2"] {
