@@ -1089,14 +1089,28 @@ impl<'a> ChangePlanner<'a> {
         // command reported a failure with nothing applied. II.7b already rules the other way for
         // the resolver ("a manager that could not answer has not said no… one broken manager
         // does not fail a sync"); this is the same question one layer along.
-        let verdicts: Vec<Verdict> = stream::iter(expanded.values())
-            .map(|spec| async move { self.spec_is_missing(spec).await })
+        // **The spec travels with its own verdict.** These were two parallel runs — a
+        // `buffer_unordered` fan-out collected into a `Vec`, and a second iteration of
+        // `expanded.values()` zipped onto it — which only agree when the answers happen to
+        // arrive in hash order. They do not: `buffer_unordered` yields as each finishes, so on
+        // a machine whose manager is slower for some names than others one package's verdict
+        // was attached to another's declaration. The plan then installed packages that were
+        // already installed and skipped ones that were missing, and `sync` reported success
+        // over a machine it had not converged — measured on `void` (`#151`), where the answer
+        // arrived out of order often enough to red the crash section four runs in four.
+        //
+        // `buffered` here would also fix the index, and it is not enough: the pairing is what
+        // must be carried, not reconstructed, and a `Vec` of answers with no identity in it is
+        // the shape that invited the zip. The order is stable either way — nothing downstream
+        // reads it as an order.
+        let verdicts: Vec<(&PackageSpec, Verdict)> = stream::iter(expanded.values())
+            .map(|spec| async move { (spec, self.spec_is_missing(spec).await) })
             .buffer_unordered(cap)
             .collect()
             .await;
         let mut needed = Vec::new();
         let mut unanswerable = Vec::new();
-        for (spec, verdict) in expanded.values().zip(verdicts) {
+        for (spec, verdict) in verdicts {
             match verdict {
                 Verdict::Missing => needed.push(spec.clone()),
                 Verdict::Satisfied => {}

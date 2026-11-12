@@ -3382,6 +3382,31 @@ crash_undeclare() {
 # The machine, asked directly. Never `shall list` — that is the program on trial.
 crash_installed() { _n=0; for _p in $CRASH_PKGS; do on_path "$_p" && _n=$((_n + 1)); done; echo "$_n"; }
 crash_missing()   { _m=""; for _p in $CRASH_PKGS; do on_path "$_p" || _m="$_m $_p"; done; echo "$_m"; }
+
+# The packages a saved plan would install, one per line, without `jq` or `python3`.
+#
+# **A count is not the fact a reader needs, and `#151` is the proof.** The crash section's
+# failure branch printed `install 2   backends: xbps` beside two absent canaries, which is
+# equally the shape of "it planned them and the install did nothing" and "it planned two
+# OTHER packages". On `void` it was the second — the plan named `openssl-devel` and `gcc`,
+# both installed before the image was built — and nothing in the log could say so. The plan
+# file names every row, so this reads the names rather than adding a flag to the product.
+#
+# Two `sed`s and no JSON parser, for the same reason every other helper here is written in
+# what the thinnest image ships: this has to work on alpine and on void alike.
+plan_names() { # <plan-file>
+    if [ ! -f "$1" ]; then
+        echo "<no plan written>"
+        return 0
+    fi
+    _rows=$(sed -n '/"installs": \[/,/^  \]/p' "$1" 2>/dev/null \
+        | sed -n 's/.*"name": "\([^"]*\)".*/\1/p' | tr '\n' ' ')
+    if [ -n "$_rows" ]; then
+        printf '%s' "$_rows"
+    else
+        echo "<nothing to install>"
+    fi
+}
 # UNINSTALL FIRST, undeclare second — and the order is not cosmetic.
 #
 # `shall apply --delete` refuses a package no active file declares: *"nothing was uninstalled:
@@ -3646,6 +3671,10 @@ crash_run() {
         lx --dry-run sync >"/tmp/crash-plan-$_tag-fail.out" 2>&1
         echo "        -- what a plan would do now:"
         sed 's/^/        | /' "/tmp/crash-plan-$_tag-fail.out" | head -20
+        # ...and WHICH packages it names, because the counts above cannot tell a plan that
+        # lost the missing canaries from one that kept them and whose install did nothing.
+        lx plan --out "/tmp/crash-plan-$_tag.json" >/dev/null 2>&1
+        echo "        -- the packages that plan would install: $(plan_names "/tmp/crash-plan-$_tag.json")"
         # **What the manager's own lock was doing at the time** (`Q50`). The commonest cause of
         # this failure is a lock the killed run left behind, and `heal` clears one it can prove
         # nobody holds — so when the sync still does not converge, the two facts a reader needs

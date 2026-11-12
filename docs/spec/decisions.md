@@ -1,4 +1,4 @@
-﻿# The decision register — 262 entries, none open
+﻿# The decision register — 263 entries, none open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **257** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **258** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 262 are accounted
-for: **257 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 263 are accounted
+for: **258 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay) — 24
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay) — 25
 
 | | question | answered |
 |---|---|---|
@@ -542,6 +542,7 @@ deliberately no longer has.*
 | **C22** | The container harness runs its whole body against a do-nothing `shall` stub, so a check that survives an executable which installs nothing, removes nothing and rebuilds nothing is measuring the image rather than the product. About fifty command-surface checks had that shape — `search finds something`, `info reads a package's metadata`, `export writes native manifests`, `config show prints the active configuration` — gated on exit 0 while their names claimed what was *printed*, and worse, the verdict moved with the host: `PASS` where the image shipped the package, `FAIL` on a clean runner. A prior batch fixed the mirror-image class (a survival claim for something never seen arrive); this half was left open. **How does a check whose name claims an effect stay honest across six backends?** — RULED 2026-11-10: **the effect is looked for, on the next check, and the witness names the same subject.** A pattern is read off the real binary and checked to hold on every backend, since `search`, `info`, `why` and `lock` answer differently on `apt`, `dnf`, `pacman`, `apk`, `xbps` and `emerge`. Where the effect is not printed — `activate` writes a file and says nothing — the witness is the file's content, not a grep matching the empty string. Three survivors stay, each asserting an effect the exit status does not carry; a test bounds the bare checks relative to the section and requires any new one to be argued into the allowance with its reason. (II.85, V.238) | 2026-11-10 |
 | **C23** | The un-asserted oracle from `#40` — the `unstubbed` ledger — was wired by `C4`, but `deny_unstubbed()` is per-mock by design, so the count of tests that leave a command unanswered could only be found by adding the call one test at a time and watching which ones failed. The owner recorded 172 such tests and left the issue open on exactly that: "the instrument exists" and "the 66 are converted" are different claims. **How does a suite make its own fall-through ledger measurable, and what does the measurement separate?** — RULED 2026-11-10: **audit mode reports where deny fails, and the report teases a probe from a query.** `SHALL_AUDIT_UNSTUBBED=1` prints one line per mock at `Drop`, placed ahead of every early return — including the `allow_unmatched_registrations` one, which is where the tests worth measuring go; the first draft sat behind it and reported zero. Measured: 352 tests reported, of which **134 only existence probes** (`command -v btrfs`, `command -v timeshift`), which are not defects because `check_command` answers `true` deliberately. Seeding the fixture's 59 probed names — the assumption the tests already made — moved probe-only tests 134 → **10** and left the 218 real ones unchanged. Those 218 are the follow-up. (II.86, V.239) | 2026-11-10 |
 | **C24** | `#41` measured the Markdown and found `docs/spec/` at 68% of it, with `decisions.md`/`why.md` at 44% of every documented byte, and proposed distilling both into a one-line-per-entry log. That is ruled against already: `Y21` considered exactly it and kept full text, because *"`decisions.md` is the ruling — an event outside the tree, with a person and a date on it — and that is the one artifact git cannot reconstruct"*, and `why.md` is mandatory reading before a rule changes with 247 entries cited by Part II and by Rust doc comments. But the 26 dated `AUDIT-`/`GRADE-`/`HANDOFF-` essays (622 KB) are the family `Y21`'s cut missed, written for a reader with sessions — the same reasoning that deleted `history.md`. **Which records stay, and what keeps one?** — RULED 2026-11-10: **a citation from a living document.** Deleted 23 of 26, recoverable from git at the commit before the cut and said so in `docs/README.md`. The test has to be transitive: a first pass kept 16 because HANDOFFs cite their predecessors, so the family was keeping itself alive; asking which essays the register, the bug list or a review test cites kept three. A chain of records citing each other is not readership. (II.87, V.240) | 2026-11-10 |
+| **C25** | `#151` reported that after a SIGKILL the crash section's recovery run exits 0 with declared canaries missing, intermittent and only on `void`, and the failure branch printed a plan naming `openssl-devel` and `gcc` — packages installed before the image was built, and not declared at all. **When a sync reports success over a machine it has not converged, which of the three readings is at fault: the plan, the install, or the report?** — RULED 2026-11-11: **the plan, because it paired each answer with the wrong declaration.** `helpers::spec_is_missing` fanned out over the declarations with `buffer_unordered` — which yields answers in completion order — collected them into a `Vec<Verdict>`, and zipped that onto a second iteration over the same map. Installed names answer from the listing and absent ones cost a repository lookup, so on `void` the orders differed and missing verdicts landed on installed declarations: the plan reinstalled what the image already had and never named the canaries. The fix carries the subject (`(spec, verdict)`), which makes the pairing structural rather than index-based; `buffered` alone would have hidden it and left the shape. A test drives the real planner against a manager whose absent names answer slowly, so the completion order is the opposite of the declaration order, and fails on the old code by naming an installed package as an install. The harness prints the plan's package names beside its counts, since a count cannot tell a lost declaration from an install that did nothing. (II.90, V.243) | 2026-11-11 |
 
 # The blocking round — thirteen questions, all ruled
 
@@ -10995,3 +10996,49 @@ predecessors and the family was keeping itself alive. Asking which essays a *liv
 **4. Deletion is recoverable, and the note says how.** `docs/README.md` names the commit before the
 cut and the `git checkout` that restores a file, so a record is cut from the tree and not from
 history.
+
+## C25
+
+**Status: ANSWERED 2026-11-11, built the same day.** A fan-out that answers a question about
+each of many subjects returns the answers *with* their subjects. Carried out of `#151`.
+
+**Asked.** `void`'s crash section went red four runs in four: after a SIGKILL, `heal` recovered
+the interrupted operations, `sync` exited 0, and three declared canaries were not on the machine.
+The failure branch printed `Planned changes: install 2 … Status: SUCCESS`, and one run printed
+`openssl-devel` and `gcc` — both installed before the image was built, neither declared. The
+canaries were not in the plan at all.
+
+**When a sync reports success over a machine it has not converged, which of the three readings is
+at fault: the plan, the install, or the report?**
+
+**Ruled: the plan — it paired each answer with the wrong declaration.**
+
+**1. Two orders, one assumption.** The install side asked every declaration `spec_is_missing`
+concurrently with `buffer_unordered`, which yields each answer **as it finishes**, collected the
+`Verdict`s into a `Vec`, and then zipped that `Vec` onto a second walk of `expanded.values()`. That
+is correct exactly when the answers arrive in the map's iteration order. They do not: installed
+names answer from one listing and absent ones cost a repository lookup, so the two classes finish
+in different orders on any machine that has both.
+
+**2. Every word after the plan was then true.** The installs ran, the commands succeeded, the exit
+code was 0, and the summary described the plan it had. A plan that reininstalled what the image
+already had and skipped what was missing is not a slow machine or a flaky runner; it is a report
+about a different question.
+
+**3. The subject travels; the index does not.** The fix collects `(spec, verdict)` pairs, so there
+is no index to get wrong. `buffered` preserves order and would also have hidden the symptom, and it
+is the weaker repair: it keeps an order nothing downstream reads and leaves a bare `Vec<Verdict>`
+for the next caller to zip against a set it believes is in the same order. Three other fan-outs of
+the same shape were audited in the same pass — the chain resolver, `check`'s health sweep and
+`list --outdated` — and all three already carry their subject.
+
+**4. The instrument that would have said so.** The crash section printed a count of planned changes,
+and a count cannot distinguish "planned the missing canaries and the install did nothing" from
+"planned two other packages". It now prints the plan's package names from the saved plan file,
+reading them with `sed` because the thinnest image has no JSON parser. `scripts/harness-logic-test.sh`
+drives it against a real plan document's shape.
+
+**5. A test that fails on the old code.** A manager that answers installed names instantly and
+absent ones slowly makes the completion order the reverse of the declaration order; the assertion
+is that the plan installs exactly the absent declarations. Under the old zip it named installed
+packages, and only one ordering in 12,870 would have passed by coincidence.

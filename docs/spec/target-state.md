@@ -4763,3 +4763,25 @@ machine about it; a unit whose line is gone is invisible to all of them.
 - **Said out loud, at the level a change is said at.** `warn!` when it happens and `would_warn!`
   in a preview, the pair `extras.rs` uses for the same kind of change — a real removal reported
   below the default log level is the defect `#153` was.
+
+## II.90 A concurrent question carries its subject, and a plan installs what it judged missing (owner ruling, 2026-11-11, `#151`, V.243)
+
+**The answer to a question asked about a declaration travels with that declaration.** A fan-out
+over a set of subjects may answer in any order; it may not leave the answers in an order the
+caller has to reconstruct, and no caller may pair a collected answer with a second, separate walk
+of the same set.
+
+- **The subject is in the value, not in the index.** `(spec, verdict)` rather than `Verdict` and a
+  `zip` against a re-iteration — the second form is correct only when the stream's completion
+  order and the map's iteration order agree, which is a coincidence on any machine whose manager
+  is slower for some names than others.
+- **What a plan installs is exactly what it judged absent.** A plan that schedules an installed
+  package and leaves an absent one alone has asked about each declaration and then acted on
+  another's answer; `sync` then reports success over a machine it has not converged, which is the
+  failure `check` exists to name (`II.31`) arriving through the front door.
+- **Ordered where order is meaning, unordered where it is not.** `buffered`/`FuturesOrdered` where
+  the stream's order is the answer (`ask_the_chain`), and a carried subject where it is not: this
+  rule is about pairing, not about which combinator to prefer.
+- **A failure in the harness names the names.** A count of planned changes cannot distinguish a
+  plan that lost the missing packages from one that kept them and whose install did nothing, so
+  the crash section prints the plan's package names beside its counts (`II.85`).

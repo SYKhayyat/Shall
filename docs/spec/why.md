@@ -8880,3 +8880,31 @@ listing is asked of the scheduler, filtered to the prefix Shall writes, and the 
 front of the removal exactly as it does for a package. Two rules carry the safety: a name without
 the prefix is not a candidate, and a scheduler that cannot be asked is not a scheduler that holds
 nothing.
+
+**V.243 — Why a concurrent question carries its subject (`#151`, `II.90`).**
+The `void` leg went red four runs in four on a check that could not be about `void`: after a
+SIGKILL, `heal` recovered the journal and `sync` exited 0 while three declared canaries — `pv`,
+`ncdu`, `dos2unix` — were absent from the machine. The failure branch printed
+`Planned changes: install 2 … Status: SUCCESS` and, one run, `openssl-devel` and `gcc` beside it:
+both installed before the image was built, and neither declared. The canaries were not in the plan
+at all.
+
+The install side collected its verdicts with `buffer_unordered`, which yields each answer **as it
+finishes**, into a `Vec<Verdict>`, and then zipped that `Vec` onto a second walk of
+`expanded.values()`. Two orders, one assumption: they agree when the answers happen to arrive in
+the hash map's order. They do not on a machine asked about two classes of package — installed ones
+answer from the listing, absent ones cost a repository lookup — so a missing verdict could land on
+an installed declaration and an installed verdict on a missing one. The plan then reinstalled what
+was already there and left the absent packages alone, and every subsequent word was earned: the
+commands succeeded, the exit code was 0, and the summary was true about the plan and false about
+the machine.
+
+**This is not a race that a slower runner would avoid, which is why it took an intermittent.** The
+class is "a value collected in completion order and indexed by declaration order", and the same
+shape appeared three times during the investigation — a chain resolver, a `check` health sweep, and
+this — each one written by a person who read `buffer_unordered` as "concurrently" and not as "as
+they finish". The two that carry their subject were never wrong; only this one reconstructed the
+pairing afterwards. `buffered` would also have fixed the symptom, and it is the weaker repair: it
+preserves an order nothing downstream reads, and it leaves the `Vec<Verdict>` shape in place for
+the next caller to zip against a set it believes is in the same order. Carrying the subject makes
+the pairing structural — there is no longer an index to get wrong.

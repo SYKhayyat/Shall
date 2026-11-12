@@ -316,6 +316,120 @@ impl shall::core::manager::MetadataProvider for DepAnswering {
         Ok(self.deps.get(name).cloned().unwrap_or_default())
     }
 }
+/// A manager whose answers take a different time per package, so a fan-out that collects them
+/// as they finish returns them in an order the declarations did not ask for.
+///
+/// `#151`: the install side of the planner collected its verdicts that way and then zipped them
+/// onto a second iteration of the declarations, so a package that was installed got a missing
+/// package's verdict and one that was missing got an installed one's. It read as a plan that
+/// reinstalled what the machine already had while leaving the absent packages alone, and `sync`
+/// exited 0 over it.
+struct UnevenPace {
+    backend: String,
+    installed: HashSet<String>,
+    /// How long an *absent* name takes to answer. Installed names answer immediately, so the
+    /// stream's completion order is the opposite of a declaration order that asks about the
+    /// absent ones first.
+    missing_takes: std::time::Duration,
+    listings: shall::core::installed::InstalledListings,
+}
+
+impl shall::core::manager::BackendCore for UnevenPace {
+    fn name(&self) -> &str {
+        &self.backend
+    }
+    fn is_available(&self) -> bool {
+        true
+    }
+    fn probes(&self) -> Vec<String> {
+        Vec::new()
+    }
+    fn needs_root(&self) -> bool {
+        false
+    }
+}
+
+#[async_trait::async_trait]
+impl shall::core::manager::Queryable for UnevenPace {
+    fn installed_cache(&self) -> (&shall::core::installed::InstalledListings, &str) {
+        (&self.listings, &self.backend)
+    }
+    async fn fetch_installed(&self) -> Result<Vec<shall::core::Package>> {
+        Ok(self
+            .installed
+            .iter()
+            .map(|n| shall::core::Package {
+                name: n.clone(),
+                backend: self.backend.clone(),
+                version: Some("1.0".into()),
+                properties: HashMap::new(),
+            })
+            .collect())
+    }
+    async fn list_manual(&self) -> Result<Vec<shall::core::Package>> {
+        self.list_installed().await
+    }
+    async fn info(&self, name: &str) -> Result<Option<shall::core::Package>> {
+        if self.installed.contains(name) {
+            return Ok(Some(shall::core::Package {
+                name: name.into(),
+                backend: self.backend.clone(),
+                version: Some("1.0".into()),
+                properties: HashMap::new(),
+            }));
+        }
+        tokio::time::sleep(self.missing_takes).await;
+        Ok(None)
+    }
+}
+
+fn uneven_registry(backend: &str, installed: &[&str]) -> Arc<BackendRegistry> {
+    let fake = Arc::new(UnevenPace {
+        backend: backend.to_string(),
+        installed: installed.iter().map(|s| (*s).to_string()).collect(),
+        missing_takes: std::time::Duration::from_millis(30),
+        listings: shall::core::installed::InstalledListings::new(),
+    });
+    let mut registry = BackendRegistry::new();
+    registry.register(Arc::new(
+        shall::core::manager::BackendCapabilities::builder(fake.clone())
+            .with_queryable(fake)
+            .build(),
+    ));
+    Arc::new(registry)
+}
+
+/// Several declarations for one manager, which `plan_with` cannot express (it keys the desired
+/// map by backend and overwrites).
+async fn plan_with_specs(
+    registry: Arc<BackendRegistry>,
+    config: &Config,
+    hosts: &[&str],
+    wanted: &[(&str, &str)],
+) -> SyncChanges {
+    let state = StateRegistry::new(PathBuf::from("test-state.json"));
+    let mut desired: HashMap<String, Vec<PackageSpec>> = HashMap::new();
+    for (backend, name) in wanted {
+        desired
+            .entry((*backend).to_string())
+            .or_default()
+            .push(PackageSpec {
+                name: (*name).into(),
+                backend: (*backend).into(),
+                ..PackageSpec::default()
+            });
+    }
+    ChangePlanner::new(registry, &state, config)
+        .plan(
+            &desired,
+            PlanScope::Whole(HostBackends::from_priority(
+                hosts.iter().map(|h| h.to_string()).collect(),
+            )),
+        )
+        .await
+        .expect("a manager that answers must produce a plan")
+}
+
 fn dep_registry(backend: Arc<DepAnswering>) -> Arc<BackendRegistry> {
     let mut registry = BackendRegistry::new();
     registry.register(Arc::new(
@@ -359,6 +473,7 @@ mod scope_match_is_exact_entry;
 mod scoped_plan_is_non_destructive;
 mod sync_never_removes_what_it_does_not_manage;
 mod sync_removes_what_it_manages_and_you_stopped_declaring;
+mod the_answer_lands_on_the_declaration_that_asked;
 mod the_config_says_how_many_times_to_ask_again;
 mod the_fake_manager_really_does_answer_a_dependency_query;
 mod the_report_is_sorted_for_a_stable_plan;

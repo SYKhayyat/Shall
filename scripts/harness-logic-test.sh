@@ -1771,6 +1771,84 @@ for _src in $SOURCES; do
     fi
 done
 
+# `plan_names` — the package names in a saved plan, which `#151` needed and no count carries.
+#
+# Driven on a real plan document's shape rather than a hand-typed one-liner, because the whole
+# value of this helper is that its `sed` range finds the `installs` block in the file `shall plan`
+# actually writes: a range that matched nothing would print `<nothing to install>` for every
+# crash failure and read as a converged machine.
+# The container harness only: the Windows sweep has no crash section to print a plan in.
+for _src in $(printf '%s\n' $SOURCES | grep -v integration-windows); do
+    TOTAL=$((TOTAL + 1))
+    (
+        _body="$(lift plan_names "$_src")"
+        if [ -z "$_body" ]; then
+            echo "  BAD   $(basename "$_src") has no plan_names — a crash failure cannot say which packages it planned"
+            exit 1
+        fi
+        eval "$_body"
+        _dir=$(mktemp -d)
+        _bad=0
+        # (1) Two installs and a removal: only the installs are named.
+        cat > "$_dir/plan.json" <<'JSON'
+{
+  "schema": 3,
+  "installs": [
+    {
+      "name": "pv",
+      "backend": "xbps",
+      "options": {},
+      "requires": [],
+      "present": true
+    },
+    {
+      "name": "ncdu",
+      "backend": "xbps",
+      "options": {},
+      "requires": [],
+      "present": true
+    }
+  ],
+  "removals": [
+    {
+      "name": "gone",
+      "backend": "xbps",
+      "version": null,
+      "options": {}
+    }
+  ],
+  "resources": {
+    "place": [],
+    "undo": [],
+    "place_intents": []
+  }
+}
+JSON
+        _got=$(plan_names "$_dir/plan.json")
+        [ "$_got" = "pv ncdu " ] || { echo "  BAD   plan_names read '$_got' from a two-install plan"; _bad=1; }
+        # (2) A converged machine: an empty installs array, which must not be confused with
+        # a file this helper could not read.
+        printf '{
+  "schema": 3,
+  "installs": [],
+  "removals": []
+}
+' > "$_dir/empty.json"
+        _got=$(plan_names "$_dir/empty.json")
+        [ "$_got" = "<nothing to install>" ] || { echo "  BAD   an empty installs array read as '$_got'"; _bad=1; }
+        # (3) And a plan that was never written says so rather than printing an empty name.
+        _got=$(plan_names "$_dir/absent.json")
+        [ "$_got" = "<no plan written>" ] || { echo "  BAD   a missing plan file read as '$_got'"; _bad=1; }
+        rm -rf "$_dir"
+        exit "$_bad"
+    )
+    if [ $? -eq 0 ]; then
+        echo "  ok    $(basename "$_src") names the packages a saved plan would install"
+    else
+        echo "  BAD   $(basename "$_src")'s plan_names cannot say what a plan installs"; BAD=$((BAD + 1))
+    fi
+done
+
 echo "--------------------------------------------------------------"
 echo " harness predicates: $((TOTAL - BAD))/$TOTAL ok"
 [ "$BAD" = 0 ] || { echo " FAILED"; exit 1; }
