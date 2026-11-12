@@ -111,7 +111,7 @@ fn run_bounded(dir: &std::path::Path, argv: &[String], bound: Duration) -> Optio
     let mut child = Command::new(env!("CARGO_BIN_EXE_shall"))
         .args(argv)
         .env("SHALL_CONFIG_DIR", dir.join("config"))
-        .env("HOME", &dir)
+        .env("HOME", dir)
         .env("XDG_CONFIG_HOME", dir.join("xdg-config"))
         .env("XDG_DATA_HOME", dir.join("xdg-data"))
         .env("SHALL_DATA_DIR", dir.join("data"))

@@ -37,7 +37,7 @@ fn run(dir: &Path, args: &[&str]) -> (String, i32) {
         .args(args)
         .current_dir(dir)
         .env("SHALL_CONFIG_DIR", dir.join("config"))
-        .env("HOME", &dir)
+        .env("HOME", dir)
         .env("XDG_CONFIG_HOME", dir.join("xdg-config"))
         .env("XDG_DATA_HOME", dir.join("xdg-data"))
         .env("SHALL_DATA_DIR", dir.join("data"))

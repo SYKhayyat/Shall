@@ -116,7 +116,7 @@ impl Sandbox {
         let out = Command::new(env!("CARGO_BIN_EXE_shall"))
             .args(args)
             .env("SHALL_CONFIG_DIR", self.cfg())
-            .env("HOME", &self.cfg())
+            .env("HOME", self.cfg())
             .env("XDG_CONFIG_HOME", self.cfg().join("xdg-config"))
             .env("XDG_DATA_HOME", self.cfg().join("xdg-data"))
             .env("SHALL_DATA_DIR", self.root.path().join("data"))

@@ -28,7 +28,7 @@ fn run_in(dir: &str, args: &[&str]) -> (i32, String) {
         // A missing config must not turn a usage error into a different failure, and a real
         // one must not let the machine's state decide the code.
         .env("SHALL_CONFIG_DIR", format!("{dir}/config"))
-        .env("HOME", &dir.to_string())
+        .env("HOME", dir)
         .env("XDG_CONFIG_HOME", format!("{dir}/xdg-config"))
         .env("XDG_DATA_HOME", format!("{dir}/xdg-data"))
         .env("SHALL_DATA_DIR", format!("{dir}/data"))
