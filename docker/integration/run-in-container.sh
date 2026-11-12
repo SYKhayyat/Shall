@@ -4501,8 +4501,12 @@ EOSNAP
         # says "No system snapshots found" and exits 0, correctly and long before it looks for a
         # terminal — so asserting the refusal against an empty gallery asserts nothing.
         refuses_with_3 "restore: the gallery refuses a shell with no terminal" lx snapshot restore
-        grep_ok "restore: and names what to use instead" \
-            "snapshot list\|rollback" lx snapshot restore
+        # `refuses_saying`, not `grep_ok`: this command refuses on purpose, and `grep_ok` answers
+        # only 0 and 2. It was spelled `grep_ok` and printed exactly the right sentence while the
+        # check FAILED on every run — the storage leg's section came out one credit short of its
+        # floor for that reason alone, on a product behaving correctly.
+        refuses_saying "restore: and names what to use instead" "snapshot list\|rollback" \
+            lx snapshot restore
     elif grep -q "already up to date" /tmp/restore-sync.out; then
         soft "restore: the sync had nothing to do, so there was no mutation for a pre-sync snapshot to precede — the fixture, not the provider"
     else
