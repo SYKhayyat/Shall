@@ -23,6 +23,20 @@ async fn declare_exec(kernel: &TestKernel, line: &str, script_rel: &str, body: &
     std::fs::write(root.join("profiles/Main"), "use tools\n").unwrap();
 }
 
+/// **The declared script, answered at the path `exec:` actually runs it from.**
+///
+/// A step is a file under the config root and `sh` is handed that absolute path, so the stub is
+/// the path — stated here rather than fallen through (`#162`), where the empty success it read
+/// before was a silence the test never wrote. The assertions below are about how often the ledger
+/// says it ran, not about what it printed.
+fn script_answers(kernel: &TestKernel, script_rel: &str) {
+    let path = kernel.app.config.config_root().join(script_rel);
+    kernel.mock_executor.set_response(
+        &format!("sh {}", path.display()),
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+}
+
 /// What `shall lock` does: record the script's current hash as approved.
 fn approve(kernel: &TestKernel, script_rel: &str, body: &str) {
     let locks = kernel.app.config.layout().locks_dir();
@@ -65,6 +79,7 @@ async fn a_script_runs_once_then_not_again_until_its_content_changes() {
     let v1 = "echo one\n";
     declare_exec(&kernel, "exec:./bin/setup.sh", "./bin/setup.sh", v1).await;
     approve(&kernel, "./bin/setup.sh", v1);
+    script_answers(&kernel, "./bin/setup.sh");
 
     // First sync: it runs, and the run is recorded.
     let state = resolve(&kernel).await;
@@ -109,6 +124,7 @@ async fn runs_always_runs_every_time() {
     let body = "echo tick\n";
     declare_exec(&kernel, "exec:./tick.sh@runs=always", "./tick.sh", body).await;
     approve(&kernel, "./tick.sh", body);
+    script_answers(&kernel, "./tick.sh");
 
     let state = resolve(&kernel).await;
     for expected in 1..=3 {
@@ -286,6 +302,7 @@ async fn removing_an_exec_runs_the_undo_it_declared() {
         body,
     )
     .await;
+    script_answers(&kernel, "./enrol.sh");
     approve(&kernel, "./enrol.sh", body);
 
     let state = resolve(&kernel).await;
@@ -338,6 +355,7 @@ async fn removing_an_exec_without_an_undo_runs_nothing() {
     let body = "echo once\n";
     declare_exec(&kernel, "exec:./once.sh", "./once.sh", body).await;
     approve(&kernel, "./once.sh", body);
+    script_answers(&kernel, "./once.sh");
 
     let state = resolve(&kernel).await;
     kernel
@@ -523,6 +541,7 @@ async fn a_step_can_belong_to_both_verbs() {
     )
     .await;
     approve(&kernel, "./bin/both.sh", body);
+    script_answers(&kernel, "./bin/both.sh");
 
     let state = resolve(&kernel).await;
     kernel
@@ -565,6 +584,12 @@ async fn a_catalogued_step_runs_from_its_name_without_a_script_or_an_approval() 
     std::fs::write(root.join("modules/tools.txt"), "exec:step/rustup\n").unwrap();
     std::fs::write(root.join("profiles/Main"), "use tools\n").unwrap();
     // Deliberately no `approve(...)`, and deliberately no file at `<config>/step/rustup`.
+    // The catalogue's own command, stated rather than fallen through (`#162`): a catalogued step
+    // is a program with arguments, so its answer is this mock's success and nothing else.
+    kernel.mock_executor.set_response(
+        "rustup update",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
 
     let state = resolve(&kernel).await;
     assert!(state.has_execs(), "the step line did not reach the model");

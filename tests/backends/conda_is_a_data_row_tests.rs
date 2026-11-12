@@ -33,7 +33,9 @@ fn config_with_env(env: Option<&str>) -> Config {
 }
 
 /// Every conda command this run would issue, in order, for a given `[backend_settings.conda]`.
-async fn conda_calls(cfg: Config) -> Vec<String> {
+/// The env name the config asks for, passed in rather than re-derived here: this helper only needs
+/// to know which strings to answer.
+async fn conda_calls(cfg: Config, env: &str) -> Vec<String> {
     let vfs = Arc::new(dashmap::DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
     let exec = CommandExecutor::with_layer(
@@ -46,6 +48,18 @@ async fn conda_calls(cfg: Config) -> Vec<String> {
     let hooks = Arc::new(shall::app::LuaHooks::new(&cfg).expect("hooks init"));
     let reg = shall::backends::create_default_registry(exec, &cfg, hooks).await;
     let conda = reg.get("conda").expect("conda registers");
+
+    // **The three questions this row asks, answered rather than fallen through** (`#162`): the
+    // mutations' answer is success and nothing printed, and the search's is an empty result set.
+    // What each test below asserts is the argv, so the argv is answered and the argv is read —
+    // the run no longer borrows an answer nobody wrote.
+    for cmd in [
+        format!("conda install -n {env} -y -- numpy=1.2.3"),
+        format!("conda remove -n {env} -y -- numpy"),
+        "conda search --json -- numpy".to_string(),
+    ] {
+        mock.set_response(&cmd, Ok(shall::core::executor::DryRunOutput::new().into()));
+    }
 
     let mut options = shall::config::grammar::Options::default();
     options.set("version", "1.2.3".to_string());
@@ -75,7 +89,6 @@ async fn conda_calls(cfg: Config) -> Vec<String> {
         .await
         .expect("search");
 
-    mock.allow_unmatched_registrations();
     mock.get_calls().await
 }
 
@@ -84,7 +97,7 @@ async fn conda_calls(cfg: Config) -> Vec<String> {
 /// in a comment; the row says it by not naming the placeholder in `search_args`.
 #[tokio::test]
 async fn the_environment_setting_reaches_every_scoped_verb_and_not_search() {
-    let calls = conda_calls(config_with_env(Some("ml"))).await;
+    let calls = conda_calls(config_with_env(Some("ml")), "ml").await;
     assert_eq!(
         calls,
         vec![
@@ -101,7 +114,7 @@ async fn the_environment_setting_reaches_every_scoped_verb_and_not_search() {
 /// answer here is a wrong answer for almost everybody.
 #[tokio::test]
 async fn no_setting_means_the_base_environment() {
-    let calls = conda_calls(config_with_env(None)).await;
+    let calls = conda_calls(config_with_env(None), "base").await;
     assert_eq!(calls[0], "conda install -n base -y -- numpy=1.2.3");
     assert_eq!(calls[1], "conda remove -n base -y -- numpy");
 }
@@ -111,7 +124,7 @@ async fn no_setting_means_the_base_environment() {
 /// asks conda about a flag rather than an environment, and conda would answer *something*.
 #[tokio::test]
 async fn a_blank_setting_is_not_an_environment_name() {
-    let calls = conda_calls(config_with_env(Some("   "))).await;
+    let calls = conda_calls(config_with_env(Some("   ")), "base").await;
     assert_eq!(calls[0], "conda install -n base -y -- numpy=1.2.3");
 }
 

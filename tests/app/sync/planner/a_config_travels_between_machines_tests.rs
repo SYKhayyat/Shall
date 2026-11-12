@@ -92,6 +92,12 @@ async fn a_pin_to_a_manager_this_machine_lacks_is_skipped_not_failed() {
 async fn the_half_of_the_config_this_machine_can_do_still_happens() {
     // The whole point of the rule: one file, both lines, each machine doing its half.
     let kernel = kernel_with(&format!("brew:neovim\n{}:jq\n", NOT_HERE)).await;
+    // brew has never heard of this formula — `brew info` says `[]` — which is the answer
+    // bare-name and installed-resolution read. Stated rather than fallen through (`#162`).
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- neovim",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let changes = plan_of(&kernel).await;
 
     assert_eq!(
@@ -105,6 +111,12 @@ async fn the_half_of_the_config_this_machine_can_do_still_happens() {
 #[tokio::test]
 async fn the_report_counts_a_skip_apart_from_a_change() {
     let kernel = kernel_with(&format!("brew:neovim\n{}:jq\n", NOT_HERE)).await;
+    // Squid: brew has never heard of this formula — `brew info` says `[]` — which is the answer
+    // bare-name and installed-resolution read. Stated rather than fallen through (`#162`).
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- neovim",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let report = plan_of(&kernel).await.generate_report();
 
     assert_eq!(
@@ -122,6 +134,12 @@ async fn a_managed_package_whose_manager_is_gone_is_not_reaped() {
     // the config now travels to a machine with no zypper. Scheduling the removal would run a
     // command that cannot exist, and failing is not what the user asked for either.
     let kernel = kernel_with("brew:neovim\n").await;
+    // Squid: brew has never heard of this formula — `brew info` says `[]` — which is the answer
+    // bare-name and installed-resolution read. Stated rather than fallen through (`#162`).
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- neovim",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     {
         let mut state = kernel.state.lock().await;
         state.manage(ManagedPackage {

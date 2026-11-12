@@ -210,6 +210,24 @@ async fn rollback_after_failure(
     first: GraphAction,
     installed_before: Option<&str>,
 ) -> (Vec<String>, String) {
+    // **The questions around the failure, stated rather than fallen through** (`#162`): brew knows
+    // nothing about `pkg-b` — that is why the graph is installing it — and the compensation for
+    // `first` is the same brew call, succeeding. Which one runs depends on what `first` is, so the
+    // answer is registered for the verb the test actually gave it.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- pkg-b",
+        Ok(DryRunOutput::default().into()),
+    );
+    match &first {
+        GraphAction::Install(_) => kernel
+            .mock_executor
+            .set_response("brew install -- pkg-a", Ok(DryRunOutput::default().into())),
+        GraphAction::Remove { .. } => kernel.mock_executor.set_response(
+            "brew uninstall -- pkg-a",
+            Ok(DryRunOutput::default().into()),
+        ),
+    }
+
     if let Some(json) = installed_before {
         let mut answer: std::process::Output = DryRunOutput::default().into();
         answer.stdout = json.as_bytes().to_vec();
