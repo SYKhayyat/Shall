@@ -6,6 +6,19 @@ async fn a_partial_sync_counts_only_the_operations_that_happened() {
     let mut config = Config::sandboxed(&config_dir("partial-counters"));
     config.keep_going_this_run = true;
     let (engine, mock) = engine(config).await;
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "brew info --json=v1 -- neovim",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response("cargo install --list", Ok(DryRunOutput::default().into()));
+    mock.set_response(
+        "brew info --json=v1 -- neovim",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response("cargo install --list", Ok(DryRunOutput::default().into()));
     mock.set_response("brew install -- neovim", Ok(DryRunOutput::default().into()));
     mock.set_response(
         "cargo install -- ripgrep",

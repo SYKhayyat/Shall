@@ -22,6 +22,7 @@ use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
+use shall::core::executor::DryRunOutput;
 fn fresh(name: &str) -> std::path::PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
     let _ = std::fs::remove_dir_all(&dir);
@@ -270,6 +271,10 @@ go
 
     let vfs = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response("cargo install --list", Ok(DryRunOutput::default().into()));
     let exec =
         CommandExecutor::with_layer(true, false, mock.clone(), vfs, Arc::new(DashMap::new()));
     let app = shall::app::App::new_with_executor_and_state_path(

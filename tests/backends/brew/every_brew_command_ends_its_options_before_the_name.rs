@@ -1,8 +1,43 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 #[tokio::test]
 async fn every_brew_command_ends_its_options_before_the_name() {
     let (mock, core) = mocked();
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response("brew deps -- ripgrep", Ok(DryRunOutput::default().into()));
+    mock.set_response(
+        "brew info --json=v1 -- ripgrep",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "brew install -- ripgrep",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response("brew search -- ripgrep", Ok(DryRunOutput::default().into()));
+    mock.set_response(
+        "brew uninstall -- ripgrep",
+        Ok(DryRunOutput::default().into()),
+    );
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response("brew deps -- ripgrep", Ok(DryRunOutput::default().into()));
+    mock.set_response(
+        "brew info --json=v1 -- ripgrep",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "brew install -- ripgrep",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response("brew search -- ripgrep", Ok(DryRunOutput::default().into()));
+    mock.set_response(
+        "brew uninstall -- ripgrep",
+        Ok(DryRunOutput::default().into()),
+    );
     let spec = PackageSpec {
         name: "ripgrep".into(),
         backend: "brew".into(),

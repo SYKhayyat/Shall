@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// Q45, and the one whose argv is not a name list.
 ///
@@ -10,6 +11,28 @@ use super::*;
 async fn a_batch_of_extensions_is_one_code_process() {
     let vfs = Arc::new(dashmap::DashMap::new());
     let mock = Arc::new(shall::core::executor::MockExecutor::new(vfs.clone()));
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "code --force --install-extension rust-lang.rust-analyzer --install-extension tamasfe.even-better-toml",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "code --uninstall-extension rust-lang.rust-analyzer --uninstall-extension tamasfe.even-better-toml",
+        Ok(DryRunOutput::default().into()),
+    );
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "code --force --install-extension rust-lang.rust-analyzer --install-extension tamasfe.even-better-toml",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "code --uninstall-extension rust-lang.rust-analyzer --uninstall-extension tamasfe.even-better-toml",
+        Ok(DryRunOutput::default().into()),
+    );
     let exec = CommandExecutor::with_layer(
         false,
         false,

@@ -12,6 +12,14 @@ async fn the_escalated_half_of_a_dry_run_never_stages_a_real_temp_file() {
         .collect();
     let dest = dir.path().join("not-here").join("shall-packages.nix");
     let (core, _vfs, mock) = dry_core();
+    // **The escalation this test is about, stated rather than fallen through** (`#162`). Its argv
+    // carries the destination this test just chose and the word `(staged)` where the dry run never
+    // wrote a file, so it is the one string here that cannot be spelled before the run — and the
+    // assertion below is a substring, which is why nothing caught the missing answer.
+    mock.set_response(
+        &format!("sudo -n install -m 0644 (staged) {}", dest.display()),
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
 
     core.place(&dest, "BODY")
         .await

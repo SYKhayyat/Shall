@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// Adding a repository, removing one and listing them are three commands, and a row may
 /// name a different program for each.
@@ -21,6 +22,7 @@ async fn a_repository_verb_runs_the_program_that_verb_needs() {
     ] {
         let vfs = Arc::new(DashMap::new());
         let mock = Arc::new(MockExecutor::new(vfs.clone()));
+
         let exec =
             CommandExecutor::with_layer(true, false, mock.clone(), vfs, Arc::new(DashMap::new()));
         let mut reg = BackendRegistry::new();
@@ -29,6 +31,19 @@ async fn a_repository_verb_runs_the_program_that_verb_needs() {
             .get(name)
             .and_then(|b| b.as_repo_manager().cloned())
             .unwrap_or_else(|| panic!("{name} manages no repositories"));
+
+        // **Every command this manager's two verbs send, stated rather than fallen through**
+        // (`#162`). The repo verbs write files through `sh -c`, `rm` and a manager's own plugin, so
+        // the answers are the empty success they read before. Split by manager because each
+        // iteration builds its own mock — one list for both would leave half of it dead.
+        let argv: &[&str] = if name == "dnf" {
+            &DNF_REPO_ARGV
+        } else {
+            &PACMAN_REPO_ARGV
+        };
+        for a in argv {
+            mock.set_response(a, Ok(DryRunOutput::default().into()));
+        }
 
         rm.add_repo("shallprobe", "https://example.invalid/r", false)
             .await
@@ -66,6 +81,12 @@ async fn a_repository_verb_runs_the_program_that_verb_needs() {
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
     let exec =
         CommandExecutor::with_layer(true, false, mock.clone(), vfs, Arc::new(DashMap::new()));
+    // The control's own `rm`, stated rather than fallen through (`#162`): removing a real name
+    // that is not Shall's prefix runs the manager's `rm` exactly as the probed name does.
+    mock.set_response(
+        "rm -f /etc/yum.repos.d/epel.repo",
+        Ok(DryRunOutput::default().into()),
+    );
     let mut reg = BackendRegistry::new();
     register_dnf(&mut reg, &exec);
     let rm = reg.get("dnf").unwrap().as_repo_manager().unwrap().clone();
@@ -87,3 +108,17 @@ async fn a_repository_verb_runs_the_program_that_verb_needs() {
         .await
         .expect("a plain name");
 }
+
+/// Every argv dnf's two repo verbs send: its own plugin, `rm`, and its listing.
+const DNF_REPO_ARGV: [&str; 3] = [
+    "dnf config-manager --add-repo https://example.invalid/r",
+    "rm -f /etc/yum.repos.d/shallprobe.repo",
+    "dnf repolist --all",
+];
+
+/// The same for pacman, which writes both files through `sh -c` and reads with `pacman-conf`.
+const PACMAN_REPO_ARGV: [&str; 3] = [
+    "sh -c set -e; printf '[%s]\\nServer = %s\\n' 'shallprobe' 'https://example.invalid/r' > '/etc/pacman.d/shall-shallprobe.conf'; grep -qxF 'Include = /etc/pacman.d/shall-shallprobe.conf' /etc/pacman.conf || printf '\\n%s\\n' 'Include = /etc/pacman.d/shall-shallprobe.conf' >> /etc/pacman.conf",
+    "sh -c rm -f '/etc/pacman.d/shall-shallprobe.conf'; sed -i '\\#Include = /etc/pacman.d/shall-shallprobe.conf#d' /etc/pacman.conf",
+    "pacman-conf --repo-list",
+];

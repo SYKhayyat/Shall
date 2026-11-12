@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// Two runs are two answers.
 ///
@@ -13,7 +14,22 @@ async fn a_second_run_asks_for_its_own_credentials() {
         return;
     }
     let (first, first_mock) = wired();
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    first_mock.set_response("sudo -n -v", Ok(DryRunOutput::default().into()));
+    first_mock.set_response(
+        "sudo -n apt install -y curl",
+        Ok(DryRunOutput::default().into()),
+    );
     let (second, second_mock) = wired();
+    // The second run asks its own questions, so it gets its own answers — the point of the test
+    // is that it asked at all, and both used to be read out of silence (`#162`).
+    second_mock.set_response("sudo -n -v", Ok(DryRunOutput::default().into()));
+    second_mock.set_response(
+        "sudo -n apt install -y curl",
+        Ok(DryRunOutput::default().into()),
+    );
 
     let _ = first.run("apt", &["install", "-y", "curl"], true).await;
     let _ = second.run("apt", &["install", "-y", "curl"], true).await;

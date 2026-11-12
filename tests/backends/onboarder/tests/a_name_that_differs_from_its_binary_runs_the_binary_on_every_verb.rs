@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// XIII.12: the prefix a line is written with and the program that runs are two facts.
 /// `firewall:22/tcp` runs `ufw`, and every verb has to agree about that — an install that
@@ -6,6 +7,15 @@ use super::*;
 #[tokio::test]
 async fn a_name_that_differs_from_its_binary_runs_the_binary_on_every_verb() {
     let (mock, exec) = mock_exec();
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response("ufw allow 22/tcp", Ok(DryRunOutput::default().into()));
+    mock.set_response(
+        "ufw delete allow 22/tcp",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response("ufw status", Ok(DryRunOutput::default().into()));
     let mut reg = BackendRegistry::new();
     assert_eq!(
         register_custom_backends(&mut reg, &exec, vec![firewall_def()]),

@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// Q45: **one command for N packages, not N commands.**
 ///
@@ -9,6 +10,28 @@ use super::*;
 async fn a_batch_of_formulae_is_one_brew_call() {
     let vfs = Arc::new(dashmap::DashMap::new());
     let mock = Arc::new(shall::core::executor::MockExecutor::new(vfs.clone()));
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "brew install -- jq ripgrep",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "brew uninstall -- jq ripgrep",
+        Ok(DryRunOutput::default().into()),
+    );
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "brew install -- jq ripgrep",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "brew uninstall -- jq ripgrep",
+        Ok(DryRunOutput::default().into()),
+    );
     let exec = CommandExecutor::with_layer(
         false,
         false,

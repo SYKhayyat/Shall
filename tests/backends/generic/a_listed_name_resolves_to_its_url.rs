@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// The other `{url}` template: gem removes by source URL, and a name the listing knows
 /// resolves to one.
@@ -6,6 +7,13 @@ use super::*;
 async fn a_listed_name_resolves_to_its_url() {
     let vfs = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "gem sources -r https://gems.example.invalid/",
+        Ok(DryRunOutput::default().into()),
+    );
     let mut listed: std::process::Output = DryRunOutput::new().into();
     listed.stdout = b"internal https://gems.example.invalid/\n".to_vec();
     mock.set_response("gem sources", Ok(listed));

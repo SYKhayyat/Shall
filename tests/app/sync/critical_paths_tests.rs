@@ -47,6 +47,12 @@ async fn test_kernel_isolates_both_config_and_data_roots() {
 #[tokio::test]
 async fn a_declared_package_is_one_node_however_many_things_it_depends_on() {
     let kernel = TestKernel::new().await;
+    // Stated rather than fallen through (`#162`): the installed-state question the plan asks about
+    // the one declared line. brew has never heard of `pkg-a`, which is why it is a change at all.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- pkg-a",
+        Ok(DryRunOutput::default().into()),
+    );
     let state_lock = kernel.state.lock().await;
 
     let planner = ChangePlanner::new(kernel.app.registry.clone(), &state_lock, &kernel.app.config);

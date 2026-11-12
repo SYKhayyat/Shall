@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// One package's opt-out is not another's. A batch where the specs disagree has to become
 /// two commands, or the flag silently covers a line that never asked for it — which is the
@@ -11,6 +12,17 @@ async fn a_mixed_batch_does_not_hand_one_lines_opt_out_to_another() {
     }
     let vfs = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "helm plugin install -- https://example.com/helm-diff",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "helm plugin install --verify=false -- https://example.com/helm-secrets",
+        Ok(DryRunOutput::default().into()),
+    );
     let inst = GenericInstallable {
         core: Arc::new(source_option_core(mock.clone(), vfs)),
     };

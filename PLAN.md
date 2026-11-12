@@ -1609,15 +1609,31 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     excused from the unused-stub check *by key* — not `allow_unmatched_registrations`, which
     would excuse every dead stub in the mock. Two tests in `an_unanswered_command_is_a_defect_tests`
     hold that difference.
-  - **What is left is the long tail** — 78 tests in 76 files, mostly one each, and mostly
-    per-package answers (`brew info -- pkg`, `apt install`, `flatpak install`) which belong where
-    the test asserts rather than in the fixture. The biggest single clusters are
-    `the_probe_argv_does_not_depend_on_the_package_tests` (2) and the `go env GOPATH` /
-    `sudo -n -v` probes.
-  - **Backend tests that build their own `MockExecutor` per step were left alone on purpose**: the
-    audit reports against one mock while the assertion reads calls from another, so a stub
-    registered in the test is never matched. That needs the *helper* they share to state the
-    machine, not the test.
+  - **The long tail is written out: 78 → 0.** Every remaining one was a per-package answer at the
+    place that asserts it (`brew info --json=v1 -- pkg`, `apt install -y -- jq`, `go env GOPATH`),
+    plus four mechanisms the tail needed, each with a written reason where it is used:
+    - **`MockExecutor::answer_everything_with`** — a *stated* answer for every unregistered command.
+      For tests that drive a whole surface to read the **argv** and assert nothing about output:
+      `argv_drift_tests` (which exists to avoid a second copy of the argv list) and the `clean_cache`
+      family half (which asks eighteen backends whether they run anything at all). A written answer,
+      not silence: it is a claim that can be wrong, and the unused-stub check still applies to every
+      name registered. Deliberately **not** a fixture default — a `TestKernel` test that reaches an
+      unexpected command is a test whose machine is not what it thinks.
+    - **`ArgvCase::install_stubs`** — the install half of the ask-first effectors (snap's
+      `snap info`, lvm's `lvs … -o lv_size`, systemd's `start`/`enable`, gsettings' `get`). The
+      install half used to read the mock's silence, and a probe answering "present" from nowhere
+      would have made the install converge on absent.
+    - **The command is stated where the caller already states the other one.** `rollback_after_failure`
+      now answers the rolled-back *removal* (uninstall then reinstall) because both calls always run;
+      a rolled-back *install* is undone three different ways (reverted, removed, protected) so each
+      of those tests states its own two answers. Registering both verbs from the helper would have
+      made one of them a dead stub — and a second registration of a key a caller already registered
+      leaves *one of the two* unmatched.
+    - **The `sudo` pair asks twice and is answered twice**: `a_second_run_asks_for_its_own_credentials`
+      had stubbed the first run's mock only, which is the same shape of bug it exists to catch.
+  - **What is left is 135 `command -v` existence probes**, which are not this issue: `check_command`
+    records them so a test *can* ask, and its `true` default is the deliberate "silence means fine"
+    choice documented beside it. Turning them into 135 names would assert nothing new.
   - ISSUE #162
 - [x] #89 guard-reachability control builds a vacuous fixture. (**BUILT — and the state the control
   needs turned out to be reachable, but not through any of the three shapes the fixture had tried.**

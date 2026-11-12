@@ -1,11 +1,17 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// asdf's prerequisite is per declared tool, and the probe answers for all of them at
 /// once. `asdf plugin list` exits 0 whatever it says, so a plugin that IS there must be
 /// read out of the output — and one that is not must still be offered.
 #[tokio::test]
 async fn a_per_package_row_asks_once_per_missing_package_only() {
-    let mut h = harness(&[("asdf plugin list", true, "jq\n")]);
+    // The added plugin is answered rather than fallen through (`#162`): `--yes` runs it, and the
+    // assertion is that it ran once for the missing plugin and never for the present one.
+    let mut h = harness(&[
+        ("asdf plugin list", true, "jq\n"),
+        ("asdf plugin add nodejs", true, ""),
+    ]);
     h.config = Arc::new(shall::config::Config {
         yes: true,
         ..Default::default()

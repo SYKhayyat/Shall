@@ -5,6 +5,25 @@ use shall::core::executor::DryRunOutput;
 #[tokio::test]
 async fn a_module_that_did_not_build_fails_the_sync_loudly() {
     let (engine, mock) = engine(Config::sandboxed(&config_dir("kernel-rebuild-fail"))).await;
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "brew info --json=v1 -- linux-image-generic",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "brew install -- linux-image-generic",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "brew info --json=v1 -- linux-image-generic",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "brew install -- linux-image-generic",
+        Ok(DryRunOutput::default().into()),
+    );
     mock.set_response(
         "sudo -n dkms autoinstall",
         Ok(DryRunOutput::default().into()),

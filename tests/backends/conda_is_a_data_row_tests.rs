@@ -22,6 +22,7 @@ use shall::core::{CommandExecutor, PackageSpec};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use shall::core::executor::DryRunOutput;
 fn config_with_env(env: Option<&str>) -> Config {
     let mut cfg = Config::default();
     if let Some(env) = env {
@@ -160,15 +161,13 @@ async fn the_manual_set_comes_from_the_history_export() {
         q.manual_source()
     );
 
-    let _ = q.list_manual().await;
-    mock.allow_unmatched_registrations();
-
-    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
-    // machine, each with the empty answer it used to receive from silence instead.
+    // Stated rather than fallen through (`#162`): the export this test exists to watch run, and
+    // its answer — an empty history, which is a valid export with nothing in it.
     mock.set_response(
         "conda env export -n ml --from-history --json",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
+        Ok(DryRunOutput::default().into()),
     );
+    let _ = q.list_manual().await;
     let calls = mock.get_calls().await;
     assert!(
         calls

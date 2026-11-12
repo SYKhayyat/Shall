@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// Both halves of what the `tools` image measured on 2026-07-29, in one place because they
 /// are one lifecycle: a mix archive that cannot be pinned cannot be installed at all on an
@@ -21,6 +22,17 @@ async fn a_mix_archive_is_pinnable_and_its_removal_does_not_wait_for_an_answer()
     use shall::core::executor::MockExecutor;
     let vfs = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "mix archive.install hex --force -- phx_new 1.6.16",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "mix archive.uninstall --force -- phx_new",
+        Ok(DryRunOutput::default().into()),
+    );
     let exec =
         CommandExecutor::with_layer(true, false, mock.clone(), vfs, Arc::new(DashMap::new()));
     let mut reg = BackendRegistry::new();

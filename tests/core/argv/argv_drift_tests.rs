@@ -232,6 +232,11 @@ async fn every_subcommand_shall_invokes_still_exists_upstream() {
 
     let vfs = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
+    // **Every question answered with success, stated rather than fallen through** (`#162`): this
+    // test reads the argv each backend builds and asks whether those subcommands still exist
+    // upstream — it asserts nothing about what any of them printed, and two hundred stubs would
+    // be a second copy of the argv list this file exists to avoid writing.
+    mock.answer_everything_with(Ok(shall::core::executor::DryRunOutput::new().into()));
     let exec =
         CommandExecutor::with_layer(true, false, mock.clone(), vfs, Arc::new(DashMap::new()));
     let config = shall::config::Config::default();

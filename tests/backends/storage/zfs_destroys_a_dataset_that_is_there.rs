@@ -1,8 +1,23 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 #[tokio::test]
 async fn zfs_destroys_a_dataset_that_is_there() {
     let (mock, exec) = storage_layer(&[("zfs list -H -o name tank/data", out("tank/data\n"))]);
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "zfs destroy -r tank/data",
+        Ok(DryRunOutput::default().into()),
+    );
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "zfs destroy -r tank/data",
+        Ok(DryRunOutput::default().into()),
+    );
     let z = ZfsInstallable {
         core: Arc::new(ZfsBackendCore {
             executor: exec,

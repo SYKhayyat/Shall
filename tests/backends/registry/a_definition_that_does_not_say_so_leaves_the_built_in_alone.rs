@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// The default: a definition that does not say so leaves the built-in alone. Picking the
 /// name `apt` is not a way to become `apt`.
@@ -9,6 +10,10 @@ async fn a_definition_that_does_not_say_so_leaves_the_built_in_alone() {
     use shall::core::executor::MockExecutor;
     let vfs = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response("apt install -y -- jq", Ok(DryRunOutput::default().into()));
     let exec =
         CommandExecutor::with_layer(true, false, mock.clone(), vfs, Arc::new(DashMap::new()));
     let mut reg = BackendRegistry::new();

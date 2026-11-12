@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// `info` is what the planner asks, so it has to answer the same way `list` does. It used
 /// to answer `Path::exists`, which calls any directory on any filesystem a subvolume — and
@@ -17,6 +18,10 @@ async fn a_plain_directory_is_not_an_installed_subvolume() {
                 "btrfs subvolume list /srv",
                 "ID 256 gen 8 top level 5 path data\n",
             ),
+            // The qgroup probe `info` runs for a subvolume it did find, stated rather than fallen
+            // through (`#162`): no qgroup limits is the ordinary answer, and the property asserted
+            // below is the mount, not this.
+            ("btrfs qgroup show -r -f --raw /mnt/fs/data", ""),
         ],
     );
     let q = BtrfsQueryable {

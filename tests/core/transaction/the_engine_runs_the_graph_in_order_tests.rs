@@ -8,6 +8,7 @@
 
 use petgraph::stable_graph::StableDiGraph;
 use shall::app::sync::planner::{ChangePlanner, HostBackends, PlanScope};
+use shall::core::executor::DryRunOutput;
 use shall::core::{GraphAction, PackageSpec, StateRegistry, Transaction};
 use std::collections::HashMap;
 
@@ -187,6 +188,12 @@ async fn two_managers_run_at_once_and_one_manager_runs_one_at_a_time() {
     let executor = kernel.app.executor.clone();
 
     const STEP: Duration = Duration::from_millis(300);
+    // Stated rather than fallen through (`#162`): this test slows `brew list` down to watch two
+    // managers overlap, and a delay alone leaves the call unregistered — so the answer is the
+    // empty listing, registered beside the delay that is the actual subject.
+    kernel
+        .mock_executor
+        .set_response("brew list", Ok(DryRunOutput::default().into()));
     kernel.mock_executor.set_delay("brew list", STEP);
     kernel.mock_executor.set_delay("cargo install --list", STEP);
 

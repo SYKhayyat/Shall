@@ -47,9 +47,20 @@ impl shall::core::SnapshotProvider for FailingListProvider {
 #[tokio::test]
 async fn a_failed_snapshot_prune_is_reported_instead_of_being_swallowed() {
     let (mut engine, mock) = engine(Config::sandboxed(&config_dir("prune-failure"))).await;
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "brew info --json=v1 -- neovim",
+        Ok(DryRunOutput::default().into()),
+    );
     engine.snapshot_manager = Arc::new(SnapshotManager::with_provider(Box::new(
         FailingListProvider,
     )));
+    mock.set_response(
+        "brew info --json=v1 -- neovim",
+        Ok(DryRunOutput::default().into()),
+    );
     mock.set_response("brew install -- neovim", Ok(DryRunOutput::default().into()));
     let changes = install_changes(&[package("brew", "neovim")]);
     let (logs, guard) = log_collector();

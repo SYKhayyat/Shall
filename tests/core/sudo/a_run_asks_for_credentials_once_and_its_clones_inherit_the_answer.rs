@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// A run asks the machine for credentials once, and every handle it holds inherits the answer.
 ///
@@ -13,6 +14,14 @@ async fn a_run_asks_for_credentials_once_and_its_clones_inherit_the_answer() {
         return;
     }
     let (executor, mock) = wired();
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response("sudo -n -v", Ok(DryRunOutput::default().into()));
+    mock.set_response(
+        "sudo -n apt install -y curl",
+        Ok(DryRunOutput::default().into()),
+    );
     let _ = executor.run("apt", &["install", "-y", "curl"], true).await;
     let calls = mock.get_calls().await;
     assert_eq!(

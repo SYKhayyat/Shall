@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// Q6, the case the key exists for: a manager changes its CLI, and the person on that
 /// machine corrects it that day instead of waiting for a Shall release.
@@ -9,6 +10,13 @@ async fn a_definition_that_says_so_replaces_a_built_in() {
     use shall::core::executor::MockExecutor;
     let vfs = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "apt-fast install --assume-yes jq",
+        Ok(DryRunOutput::default().into()),
+    );
     let exec =
         CommandExecutor::with_layer(true, false, mock.clone(), vfs, Arc::new(DashMap::new()));
     let mut reg = BackendRegistry::new();

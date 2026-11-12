@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// A pinned version rides where that manager puts it, and still behind the terminator.
 ///
@@ -15,6 +16,13 @@ async fn a_trailing_positional_version_lands_after_the_name() {
 
     let vfs = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "dart pub global activate -- webdev 2.7.0",
+        Ok(DryRunOutput::default().into()),
+    );
     let exec =
         CommandExecutor::with_layer(true, false, mock.clone(), vfs, Arc::new(DashMap::new()));
     let mut reg = BackendRegistry::new();

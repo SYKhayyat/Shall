@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// **A removal that left the name answering owes the user a sentence** (`#136`, C11).
 ///
@@ -29,7 +30,23 @@ async fn a_removal_names_the_launcher_the_manager_left() {
     let launcher = bin.join("nimjson.cmd");
     std::fs::write(&launcher, b"@echo off\n").expect("the leftover launcher");
 
-    let (engine, _mock) = engine(config).await;
+    let (engine, mock) = engine(config).await;
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "brew info --json=v1 -- neovim",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response("brew install -- neovim", Ok(DryRunOutput::default().into()));
+    // Stated rather than fallen through (`#162`): brew knows nothing about the formula the second
+    // half installs, and that install itself succeeds. This test asserts about a launcher file and
+    // two log lines, so the answers it never looked at are the ones it says here.
+    mock.set_response(
+        "brew info --json=v1 -- neovim",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response("brew install -- neovim", Ok(DryRunOutput::default().into()));
 
     let (logs, guard) = log_collector();
     engine

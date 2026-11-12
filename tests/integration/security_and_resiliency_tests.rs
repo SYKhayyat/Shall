@@ -218,14 +218,19 @@ async fn rollback_after_failure(
         "brew info --json=v1 -- pkg-b",
         Ok(DryRunOutput::default().into()),
     );
-    match &first {
-        GraphAction::Install(_) => kernel
+    // A rolled-back **removal** puts the package back at the same call it was taken away with, so
+    // both verbs run and both are stated here. A rolled-back *install* is undone differently
+    // depending on what the machine held before (reverted, removed, or left alone because it is
+    // protected), so each of those tests states its own two answers instead of the helper
+    // guessing.
+    if let GraphAction::Remove { .. } = &first {
+        kernel
             .mock_executor
-            .set_response("brew install -- pkg-a", Ok(DryRunOutput::default().into())),
-        GraphAction::Remove { .. } => kernel.mock_executor.set_response(
+            .set_response("brew install -- pkg-a", Ok(DryRunOutput::default().into()));
+        kernel.mock_executor.set_response(
             "brew uninstall -- pkg-a",
             Ok(DryRunOutput::default().into()),
-        ),
+        );
     }
 
     if let Some(json) = installed_before {
@@ -270,6 +275,12 @@ async fn rollback_after_failure(
 #[tokio::test]
 async fn a_failed_upgrade_is_reverted_and_never_uninstalled() {
     let kernel = TestKernel::new().await;
+    // The reinstall that reverts the upgrade, and the version it is asked for — the assertion
+    // below is that no version is smuggled into the formula name, so the call is stated here
+    // rather than read out of the mock's silence (`#162`).
+    kernel
+        .mock_executor
+        .set_response("brew install -- pkg-a", Ok(DryRunOutput::default().into()));
     let (calls, _err) = rollback_after_failure(
         &kernel,
         GraphAction::Install(create_dummy_spec("pkg-a", "brew", None)),
@@ -410,6 +421,15 @@ async fn an_unreadable_prior_state_is_never_taken_for_absence() {
 #[tokio::test]
 async fn a_package_this_run_installed_is_still_removed() {
     let kernel = TestKernel::new().await;
+    // The install this run performed, and the removal that undoes it — the second is this
+    // test's subject, and both used to be read out of the mock's silence (`#162`).
+    kernel
+        .mock_executor
+        .set_response("brew install -- pkg-a", Ok(DryRunOutput::default().into()));
+    kernel.mock_executor.set_response(
+        "brew uninstall -- pkg-a",
+        Ok(DryRunOutput::default().into()),
+    );
     let (calls, _err) = rollback_after_failure(
         &kernel,
         GraphAction::Install(create_dummy_spec("pkg-a", "brew", None)),

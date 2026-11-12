@@ -1,8 +1,16 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 #[tokio::test]
 async fn a_command_for_the_account_this_process_is_runs_unwrapped() {
     let (e, mock) = wired();
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "gsettings get org.gnome.desktop.interface gtk-theme",
+        Ok(DryRunOutput::default().into()),
+    );
     let account = Account::current().expect("this process has an account");
     e.read_raw_as(
         &account,

@@ -5,6 +5,25 @@ use shall::core::executor::DryRunOutput;
 #[tokio::test]
 async fn a_kernel_change_rebuilds_the_out_of_tree_modules() {
     let (engine, mock) = engine(Config::sandboxed(&config_dir("kernel-rebuild"))).await;
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "brew info --json=v1 -- linux-image-generic",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "brew install -- linux-image-generic",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "brew info --json=v1 -- linux-image-generic",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "brew install -- linux-image-generic",
+        Ok(DryRunOutput::default().into()),
+    );
     mock.set_response(
         "sudo -n dkms autoinstall",
         Ok(DryRunOutput::default().into()),

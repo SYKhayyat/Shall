@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// asdf's fallback is an operand too, and used to be treated as a flag.
 ///
@@ -13,6 +14,13 @@ async fn a_required_version_fallback_is_an_operand_not_a_flag() {
 
     let vfs = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "asdf install nodejs latest",
+        Ok(DryRunOutput::default().into()),
+    );
     let exec =
         CommandExecutor::with_layer(true, false, mock.clone(), vfs, Arc::new(DashMap::new()));
     let mut reg = BackendRegistry::new();

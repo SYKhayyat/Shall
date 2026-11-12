@@ -33,6 +33,21 @@ async fn every_backend_sends_the_argv_its_manager_expects() {
             ..Default::default()
         };
 
+        // **This case's two commands, stated rather than fallen through** (`#162`): the empty
+        // success they received from silence. It is the argv the table already names, so an
+        // unmatched registration here means the product ran something else — a louder failure
+        // than the `check` below, which accepts any call *containing* the string.
+        for expected in [&case.install, &case.remove] {
+            if let super::Expect::Runs(argv) = expected {
+                mock.set_response(argv, Ok(shall::core::executor::DryRunOutput::new().into()));
+            }
+        }
+        // **Each ask-first effector, answered "absent" for the install half.** `remove_stubs`
+        // below says "present" for the removal half, and both halves used to read the same
+        // silence; the phases want different answers, so both are written down.
+        for (cmd, _) in case.install_stubs.iter().chain(case.remove_stubs.iter()) {
+            mock.set_response(cmd, Ok(shall::core::executor::DryRunOutput::new().into()));
+        }
         let installed = inst.install(&[spec], false).await;
         let after_install = mock.get_calls().await.len();
         // The removal's existence answers go in here, between the two drives, so an

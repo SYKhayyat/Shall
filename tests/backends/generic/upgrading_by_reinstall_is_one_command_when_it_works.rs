@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// `Q46`: **upgrading by reinstalling is one command, and still isolates a bad package.**
 ///
@@ -12,6 +13,14 @@ use super::*;
 async fn upgrading_by_reinstall_is_one_command_when_it_works() {
     let vfs = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "npm install -g -- a b c",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response("npm ls", Ok(DryRunOutput::default().into()));
     let mut core = apt_like_core(mock.clone(), vfs);
     core.name = "npm".into();
     core.config.name = "npm".into();

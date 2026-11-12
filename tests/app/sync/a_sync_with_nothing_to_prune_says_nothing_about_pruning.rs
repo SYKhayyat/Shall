@@ -18,11 +18,22 @@ async fn a_sync_with_nothing_to_prune_says_nothing_about_pruning() {
     };
     let (mut engine, mock) = engine(config).await;
 
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "brew info --json=v1 -- neovim",
+        Ok(DryRunOutput::default().into()),
+    );
+
     let provider = MockSnapshotProvider::new();
     provider
         .add_historical_snapshot("shall_pre_recent", 1)
         .await;
     engine.snapshot_manager = Arc::new(SnapshotManager::with_provider(Box::new(provider)));
+    mock.set_response(
+        "brew info --json=v1 -- neovim",
+        Ok(DryRunOutput::default().into()),
+    );
     mock.set_response("brew install -- neovim", Ok(DryRunOutput::default().into()));
     let (logs, guard) = log_collector();
 

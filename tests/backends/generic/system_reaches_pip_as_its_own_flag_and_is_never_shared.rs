@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// **`@system` reaches pip as `--break-system-packages`, and only for the line that said
 /// it** (`Q49`, owner ruling 2026-08-10).
@@ -11,6 +12,14 @@ use super::*;
 async fn system_reaches_pip_as_its_own_flag_and_is_never_shared() {
     let vfs = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response("pip install -- httpie", Ok(DryRunOutput::default().into()));
+    mock.set_response(
+        "pip install --break-system-packages -- black",
+        Ok(DryRunOutput::default().into()),
+    );
     let inst = GenericInstallable {
         core: Arc::new(pip_core(mock.clone(), vfs)),
     };

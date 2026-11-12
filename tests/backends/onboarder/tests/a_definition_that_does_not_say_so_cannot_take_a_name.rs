@@ -1,10 +1,15 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// The default is unchanged and it is the security property: picking a name already in
 /// use is not enough to take it. Only saying so is.
 #[tokio::test]
 async fn a_definition_that_does_not_say_so_cannot_take_a_name() {
     let (mock, exec) = mock_exec();
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response("paru -S -- jq", Ok(DryRunOutput::default().into()));
     let mut reg = BackendRegistry::new();
 
     let first = CustomBackendDef {

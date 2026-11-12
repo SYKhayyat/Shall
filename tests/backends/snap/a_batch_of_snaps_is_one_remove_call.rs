@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// Q45. Removal batches; install does not, and the asymmetry is the point — `snap install`
 /// has to choose per package between `install` and `refresh --channel=` depending on what
@@ -8,6 +9,20 @@ use super::*;
 async fn a_batch_of_snaps_is_one_remove_call() {
     let vfs = Arc::new(dashmap::DashMap::new());
     let mock = Arc::new(shall::core::executor::MockExecutor::new(vfs.clone()));
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "snap remove -- code firefox",
+        Ok(DryRunOutput::default().into()),
+    );
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "snap remove -- code firefox",
+        Ok(DryRunOutput::default().into()),
+    );
     let exec = CommandExecutor::with_layer(
         false,
         false,

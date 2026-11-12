@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// The leading word of a repository command is a program, and for two backends it was a
 /// subcommand of a manager that has no such subcommand — `apt add-apt-repository …` and
@@ -36,6 +37,13 @@ async fn every_repo_row_runs_the_program_that_edits_that_managers_sources() {
             .as_repo_manager()
             .unwrap_or_else(|| panic!("{} manages no repositories", name));
 
+        // **Every command this row's two repo verbs send, stated rather than fallen through**
+        // (`#162`). The empty success each one received from silence, spelled per manager because
+        // every iteration builds its own mock — and the argv, not the program, is what this test
+        // has never written down.
+        for argv in repo_argv(name) {
+            mock.set_response(argv, Ok(DryRunOutput::default().into()));
+        }
         let _ = mgr
             .add_repo("shalltest", "https://example.invalid/repo", false)
             .await;
@@ -63,5 +71,34 @@ async fn every_repo_row_runs_the_program_that_edits_that_managers_sources() {
                 calls
             );
         }
+    }
+}
+
+/// The argv each repository row sends, by backend.
+///
+/// Two of these are `sh -c` scripts rather than a manager's own verb, which is the whole finding
+/// this test records — so they are spelled here in full and matched exactly.
+fn repo_argv(name: &str) -> &'static [&'static str] {
+    match name {
+        "apt" => &["add-apt-repository -y https://example.invalid/repo"],
+        "apk" => &[
+            "sh -c echo 'https://example.invalid/repo' >> /etc/apk/repositories",
+            "cat /etc/apk/repositories",
+        ],
+        "zypper" => &["zypper addrepo https://example.invalid/repo shalltest"],
+        "winget" => &[
+            "winget source add --name shalltest --arg https://example.invalid/repo",
+            "winget source list",
+        ],
+        "scoop" => &[
+            "scoop bucket add shalltest https://example.invalid/repo",
+            "scoop bucket list",
+        ],
+        "choco" => &[
+            "choco source add -n shalltest -s https://example.invalid/repo",
+            "choco source list",
+        ],
+        "gem" => &["gem sources -a https://example.invalid/repo", "gem sources"],
+        other => panic!("`repo_argv` was asked about `{other}`, which is not a repository row"),
     }
 }

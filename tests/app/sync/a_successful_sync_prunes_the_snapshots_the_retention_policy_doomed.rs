@@ -13,6 +13,13 @@ async fn a_successful_sync_prunes_the_snapshots_the_retention_policy_doomed() {
     };
     let (mut engine, mock) = engine(config).await;
 
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "brew info --json=v1 -- neovim",
+        Ok(DryRunOutput::default().into()),
+    );
+
     let provider = MockSnapshotProvider::new();
     let deletions = provider.deletions.clone();
     provider
@@ -23,6 +30,10 @@ async fn a_successful_sync_prunes_the_snapshots_the_retention_policy_doomed() {
         .await;
     engine.snapshot_manager = Arc::new(SnapshotManager::with_provider(Box::new(provider)));
 
+    mock.set_response(
+        "brew info --json=v1 -- neovim",
+        Ok(DryRunOutput::default().into()),
+    );
     mock.set_response("brew install -- neovim", Ok(DryRunOutput::default().into()));
     let changes = install_changes(&[package("brew", "neovim")]);
     let (logs, guard) = log_collector();

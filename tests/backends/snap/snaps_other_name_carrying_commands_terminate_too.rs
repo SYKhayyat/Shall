@@ -1,9 +1,22 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 #[tokio::test]
 async fn snaps_other_name_carrying_commands_terminate_too() {
     let vfs = Arc::new(dashmap::DashMap::new());
     let mock = Arc::new(shall::core::executor::MockExecutor::new(vfs.clone()));
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response("snap find -- code", Ok(DryRunOutput::default().into()));
+    mock.set_response("snap info -- code", Ok(DryRunOutput::default().into()));
+    mock.set_response("snap remove -- code", Ok(DryRunOutput::default().into()));
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response("snap find -- code", Ok(DryRunOutput::default().into()));
+    mock.set_response("snap info -- code", Ok(DryRunOutput::default().into()));
+    mock.set_response("snap remove -- code", Ok(DryRunOutput::default().into()));
     let exec = CommandExecutor::with_layer(
         false,
         false,

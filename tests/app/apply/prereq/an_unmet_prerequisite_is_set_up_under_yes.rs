@@ -1,15 +1,20 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// The reported case: mix cannot install anything, and `--yes` is the flag that says do it
 /// (owner ruling, 2026-07-29). Measured in the tools image: without Hex, `mix hex.info` is
 /// `** (Mix) The task "hex.info" could not be found`, exit 1.
 #[tokio::test]
 async fn an_unmet_prerequisite_is_set_up_under_yes() {
-    let mut h = harness(&[(
-        "mix hex.info",
-        false,
-        "** (Mix) The task \"hex.info\" could not be found",
-    )]);
+    let mut h = harness(&[
+        (
+            "mix hex.info",
+            false,
+            "** (Mix) The task \"hex.info\" could not be found",
+        ),
+        // The setup `--yes` authorises, answered rather than fallen through (`#162`).
+        ("mix local.hex --force", true, ""),
+    ]);
     h.config = Arc::new(shall::config::Config {
         yes: true,
         ..Default::default()

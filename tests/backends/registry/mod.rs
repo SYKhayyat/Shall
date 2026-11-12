@@ -126,6 +126,12 @@ struct ArgvCase {
     /// install half keeps the mock default, which reads as absent — exactly what an
     /// install's own ask wants. Empty means no stubs.
     remove_stubs: &'static [(&'static str, &'static str)],
+    /// Answers the *install* half's ask-first probes need: the effectors (snap, lvm, the
+    /// service rows, the settings row) each ask whether the thing is already there before they
+    /// create it, and "no" is what an install wants. Written down for the same reason
+    /// `remove_stubs` is: the install half used to read the mock's silence, and a probe that
+    /// answered "present" from nowhere would have made the install converge on absent.
+    install_stubs: &'static [(&'static str, &'static str)],
 }
 impl ArgvCase {
     /// A package manager: the declaration is a bare package name.
@@ -143,6 +149,7 @@ impl ArgvCase {
             install,
             remove,
             remove_stubs: &[],
+            install_stubs: &[],
         }
     }
     /// A backend whose declaration is not a package name.
@@ -162,7 +169,13 @@ impl ArgvCase {
             install,
             remove,
             remove_stubs: &[],
+            install_stubs: &[],
         }
+    }
+    /// Attach the existence answers this backend's install asks for.
+    fn with_install_stubs(mut self, stubs: &'static [(&'static str, &'static str)]) -> Self {
+        self.install_stubs = stubs;
+        self
     }
     /// Attach the existence answers this backend's removal asks for.
     fn with_remove_stubs(mut self, stubs: &'static [(&'static str, &'static str)]) -> Self {
@@ -190,38 +203,38 @@ fn argv_cases() -> Vec<ArgvCase> {
         ArgvCase::pkg(
             "zypper",
             &register_zypper,
-            Runs("zypper install -y"),
-            Runs("zypper remove -y"),
+            Runs("zypper install -y -- jq"),
+            Runs("zypper remove -y -- jq"),
         ),
         ArgvCase::pkg(
             "winget",
             &register_winget,
-            Runs("winget install"),
-            Runs("winget uninstall"),
+            Runs("winget install --silent --accept-source-agreements --accept-package-agreements -- jq"),
+            Runs("winget uninstall --silent -- jq"),
         ),
         ArgvCase::pkg(
             "scoop",
             &register_scoop,
-            Runs("scoop install"),
-            Runs("scoop uninstall"),
+            Runs("scoop install jq"),
+            Runs("scoop uninstall jq"),
         ),
         ArgvCase::pkg(
             "choco",
             &register_choco,
-            Runs("choco install"),
-            Runs("choco uninstall"),
+            Runs("choco install -y -- jq"),
+            Runs("choco uninstall -y -- jq"),
         ),
         ArgvCase::pkg(
             "mas",
             &register_mas,
-            Runs("mas install"),
-            Runs("mas uninstall"),
+            Runs("mas install jq"),
+            Runs("mas uninstall jq"),
         ),
         ArgvCase::pkg(
             "macports",
             &register_macports,
-            Runs("port install"),
-            Runs("port uninstall"),
+            Runs("port install -- jq"),
+            Runs("port uninstall -- jq"),
         ),
         // PowerShell's module manager. Its module was `#[cfg(target_os = "windows")]` until
         // 2026-07-30, so it could not appear in this table at all: the row would not compile
@@ -229,8 +242,8 @@ fn argv_cases() -> Vec<ArgvCase> {
         ArgvCase::pkg(
             "psresource",
             &|r, e| shall::backends::psresource::register(r, e, &Config::default()),
-            Runs("Install-PSResource"),
-            Runs("Uninstall-PSResource"),
+            Runs("pwsh -NoProfile -NonInteractive -Command Install-PSResource -Name 'jq' -TrustRepository -AcceptLicense -Scope CurrentUser -Reinstall"),
+            Runs("pwsh -NoProfile -NonInteractive -Command Uninstall-PSResource -Name 'jq'"),
         ),
         // The two rows that carried the defect as their expectation. `--` is not decoration
         // here: these are the two managers that run as root.
@@ -260,37 +273,37 @@ fn argv_cases() -> Vec<ArgvCase> {
         ArgvCase::pkg(
             "guix",
             &register_guix,
-            Runs("guix install"),
-            Runs("guix remove"),
+            Runs("guix install -- jq"),
+            Runs("guix remove -- jq"),
         ),
         ArgvCase::pkg(
             "emerge",
             &register_emerge,
-            Runs("emerge"),
-            Runs("--unmerge"),
+            Runs("emerge --ask=n --quiet -- jq"),
+            Runs("emerge --unmerge --ask=n -- jq"),
         ),
         ArgvCase::pkg(
             "eopkg",
             &register_eopkg,
-            Runs("eopkg install -y"),
-            Runs("eopkg remove -y"),
+            Runs("eopkg install -y -- jq"),
+            Runs("eopkg remove -y -- jq"),
         ),
         ArgvCase::pkg(
             "slackpkg",
             &register_slackpkg,
-            Runs("slackpkg -batch=on"),
-            Runs("remove"),
+            Runs("slackpkg -batch=on -default_answer=y install jq"),
+            Runs("slackpkg -batch=on -default_answer=y remove jq"),
         ),
         ArgvCase::pkg(
             "moss",
             &register_moss,
-            Runs("moss install"),
-            Runs("moss remove"),
+            Runs("moss install jq"),
+            Runs("moss remove jq"),
         ),
         // The AUR helpers: pacman-syntax, registered on Linux only, and until 2026-07-30
         // reached through a five-argument helper no row could name.
-        ArgvCase::pkg("yay", &register_yay, Runs("yay -S"), Runs("yay -Rs")),
-        ArgvCase::pkg("paru", &register_paru, Runs("paru -S"), Runs("paru -Rs")),
+        ArgvCase::pkg("yay", &register_yay, Runs("yay -S --noconfirm --needed -- jq"), Runs("yay -Rs --noconfirm -- jq")),
+        ArgvCase::pkg("paru", &register_paru, Runs("paru -S --noconfirm --needed -- jq"), Runs("paru -Rs --noconfirm -- jq")),
         // ---- Cross-platform store-shaped managers.
         ArgvCase::pkg(
             "brew",
@@ -306,7 +319,8 @@ fn argv_cases() -> Vec<ArgvCase> {
             &|r, e| shall::backends::snap::register(r, e, &Config::default()),
             Runs("snap install -- jq"),
             Runs("snap remove -- jq"),
-        ),
+        )
+        .with_install_stubs(&[("snap info -- jq", "")]),
         ArgvCase::pkg(
             "flatpak",
             &|r, e| shall::backends::flatpak::register(r, e, &Config::default()),
@@ -334,21 +348,21 @@ fn argv_cases() -> Vec<ArgvCase> {
         ArgvCase::pkg(
             "pip",
             &register_pip,
-            Runs("pip install"),
-            Runs("pip uninstall"),
+            Runs("pip install -- jq"),
+            Runs("pip uninstall -y -- jq"),
         ),
         ArgvCase::pkg(
             "gem",
             &register_gem,
-            Runs("gem install"),
-            Runs("gem uninstall"),
+            Runs("gem install jq"),
+            Runs("gem uninstall jq"),
         ),
-        ArgvCase::pkg("bun", &register_bun, Runs("bun add"), Runs("bun remove")),
+        ArgvCase::pkg("bun", &register_bun, Runs("bun add -g -- jq"), Runs("bun remove -g -- jq")),
         ArgvCase::pkg(
             "dotnet",
             &register_dotnet,
-            Runs("dotnet tool install"),
-            Runs("dotnet tool uninstall"),
+            Runs("dotnet tool install --global -- jq"),
+            Runs("dotnet tool uninstall --global -- jq"),
         ),
         ArgvCase::pkg(
             "cargo",
@@ -420,50 +434,50 @@ fn argv_cases() -> Vec<ArgvCase> {
         ArgvCase::pkg(
             "composer",
             &register_composer,
-            Runs("composer global require"),
-            Runs("global remove"),
+            Runs("composer global require -- jq"),
+            Runs("composer global remove -- jq"),
         ),
         ArgvCase::pkg(
             "opam",
             &register_opam,
-            Runs("opam install"),
-            Runs("opam remove"),
+            Runs("opam install -y -- jq"),
+            Runs("opam remove -y -- jq"),
         ),
         ArgvCase::pkg(
             "luarocks",
             &register_luarocks,
-            Runs("luarocks install"),
-            Runs("luarocks remove"),
+            Runs("luarocks install -- jq"),
+            Runs("luarocks remove -- jq"),
         ),
         ArgvCase::pkg(
             "nimble",
             &register_nimble,
-            Runs("nimble install"),
-            Runs("nimble uninstall"),
+            Runs("nimble install -y jq"),
+            Runs("nimble uninstall -y jq"),
         ),
         ArgvCase::pkg(
             "pixi",
             &register_pixi,
-            Runs("pixi global install"),
-            Runs("pixi global uninstall"),
+            Runs("pixi global install -- jq"),
+            Runs("pixi global uninstall -- jq"),
         ),
         ArgvCase::pkg(
             "spack",
             &register_spack,
-            Runs("spack install"),
-            Runs("spack uninstall"),
+            Runs("spack install jq"),
+            Runs("spack uninstall -y jq"),
         ),
         ArgvCase::pkg(
             "mix",
             &register_mix,
-            Runs("mix archive.install"),
-            Runs("mix archive.uninstall"),
+            Runs("mix archive.install hex --force -- jq"),
+            Runs("mix archive.uninstall --force -- jq"),
         ),
         ArgvCase::pkg(
             "asdf",
             &register_asdf,
-            Runs("asdf install"),
-            Runs("asdf uninstall"),
+            Runs("asdf install jq latest"),
+            Runs("asdf uninstall jq"),
         ),
         // helm installs from `@url=` and lists/removes by name. It was exempt from this
         // table while a row could only carry a package name — the exemption said the row
@@ -478,8 +492,8 @@ fn argv_cases() -> Vec<ArgvCase> {
             Runs("helm plugin uninstall -- shall-probe"),
         ),
         // The two Haskell managers, which have no uninstall verb at all.
-        ArgvCase::pkg("cabal", &register_cabal, Runs("cabal install"), Unsupported),
-        ArgvCase::pkg("stack", &register_stack, Runs("stack install"), Unsupported),
+        ArgvCase::pkg("cabal", &register_cabal, Runs("cabal install -- jq"), Unsupported),
+        ArgvCase::pkg("stack", &register_stack, Runs("stack install jq"), Unsupported),
         // ---- Editor extension hosts.
         ArgvCase::pkg(
             "vscode",
@@ -498,8 +512,8 @@ fn argv_cases() -> Vec<ArgvCase> {
         ArgvCase::pkg(
             "emacs",
             &|r, e| shall::backends::emacs::register(r, e, &Config::default()),
-            Runs("(dolist (p '(jq)) (package-install p))"),
-            Runs("(package-delete p)"),
+            Runs("emacs --batch --eval (progn (require 'package) (package-initialize) (unless package-archive-contents (package-refresh-contents)) (dolist (p '(jq)) (package-install p)))"),
+            Runs("emacs --batch --eval (progn (require 'package) (package-initialize) (dolist (n '(jq)) (let ((p (cadr (assoc n package-alist)))) (if p (package-delete p)))))"),
         ),
         // ---- Resource backends: the declaration is not a package name, and each addresses
         // its own kind of thing. These are the rows the old table's shape could not hold.
@@ -511,6 +525,12 @@ fn argv_cases() -> Vec<ArgvCase> {
             Runs("lvcreate -n data -L 1G vg0"),
             Runs("lvremove -y vg0/data"),
         )
+        .with_install_stubs(&[(
+            // The install asks for the volume's size before it creates one, and an empty answer
+            // is "there is nothing here yet" — which is what an install wants to hear.
+            "lvs --noheadings --units b --nosuffix -o lv_size vg0/data",
+            "",
+        )])
         .with_remove_stubs(&[(
             // Removal asks whether the volume is there before it removes (already-absent
             // is convergence); the stub answers "present".
@@ -556,7 +576,17 @@ fn argv_cases() -> Vec<ArgvCase> {
             // `systemctl`. The product was right; the test had two branches for three cases.
              RunsOneOf(&["sc start nginx", "launchctl", "systemctl", "rc-service nginx start"]),
              RunsOneOf(&["sc stop nginx", "launchctl", "systemctl", "rc-service nginx stop"]),
-        ),
+        )
+        .with_install_stubs(&[
+            // Provisioning starts and enables; the answer is a success either way, and the argv is
+            // what the row asserts.
+            ("systemctl --no-pager start -- nginx", ""),
+            ("systemctl --no-pager enable -- nginx", ""),
+        ])
+        .with_remove_stubs(&[
+            ("systemctl --no-pager stop -- nginx", ""),
+            ("systemctl --no-pager disable -- nginx", ""),
+        ]),
         ArgvCase::shaped(
             "setting",
             &|r, e| shall::backends::setting::register(r, e, &Config::default()),
@@ -597,7 +627,9 @@ fn argv_cases() -> Vec<ArgvCase> {
                     "gsettings reset org.shall.probe key"
                 })
             },
-        ),
+        )
+        .with_install_stubs(&[("gsettings get org.shall.probe key", "")])
+        .with_remove_stubs(&[("gsettings get org.shall.probe key", "")]),
         // ---- Backends that run no command. Each fetches over HTTP or writes to the
         // filesystem directly, so "no argv" is the right answer and not a hole — but it is
         // asserted, because a download backend that started shelling out to `curl` would

@@ -156,6 +156,12 @@ async fn a_shared_probe_still_answers_per_package() {
 #[tokio::test]
 async fn a_mutation_makes_the_next_question_a_question_again() {
     let (mock, reg) = npm_with_a_prefix().await;
+    // The mutation this test drives, stated rather than fallen through (`#162`): its success is
+    // what drops the memo, and what the test asserts is the *next* probe re-running.
+    mock.set_response(
+        "npm install -g -- alpha@1.0.0",
+        Ok(DryRunOutput::default().into()),
+    );
     let npm = reg.get("npm").expect("npm registers");
     let q = npm.as_queryable().expect("npm answers questions");
 
@@ -218,6 +224,12 @@ async fn a_mutation_makes_the_next_question_a_question_again() {
 #[tokio::test]
 async fn a_mutation_landing_mid_question_does_not_leave_that_answer_current() {
     let (mock, reg) = npm_with_a_prefix().await;
+    // The mutation this test drives, stated rather than fallen through (`#162`): its success is
+    // what drops the memo, and what the test asserts is the *next* probe re-running.
+    mock.set_response(
+        "npm install -g -- alpha@1.0.0",
+        Ok(DryRunOutput::default().into()),
+    );
     let npm = reg.get("npm").expect("npm registers");
     mock.set_delay("npm prefix -g", std::time::Duration::from_millis(400));
 

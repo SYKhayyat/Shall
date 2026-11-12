@@ -722,6 +722,9 @@ pub struct MockExecutor {
     forbidden: DashMap<String, ()>,
     /// Standing facts about the machine — see [`MockExecutor::set_machine_response`].
     machine: DashMap<String, ()>,
+    /// The answer for every command with no exact registration — see
+    /// [`MockExecutor::answer_everything_with`].
+    default_response: std::sync::Mutex<Option<Result<StdOutput>>>,
     /// How long a command takes, for tests about concurrency rather than about output.
     delays: DashMap<String, std::time::Duration>,
     /// Set by a test that means it — see [`MockExecutor::allow_unmatched_registrations`].
@@ -747,6 +750,7 @@ impl MockExecutor {
             unstubbed: DashMap::new(),
             forbidden: DashMap::new(),
             machine: DashMap::new(),
+            default_response: std::sync::Mutex::new(None),
             delays: DashMap::new(),
             allow_unmatched: std::sync::atomic::AtomicBool::new(false),
             deny_unstubbed: std::sync::atomic::AtomicBool::new(false),
@@ -784,6 +788,25 @@ impl MockExecutor {
     ) {
         self.responses.insert(cmd_pattern.to_string(), response);
         self.forbidden.insert(cmd_pattern.to_string(), ());
+    }
+
+    /// Answer every command with no exact registration, and record none of them as unanswered.
+    ///
+    /// For a test that drives a whole surface to read the **argv** and asserts nothing about
+    /// output: `argv_drift_tests` walks every backend's subcommand chain and asks whether those
+    /// subcommands still exist upstream, so what each call returned is not a fact it has an
+    /// opinion about. The ledger stays honest because this is a *written* answer rather than
+    /// silence — the test says "every question here is answered with success", which is a claim
+    /// that can be wrong, and the unused-stub check still applies to everything registered by
+    /// name.
+    ///
+    /// Not a fixture default: a `TestKernel` test that reaches an unexpected command is a test
+    /// whose machine is not what it thinks, and that stays reportable.
+    pub fn answer_everything_with(&self, response: Result<StdOutput>) {
+        *self
+            .default_response
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(response);
     }
 
     /// Register a **standing fact about the machine** — what a manager holds — rather than this
@@ -979,6 +1002,14 @@ impl ExecutionLayer for MockExecutor {
         }
         if let Some(res) = self.responses.get(&full_cmd) {
             self.matched.insert(full_cmd, ());
+            return res.clone();
+        }
+        if let Some(res) = self
+            .default_response
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
             return res.clone();
         }
         // Recorded, not refused. Most callers of an unstubbed command are asserting the argv or

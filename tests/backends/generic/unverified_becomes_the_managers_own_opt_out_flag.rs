@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// Q5. `@unverified` is what turns off a verification the *manager* does, and it reaches
 /// the command line as that manager's own flag.
@@ -10,6 +11,13 @@ async fn unverified_becomes_the_managers_own_opt_out_flag() {
     }
     let vfs = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "helm plugin install --verify=false -- https://github.com/databus23/helm-diff",
+        Ok(DryRunOutput::default().into()),
+    );
     let inst = GenericInstallable {
         core: Arc::new(source_option_core(mock.clone(), vfs)),
     };

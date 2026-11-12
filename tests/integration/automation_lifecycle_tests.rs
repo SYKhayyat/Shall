@@ -106,6 +106,16 @@ async fn test_snapshot_retention_respects_dry_run() {
 #[tokio::test]
 async fn test_systemd_oncalendar_translation_logic() {
     let kernel = TestKernel::new().await;
+    // Stated rather than fallen through (`#162`): the two systemd calls provisioning makes, as the
+    // user-scoped unit this test is about. What the test asserts is the unit text below.
+    for cmd in [
+        "systemctl --no-pager --user daemon-reload",
+        "systemctl --no-pager --user enable --now shall-weekly-sync-task.timer",
+    ] {
+        kernel
+            .mock_executor
+            .set_response(cmd, Ok(shall::core::executor::DryRunOutput::new().into()));
+    }
 
     // Input: Every Monday at 4:30 AM ("30 4 * * 1")
     let cron = "30 4 * * 1";

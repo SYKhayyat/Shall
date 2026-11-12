@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// Q6. `overrides = true` replaces whatever already holds the name. Here that is an
 /// earlier custom definition; `a_definition_that_says_so_replaces_a_built_in` in
@@ -6,6 +7,13 @@ use super::*;
 #[tokio::test]
 async fn overrides_replaces_the_definition_that_held_the_name() {
     let (mock, exec) = mock_exec();
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "paru-git -S --noconfirm jq",
+        Ok(DryRunOutput::default().into()),
+    );
     let mut reg = BackendRegistry::new();
 
     let first = CustomBackendDef {

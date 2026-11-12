@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// Both sides of the rule, on the four backends that put a version after the name.
 ///
@@ -69,6 +70,11 @@ async fn a_version_after_the_name_keeps_the_terminator_unless_it_is_an_option() 
     {
         let vfs = Arc::new(DashMap::new());
         let mock = Arc::new(MockExecutor::new(vfs.clone()));
+
+        // Stated rather than fallen through (`#162`): each case's own command, so the answer
+        // travels with the case instead of being a list of every manager in the file — a fresh
+        // mock per iteration means a list here would be four stubs and one that ran.
+        mock.set_response(expected, Ok(DryRunOutput::default().into()));
         let exec =
             CommandExecutor::with_layer(true, false, mock.clone(), vfs, Arc::new(DashMap::new()));
         let mut reg = BackendRegistry::new();

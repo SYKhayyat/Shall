@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// `shall clean-cache` reaches the managers that have one, and says nothing about the rest.
 ///
@@ -38,6 +39,11 @@ async fn cache_cleaning_runs_a_command_or_refuses_by_name() {
             .get(name)
             .and_then(|b| b.as_upgradable().cloned())
             .unwrap_or_else(|| panic!("{name} cannot upgrade"));
+        // Stated rather than fallen through (`#162`): the answer to this row's own cache
+        // command, which for every manager is an empty success. `want` below is the argv, and
+        // registering it means the product that emitted something else fails here rather than
+        // passing on a silence.
+        mock.set_response(want, Ok(DryRunOutput::default().into()));
         up.clean_cache(false)
             .await
             .unwrap_or_else(|e| panic!("{name} has a cache verb and refused it: {e}"));
@@ -52,6 +58,11 @@ async fn cache_cleaning_runs_a_command_or_refuses_by_name() {
     // none may run something and then report it has no cache.
     let vfs = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
+    // **Every question answered with success, stated rather than fallen through** (`#162`): this
+    // half asks each backend whether it runs *anything* for `clean-cache`, and not one of the
+    // eighteen answers is a fact it asserts. Spelling them out would be a second copy of the
+    // manager list that this half exists to walk.
+    mock.answer_everything_with(Ok(DryRunOutput::default().into()));
     let exec =
         CommandExecutor::with_layer(true, false, mock.clone(), vfs, Arc::new(DashMap::new()));
     let mut reg = BackendRegistry::new();

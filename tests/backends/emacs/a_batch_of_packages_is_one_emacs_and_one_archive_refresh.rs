@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// `Q46`. Each install spawned a whole Emacs **and** a `package-refresh-contents`, which is
 /// a network fetch of the archive. Ten packages meant ten startups and ten refreshes of an
@@ -7,6 +8,20 @@ use super::*;
 #[tokio::test]
 async fn a_batch_of_packages_is_one_emacs_and_one_archive_refresh() {
     let (core, mock) = wired();
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "emacs --batch --eval (progn (require 'package) (package-initialize) (unless package-archive-contents (package-refresh-contents)) (dolist (p '(csv-mode rainbow-mode)) (package-install p)))",
+        Ok(DryRunOutput::default().into()),
+    );
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "emacs --batch --eval (progn (require 'package) (package-initialize) (unless package-archive-contents (package-refresh-contents)) (dolist (p '(csv-mode rainbow-mode)) (package-install p)))",
+        Ok(DryRunOutput::default().into()),
+    );
     let specs = vec![
         shall::core::PackageSpec {
             name: "csv-mode".into(),

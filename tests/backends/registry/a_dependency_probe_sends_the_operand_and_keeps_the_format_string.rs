@@ -1,4 +1,5 @@
 use super::*;
+use shall::core::executor::DryRunOutput;
 
 /// A dependency probe sends its operand and keeps the manager's own format language.
 ///
@@ -31,6 +32,10 @@ async fn a_dependency_probe_sends_the_operand_and_keeps_the_format_string() {
     for (name, register, argv) in want {
         let vfs = Arc::new(DashMap::new());
         let mock = Arc::new(MockExecutor::new(vfs.clone()));
+
+        // Stated rather than fallen through (`#162`): the case's own argv, registered on the
+        // mock this iteration builds. A list of all three here would leave two dead per pass.
+        mock.set_response(argv, Ok(DryRunOutput::default().into()));
         let exec =
             CommandExecutor::with_layer(true, false, mock.clone(), vfs, Arc::new(DashMap::new()));
         let mut reg = BackendRegistry::new();

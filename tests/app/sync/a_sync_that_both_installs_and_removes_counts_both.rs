@@ -8,6 +8,25 @@ use shall::core::executor::DryRunOutput;
 #[tokio::test]
 async fn a_sync_that_both_installs_and_removes_counts_both() {
     let (engine, mock) = engine(Config::sandboxed(&config_dir("both-counters"))).await;
+
+    // Stated rather than fallen through (`#162`): what this test asks its manager, and the
+    // answer it read from silence before. The assertions here are about the argv.
+    mock.set_response(
+        "brew info --json=v1 -- neovim",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "brew info --json=v1 -- old-brew",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "brew info --json=v1 -- neovim",
+        Ok(DryRunOutput::default().into()),
+    );
+    mock.set_response(
+        "brew info --json=v1 -- old-brew",
+        Ok(DryRunOutput::default().into()),
+    );
     mock.set_response("brew install -- neovim", Ok(DryRunOutput::default().into()));
     mock.set_response(
         "brew uninstall -- old-brew",
