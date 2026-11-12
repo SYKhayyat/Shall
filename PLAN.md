@@ -1599,6 +1599,26 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     file naming the three, since a typo falling back to `ask` would read as the setting not
     working. II.91, V.244, C26. Whether a `never` decline should exit non-zero forever is a
     separate question, filed as #161. — ISSUE #94
+- [ ] #162 141 tests assert from an empty string they never wrote. **Measured, and half converted.**
+  The ledger is `SHALL_AUDIT_UNSTUBBED=1` over the suite: each test that fell through to the
+  empty-success default is a test whose assertions about what Shall *printed* proved nothing.
+  - **What is stated now: 141 → 78 tests, 596 → 457 fall-throughs.** Four commits: the orphan
+    tests, eighteen `TestKernel` files, the fixture's standing facts, and four shared helpers.
+  - **The fixture states the machine once** (`MockExecutor::set_machine_response`): a manager's
+    whole listing is not a claim about the product's argv, so it is registered as a fact and
+    excused from the unused-stub check *by key* — not `allow_unmatched_registrations`, which
+    would excuse every dead stub in the mock. Two tests in `an_unanswered_command_is_a_defect_tests`
+    hold that difference.
+  - **What is left is the long tail** — 78 tests in 76 files, mostly one each, and mostly
+    per-package answers (`brew info -- pkg`, `apt install`, `flatpak install`) which belong where
+    the test asserts rather than in the fixture. The biggest single clusters are
+    `the_probe_argv_does_not_depend_on_the_package_tests` (2) and the `go env GOPATH` /
+    `sudo -n -v` probes.
+  - **Backend tests that build their own `MockExecutor` per step were left alone on purpose**: the
+    audit reports against one mock while the assertion reads calls from another, so a stub
+    registered in the test is never matched. That needs the *helper* they share to state the
+    machine, not the test.
+  - ISSUE #162
 - [x] #89 guard-reachability control builds a vacuous fixture. (**BUILT — and the state the control
   needs turned out to be reachable, but not through any of the three shapes the fixture had tried.**
   `plan` wrote 2 removals with no guard refusal because nothing protected them, and the missing
