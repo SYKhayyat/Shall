@@ -138,7 +138,7 @@ impl Schedules<'_> {
         }
         for name in &orphans {
             self.scheduler
-                .deprovision(self.executor, name, None, reaped.clone())
+                .deprovision(self.executor, name, None, reaped)
                 .await?;
         }
         tracing::warn!(
