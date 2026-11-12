@@ -8,6 +8,13 @@ use super::*;
 async fn an_upgrade_whose_every_attempt_fails_is_reported() {
     let vfs = Arc::new(DashMap::new());
     let mock = Arc::new(MockExecutor::new(vfs.clone()));
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    mock.set_response(
+        "npm ls",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     // Every shape the reinstall takes must fail: the batch and each individual retry.
     // (The mock answers by exact command line; npm terminates its options, so the
     // names arrive after `--`.)

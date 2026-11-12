@@ -62,6 +62,13 @@ async fn recovery_finishes_the_work_a_doomed_entry_is_not_holding_up() {
     let kernel = TestKernel::new().await;
     let (graph, _) = graph_with_one_doomed_node();
 
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew install -- unrelated",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+
     let mut tx = Transaction::with_config(
         graph,
         kernel.app.registry.clone(),
@@ -115,6 +122,21 @@ async fn recovery_finishes_the_work_a_doomed_entry_is_not_holding_up() {
 async fn a_sync_still_stops_at_the_first_failure() {
     let kernel = TestKernel::new().await;
     let (graph, _) = graph_with_one_doomed_node();
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- unrelated",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew install -- unrelated",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew uninstall -- unrelated",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
 
     let mut tx = Transaction::with_config(
         graph,

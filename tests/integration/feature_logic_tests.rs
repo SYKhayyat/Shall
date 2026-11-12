@@ -164,6 +164,17 @@ async fn test_module_resolution_failure_handling() {
 #[tokio::test]
 async fn test_sync_report_generation_schema_fidelity() {
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- ripgrep",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew list --versions",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let state_guard = kernel.state.lock().await;
 
     let planner = ChangePlanner::new(
@@ -230,6 +241,17 @@ async fn test_sync_report_generation_schema_fidelity() {
 #[tokio::test]
 async fn test_scoped_planner_filtering_accuracy() {
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- pkg-work",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew list --versions",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let state_guard = kernel.state.lock().await;
     let planner = ChangePlanner::new(
         kernel.app.registry.clone(),

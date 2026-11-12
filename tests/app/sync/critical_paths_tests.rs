@@ -98,6 +98,21 @@ async fn a_declared_package_is_one_node_however_many_things_it_depends_on() {
 #[tokio::test]
 async fn test_dag_cycle_detection_logic() {
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- pkg-a",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- pkg-b",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew list --versions",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let state_lock = kernel.state.lock().await;
     let planner = ChangePlanner::new(kernel.app.registry.clone(), &state_lock, &kernel.app.config);
 
@@ -159,6 +174,13 @@ async fn test_transaction_rollback_fidelity() {
         requires: vec![],
         present: true,
     };
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- fail-node",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
 
     // Set response to failure
     kernel.mock_executor.set_response(
@@ -527,6 +549,17 @@ async fn test_dry_run_vfs_simulation() {
 #[tokio::test]
 async fn list_aggregates_every_backend_that_answers() {
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "dpkg-query -W -f=${db:Status-Status} ${Package} ${Version}\\n",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "pacman -Qmq",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     // brew's lister: `brew list --versions` → "name version" per line.
     kernel.mock_executor.set_response(
         "brew list --versions",

@@ -141,6 +141,17 @@ async fn test_transaction_atomic_rollback_fidelity() {
     kernel
         .mock_executor
         .set_response("brew install -- pkg-a", Ok(DryRunOutput::default().into()));
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- pkg-a",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- pkg-b",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     kernel.mock_executor.set_response(
         "brew install -- pkg-b",
         Err(Error::command_failed("Network Timeout")),
@@ -313,6 +324,17 @@ async fn a_rolled_back_removal_comes_back_at_the_version_it_left_at() {
 #[tokio::test]
 async fn rollback_will_not_remove_a_protected_package() {
     let mut kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- pkg-b",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew install -- pkg-a",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let mut config = (*kernel.app.config).clone();
     config.guard.protected_packages.push("pkg-a".to_string());
     kernel.app.config = std::sync::Arc::new(config);
@@ -337,6 +359,17 @@ async fn rollback_will_not_remove_a_protected_package() {
 #[tokio::test]
 async fn an_unreadable_prior_state_is_never_taken_for_absence() {
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- pkg-b",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew install -- pkg-a",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     kernel.mock_executor.set_response(
         "brew info --json=v1 -- pkg-a",
         Err(Error::command_failed("brew is wedged")),
@@ -384,6 +417,13 @@ async fn a_package_this_run_installed_is_still_removed() {
 #[tokio::test]
 async fn a_manager_that_cannot_answer_schedules_nothing_and_names_the_declaration() {
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew list --versions",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     kernel.mock_executor.set_response(
         "brew info --json=v1 -- pkg-a",
         Err(Error::command_failed("brew is wedged")),

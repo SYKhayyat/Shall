@@ -1,4 +1,4 @@
-﻿use shall::core::SnapshotManager;
+use shall::core::SnapshotManager;
 
 // Import our exhaustive A+ Test Infrastructure
 use crate::mock_providers::{MockSnapshotProvider, TestKernel};
@@ -223,6 +223,17 @@ async fn test_launchd_plist_translation_logic() {
 #[tokio::test]
 async fn test_scheduler_reboot_mapping_fidelity() {
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "systemctl --no-pager --user daemon-reload",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "systemctl --no-pager --user enable shall-reboot-cleanup.service",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
 
     kernel
         .app

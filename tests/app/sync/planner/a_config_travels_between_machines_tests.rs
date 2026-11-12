@@ -213,6 +213,21 @@ async fn a_package_that_fails_still_fails_the_command() {
     // The other half, and the reason this is a rule about *absence* rather than a licence to
     // continue past anything. A manager that is here and says no is a fact about this run.
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- neovim",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew list --versions",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --create --comments pre_sync --tags D",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let root = kernel.app.config.config_root();
     fs::write(root.join("modules/m.txt"), "brew:neovim\n")
         .await

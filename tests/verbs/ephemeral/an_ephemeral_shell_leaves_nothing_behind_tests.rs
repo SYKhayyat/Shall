@@ -15,6 +15,25 @@ use crate::mock_providers::TestKernel;
 #[tokio::test]
 async fn a_session_registers_its_packages_as_transient() {
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- vim",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew list --versions",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --create --comments pre_sync --tags D",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let shell = kernel.app.shell();
 
     kernel
@@ -52,6 +71,21 @@ async fn a_session_registers_its_packages_as_transient() {
 #[tokio::test]
 async fn a_purge_takes_this_sessions_packages_and_leaves_another_sessions() {
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- temp-tool-1",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --create --comments pre_sync --tags D",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let shell = kernel.app.shell();
 
     let target_session_id = "purge-this-session";

@@ -176,6 +176,13 @@ async fn a_script_edited_after_approval_is_refused_until_reapproved() {
 async fn a_false_when_runs_nothing_and_keeps_the_count() {
     let kernel = TestKernel::new().await;
     let body = "echo once\n";
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        &format!("sh {}/./enroll.sh", kernel.tmp.path().display()),
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let root = kernel.app.config.config_root();
     std::fs::write(root.join("./enroll.sh"), body).unwrap();
     approve(&kernel, "./enroll.sh", body);
@@ -290,6 +297,12 @@ async fn removing_an_exec_runs_the_undo_it_declared() {
         .unwrap();
     assert_eq!(runs_of(&kernel, body), 1);
 
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "sh -c echo unenrol",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     // The line is deleted — the declaration no longer exists anywhere.
     let root = kernel.app.config.config_root();
     std::fs::write(root.join("modules/tools.txt"), "# gone\n").unwrap();
@@ -333,6 +346,7 @@ async fn removing_an_exec_without_an_undo_runs_nothing() {
         .apply(&state, shall::model::exec::Verb::Sync, None)
         .await
         .unwrap();
+
     let before = kernel.mock_executor.get_calls().await.len();
 
     std::fs::write(
@@ -363,6 +377,13 @@ async fn removing_an_exec_without_an_undo_runs_nothing() {
 async fn a_false_when_does_not_run_the_undo() {
     let kernel = TestKernel::new().await;
     let body = "echo enrol\n";
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        &format!("sh {}/./enrol.sh", kernel.tmp.path().display()),
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let root = kernel.app.config.config_root();
     std::fs::write(root.join("./enrol.sh"), body).unwrap();
     approve(&kernel, "./enrol.sh", body);
@@ -415,6 +436,17 @@ async fn a_step_names_the_verb_that_runs_it_and_the_other_verb_leaves_it_alone()
     use shall::model::exec::Verb;
 
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        &format!("sh {}/./bin/firmware.sh", kernel.tmp.path().display()),
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        &format!("sh {}/./bin/plain.sh", kernel.tmp.path().display()),
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let root = kernel.app.config.config_root();
     std::fs::create_dir_all(root.join("bin")).unwrap();
 
@@ -704,6 +736,21 @@ async fn deleting_the_last_exec_line_runs_its_undo_through_the_sync_verb() {
     approve(&kernel, "./enrol.sh", body);
 
     shall::app::sync::resolver::new_resolution();
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "sh -c echo unenrol",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        &format!("sh {}/./enrol.sh", kernel.tmp.path().display()),
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     shall::verbs::sync::watch_reconcile(&kernel.app)
         .await
         .expect("the first sync runs the script");

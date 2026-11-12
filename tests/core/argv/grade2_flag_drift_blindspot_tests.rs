@@ -115,6 +115,13 @@ async fn a_capability_flag_is_sent_exactly_when_the_tool_documents_it() {
     let mut verdicts: Vec<String> = Vec::new();
     let mut wrong: Vec<String> = Vec::new();
 
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    mock.set_response(
+        "helm plugin install --verify=false -- https://example.invalid/shall-drift-probe",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+
     for backend in registry.present_on_this_machine() {
         let name = backend.name().to_string();
         let Some(flag) = shall::backends::capability::unverified_arg(&name) else {

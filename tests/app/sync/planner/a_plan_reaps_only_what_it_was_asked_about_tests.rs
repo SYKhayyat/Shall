@@ -69,8 +69,21 @@ async fn machine_holding_four(kernel: &TestKernel) {
 async fn a_plan_over_an_explicit_package_set_removes_nothing() {
     let kernel = TestKernel::new().await;
     machine_holding_four(&kernel).await;
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "cargo install --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
 
     let desired = desired_of(&[spec("cargo", "ripgrep")]);
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "cargo install --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
 
     let just_these = {
         let state = kernel.app.state.lock().await;
@@ -185,6 +198,24 @@ async fn a_narrowed_plan_removes_nothing() {
 async fn the_transient_shell_plans_no_removal_of_the_machines_packages() {
     let kernel = TestKernel::new().await;
     machine_holding_four(&kernel).await;
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "cargo install -- fd",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "cargo install --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --create --comments pre_sync --tags D",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
 
     kernel
         .app
@@ -192,6 +223,25 @@ async fn the_transient_shell_plans_no_removal_of_the_machines_packages() {
         .provision_transient_env(&["cargo:fd".into()], "shell-test")
         .await
         .expect("provisioning a transient shell must succeed");
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "cargo install -- fd",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "cargo install --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --create --comments pre_sync --tags D",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
 
     // Nothing the machine held was touched. Read from the registry rather than from the plan,
     // because the question is about the machine and a plan is only a claim about it.
@@ -218,6 +268,29 @@ async fn the_transient_shell_plans_no_removal_of_the_machines_packages() {
 #[tokio::test]
 async fn activating_a_profile_reaps_only_the_backends_priority_names() {
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "cargo install -- ripgrep",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "cargo install --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "cargo uninstall -- bat",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --create --comments pre_sync --tags D",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let root = kernel.app.config.config_root();
 
     // `priority` lists cargo alone: brew and npm are managers this host does not use.
@@ -230,6 +303,28 @@ async fn activating_a_profile_reaps_only_the_backends_priority_names() {
     tokio::fs::write(root.join("active"), "\n").await.unwrap();
 
     machine_holding_four(&kernel).await;
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "cargo install -- ripgrep",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "cargo install --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "cargo uninstall -- bat",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --create --comments pre_sync --tags D",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
 
     // The resolver's answer is the list `activate` must plan against. Asserted here rather than
     // trusted, so a `priority` this fixture failed to write cannot make the test vacuous.

@@ -149,6 +149,13 @@ async fn the_manual_set_comes_from_the_history_export() {
 
     let _ = q.list_manual().await;
     mock.allow_unmatched_registrations();
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    mock.set_response(
+        "conda env export -n ml --from-history --json",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let calls = mock.get_calls().await;
     assert!(
         calls

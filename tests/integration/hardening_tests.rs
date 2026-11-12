@@ -81,6 +81,13 @@ async fn resolver_records_every_scope_a_package_belongs_to() {
 #[tokio::test]
 async fn scoped_upgrade_is_non_destructive_end_to_end() {
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "cargo install --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let root = kernel.app.config.config_root();
     tokio::fs::write(root.join("profiles/Work"), "use dev\n")
         .await
@@ -185,6 +192,13 @@ async fn dependents_only_config_resolves_and_applies_the_dependent_phase() {
 #[tokio::test]
 async fn repo_manager_dispatches_add_command() {
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "gem sources -a https://gems.example.com/",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     kernel.mock_executor.set_command_exists("gem", true);
 
     let gem = kernel
@@ -214,6 +228,21 @@ async fn repo_manager_dispatches_add_command() {
 #[tokio::test]
 async fn installed_but_undeclared_lists_the_dependency_closure_too() {
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew list --versions",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "dpkg-query -W -f=${db:Status-Status} ${Package} ${Version}\\n",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "pacman -Qmq",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     // cargo reports two installed crates...
     kernel.mock_executor.set_response(
         "cargo install --list",
@@ -282,6 +311,17 @@ async fn installed_but_undeclared_lists_the_dependency_closure_too() {
 async fn pinned_version_reaches_install_command() {
     let kernel = TestKernel::new().await;
 
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "cargo install --version 13.0.0 -- ripgrep",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "pip install -- requests==2.31.0",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+
     // generic inline pin (pip == syntax)
     let pip = kernel.app.registry.get("pip").expect("pip registered");
     pip.as_installable()
@@ -320,6 +360,13 @@ async fn pinned_version_reaches_install_command() {
 #[tokio::test]
 async fn floating_version_is_not_pinned() {
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "pip install -- requests",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let pip = kernel.app.registry.get("pip").unwrap();
     pip.as_installable()
         .unwrap()

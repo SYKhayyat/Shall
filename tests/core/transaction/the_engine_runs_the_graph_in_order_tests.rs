@@ -52,6 +52,29 @@ async fn a_node_runs_only_after_everything_it_requires() {
     graph.add_edge(a, c, ());
     graph.add_edge(b, c, ());
 
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- build-system",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- compiler-core",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- complex-app",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew install -- compiler-core build-system",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew install -- complex-app",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+
     let mut tx = Transaction::new(
         graph,
         kernel.app.registry.clone(),
@@ -94,6 +117,21 @@ async fn a_cycle_is_refused_by_name_rather_than_planned() {
     let kernel = TestKernel::new().await;
 
     let state = StateRegistry::default();
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- loop-a",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- loop-b",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew list --versions",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let planner = ChangePlanner::new(kernel.app.registry.clone(), &state, &kernel.app.config);
 
     let mut desired = HashMap::new();

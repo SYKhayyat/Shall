@@ -23,6 +23,17 @@ fn get_now_ts() -> u64 {
 #[tokio::test]
 async fn test_lease_expiration_pruning_logic() {
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- active-binary",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew list --versions",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let mut state = kernel.state.lock().await;
     let now = get_now_ts();
 
@@ -99,6 +110,17 @@ async fn test_lease_expiration_pruning_logic() {
 #[tokio::test]
 async fn test_lease_manifest_override_logic() {
     let kernel = TestKernel::new().await;
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- manifest-protected",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew list --versions",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     let mut state = kernel.state.lock().await;
     let now = get_now_ts();
 

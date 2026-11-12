@@ -414,6 +414,25 @@ async fn absent_removes_a_package_shall_does_not_own_and_declares_it_gone() {
         ],
     );
     other_managers(&kernel, &[Listing::BrewKnowsNothingAbout("orphan-pkg")]);
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- orphan-pkg",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "pacman -Qmq",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --create --comments pre_sync --tags D",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     std::fs::write(kernel.tmp.path().join("profiles/Main"), "brew:orphan-pkg\n").unwrap();
     brew_holds(&kernel, &["orphan-pkg"]);
     kernel.mock_executor.set_response(
@@ -480,6 +499,33 @@ async fn absent_names_the_manager_that_actually_holds_a_bare_name() {
         ],
     );
     other_managers(&kernel, &[Listing::BrewKnowsNothingAbout("orphan-pkg")]);
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- orphan-pkg",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "cargo install --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "dpkg-query -W -f=${db:Status-Status} ${Package} ${Version}\\n",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "pacman -Qmq",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --create --comments pre_sync --tags D",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     kernel.mock_executor.set_response(
         "brew uninstall -- orphan-pkg",
         Ok(DryRunOutput::default().into()),
@@ -577,6 +623,21 @@ async fn uninstalling_a_package_shall_owns_is_unaffected() {
             Listing::BrewKnowsNothingAbout("owned-pkg"),
         ],
     );
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- owned-pkg",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --create --comments pre_sync --tags D",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     std::fs::write(kernel.tmp.path().join("profiles/Main"), "brew:owned-pkg\n").unwrap();
     {
         let mut state = kernel.app.state.lock().await;
@@ -625,6 +686,21 @@ async fn a_bare_name_shall_owns_costs_no_listing_either() {
             Listing::SnapshotsListed,
             Listing::BrewKnowsNothingAbout("owned-pkg"),
         ],
+    );
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- owned-pkg",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --create --comments pre_sync --tags D",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "sudo -n timeshift --list",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     std::fs::write(kernel.tmp.path().join("profiles/Main"), "brew:owned-pkg\n").unwrap();
     {
@@ -831,6 +907,17 @@ async fn recovery_answers_the_total_ceiling_a_sync_answers() {
     other_managers(
         &kernel,
         &[Listing::BrewInstalls("o1"), Listing::BrewInstalls("o2")],
+    );
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew install -- o1",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew install -- o2",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     {
         let mut j = kernel.app.journal.lock().await;

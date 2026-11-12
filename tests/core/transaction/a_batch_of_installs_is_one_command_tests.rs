@@ -33,6 +33,29 @@ async fn five_independent_installs_reach_the_manager_as_one_command() {
     let kernel = TestKernel::new().await;
 
     let mut graph = petgraph::stable_graph::StableDiGraph::new();
+
+    // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
+    // machine, each with the empty answer it used to receive from silence instead.
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- pkg-parallel-0",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- pkg-parallel-1",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- pkg-parallel-2",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- pkg-parallel-3",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
+    kernel.mock_executor.set_response(
+        "brew info --json=v1 -- pkg-parallel-4",
+        Ok(shall::core::executor::DryRunOutput::new().into()),
+    );
     for i in 0..5 {
         let pkg_name = format!("pkg-parallel-{}", i);
         let spec = PackageSpec {
