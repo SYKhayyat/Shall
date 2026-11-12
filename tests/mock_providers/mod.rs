@@ -181,6 +181,34 @@ impl TestKernel {
         mock_executor.set_command_exists("zfs", true);
         mock_executor.set_command_exists("zypper", true);
 
+        // **What this machine holds, stated once instead of fallen through.**
+        //
+        // `priority` here is `apt`, `brew`, `cargo`, and every reconcile asks those managers what
+        // they hold; the snapshot provider is asked what snapshots exist; a bare `absent:` name is
+        // hunted across the rest. None of that is a claim about the product's argv, it is the
+        // machine, so it is registered as a standing fact rather than per test — see
+        // `MockExecutor::set_machine_response`.
+        //
+        // **A test that needs this machine to hold something overrides the key it cares about**
+        // (`brew_holds` for brew), and its own registration is a normal one, held to the unused
+        // check like every other. The per-package answers stay per test: `brew info -- pkg`,
+        // `zypper search`, every install and every removal are the test's subject, not the
+        // fixture's.
+        for listing in [
+            "brew list --versions",
+            "cargo install --list",
+            "dpkg-query -W -f=${db:Status-Status} ${Package} ${Version}\\n",
+            "pacman -Qmq",
+            "snap list",
+            "sudo -n timeshift --list",
+            "zypper search --installed-only",
+        ] {
+            mock_executor.set_machine_response(
+                listing,
+                Ok(shall::core::executor::DryRunOutput::new().into()),
+            );
+        }
+
         let executor = CommandExecutor::with_layer(
             true,
             false,

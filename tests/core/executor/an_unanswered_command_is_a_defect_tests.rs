@@ -139,3 +139,45 @@ async fn allowing_a_dead_stub_does_not_also_allow_an_unanswered_call() {
          flag mean two unrelated things"
     );
 }
+
+/// **A machine fact is not a claim about argv, so going unasked does not convict it.**
+///
+/// `brew list --versions` says what the machine holds. Whether a given run consults it depends on
+/// the config in front of the run, not on the product's dialect — so a test whose config never
+/// reaches brew was never making an assertion that could be contradicted here. That is the
+/// distinction from `allow_unmatched_registrations`: the mock's *other* stubs stay held to account,
+/// which the next test shows.
+#[test]
+fn a_machine_fact_that_goes_unasked_is_not_a_dead_stub() {
+    let m = mock();
+    m.set_machine_response("brew list --versions", Ok(DryRunOutput::new().into()));
+    m.assert_every_registration_was_used();
+    assert!(
+        m.unmatched_registrations().is_empty(),
+        "a standing fact about the machine is not a stub the test expected to see run"
+    );
+}
+
+/// And the exemption is exactly one key deep: the test's own dead stub still fails, with the
+/// machine fact absent from the report rather than excusing the rest of it.
+#[test]
+fn a_machine_fact_does_not_excuse_the_tests_own_dead_stub() {
+    let m = mock();
+    m.set_machine_response("brew list --versions", Ok(DryRunOutput::new().into()));
+    m.set_response("brew install -- neovim", Ok(DryRunOutput::new().into()));
+    assert_eq!(
+        m.unmatched_registrations(),
+        vec!["brew install -- neovim".to_string()],
+        "the machine fact must not appear beside the real dead stub"
+    );
+    let failed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        m.assert_every_registration_was_used()
+    }));
+    assert!(
+        failed.is_err(),
+        "the real dead stub must still fail the test"
+    );
+    // Dropping the mock would run the same check a third time, outside any `catch_unwind`, and
+    // the process would abort instead of failing the test.
+    std::mem::forget(m);
+}

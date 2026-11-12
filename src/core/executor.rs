@@ -720,6 +720,8 @@ pub struct MockExecutor {
     /// Registrations whose whole purpose is to stay unmatched — see
     /// [`MockExecutor::set_response_that_must_not_be_used`].
     forbidden: DashMap<String, ()>,
+    /// Standing facts about the machine — see [`MockExecutor::set_machine_response`].
+    machine: DashMap<String, ()>,
     /// How long a command takes, for tests about concurrency rather than about output.
     delays: DashMap<String, std::time::Duration>,
     /// Set by a test that means it — see [`MockExecutor::allow_unmatched_registrations`].
@@ -744,6 +746,7 @@ impl MockExecutor {
             matched: DashMap::new(),
             unstubbed: DashMap::new(),
             forbidden: DashMap::new(),
+            machine: DashMap::new(),
             delays: DashMap::new(),
             allow_unmatched: std::sync::atomic::AtomicBool::new(false),
             deny_unstubbed: std::sync::atomic::AtomicBool::new(false),
@@ -783,13 +786,34 @@ impl MockExecutor {
         self.forbidden.insert(cmd_pattern.to_string(), ());
     }
 
+    /// Register a **standing fact about the machine** — what a manager holds — rather than this
+    /// test's expectation about one call.
+    ///
+    /// The unused-stub check exists because a stub nobody matched is a claim about argv that the
+    /// product disagreed with. A manager's whole listing is not that claim: it is the machine, and
+    /// which part of it a given run consults is a property of the config, not of the product's
+    /// dialect. So the answer is registered normally and **this key alone** is excused from the
+    /// unused check — the mock's other stubs stay held to account, which is the difference between
+    /// this and [`MockExecutor::allow_unmatched_registrations`].
+    ///
+    /// It is not for a per-package answer (`brew info -- pkg`), an install or a removal. Those are
+    /// the test's own subject and are written down, and checked, where the test asserts them.
+    pub fn set_machine_response(&self, cmd_pattern: &str, response: Result<StdOutput>) {
+        self.responses.insert(cmd_pattern.to_string(), response);
+        self.machine.insert(cmd_pattern.to_string(), ());
+    }
+
     /// Registered patterns no call ever matched.
     pub fn unmatched_registrations(&self) -> Vec<String> {
         let mut out: Vec<String> = self
             .responses
             .iter()
             .map(|e| e.key().clone())
-            .filter(|k| !self.matched.contains_key(k) && !self.forbidden.contains_key(k))
+            .filter(|k| {
+                !self.matched.contains_key(k)
+                    && !self.forbidden.contains_key(k)
+                    && !self.machine.contains_key(k)
+            })
             .collect();
         out.sort();
         out
