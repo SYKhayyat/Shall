@@ -20,3 +20,4 @@ mod a_bare_install_refuses_without_a_terminal;
 mod a_qualified_install_does_not_prompt;
 mod explicit_confirmation_skips_the_bare_prompt;
 mod no_bare_install_does_not_prompt;
+mod the_setting_can_answer_instead_of_the_prompt;

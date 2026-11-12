@@ -4785,3 +4785,24 @@ of the same set.
 - **A failure in the harness names the names.** A count of planned changes cannot distinguish a
   plan that lost the missing packages from one that kept them and whose install did nothing, so
   the crash section prints the plan's package names beside its counts (`II.85`).
+
+## II.91 A bare declaration is installed only as far as `[declare] install` allows (owner ruling, 2026-11-11, `#94`, V.244)
+
+**`ask` (the default), `always` and `never` are the three answers to one question: may a bare name in a
+manifest put a package on this machine?** The question is asked on the sync/apply path, immediately
+before execution, and never by a read-only command.
+
+- **Three readings, because a flag can only say one of them.** `--yes` answers "do it without asking";
+  nothing a command line can carry means "and do not even do it". A machine that mirrors another
+  machine's intent and a CI image that installs whatever it names are both ordinary, and they need
+  opposite answers to the same prompt.
+- **`never` outranks `--yes`.** The flag answers a question; `never` says there is no question to
+  answer. A run that passed `--yes` to skip the prompt still gets nothing installed, and is told
+  which setting declined it and how to change it — the refusal names a fact a person wrote months
+  ago and will not remember.
+- **A decline leaves the declaration in the file and the run non-converged.** `II.16` is untouched —
+  Shall appends whole lines and never rewrites a person's manifest — so the count of what the machine
+  still owes includes what a policy declined, and the exit code carries it (`Q-C`).
+- **The vocabulary is closed.** A word that is not one of the three is refused at the file with the
+  three that work, rather than falling back to `ask`: a typo that silently restores the prompt reads
+  as the setting not working at all.

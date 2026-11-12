@@ -389,6 +389,47 @@ impl Default for ReceiptSettings {
     }
 }
 
+/// The `[declare]` table: what a bare declaration is allowed to do to a machine it is not on.
+///
+/// **Three-way because the `ask` alone leaves two callers with no answer.** A CI image and a
+/// machine whose owner has said "install whatever I name" both want the install without a
+/// question; a machine that is a mirror of some other machine's intent wants nothing installed
+/// without a line saying so. `--yes` is the per-run answer to the first, and it cannot express
+/// the second at all — there is no flag whose meaning is "and do not even ask".
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DeclareSettings {
+    /// What happens when a manifest names a bare tool the machine does not have: `ask`,
+    /// `always` or `never`.
+    ///
+    /// `ask` is the default and the ruling (`#94`): a bare name is a request, not an
+    /// instruction, and a `sync` that silently installed every one of them would make the
+    /// difference between a manifest and a shopping list disappear.
+    #[serde(default)]
+    pub install: BareInstall,
+}
+
+impl Default for DeclareSettings {
+    fn default() -> Self {
+        Self {
+            install: BareInstall::Ask,
+        }
+    }
+}
+
+/// What a bare declaration may do. See [`DeclareSettings::install`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BareInstall {
+    /// Ask, before installing anything selected by a bare declaration. The default.
+    #[default]
+    Ask,
+    /// Install it without asking.
+    Always,
+    /// Never install it. The declaration stays in the file and `sync` reports it as owed.
+    Never,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LockSettings {
@@ -927,6 +968,11 @@ pub struct Config {
     #[serde(default)]
     pub receipts: ReceiptSettings,
 
+    /// The `[declare]` table: what a bare declaration in a manifest is allowed to install.
+    /// See [`DeclareSettings`].
+    #[serde(default)]
+    pub declare: DeclareSettings,
+
     /// The `[lock]` table: which axes a bare `lock` freezes, which managers get version pins,
     /// and whether an ordinary `sync` replays them. See [`LockSettings`].
     #[serde(default)]
@@ -1351,6 +1397,7 @@ impl Default for Config {
             allow_mass_install: false,
             guard: GuardSettings::default(),
             receipts: ReceiptSettings::default(),
+            declare: DeclareSettings::default(),
             lock: LockSettings::default(),
             query: QuerySettings::default(),
             journal: JournalSettings::default(),

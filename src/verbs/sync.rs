@@ -60,7 +60,9 @@ pub struct Reconciled {
     pub declared_total: usize,
 }
 
-pub(crate) fn bare_install_names(changes: &crate::app::sync::planner::SyncChanges) -> Vec<String> {
+/// The installs a bare declaration selected, `backend:name`, as both the question and the
+/// count of what a decline leaves owed name them.
+pub fn bare_install_names(changes: &crate::app::sync::planner::SyncChanges) -> Vec<String> {
     changes
         .graph
         .node_weights()
@@ -75,11 +77,33 @@ pub(crate) fn bare_install_names(changes: &crate::app::sync::planner::SyncChange
         .collect()
 }
 
+/// What a bare declaration is going to be allowed to do this run, and why.
+///
+/// **The reason travels with the answer** because the two ways of declining are different facts:
+/// one is a person saying no at a prompt, the other is a machine whose owner already said no.
+/// A single `bool` reported both as "Declined", which reads as the first when it was the second.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BareDecision {
+    /// Install what the bare declarations selected.
+    Proceed,
+    /// Install nothing they selected, for this reason.
+    Declined(BareDecline),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BareDecline {
+    /// The person at the prompt said no.
+    Asked,
+    /// `[declare] install = "never"`, which no flag overrides.
+    Setting,
+}
+
 pub fn confirm_bare_installs(
     changes: &crate::app::sync::planner::SyncChanges,
+    policy: crate::config::config::BareInstall,
     yes: bool,
-) -> Result<bool> {
-    confirm_bare_installs_with(changes, yes, |prompt| {
+) -> Result<BareDecision> {
+    confirm_bare_installs_with(changes, policy, yes, |prompt| {
         Ok(crate::core::prompt::confirm(
             false,
             prompt,
@@ -90,24 +114,43 @@ pub fn confirm_bare_installs(
     })
 }
 
+/// The three-way rule, with the question itself injected so `ask` is testable.
 pub fn confirm_bare_installs_with<F>(
     changes: &crate::app::sync::planner::SyncChanges,
+    policy: crate::config::config::BareInstall,
     yes: bool,
     ask: F,
-) -> Result<bool>
+) -> Result<BareDecision>
 where
     F: FnOnce(&str) -> Result<bool>,
 {
+    use crate::config::config::BareInstall;
     let names = bare_install_names(changes);
-    if names.is_empty() || yes {
-        return Ok(true);
+    if names.is_empty() {
+        return Ok(BareDecision::Proceed);
+    }
+    match policy {
+        // **`never` outranks `--yes`.** `--yes` answers a question, and this setting says there
+        // is no question to answer: a person who wrote `never` into their configuration and then
+        // ran the flag is asking for the flag's other effects (the removals, the rebuild), not
+        // for the one thing they turned off.
+        BareInstall::Never => return Ok(BareDecision::Declined(BareDecline::Setting)),
+        BareInstall::Always => return Ok(BareDecision::Proceed),
+        BareInstall::Ask => {}
+    }
+    if yes {
+        return Ok(BareDecision::Proceed);
     }
     let prompt = if names.len() == 1 {
         format!("Install {} from a bare declaration?", names[0])
     } else {
         format!("Install {} packages from bare declarations?", names.len())
     };
-    ask(&prompt)
+    Ok(if ask(&prompt)? {
+        BareDecision::Proceed
+    } else {
+        BareDecision::Declined(BareDecline::Asked)
+    })
 }
 
 /// How many rows of a skip list are declarations that did not arrive.
@@ -375,14 +418,31 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
         });
     }
 
-    if opts.confirm && !changes.is_empty() && !confirm_bare_installs(&changes, app.config.yes)? {
-        println!("Declined — no bare declarations were installed. The declarations remain.");
-        return Ok(Reconciled {
-            applied: 0,
-            left_in_place: 0,
-            not_installed: bare_install_names(&changes).len(),
-            declared_total,
-        });
+    if opts.confirm && !changes.is_empty() {
+        match confirm_bare_installs(&changes, app.config.declare.install, app.config.yes)? {
+            BareDecision::Proceed => {}
+            BareDecision::Declined(why) => {
+                // **Said out loud, and named to the setting that did it.** A `sync` that
+                // installed nothing and printed nothing is indistinguishable from one that
+                // converged, and the user who wrote `never` months ago will not remember it.
+                println!(
+                    "Declined — {}. The declarations remain.",
+                    match why {
+                        BareDecline::Asked => "no bare declarations were installed".to_string(),
+                        BareDecline::Setting => "`[declare] install = \"never\"` installs nothing \
+                             a bare declaration selects, and `--yes` does not override it; set it \
+                             to \"ask\" or \"always\" to change that"
+                            .to_string(),
+                    }
+                );
+                return Ok(Reconciled {
+                    applied: 0,
+                    left_in_place: 0,
+                    not_installed: bare_install_names(&changes).len(),
+                    declared_total,
+                });
+            }
+        }
     }
 
     // The package plan runs only when it has something in it — a dependents-only sync skips

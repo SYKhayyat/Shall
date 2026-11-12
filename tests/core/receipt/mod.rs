@@ -10,3 +10,4 @@ mod a_truncated_last_line_does_not_lose_the_whole_file;
 mod installing_the_same_package_twice_is_one_receipt;
 mod no_file_is_an_empty_record;
 mod the_receipts_file_is_the_wals_sibling;
+mod the_toggle_drops_the_reader_as_well_as_the_writer;

@@ -1589,7 +1589,16 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
      shared prompt convention: `--yes` answers yes, an interactive no leaves the declaration in
      place and installs nothing, and a noninteractive run refuses with `--yes`/`--dry-run` advice.
      `plan`, `check`, `status`, and dry-run paths never ask. Saved plans use schema 3 so an older
-     artifact without the provenance cannot bypass the question. — ISSUE #94
+     artifact without the provenance cannot bypass the question.
+  - **2b. The third answer, which the prompt could not give.** `--yes` says yes once; nothing a
+    command line carries means *and do not install it either*. `[declare] install` is therefore
+    three-way — `ask` (default) / `always` / `never` — and `never` outranks `--yes`: the flag
+    answers a question this setting says the run does not get to answer. A decline installs
+    nothing, leaves the declaration where II.16 requires it, names the setting that did it, and
+    leaves the run non-converged (Q-C). The vocabulary is closed — a fourth word is refused at the
+    file naming the three, since a typo falling back to `ask` would read as the setting not
+    working. II.91, V.244, C26. Whether a `never` decline should exit non-zero forever is a
+    separate question, filed as #161. — ISSUE #94
 - [x] #89 guard-reachability control builds a vacuous fixture. (**BUILT — and the state the control
   needs turned out to be reachable, but not through any of the three shapes the fixture had tried.**
   `plan` wrote 2 removals with no guard refusal because nothing protected them, and the missing

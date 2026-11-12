@@ -1,4 +1,4 @@
-﻿# The decision register — 263 entries, none open
+﻿# The decision register — 264 entries, none open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **258** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **259** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 263 are accounted
-for: **258 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 264 are accounted
+for: **259 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay) — 25
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay) — 26
 
 | | question | answered |
 |---|---|---|
@@ -543,6 +543,7 @@ deliberately no longer has.*
 | **C23** | The un-asserted oracle from `#40` — the `unstubbed` ledger — was wired by `C4`, but `deny_unstubbed()` is per-mock by design, so the count of tests that leave a command unanswered could only be found by adding the call one test at a time and watching which ones failed. The owner recorded 172 such tests and left the issue open on exactly that: "the instrument exists" and "the 66 are converted" are different claims. **How does a suite make its own fall-through ledger measurable, and what does the measurement separate?** — RULED 2026-11-10: **audit mode reports where deny fails, and the report teases a probe from a query.** `SHALL_AUDIT_UNSTUBBED=1` prints one line per mock at `Drop`, placed ahead of every early return — including the `allow_unmatched_registrations` one, which is where the tests worth measuring go; the first draft sat behind it and reported zero. Measured: 352 tests reported, of which **134 only existence probes** (`command -v btrfs`, `command -v timeshift`), which are not defects because `check_command` answers `true` deliberately. Seeding the fixture's 59 probed names — the assumption the tests already made — moved probe-only tests 134 → **10** and left the 218 real ones unchanged. Those 218 are the follow-up. (II.86, V.239) | 2026-11-10 |
 | **C24** | `#41` measured the Markdown and found `docs/spec/` at 68% of it, with `decisions.md`/`why.md` at 44% of every documented byte, and proposed distilling both into a one-line-per-entry log. That is ruled against already: `Y21` considered exactly it and kept full text, because *"`decisions.md` is the ruling — an event outside the tree, with a person and a date on it — and that is the one artifact git cannot reconstruct"*, and `why.md` is mandatory reading before a rule changes with 247 entries cited by Part II and by Rust doc comments. But the 26 dated `AUDIT-`/`GRADE-`/`HANDOFF-` essays (622 KB) are the family `Y21`'s cut missed, written for a reader with sessions — the same reasoning that deleted `history.md`. **Which records stay, and what keeps one?** — RULED 2026-11-10: **a citation from a living document.** Deleted 23 of 26, recoverable from git at the commit before the cut and said so in `docs/README.md`. The test has to be transitive: a first pass kept 16 because HANDOFFs cite their predecessors, so the family was keeping itself alive; asking which essays the register, the bug list or a review test cites kept three. A chain of records citing each other is not readership. (II.87, V.240) | 2026-11-10 |
 | **C25** | `#151` reported that after a SIGKILL the crash section's recovery run exits 0 with declared canaries missing, intermittent and only on `void`, and the failure branch printed a plan naming `openssl-devel` and `gcc` — packages installed before the image was built, and not declared at all. **When a sync reports success over a machine it has not converged, which of the three readings is at fault: the plan, the install, or the report?** — RULED 2026-11-11: **the plan, because it paired each answer with the wrong declaration.** `helpers::spec_is_missing` fanned out over the declarations with `buffer_unordered` — which yields answers in completion order — collected them into a `Vec<Verdict>`, and zipped that onto a second iteration over the same map. Installed names answer from the listing and absent ones cost a repository lookup, so on `void` the orders differed and missing verdicts landed on installed declarations: the plan reinstalled what the image already had and never named the canaries. The fix carries the subject (`(spec, verdict)`), which makes the pairing structural rather than index-based; `buffered` alone would have hidden it and left the shape. A test drives the real planner against a manager whose absent names answer slowly, so the completion order is the opposite of the declaration order, and fails on the old code by naming an installed package as an install. The harness prints the plan's package names beside its counts, since a count cannot tell a lost declaration from an install that did nothing. (II.90, V.243) | 2026-11-11 |
+| **C26** | `#94`'s second half shipped as the prompt and `--yes`: the question was asked, and the only way to avoid being asked was a flag whose meaning is "yes". The issue had ruled the *shape* — `ask` / `always` / `never` — and left the key to the implementer. **What does a bare declaration do on a machine whose owner has already answered, and can a flag express the answer "no" when they are not there?** — RULED 2026-11-11: **`[declare] install` is three-way, and `never` outranks `--yes`.** `--yes` answers the question; `never` says the question is not the run's to answer, and a person who turned it off on purpose does not re-enable it by running the command their CI runs. A decline installs nothing, leaves the declaration where `II.16` requires it, prints which setting did it (a person who wrote it months ago will not remember), and leaves the run non-converged so the exit code carries what is owed (Q-C). The vocabulary is closed: a fourth word is refused at the file naming the three, because a typo that fell back to `ask` would read as the setting not working. (II.91, V.244) | 2026-11-11 |
 
 # The blocking round — thirteen questions, all ruled
 
@@ -11042,3 +11043,35 @@ drives it against a real plan document's shape.
 absent ones slowly makes the completion order the reverse of the declaration order; the assertion
 is that the plan installs exactly the absent declarations. Under the old zip it named installed
 packages, and only one ordering in 12,870 would have passed by coincidence.
+
+## C26
+
+**Status: ANSWERED 2026-11-11, built the same day.** A bare declaration is installed only as far as
+`[declare] install` allows. Carried out of `#94`.
+
+**Asked.** `#94` ruled the shape and left the key to the implementer: the prompt and `--yes` are two
+of the three answers, and no command line can express the third.
+
+**What does a bare declaration do on a machine whose owner has already answered, and can a flag
+express the answer "no" when they are not there?**
+
+**Ruled: `[declare] install` is `ask` / `always` / `never`, and `never` outranks `--yes`.**
+
+**1. `--yes` cannot say no.** A flag is an answer to a question. There is no flag whose meaning is
+"and do not do it either", and the machine that needs one is not exotic: a host mirroring another
+host's manifest should install nothing a bare line selected.
+
+**2. A policy is spoken, not inferred.** A decline under `never` prints the setting that did it.
+Somebody who wrote that line months ago will not remember it, and a package that silently never
+arrives is indistinguishable from a declaration that does not work.
+
+**3. The declaration survives, and so does the count.** `II.16` says Shall appends whole lines and
+never rewrites a person's manifest, so nothing removes the line; and the run reports what it still
+owes (Q-C) rather than reading as converged.
+
+**4. The vocabulary is closed.** `install = "sometimes"` is refused at the file, naming the three
+words. A typo that fell back to `ask` would restore the prompt and read as the setting being broken.
+
+**5. What this does not answer, and does not pretend to.** Whether a policy decline should also exit
+non-zero on *every* run — the honest data point that the machine is not converged — is a separate
+question, filed as #161 rather than decided under an implementation issue.

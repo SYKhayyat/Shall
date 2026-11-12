@@ -495,9 +495,26 @@ pub async fn handle_execute(app: &App, plan_path: &str, yes: bool) -> Result<()>
     changes.withdraw_what_this_machine_cannot_run(&app.registry);
     let skipped = std::mem::take(&mut changes.skipped);
 
-    if !crate::verbs::sync::confirm_bare_installs(&changes, yes || app.config.yes)? {
-        println!("Apply cancelled — no bare declarations were installed.");
-        return Ok(());
+    // The same three-way rule `sync` applies, because a captured plan is where a bare
+    // declaration outlives the run that resolved it: `never` refuses here as well, and says so
+    // rather than cancelling silently.
+    match crate::verbs::sync::confirm_bare_installs(
+        &changes,
+        app.config.declare.install,
+        yes || app.config.yes,
+    )? {
+        crate::verbs::sync::BareDecision::Proceed => {}
+        crate::verbs::sync::BareDecision::Declined(crate::verbs::sync::BareDecline::Asked) => {
+            println!("Apply cancelled — no bare declarations were installed.");
+            return Ok(());
+        }
+        crate::verbs::sync::BareDecision::Declined(crate::verbs::sync::BareDecline::Setting) => {
+            println!(
+                "Apply cancelled — `[declare] install = \"never\"` installs nothing a bare \
+                 declaration selects, and `--yes` does not override it."
+            );
+            return Ok(());
+        }
     }
 
     if !yes && !app.config.yes {

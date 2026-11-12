@@ -8908,3 +8908,27 @@ pairing afterwards. `buffered` would also have fixed the symptom, and it is the 
 preserves an order nothing downstream reads, and it leaves the `Vec<Verdict>` shape in place for
 the next caller to zip against a set it believes is in the same order. Carrying the subject makes
 the pairing structural — there is no longer an index to get wrong.
+
+**V.244 — Why a bare declaration is installed only as far as the setting allows (`#94`, `II.91`).**
+`#94`'s second half shipped as the prompt, and the prompt is one of three answers to one question.
+`--yes` is the second — a run that has said yes once, for every bare name in the plan — but a flag
+cannot say the third. There is no command line that means *do not install this even if I said yes*,
+and the machine that wants it is not exotic: a host mirroring another host's intent should install
+nothing a bare line selected, while its manifest stays a faithful copy of the other's.
+
+**The setting reads the disagreement out loud.** `never` is not silence. A `sync` on a machine whose
+policy declines installs nothing for that declaration and says so, naming the setting, so the person
+who wrote it months ago is not left inferring it from a package that never arrives. That sentence is
+the whole difference between a policy and a bug.
+
+**`never` outranking `--yes` is the part worth arguing.** A flag is an answer to a question, and this
+setting says the question is not one the run gets to answer — a person who turned it off on purpose
+does not re-enable it by running the same command their CI runs. The alternative, `--yes` winning,
+makes the setting advisory and makes the mirror machine install what its own configuration says not
+to; the cost of the rule is that a run wanting one bare install must change the setting, which is
+what a deliberate policy should cost.
+
+**And the run is not converged, so it does not claim to be.** The declaration survives (`II.16`) and
+the count of what is owed includes it (Q-C): a policy that suppressed the install and also suppressed
+the report would be the same lie by a shorter route. Whether a policy decline should also make the
+exit code non-zero on every run is a separate question, filed rather than answered here.
