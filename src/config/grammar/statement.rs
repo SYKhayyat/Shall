@@ -379,6 +379,22 @@ impl Statement {
         }
     }
 
+    /// Whether an export should carry this line (II.94).
+    ///
+    /// **Asked of the statement, not read at the export site.** `@export=no` is validated here,
+    /// so the answer to "was this line opted out" has exactly one implementation — the exporter
+    /// asks, and a statement kind added tomorrow inherits the behaviour by existing.
+    pub fn exports(&self) -> bool {
+        let options = match self {
+            Statement::Package(decl) | Statement::Absent(decl) => &decl.options,
+            other => match other.options() {
+                Some(options) => options,
+                None => return true,
+            },
+        };
+        options.one(EXPORT_KEY) != Some("no")
+    }
+
     /// What this statement names, without its keyword: `nginx` for `service:nginx`.
     ///
     /// The `key` minus the `kind`, so the two can never disagree about where the boundary is.
@@ -1737,6 +1753,7 @@ pub fn set_user_scope(origin: &Origin, stmt: &mut Statement, user: &str) -> Resu
 /// demoted by `one()`'s `.first()`. Deliberately absent: `requires`, `after` (lists by
 /// design), `on` and `notify` (comma-bearing values whose multiplicity lives in the value).
 pub(crate) const SINGLE_VALUE_OPTION_KEYS: &[&str] = &[
+    EXPORT_KEY,
     "source",
     "enabled",
     "status",
@@ -1950,8 +1967,11 @@ pub fn validate_extra_options(
 ) -> Result<()> {
     let prefix = kind.as_str();
     let legal = keys_for(kind);
+    validate_export(origin, options)?;
     for key in options.keys() {
-        if legal.contains(&key) {
+        // `@export` is legal on every line that carries options (II.94): it is a statement about
+        // the export, not about the resource, so it belongs to no kind's own list.
+        if legal.contains(&key) || key == EXPORT_KEY {
             // A key that answers to ONE value refuses a second occurrence outright. `one()`
             // reads the first, so a repeated `@status=running,@status=stopped` kept the first
             // and did nothing — a hand-edit flip that parsed, exited 0, changed nothing.
@@ -1987,6 +2007,32 @@ pub fn validate_extra_options(
     validate_scope(origin, prefix, name, options)
 }
 
+/// The opt-out from an export (II.94), spelled once because three gates refuse a typo of it.
+pub const EXPORT_KEY: &str = "export";
+
+/// `@export=yes|no` — the closed vocabulary, and the reason it is closed.
+///
+/// **`@export=nope` must not read as the default.** An opt-out that a typo turns into "export it
+/// anyway" is worse than no opt-out: the person believes a line is excluded, the artifact carries
+/// it, and nothing anywhere says so. Two words, named in the refusal (`[declare] install`'s
+/// three-word precedent, `#94`).
+fn validate_export(origin: &Origin, options: &Options) -> Result<()> {
+    let Some(written) = options.one(EXPORT_KEY) else {
+        return Ok(());
+    };
+    if written == "yes" || written == "no" {
+        return Ok(());
+    }
+    Err(GrammarError::new(
+        origin.clone(),
+        format!("`@export={}` is not a yes or a no", written),
+    )
+    .with_hint(
+        "`@export=no` keeps the line out of `shall export` while `sync` still applies it. \
+         Anything else would be an opt-out that silently did nothing.",
+    ))
+}
+
 /// Every option a package line may carry (II.2's table). Hooks are `*_install`
 /// (`after_install`, `before_install`, …), so they are matched by suffix rather than listed.
 ///
@@ -1995,6 +2041,8 @@ pub fn validate_extra_options(
 pub(crate) const PACKAGE_OPTION_KEYS: &[&str] = &[
     "version",
     "hold",
+    // II.94's opt-out. Legal on every line, read by the exporter and by nothing else.
+    EXPORT_KEY,
     "expires",
     "until",
     "requires",
@@ -2345,6 +2393,8 @@ fn validate_options(origin: &Origin, decl: &PackageDecl, absent: bool) -> Result
     // A health check decides whether the machine is rolled back (XIII.5), so a line whose
     // check cannot be understood must not parse. `@health=port:donkey` that read as a shell
     // command would be a probe that fails every time and reverts every sync.
+    validate_export(origin, o)?;
+
     if let Some(written) = o.one("health") {
         if crate::model::health::Probe::parse(written).is_none() {
             return Err(GrammarError::new(

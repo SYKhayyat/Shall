@@ -5,6 +5,7 @@ mod adopt;
 mod apply;
 mod backends;
 mod bisect;
+mod bootstrap;
 mod bundle;
 mod check;
 mod conflicts;

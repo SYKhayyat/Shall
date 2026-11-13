@@ -3,6 +3,7 @@ pub mod adopt;
 pub mod apply;
 pub mod backends;
 pub mod bisect;
+pub mod bootstrap;
 pub mod bundle;
 pub mod check;
 pub mod conflicts;

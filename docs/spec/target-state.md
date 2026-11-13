@@ -4898,3 +4898,25 @@ mechanism:
   failure in either mode — the distinction between "the format cannot say this" and "I do not want
   this exported" is the whole reason the option exists, and a run that conflated them would make
   the opt-out useless.
+
+**Shipped 2026-11-13 — the bash artifact from the declarations.** `--from-declaration --format
+bash` writes `bootstrap.sh` (or into `--out`). One mechanism below this rule closes it:
+
+- **The commands are the run's own.** `Installable::planned_installs` is the same builder
+  `install` runs through, read instead of run; the artifact cannot disagree with the tool about
+  an argv (`#151`, `#162`). An export never touches the machine, and never runs an install to
+  describe one.
+- **Every declared package is exported, not only the ones missing here** — the artifact is for a
+  fresh machine, where none are installed; a script built from this machine's differences would
+  print nothing where it matters. Backends are ordered as a sync orders them (foundation first,
+  then priority).
+- **Resource lines are not exported yet.** `link:`, `service:`, `setting:`, `shim:`,
+  `schedule:` and `repo:` are refused — a path Shall knows how to act on but has not yet given an
+  exit, in the sense of this rule: refused by default, `@export=no` to say the machine doesn't
+  need one here, `--best-effort` to get what packages will give.
+- **Secrets are refused, not worked around.** A `link: @decrypt`/`@identity` and an `exec:`/
+  `dotfiles:` line carry ciphertext and plaintext that live in the config and keyring, not in a
+  file other people run.
+
+The `--from-scan` half and the ansible/nix formats are `#66`'s and the rest of `#67`'s, closed
+by the same rule.

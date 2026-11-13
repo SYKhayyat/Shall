@@ -811,13 +811,30 @@ pub enum Commands {
     /// Emit a CycloneDX software bill of materials (SBOM) spanning every backend
     Sbom,
 
-    /// Export the managed package set as NATIVE manifests (Brewfile, requirements.txt,
-    /// package.json, Aptfile) — the no-lock-in escape hatch and a way to interop with other
-    /// tools. With no `--format`, writes every applicable file into `--out`.
+    /// Export what this machine is: either the managed package set as NATIVE manifests
+    /// (Brewfile, requirements.txt, package.json, Aptfile) — the no-lock-in escape hatch — or a
+    /// standalone script (bash) that reproduces the machine without Shall.
+    ///
+    /// With no `--format`, writes every applicable manifest file into `--out`. A script format
+    /// needs a source: `--from-declaration` exports what the config files say, `--from-scan`
+    /// what the machine is. A line the format cannot carry is refused; `@export=no` on the line
+    /// opts it out, and `--best-effort` writes the script anyway with a comment at each hole.
     Export {
-        /// One of: brew | pip | npm | apt. Omit to emit all applicable formats.
+        /// One of: brew | pip | npm | apt (manifests) or bash (a script).
         #[arg(long)]
         format: Option<String>,
+
+        /// Export the standalone script from the declaration files
+        #[arg(long)]
+        from_declaration: bool,
+
+        /// Export the standalone script from a scan of this machine
+        #[arg(long)]
+        from_scan: bool,
+
+        /// Write the script even when it cannot say everything, marking each hole
+        #[arg(long)]
+        best_effort: bool,
 
         /// Directory to write the manifest file(s) into
         #[arg(long, default_value = ".")]

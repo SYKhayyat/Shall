@@ -159,6 +159,19 @@ pub trait Installable: Send + Sync {
         false
     }
 
+    /// The command(s) that would install these, when this backend can say.
+    ///
+    /// **`None` is the honest answer for a backend with no single argv** — one that installs by
+    /// copying a file, or whose install reads machine state mid-body. `#67`'s export turns a
+    /// `None` into its refusal, so a `None` is never silent: it is a line the artifact cannot
+    /// carry, named and offered `@export=no` / `--best-effort` (II.94).
+    fn planned_installs(
+        &self,
+        _specs: &[PackageSpec],
+    ) -> Option<Vec<crate::backends::generic::PlannedInstall>> {
+        None
+    }
+
     fn created_paths(&self) -> Vec<std::path::PathBuf> {
         Vec::new()
     }

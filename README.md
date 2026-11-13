@@ -246,7 +246,7 @@ ships, so a line that no longer works fails the build rather than misleading you
 | `eval` | Print the resolved config as versioned JSON — every `when` decided, every bare name given a backend. Takes no locks |
 | `try` | Rehearse this config on a clean machine in a container. Answers what `plan` cannot: would it work somewhere that is not here? |
 | `lock` / `unlock` | Freeze what a sync would otherwise decide again — nine kinds, from version pins to `exec:` approvals. Scope it to a kind, a sub-category (`versions:apt`), or one name. **Recorded versions are replayed by every sync, not only `sync --locked`** — see below |
-| `export` | Emit native manifests (Brewfile, requirements.txt, package.json, Aptfile) |
+| `export` | Emit native manifests (Brewfile, requirements.txt, package.json, Aptfile); or with `--from-declaration --format bash` a standalone script that reproduces the machine without Shall (`@export=no` opts a line out; `--best-effort` writes a marked lossy copy) |
 | `bundle` | An offline/air-gapped bundle of config, lockfile and resolved package list |
 | `sbom` / `check security` | CycloneDX bill of materials; scan managed packages against OSV.dev |
 
@@ -402,3 +402,10 @@ Every one of these files runs on your machine, so every one goes through the app
 the first `sync` after you write or change one refuses it by name and tells you to run `shall
 lock`. That is the same rule hooks and `exec:` scripts follow, and it is why a repo you cloned
 cannot teach your machine anything you have not read.
+
+`export --from-declaration --format bash` writes `bootstrap.sh`: a shebang-and-commands script
+whose commands are the ones `sync` would actually run (the same argv builder, read not run). A
+line the format cannot carry — a `link: @decrypt`, an `exec:` script, or for now any resource line
+— is refused with the file and line named, and nothing is written. `@export=no` on a line keeps it
+out of the artifact while `sync` still applies it; `--best-effort` writes the script anyway, marks
+each hole with a `#` comment, and still exits 2. `--from-scan` is `#66`.

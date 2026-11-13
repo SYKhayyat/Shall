@@ -232,6 +232,20 @@ impl std::fmt::Debug for MachineListing {
 /// `list --outdated` asks each manager about one package at a time — and `Searchable::lookup`
 /// defaults to a whole search for that one name, so a machine with 280 packages ran 280
 /// registry searches. Measured: 771.4s, against 2.9s for the plain listing that fed it.
+/// One command an install would run, before it is run.
+///
+/// **Not an argv alone.** `unverified` is the fact the *runner* needs to translate a failure
+/// into advice ("helm 3 cannot verify plugins"), and it is decided while the argv is built — so
+/// a plain `(String, Vec<String>)` would either lose it or make the runner recompute it from
+/// the specs a second time.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlannedInstall {
+    pub binary: String,
+    pub args: Vec<String>,
+    /// Whether the specs asked for something this manager's own verification covers.
+    pub unverified: bool,
+}
+
 #[derive(Clone)]
 pub struct OutdatedProbe {
     /// `None` falls back to `list_binary`, then the backend name.
@@ -913,6 +927,14 @@ fn install_source(backend: &str, spec: &PackageSpec, key: &str) -> Result<String
 
 #[async_trait]
 impl Installable for GenericInstallable {
+    /// Answered from the same builder `install` runs through, so the exporter and the install
+    /// cannot disagree about an argv. `Err` is `None`: a spec that cannot be turned into a
+    /// command (an exact version this manager has no syntax for) is not something an artifact
+    /// may quietly drop.
+    fn planned_installs(&self, specs: &[PackageSpec]) -> Option<Vec<PlannedInstall>> {
+        self.install_commands(specs).ok()
+    }
+
     async fn install(&self, specs: &[PackageSpec], sudo: bool) -> Result<()> {
         if specs.is_empty() {
             return Ok(());
@@ -1070,6 +1092,52 @@ pub fn batch_bound(specs: &[PackageSpec]) -> usize {
 impl GenericInstallable {
     /// One install command for specs that agree about verification.
     async fn install_group(&self, specs: &[PackageSpec], sudo: bool) -> Result<()> {
+        for planned in self.install_commands(specs)? {
+            let arg_refs: Vec<&str> = planned.args.iter().map(|s| s.as_str()).collect();
+            let outcome = if self.core.config.is_exclusive {
+                self.core
+                    .executor
+                    .run_exclusive(self.core.lock_key(), &planned.binary, &arg_refs, sudo)
+                    .await
+            } else {
+                self.core
+                    .executor
+                    .run(&planned.binary, &arg_refs, sudo)
+                    .await
+            };
+            // The chain the flag would ride on, for the advice below: `plugin install` for helm.
+            let chain: Vec<String> = planned
+                .args
+                .iter()
+                .take_while(|a| !a.starts_with('-'))
+                .cloned()
+                .collect();
+            outcome
+                .map_err(|e| self.explain_verification(e, planned.unverified, &chain))
+                .map_err(|e| self.explain_os_owned_environment(e))?;
+        }
+        Ok(())
+    }
+
+    /// The commands `install` would run for these specs, in order, without running any of them.
+    ///
+    /// **One builder, read or run.** `#67`'s export needs the argv that would reproduce a
+    /// package on a fresh machine, and the only honest place to get it is the code that builds
+    /// the argv a sync actually runs — a second builder for the exporter would be free to
+    /// disagree with the first the next time a capability flag moved, which is `#151` and `#162`
+    /// in another dress. So the tail of `install_group` became this, and the install became a
+    /// loop over its answer.
+    pub(crate) fn install_commands(&self, specs: &[PackageSpec]) -> Result<Vec<PlannedInstall>> {
+        let mut out = Vec::new();
+        self.collect_install_commands(specs, &mut out)?;
+        Ok(out)
+    }
+
+    fn collect_install_commands(
+        &self,
+        specs: &[PackageSpec],
+        out: &mut Vec<PlannedInstall>,
+    ) -> Result<()> {
         if specs.is_empty() {
             return Ok(());
         }
@@ -1137,7 +1205,7 @@ impl GenericInstallable {
         // is present.
         if trailing_option && specs.len() > 1 {
             for spec in specs {
-                Box::pin(self.install_group(std::slice::from_ref(spec), sudo)).await?;
+                self.collect_install_commands(std::slice::from_ref(spec), out)?;
             }
             return Ok(());
         }
@@ -1201,28 +1269,11 @@ impl GenericInstallable {
             crate::core::argv::push_names(&mut final_args, self.core.binary(), names);
         }
 
-        let arg_refs: Vec<&str> = final_args.iter().map(|s| s.as_str()).collect();
-
-        let outcome = if self.core.config.is_exclusive {
-            self.core
-                .executor
-                .run_exclusive(self.core.lock_key(), self.core.binary(), &arg_refs, sudo)
-                .await
-        } else {
-            self.core
-                .executor
-                .run(self.core.binary(), &arg_refs, sudo)
-                .await
-        };
-        // The chain the flag would ride on, for the advice below: `plugin install` for helm.
-        let chain: Vec<String> = final_args
-            .iter()
-            .take_while(|a| !a.starts_with('-'))
-            .cloned()
-            .collect();
-        outcome
-            .map_err(|e| self.explain_verification(e, opting_out, &chain))
-            .map_err(|e| self.explain_os_owned_environment(e))?;
+        out.push(PlannedInstall {
+            binary: self.core.binary().to_string(),
+            args: final_args,
+            unverified: opting_out,
+        });
         Ok(())
     }
 

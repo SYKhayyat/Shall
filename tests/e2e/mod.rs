@@ -1,4 +1,5 @@
 mod a_closed_stdout_is_not_a_successful_run_tests;
+mod a_declaration_becomes_a_script_that_needs_no_shall_tests;
 mod a_failed_sync_fails_under_every_flag_tests;
 mod a_non_utf8_argument_is_refused_not_fatal_tests;
 mod a_previewed_deactivation_says_what_it_would_do;

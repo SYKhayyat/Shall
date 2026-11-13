@@ -373,6 +373,39 @@ fn refuse_json_without_dry_run(cli: &Cli) -> Result<()> {
     ))
 }
 
+/// One source for a script export, named — and no `--stdout` (#67, II.94).
+///
+/// **`--from-declaration` and `--from-scan` are different truths**, not two spellings of one:
+/// the first is what the machine is meant to be, the second what it is. A default would answer
+/// one of them silently, so the flag is required and both are named when neither is given.
+///
+/// **`--stdout` is refused for a script because the artifact is a file's worth of commands**,
+/// and the manifest half of this verb already writes files: two ways to get one artifact, one of
+/// them lossy about trailing newlines and mixed with whatever else the verb prints, is a second
+/// answer nobody asked for.
+fn check_script_source(from_declaration: bool, from_scan: bool, stdout: bool) -> Result<()> {
+    if from_declaration == from_scan {
+        return Err(anyhow::anyhow!(
+            "a script export needs exactly one source: `--from-declaration` (what the config \
+             files say) or `--from-scan` (what this machine is)."
+        ));
+    }
+    if from_scan {
+        // `#66`'s half. Refused by name rather than quietly exporting the declarations, which
+        // would be the wrong answer to the question asked and would look like the right one.
+        return Err(anyhow::anyhow!(
+            "`--from-scan` is not built yet (`#66`): it needs the discovery `shall adopt` uses to \
+             be asked for an argv. Use `--from-declaration` today."
+        ));
+    }
+    if stdout {
+        return Err(anyhow::anyhow!(
+            "`--stdout` belongs to the manifest export. Write the script with `--out`."
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) async fn dispatch(app: &App, cli: &Cli) -> Result<()> {
     refuse_json_without_dry_run(cli)?;
     match &cli.command {
@@ -617,20 +650,47 @@ pub(crate) async fn dispatch(app: &App, cli: &Cli) -> Result<()> {
         Commands::Sbom => handle_sbom(&app.config, &app.registry, &app.state).await,
         Commands::Export {
             format,
+            from_declaration,
+            from_scan,
+            best_effort,
             out,
             stdout,
             force,
         } => {
-            handle_export(
-                &app.config,
-                &app.registry,
-                &app.state,
-                format.as_deref(),
-                out,
-                *stdout,
-                *force,
-            )
-            .await
+            // Two exports, one verb: a native manifest for one ecosystem, or a script that
+            // calls the managers. `--format` decides which, and the script formats are the
+            // only ones that take a source — a manifest comes from the state, which is neither
+            // the declaration files nor a scan.
+            let script = format
+                .as_deref()
+                .and_then(shall::app::bootstrap::Format::parse);
+            match script {
+                Some(script_format) => {
+                    check_script_source(*from_declaration, *from_scan, *stdout)?;
+                    handle_script_export(app, script_format, *best_effort, out, *force).await
+                }
+                None => {
+                    if *from_declaration || *from_scan || *best_effort {
+                        anyhow::bail!(
+                            "--from-declaration, --from-scan and --best-effort belong to a \
+                             script format ({}). `--format {}` writes a manager's own manifest \
+                             from the state.",
+                            shall::app::bootstrap::Format::WORDS.join(", "),
+                            format.as_deref().unwrap_or("brew|pip|npm|apt")
+                        );
+                    }
+                    handle_export(
+                        &app.config,
+                        &app.registry,
+                        &app.state,
+                        format.as_deref(),
+                        out,
+                        *stdout,
+                        *force,
+                    )
+                    .await
+                }
+            }
         }
         Commands::Bundle {
             out,
@@ -1038,6 +1098,17 @@ pub(crate) async fn load_and_merge_config(cli: &Cli) -> Result<shall::config::Co
         allow_mass_install: cli.allow_mass_install,
         config_path: None,
     });
+    // **A script export is a preview that is kept**, so it is started as one — here, before
+    // `App::new` builds the executor with this flag, because forcing it at the call site would be
+    // a preview flag read by a machine already able to write (#67, II.94).
+    if let Commands::Export {
+        format: Some(word), ..
+    } = &cli.command
+    {
+        if shall::app::bootstrap::Format::parse(word).is_some() {
+            config.dry_run = true;
+        }
+    }
     // The one place `--dry-run` becomes a property of the process. Set after the config merge
     // so a `dry_run = true` in `preferences.toml` counts too, and before dispatch so no write
     // can run ahead of it. Every config write consults this instead of each verb remembering
