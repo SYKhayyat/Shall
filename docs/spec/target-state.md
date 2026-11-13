@@ -4800,9 +4800,32 @@ before execution, and never by a read-only command.
   answer. A run that passed `--yes` to skip the prompt still gets nothing installed, and is told
   which setting declined it and how to change it — the refusal names a fact a person wrote months
   ago and will not remember.
-- **A decline leaves the declaration in the file and the run non-converged.** `II.16` is untouched —
+- **A decline leaves the declaration in the file and the package owed.** `II.16` is untouched —
   Shall appends whole lines and never rewrites a person's manifest — so the count of what the machine
-  still owes includes what a policy declined, and the exit code carries it (`Q-C`).
+  still owes includes what a policy declined. What that does to the exit code is `II.92`, not this
+  rule: the declaration is owed, and a run doing what its owner configured is not a failure.
 - **The vocabulary is closed.** A word that is not one of the three is refused at the file with the
   three that work, rather than falling back to `ask`: a typo that silently restores the prompt reads
   as the setting not working at all.
+
+## II.92 A decline by policy is a warning and exit 0; a decline by a person is a failure (owner ruling, 2026-08-02, `#161`, V.245)
+
+**When a run installs nothing because the configuration says not to, the run succeeded.** `sync` on
+a machine whose `[declare] install = "never"` covers the only pending declaration does what its owner
+configured it to do, and reports it at exit **0**.
+
+- **It is a warning, not silence.** The line is printed on every such run, at the same volume as
+  before, prefixed `WARNING:` and naming the setting: a package that never arrives is exactly what a
+  log reader has to be able to find. Only the *classification* changed, never the fact.
+- **The count is unchanged and the attribution decides the exit code.** A policy-declined
+  declaration is counted as owed (`II.91`) and subtracted again by name from the failure count, so
+  `Reconciled` distinguishes "did not arrive" from "did not arrive because this machine is
+  configured not to install it".
+- **A decline answered by a person is still exit 1.** A run that asked and was told no was asked to
+  do something and did not do it, which is the same failure a manager that could not be reached is.
+  The distinction is the source of the answer, not the size of the shortfall.
+- **Gating is not weakened, because it never depended on this.** `check` and `plan` report the same
+  missing declaration and exit 2 (`U21`); a job that must fail on drift gates on those, not on
+  `sync`'s exit code.
+- **A configuration's answer is never inferred from a flag.** `--yes` does not turn a policy decline
+  into a failure or a success — it answers the prompt and nothing else (`II.91`).

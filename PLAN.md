@@ -1597,9 +1597,9 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     nothing, leaves the declaration where II.16 requires it, names the setting that did it, and
     leaves the run non-converged (Q-C). The vocabulary is closed — a fourth word is refused at the
     file naming the three, since a typo falling back to `ask` would read as the setting not
-    working. II.91, V.244, C26. Whether a `never` decline should exit non-zero forever is a
-    separate question, filed as #161. — ISSUE #94
-- [ ] #162 141 tests assert from an empty string they never wrote. **Measured, and half converted.**
+    working. II.91, V.244, C26. Whether a `never` decline should exit non-zero forever was filed
+    as #161 and ruled: it should not. — ISSUE #94
+- [x] #162 141 tests assert from an empty string they never wrote. **Closed — the ledger is empty.**
   The ledger is `SHALL_AUDIT_UNSTUBBED=1` over the suite: each test that fell through to the
   empty-success default is a test whose assertions about what Shall *printed* proved nothing.
   - **What is stated now: 141 → 78 tests, 596 → 457 fall-throughs.** Four commits: the orphan
@@ -1635,6 +1635,28 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
     records them so a test *can* ask, and its `true` default is the deliberate "silence means fine"
     choice documented beside it. Turning them into 135 names would assert nothing new.
   - ISSUE #162
+- [x] #161 A `[declare] install = "never"` decline exits 1 on every run. **RULED: it exits 0, and
+  still says so.** The decline was reaching the same non-convergence path a manager that could not
+  be asked takes, so a machine whose only pending declaration was policy-declined was red nightly,
+  forever — measured `rc=1` twice on one host with one line and one setting.
+  - **Both halves stay distinguishable, and that is the spine.** A decline a *person* answered at
+    the prompt is still exit 1: that run was asked to do something and did not do it. The difference
+    is the source of the answer, not the size of the shortfall — so `Reconciled` gained
+    `declined_by_policy`, counted **inside** `not_installed` and subtracted by the exit rule. One
+    count, two facts; a run that reports `0` owed would be claiming it converged.
+  - **A warning, not silence.** The line keeps its volume and its sentence and changes only its
+    prefix, `WARNING:` instead of `Error:`. An exit-0 run that printed nothing would be the other
+    failure — a package that never arrives on a machine whose log reads fine. It goes to stderr
+    under `--json`, because that mode promises one document on stdout and nothing else.
+  - **Gating was never on this code path.** `check` and `plan` find the same missing declaration and
+    exit 2, unchanged; a job that must fail on drift gates on those. What was wrong was the *write*
+    command calling its owner's decision a defect.
+  - Three tests, and the first one fails if the subtraction is removed: a `never` fixture syncs
+    `Ok(())` having run no install, the same fixture under `always` does install (the control), and
+    a declaration no manager can answer for still fails with "not converged". II.92, V.245, C27.
+  - **Separate defect found while measuring it, filed as #164**: `watch` passes `confirm: false`, so
+    `install = "never"` is not consulted by the daemon at all — `watch --once` installed the
+    declaration this setting forbids, `rc=0`. — ISSUE #161
 - [x] #89 guard-reachability control builds a vacuous fixture. (**BUILT — and the state the control
   needs turned out to be reachable, but not through any of the three shapes the fixture had tried.**
   `plan` wrote 2 removals with no guard refusal because nothing protected them, and the missing

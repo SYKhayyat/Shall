@@ -8928,7 +8928,36 @@ makes the setting advisory and makes the mirror machine install what its own con
 to; the cost of the rule is that a run wanting one bare install must change the setting, which is
 what a deliberate policy should cost.
 
-**And the run is not converged, so it does not claim to be.** The declaration survives (`II.16`) and
-the count of what is owed includes it (Q-C): a policy that suppressed the install and also suppressed
-the report would be the same lie by a shorter route. Whether a policy decline should also make the
-exit code non-zero on every run is a separate question, filed rather than answered here.
+**And the run does not claim to have converged.** The declaration survives (`II.16`) and the count
+of what is owed includes it: a policy that suppressed the install and also suppressed the report
+would be the same lie by a shorter route. What that count does to the exit code is `II.92`'s
+question, ruled two days later — the package is owed, and the run is not a failure.
+
+**V.245 — Why a policy decline exits 0 (`#161`, `II.92`, `V.244`).** `V.244` left this open on
+purpose, because it is a contract with everything that reads an exit code and not a detail of the
+setting. `sync` answered a `never` decline through the non-convergence path — the one a manager that
+cannot be reached takes — so it exited **1 on every run, forever**, over a machine in exactly the
+state its owner described.
+
+**That red light is not free.** A cron entry goes red nightly, a systemd timer sits in `failed`
+forever, a CI step stops the pipeline, `sync && next` never runs `next`, and an alerting rule fires
+for a machine behaving correctly. The damage is not the single false alarm; it is that a permanent
+false alarm is how a team learns to skip the alarm — the reader who ignores the nightly red is the
+same reader who misses the real one.
+
+**Nothing is lost by not failing, because the two commands that answer "is this host right?" already
+say so.** `check` and `plan` are read-only, find the same missing declaration, and exit **2**
+(`U21`). So gating on a policy decline works today, unchanged, through the commands whose job it is
+to report drift. What was wrong was the *write* command calling a decision a defect.
+
+**Both halves stay distinguishable, which is what makes the rule honest.** A run that declined
+because a person answered *no* at the prompt is a run that was asked to do something and did not:
+that still exits 1. The difference is not the count of what is owed — it is the same count — but
+where the answer came from: the owner already ruled the declaration out on this machine (`never`), or
+the run asked and was refused. `Reconciled` therefore counts `declined_by_policy` inside
+`not_installed` rather than beside it, and the exit rule subtracts exactly that.
+
+**And it is said out loud, as a warning.** An exit-0 run that printed nothing would be the other
+failure: a declaration that never arrives, on a machine whose log says everything is fine. So the
+line stays, at the same volume, prefixed `WARNING:` instead of `Error:` — one greppable sentence
+naming the setting, in the one place a nightly job's log is read.

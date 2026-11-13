@@ -49,6 +49,15 @@ pub struct Reconciled {
     /// asked for and did not happen, which is the difference between a run that converged and
     /// one that only reported it had.
     pub not_installed: usize,
+    /// Declarations left alone **because the configuration says so**, counted inside
+    /// `not_installed` rather than beside it.
+    ///
+    /// `[declare] install = "never"` describes an intended state, not a run that went wrong: the
+    /// packages it covers are absent by their owner's choice, and a `sync` that failed every
+    /// night over them would be a red light nobody can act on and everybody learns to skip. They
+    /// are still printed — as a warning, not an error — because a declaration that never arrives
+    /// is the one thing a log reader has to be able to find.
+    pub declined_by_policy: usize,
     /// How many declarations the configuration holds — the model's number, never a manager's
     /// answer. Packages, resources and dated lines alike, because a narrowed run's pending
     /// count is about lines.
@@ -329,6 +338,7 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
             applied,
             left_in_place: changes.skipped.len(),
             not_installed: not_installed_of(&changes.skipped),
+            declined_by_policy: 0,
             declared_total,
         });
     }
@@ -342,6 +352,7 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
             applied: 0,
             left_in_place: changes.skipped.len(),
             not_installed: not_installed_of(&changes.skipped),
+            declined_by_policy: 0,
             declared_total,
         });
     }
@@ -414,6 +425,7 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
             applied: applied + extras_undone,
             left_in_place: changes.skipped.len(),
             not_installed: not_installed_of(&changes.skipped),
+            declined_by_policy: 0,
             declared_total,
         });
     }
@@ -425,20 +437,39 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
                 // **Said out loud, and named to the setting that did it.** A `sync` that
                 // installed nothing and printed nothing is indistinguishable from one that
                 // converged, and the user who wrote `never` months ago will not remember it.
-                println!(
-                    "Declined — {}. The declarations remain.",
-                    match why {
-                        BareDecline::Asked => "no bare declarations were installed".to_string(),
-                        BareDecline::Setting => "`[declare] install = \"never\"` installs nothing \
-                             a bare declaration selects, and `--yes` does not override it; set it \
-                             to \"ask\" or \"always\" to change that"
-                            .to_string(),
+                //
+                // **Two words, because they are two facts.** A person who answered *no* at the
+                // prompt gave this run its answer; the machine is not converged and the run
+                // failed to do what it was asked (exit 1). A `never` machine did what its owner
+                // configured it to do — the declaration is absent on purpose — so it is a
+                // warning and the run succeeds, or every night's `sync` is red over the state
+                // the file describes (owner ruling, 2026-08-02).
+                let owed = bare_install_names(&changes).len();
+                let line = match why {
+                    BareDecline::Setting => format!(
+                        "WARNING: {owed} bare declaration(s) will not be installed: \
+                         `[declare] install = \"never\"` says this machine installs nothing a bare \
+                         declaration selects, and `--yes` does not override it. Set it to \"ask\" \
+                         or \"always\" to change that. The declarations remain."
+                    ),
+                    BareDecline::Asked => {
+                        "Declined — no bare declarations were installed. The declarations remain."
+                            .to_string()
                     }
-                );
+                };
+                // A `--json` run promises one document on stdout and nothing else, and this line
+                // is a sentence: a consumer that got the warning where it expected JSON would
+                // fail to parse a run that succeeded.
+                if opts.out.is_json() {
+                    eprintln!("{line}");
+                } else {
+                    println!("{line}");
+                }
                 return Ok(Reconciled {
                     applied: 0,
                     left_in_place: 0,
-                    not_installed: bare_install_names(&changes).len(),
+                    not_installed: owed,
+                    declined_by_policy: if why == BareDecline::Setting { owed } else { 0 },
                     declared_total,
                 });
             }
@@ -469,6 +500,7 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
                     applied: 0,
                     left_in_place: changes.skipped.len(),
                     not_installed: not_installed_of(&changes.skipped),
+                    declined_by_policy: 0,
                     declared_total,
                 });
             }
@@ -501,6 +533,7 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
         applied: applied + extras_undone,
         left_in_place,
         not_installed,
+        declined_by_policy: 0,
         declared_total,
     })
 }
@@ -1043,11 +1076,14 @@ pub async fn handle_sync(app: &App, mode: SyncMode, out: Output) -> Result<()> {
     // A **partial** skip counts too, and that is the case this has to cover: three of four is
     // the ordinary shape and is worse than three of three, because something did get installed
     // and the summary reads like a successful transaction.
-    if done.not_installed > 0 {
+    // **What is left after the run's own answer is subtracted** is the only part that failed:
+    // a declaration the configuration says is never installed here is not work that went wrong,
+    // and counting it here made `sync` exit 1 every night over the state its owner described.
+    let unmet = done.not_installed.saturating_sub(done.declined_by_policy);
+    if unmet > 0 {
         return Err(crate::core::Error::command_failed(format!(
-            "{} declaration(s) could not be acted on and were not installed; this machine has \
-             not converged. The reason for each is named above.",
-            done.not_installed
+            "{unmet} declaration(s) could not be acted on and were not installed; this machine \
+             has not converged. The reason for each is named above."
         ))
         .into());
     }

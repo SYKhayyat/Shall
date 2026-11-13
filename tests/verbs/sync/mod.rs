@@ -17,6 +17,7 @@ fn spec(bare: bool) -> shall::core::PackageSpec {
 }
 mod a_bare_install_is_asked_and_can_be_declined;
 mod a_bare_install_refuses_without_a_terminal;
+mod a_never_decline_is_a_warning_and_not_a_failure;
 mod a_qualified_install_does_not_prompt;
 mod explicit_confirmation_skips_the_bare_prompt;
 mod no_bare_install_does_not_prompt;
