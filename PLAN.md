@@ -1654,9 +1654,13 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
   - Three tests, and the first one fails if the subtraction is removed: a `never` fixture syncs
     `Ok(())` having run no install, the same fixture under `always` does install (the control), and
     a declaration no manager can answer for still fails with "not converged". II.92, V.245, C27.
-  - **Separate defect found while measuring it, filed as #164**: `watch` passes `confirm: false`, so
-    `install = "never"` is not consulted by the daemon at all — `watch --once` installed the
-    declaration this setting forbids, `rc=0`. — ISSUE #161
+  - **Separate defect found while measuring it, filed as #164 and fixed**: `watch` passed
+    `confirm: false`, so `install = "never"` was not consulted by the daemon at all — `watch --once`
+    installed the declaration this setting forbids, `rc=0`. The rule now reads **the answer on every
+    reconcile and the question only where somebody can answer it**: `never` holds for `watch` too,
+    while `ask` keeps the gate (an unattended run's shape there is a separate behaviour nobody asked
+    to change). `watch` reports the decline as `declined by \`[declare] install\``, not as work that
+    could not be done. II.91, V.246, C28. — ISSUE #161 / #164
 - [x] #89 guard-reachability control builds a vacuous fixture. (**BUILT — and the state the control
   needs turned out to be reachable, but not through any of the three shapes the fixture had tried.**
   `plan` wrote 2 removals with no guard refusal because nothing protected them, and the missing

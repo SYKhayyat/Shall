@@ -1,4 +1,4 @@
-﻿# The decision register — 265 entries, none open
+﻿# The decision register — 266 entries, none open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **260** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **261** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 265 are accounted
-for: **260 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 266 are accounted
+for: **261 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay, and whether a policy decline is a failure) — 27
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay, and whether a policy decline is a failure, and which half of a setting waits for a person) — 28
 
 | | question | answered |
 |---|---|---|
@@ -545,6 +545,7 @@ deliberately no longer has.*
 | **C25** | `#151` reported that after a SIGKILL the crash section's recovery run exits 0 with declared canaries missing, intermittent and only on `void`, and the failure branch printed a plan naming `openssl-devel` and `gcc` — packages installed before the image was built, and not declared at all. **When a sync reports success over a machine it has not converged, which of the three readings is at fault: the plan, the install, or the report?** — RULED 2026-11-11: **the plan, because it paired each answer with the wrong declaration.** `helpers::spec_is_missing` fanned out over the declarations with `buffer_unordered` — which yields answers in completion order — collected them into a `Vec<Verdict>`, and zipped that onto a second iteration over the same map. Installed names answer from the listing and absent ones cost a repository lookup, so on `void` the orders differed and missing verdicts landed on installed declarations: the plan reinstalled what the image already had and never named the canaries. The fix carries the subject (`(spec, verdict)`), which makes the pairing structural rather than index-based; `buffered` alone would have hidden it and left the shape. A test drives the real planner against a manager whose absent names answer slowly, so the completion order is the opposite of the declaration order, and fails on the old code by naming an installed package as an install. The harness prints the plan's package names beside its counts, since a count cannot tell a lost declaration from an install that did nothing. (II.90, V.243) | 2026-11-11 |
 | **C26** | `#94`'s second half shipped as the prompt and `--yes`: the question was asked, and the only way to avoid being asked was a flag whose meaning is "yes". The issue had ruled the *shape* — `ask` / `always` / `never` — and left the key to the implementer. **What does a bare declaration do on a machine whose owner has already answered, and can a flag express the answer "no" when they are not there?** — RULED 2026-11-11: **`[declare] install` is three-way, and `never` outranks `--yes`.** `--yes` answers the question; `never` says the question is not the run's to answer, and a person who turned it off on purpose does not re-enable it by running the command their CI runs. A decline installs nothing, leaves the declaration where `II.16` requires it, prints which setting did it (a person who wrote it months ago will not remember), and leaves the package owed — what that owes the exit code is `C27`'s question, ruled later. The vocabulary is closed: a fourth word is refused at the file naming the three, because a typo that fell back to `ask` would read as the setting not working. (II.91, V.244) | 2026-11-11 |
 | **C27** | `C26` built `never` and left one consequence undescribed: the decline returned through the non-convergence path, so a machine whose only pending declaration was policy-declined exited **1 on every `sync`, forever**, with `Error: 1 declaration(s) could not be acted on … this machine has not converged.` Measured on one host, one line, one setting: `rc=1`, then `rc=1` again, identically. **Is a policy decline a failure — and if not, what does the run owe the reader?** — RULED 2026-08-02: **no, and it still says so, as a warning.** A run doing what its owner configured exits **0**; the line stays at the same volume, prefixed `WARNING:` instead of `Error:`, naming the setting and how to change it. A permanent nightly red is not a harmless false alarm — it is how a team learns to skip the alarm — and nothing is lost, because `check` and `plan` report the same missing declaration and exit 2, so drift gating never depended on the write command's code. The two halves stay distinguishable: a decline **asked and answered by a person** is still exit 1, because that run was asked to do something and did not do it. `Reconciled` therefore counts `declined_by_policy` inside `not_installed` and the exit rule subtracts exactly that, so "did not arrive" and "did not arrive by its owner's choice" are one count and not one fact. (II.92, V.245) | 2026-08-02 |
+| **C28** | `#161` was ruled and its measurement turned up a bigger hole next door: `[declare] install = "never"` was honoured by `sync` and **ignored by `watch`**, because `watch` passes `confirm: false` and the bare rule sat inside the `if opts.confirm` block. One fixture, one line, one setting: `shall sync --yes` declined and installed nothing (`rc=1`), `shall watch --once` installed the same declaration and printed `applied 1 change(s)` (`rc=0`). **Which part of the rule waits for a person, and which part does not?** — RULED 2026-08-02: **the question waits; the answer does not.** `never` is consulted on every reconcile, so the daemon stops installing what its owner forbade; `ask` keeps the gate, because an unattended run cannot put a question to anybody and the shape `watch` has there is a separate behaviour nobody asked to change. The unattended decline prints the same warning and reports it as `declined by \`[declare] install\`` rather than as work that could not be done. (II.91, V.246) | 2026-08-02 |
 
 # The blocking round — thirteen questions, all ruled
 
@@ -11110,3 +11111,27 @@ one erasing the other.
 **4. It is still printed, on every run.** An exit-0 run that said nothing would be the other failure:
 a package that never arrives on a machine whose log reads fine. The line keeps its volume and its
 sentence, and changes only its prefix — `WARNING:` instead of `Error:`.
+
+## C28
+
+**Status: ANSWERED 2026-08-02, built the same day.** The unattended run reads the policy too. Carried
+out of `#164`, found while measuring `#161`.
+
+**Asked.** `[declare] install = "never"` was honoured by `sync` and ignored by `watch`, because `watch`
+passes `confirm: false` and the bare-declaration rule sat inside the `if opts.confirm` block. One
+fixture, one line, one setting: `shall sync --yes` declined and installed nothing; `shall watch --once`
+installed the same declaration and printed `applied 1 change(s)`.
+
+**Ruled: the question waits for a person; the answer does not.**
+
+**1. `watch` is the run an answer-in-advance is *for*.** A person who wrote `never` is not going to be
+at the terminal at 3am, so the setting's whole purpose is the unattended case — and the bug inverted
+it, quietly installing what the file forbids while the log reported the work as done.
+
+**2. `ask` keeps the gate, and that is deliberate.** An unattended run cannot put a question to
+anybody; `watch` installing what a bare line selects is the shape it has always had and is a separate
+question. Moving both in one commit would have slipped a second behaviour change in beside the first.
+
+**3. The decline reads the same way in both spellings.** The same warning line, and `watch` reports it
+as `declined by \`[declare] install\`` rather than as work that could not be done — one number
+(`declined_by_policy`) answering both, because a policy decline is the same fact whichever verb met it.

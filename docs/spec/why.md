@@ -8961,3 +8961,21 @@ the run asked and was refused. `Reconciled` therefore counts `declined_by_policy
 failure: a declaration that never arrives, on a machine whose log says everything is fine. So the
 line stays, at the same volume, prefixed `WARNING:` instead of `Error:` — one greppable sentence
 naming the setting, in the one place a nightly job's log is read.
+
+**V.246 — Why the unattended run reads the policy too (`#164`, `II.91`).** `watch` passed
+`confirm: false`, and the bare-declaration rule lived inside the `if opts.confirm` block — so the
+daemon did not consider the setting at all. Measured on one fixture: `shall sync --yes` declined and
+installed nothing, `shall watch --once` installed the same declaration and printed
+`applied 1 change(s)`, both from one file and one setting.
+
+**`watch` is the spelling that most needs the answer.** It is `sync` with nobody watching, which is
+exactly the situation an answer-in-advance exists for: a person who wrote `never` was not going to be
+at the terminal at 3am to be asked. The bug therefore inverted the setting's purpose — the one run
+that must read it was the one that ignored it, and the log said the work had been applied with
+nothing marking a policy as crossed.
+
+**The question and the answer are gated differently, and that is the fix.** `never` is an answer, so
+it is consulted on every reconcile; `ask` is a question, so it still needs somebody to answer it, and
+the unattended run's shape (`watch` installs what a bare line selects, as it always has) is untouched
+by this. A rule that moved both would have changed a second behaviour nobody asked about, in the same
+commit as the fixing of the first.

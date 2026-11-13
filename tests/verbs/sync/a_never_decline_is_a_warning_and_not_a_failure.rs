@@ -1,42 +1,6 @@
 use super::*;
 use crate::mock_providers::TestKernel;
 
-/// A fixture with the given lines in a manifest, and the setting these tests are about.
-async fn a_machine_that_declares(
-    declarations: &[&str],
-    policy: shall::config::config::BareInstall,
-) -> TestKernel {
-    use shall::model::Landing;
-
-    let mut kernel = TestKernel::new().await;
-    // A bare line is resolved by asking the managers in `priority` whether they have the name,
-    // and this machine's apt catalogue is the one that does (`#162`: stated, not read out of
-    // silence).
-    for line in declarations.iter().filter(|l| !l.contains(':')) {
-        kernel.mock_executor.set_response(
-            &format!("apt-cache search -- {line}"),
-            Ok(shall::core::executor::DryRunOutput {
-                stdout: format!("{line} - a program this machine has\n").into_bytes(),
-                stderr: Vec::new(),
-            }
-            .into()),
-        );
-    }
-    for line in declarations {
-        kernel
-            .app
-            .declarations()
-            .declare(line, None, Landing::Imperative)
-            .await
-            .expect("the fixture's own declaration must be written for real");
-    }
-    let mut config = (*kernel.app.config).clone();
-    config.declare.install = policy;
-    config.yes = true;
-    kernel.app.config = std::sync::Arc::new(config);
-    kernel
-}
-
 async fn sync(kernel: &TestKernel) -> Result<()> {
     handle_sync(
         &kernel.app,
@@ -58,8 +22,7 @@ async fn sync(kernel: &TestKernel) -> Result<()> {
 /// as configured, forever. Here it succeeds and says what it did not do.
 #[tokio::test]
 async fn a_never_decline_is_a_warning_and_not_a_failure() {
-    let kernel =
-        a_machine_that_declares(&["dos2unix"], shall::config::config::BareInstall::Never).await;
+    let kernel = declaring(&["dos2unix"], shall::config::config::BareInstall::Never).await;
 
     sync(&kernel)
         .await
@@ -77,8 +40,7 @@ async fn a_never_decline_is_a_warning_and_not_a_failure() {
 /// machine that never planned anything.
 #[tokio::test]
 async fn the_same_declaration_installs_when_the_setting_does_not_forbid_it() {
-    let kernel =
-        a_machine_that_declares(&["dos2unix"], shall::config::config::BareInstall::Always).await;
+    let kernel = declaring(&["dos2unix"], shall::config::config::BareInstall::Always).await;
 
     sync(&kernel)
         .await
@@ -96,8 +58,7 @@ async fn the_same_declaration_installs_when_the_setting_does_not_forbid_it() {
 /// asked for and did not happen, and `Q-C` keeps it a failure.
 #[tokio::test]
 async fn a_declaration_no_manager_can_take_still_fails() {
-    let kernel =
-        a_machine_that_declares(&["brew:htop"], shall::config::config::BareInstall::Always).await;
+    let kernel = declaring(&["brew:htop"], shall::config::config::BareInstall::Always).await;
     // A manager that is here and cannot be asked: the third answer, not a policy decline.
     kernel.mock_executor.set_response(
         "brew info --json=v1 -- htop",

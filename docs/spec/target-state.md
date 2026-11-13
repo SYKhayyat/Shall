@@ -4807,6 +4807,9 @@ before execution, and never by a read-only command.
 - **The vocabulary is closed.** A word that is not one of the three is refused at the file with the
   three that work, rather than falling back to `ask`: a typo that silently restores the prompt reads
   as the setting not working at all.
+- **Every reconcile reads the policy, including the one that cannot ask.** `watch` is `sync` with
+  nobody watching, so it is the command that most needs the answer its owner wrote down; a run that
+  cannot put a question to a person still honours an answer already given (`#164`, V.246).
 
 ## II.92 A decline by policy is a warning and exit 0; a decline by a person is a failure (owner ruling, 2026-08-02, `#161`, V.245)
 

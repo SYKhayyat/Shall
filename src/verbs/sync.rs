@@ -430,8 +430,23 @@ pub async fn reconcile(app: &App, opts: Reconcile) -> Result<Reconciled> {
         });
     }
 
-    if opts.confirm && !changes.is_empty() {
-        match confirm_bare_installs(&changes, app.config.declare.install, app.config.yes)? {
+    // **The policy is read on every reconcile; only the question waits for a person.** `never` is
+    // an answer, so an unattended run must honour it — `watch` skipped this whole block, and the
+    // daemon installed exactly what its owner's configuration forbade (`#164`). `ask` keeps the
+    // gate: an unattended run cannot put the question to anyone, and the shape it has here (the
+    // bare declaration is installed, as it always was under `watch`) is unchanged by this rule.
+    if !changes.is_empty() {
+        let decision = if opts.confirm {
+            confirm_bare_installs(&changes, app.config.declare.install, app.config.yes)?
+        } else {
+            confirm_bare_installs_with(
+                &changes,
+                app.config.declare.install,
+                app.config.yes,
+                |_| Ok(true),
+            )?
+        };
+        match decision {
             BareDecision::Proceed => {}
             BareDecision::Declined(why) => {
                 // **Said out loud, and named to the setting that did it.** A `sync` that
@@ -1176,6 +1191,20 @@ pub async fn handle_watch(
                     if changed || first {
                         println!("watch: already in sync.");
                     }
+                }
+                // A decline by policy is neither a failure nor a surprise: the files and the
+                // machine differ because the configuration says they may (`II.92`), and the
+                // WARNING above has already named the setting.
+                Ok(done)
+                    if done.applied == 0
+                        && done.not_installed > 0
+                        && done.declined_by_policy == done.not_installed =>
+                {
+                    println!(
+                        "watch: nothing applied; {} declaration(s) declined by \
+                         `[declare] install`.",
+                        done.not_installed
+                    )
                 }
                 Ok(done) if done.applied == 0 && done.not_installed > 0 => println!(
                     "watch: nothing applied; {} declaration(s) could not be acted on and {} \
