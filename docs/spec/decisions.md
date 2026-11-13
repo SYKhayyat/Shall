@@ -1,4 +1,4 @@
-﻿# The decision register — 266 entries, none open
+﻿# The decision register — 267 entries, none open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **261** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **262** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -112,7 +112,7 @@ other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.m
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
 is waiting now. All 266 are accounted
-for: **261 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+for: **262 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay, and whether a policy decline is a failure, and which half of a setting waits for a person) — 28
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay, and whether a policy decline is a failure, and which half of a setting waits for a person, and what an invariant is and how it is measured) — 29
 
 | | question | answered |
 |---|---|---|
@@ -546,6 +546,7 @@ deliberately no longer has.*
 | **C26** | `#94`'s second half shipped as the prompt and `--yes`: the question was asked, and the only way to avoid being asked was a flag whose meaning is "yes". The issue had ruled the *shape* — `ask` / `always` / `never` — and left the key to the implementer. **What does a bare declaration do on a machine whose owner has already answered, and can a flag express the answer "no" when they are not there?** — RULED 2026-11-11: **`[declare] install` is three-way, and `never` outranks `--yes`.** `--yes` answers the question; `never` says the question is not the run's to answer, and a person who turned it off on purpose does not re-enable it by running the command their CI runs. A decline installs nothing, leaves the declaration where `II.16` requires it, prints which setting did it (a person who wrote it months ago will not remember), and leaves the package owed — what that owes the exit code is `C27`'s question, ruled later. The vocabulary is closed: a fourth word is refused at the file naming the three, because a typo that fell back to `ask` would read as the setting not working. (II.91, V.244) | 2026-11-11 |
 | **C27** | `C26` built `never` and left one consequence undescribed: the decline returned through the non-convergence path, so a machine whose only pending declaration was policy-declined exited **1 on every `sync`, forever**, with `Error: 1 declaration(s) could not be acted on … this machine has not converged.` Measured on one host, one line, one setting: `rc=1`, then `rc=1` again, identically. **Is a policy decline a failure — and if not, what does the run owe the reader?** — RULED 2026-08-02: **no, and it still says so, as a warning.** A run doing what its owner configured exits **0**; the line stays at the same volume, prefixed `WARNING:` instead of `Error:`, naming the setting and how to change it. A permanent nightly red is not a harmless false alarm — it is how a team learns to skip the alarm — and nothing is lost, because `check` and `plan` report the same missing declaration and exit 2, so drift gating never depended on the write command's code. The two halves stay distinguishable: a decline **asked and answered by a person** is still exit 1, because that run was asked to do something and did not do it. `Reconciled` therefore counts `declined_by_policy` inside `not_installed` and the exit rule subtracts exactly that, so "did not arrive" and "did not arrive by its owner's choice" are one count and not one fact. (II.92, V.245) | 2026-08-02 |
 | **C28** | `#161` was ruled and its measurement turned up a bigger hole next door: `[declare] install = "never"` was honoured by `sync` and **ignored by `watch`**, because `watch` passes `confirm: false` and the bare rule sat inside the `if opts.confirm` block. One fixture, one line, one setting: `shall sync --yes` declined and installed nothing (`rc=1`), `shall watch --once` installed the same declaration and printed `applied 1 change(s)` (`rc=0`). **Which part of the rule waits for a person, and which part does not?** — RULED 2026-08-02: **the question waits; the answer does not.** `never` is consulted on every reconcile, so the daemon stops installing what its owner forbade; `ask` keeps the gate, because an unattended run cannot put a question to anybody and the shape `watch` has there is a separate behaviour nobody asked to change. The unattended decline prints the same warning and reports it as `declined by \`[declare] install\`` rather than as work that could not be done. (II.91, V.246) | 2026-08-02 |
+| **C29** | `#74` asked for declared invariants — a path whose copy exists elsewhere — and the questions were what an invariant *is* and how it is measured. **RULED 2026-11-11: a promise the files make, measured against the backup tool's own listing, reported by `check durability`.** Not a resource: no phase, no placement, nothing to undo, nothing `sync` acts on. Three failures held apart — older than `@max-age`, no copy at all, and nothing on this machine could answer — with the last one never a pass. One shipped adapter (`restic`, whose listing names which paths a copy covers); the row shape is data, so a tool that can answer can be added without a release. (II.93, V.247) | 2026-11-11 |
 
 # The blocking round — thirteen questions, all ruled
 
@@ -11135,3 +11136,36 @@ question. Moving both in one commit would have slipped a second behaviour change
 **3. The decline reads the same way in both spellings.** The same warning line, and `watch` reports it
 as `declined by \`[declare] install\`` rather than as work that could not be done — one number
 (`declined_by_policy`) answering both, because a policy decline is the same fact whichever verb met it.
+
+## C29
+
+**Status: ANSWERED 2026-11-11, built the same day.** A promise about this machine that no sync can
+keep. Carried out of `#74`.
+
+**Asked.** "Declared invariants" — a line saying a path must have a copy somewhere else, checked by
+`check`. Four things had to be decided: what the noun is, which adapters ship, what an unanswerable
+target is worth, and whether `@max-age` is required. The owner ruled the shape (the promise is a line
+in the config files, where the machine's statements live) and left the implementation calls.
+
+**Ruled: `invariant:NAME @path=…,backed-by=ADAPTER:TARGET,max-age=…`, measured by `check durability`.**
+
+**1. It is a fact, not a resource.** Nothing is placed, so there is no phase, no ledger row and
+nothing to undo — `Statement::kind()` returns `None` for it, exactly as it does for set math. It
+rides through resolution in `DesiredState::invariants` and is outside `total_declarations`, because a
+line `sync` cannot apply must not sit in `sync`'s own numerator.
+
+**2. The measurement is the tool's own listing.** `restic snapshots --json --path P`, not a receipt
+Shall wrote: a receipt records the request, and the failures this exists for happen after the
+request. Included in `II.93` and argued in `V.247`.
+
+**3. Unanswerable is its own verdict, named, and never a pass.** A `@backed-by` naming an adapter
+this machine does not have, a tool that is not installed, a tool that refused and a listing that
+cannot be read all report with their own sentence and exit 2 alongside the other two failures. The
+alternative — silence — is how a check reports a kept promise over a measurement nobody took.
+
+**4. `@max-age` is required.** A deadline is the difference between a promise and a wish: without
+one, a copy from 2019 keeps it. `d`, `h` and `m`, refused by name otherwise.
+
+**5. `sync` does not act on it.** A 3am `restic backup` is a decision, and an unreachable repository
+would redden every sync — the cry-wolf `II.92` removed. `shall check` prints one line for it; the
+`durability` section prints the details.

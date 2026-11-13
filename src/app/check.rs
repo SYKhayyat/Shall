@@ -44,10 +44,18 @@ pub enum Section {
     /// wrong place to learn about it: the warning scrolls past, the file stays inert, and the
     /// tool it was teaching Shall about goes unmanaged. Loud where loud is free.
     Adapters,
+    /// Is there still a copy of everything promised elsewhere, and is it younger than the line
+    /// promised? (#74)
+    ///
+    /// **The one section that reports on a fact a sync cannot make true.** Nothing here is
+    /// convergent: a backup runs on its own timer, or it does not, and no amount of `sync` puts
+    /// a copy in a repository. So this section answers a question and never proposes one — which
+    /// is also why the promise lives in the config files, where this machine's statements live.
+    Durability,
 }
 
 impl Section {
-    pub const ALL: [Section; 9] = [
+    pub const ALL: [Section; 10] = [
         Section::Config,
         Section::Drift,
         Section::Unmanaged,
@@ -57,6 +65,7 @@ impl Section {
         Section::Security,
         Section::Approvals,
         Section::Adapters,
+        Section::Durability,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -70,6 +79,7 @@ impl Section {
             Section::Security => "security",
             Section::Approvals => "approvals",
             Section::Adapters => "adapters",
+            Section::Durability => "durability",
         }
     }
 

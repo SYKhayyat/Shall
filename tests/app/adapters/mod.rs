@@ -31,7 +31,7 @@ fn standing(files: &[(&str, &str)], name: &str) -> Standing {
 }
 mod a_file_that_is_not_toml_names_the_place_it_broke;
 mod a_file_the_ledger_has_never_seen_is_unapproved_and_is_not_parsed;
-mod a_machine_that_has_extended_nothing_says_so_for_all_eight;
+mod a_machine_that_has_extended_nothing_says_so_for_every_surface;
 mod a_plural_row_header_is_reported_rather_than_silently_dropped;
 mod a_row_of_the_right_kind_is_counted;
 mod every_surface_is_named_once_and_resolves_by_name;

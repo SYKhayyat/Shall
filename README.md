@@ -154,6 +154,8 @@ shim:node                 # a PATH stand-in
 service:nginx             # a service
 link:./dotfiles/vimrc     # a managed file
 dir:~/projects            # a directory, created idempotently
+invariant:seforim @path=~/Documents/seforim,backed-by=restic:b2:seforim,max-age=7d
+                          # a promise: `check durability` asks the backup tool
 use editors               # pull in another module
 ```
 
@@ -220,6 +222,7 @@ ships, so a line that no longer works fails the build rather than misleading you
 | `check unmanaged` | What `shall adopt` would take: installed, you chose it, nothing declares it |
 | `check absent` | Every `absent:` rule in force, and which module it comes from |
 | `check conflicts` | The same tool pinned to different versions by different backends |
+| `check durability` | Is there still a copy of what your `invariant:` lines promise, and is it younger than they allow |
 | `check health` | Per-backend readiness. It only reports — `shall heal` is what repairs |
 | `path` | Print your config repo directory, so `cd $(shall path)` works. `--explain` says what decided it; `--set DIR` stores it |
 | `edit` | Open the repo, or one file in it, in `$VISUAL`/`$EDITOR` |
@@ -370,9 +373,9 @@ not just a `$PATH` name — a missing one is a named diagnosis in `check health`
 backends use are available to yours, and an absent key means *this backend cannot answer that*,
 never *the answer is none*.
 
-### The eight things you can teach it
+### The nine things you can teach it
 
-Everything above is one of these. A row in one of eight files in your repo teaches Shall
+Everything above is one of these. A row in one of nine files in your repo teaches Shall
 something it does not ship, and a thing you teach it is a full peer of a thing it ships — the
 built-in package managers go through the same table your `[[backend]]` row goes through.
 
@@ -386,6 +389,7 @@ built-in package managers go through the same table your `[[backend]]` row goes 
 | `adapters/secret.toml` | `[[secret]]` | how to decrypt a secret |
 | `adapters/prereq.toml` | `[[prereq]]` | the setup a manager needs before it can install |
 | `adapters/bootstrap.toml` | `[[bootstrap]]` | how to obtain a manager this machine lacks |
+| `adapters/backup.toml` | `[[backup]]` | how a backup tool says when it last copied a path |
 
 **`shall adapters` says what this machine has on each**, and the column that matters is the
 last one: `no rows` is the one worth having a command for. A file can be present, approved and

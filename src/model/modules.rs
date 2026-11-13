@@ -415,7 +415,8 @@ fn substitute_in_statement(
         | Statement::Exec(name, opts)
         | Statement::Generate(name, opts)
         | Statement::Dotfiles(name, opts)
-        | Statement::Firewall(name, opts) => {
+        | Statement::Firewall(name, opts)
+        | Statement::Invariant(name, opts) => {
             sub(name);
             for value in opts.values_mut() {
                 sub(value);

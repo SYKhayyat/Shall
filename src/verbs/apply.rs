@@ -469,6 +469,7 @@ async fn one_line_state(app: &App, stmt: &Statement) -> Result<crate::model::Des
     Ok(crate::model::DesiredState {
         packages: std::collections::HashMap::new(),
         extras: vec![(stmt.clone(), Origin::argument())],
+        invariants: Vec::new(),
         lapsed: Vec::new(),
         vars: whole.vars,
     })

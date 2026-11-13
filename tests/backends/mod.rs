@@ -2,6 +2,7 @@
 
 mod appimage;
 mod artifact;
+mod backup;
 mod brew;
 mod btrfs;
 mod capability;

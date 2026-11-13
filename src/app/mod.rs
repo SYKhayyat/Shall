@@ -9,6 +9,7 @@ pub mod conflicts;
 pub mod context;
 pub mod declarations;
 pub mod diagnostics;
+pub mod durability;
 pub mod entrypoint;
 pub mod eval;
 pub mod events;

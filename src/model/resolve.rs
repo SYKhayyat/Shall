@@ -28,6 +28,15 @@ pub struct DesiredState {
     pub packages: HashMap<String, Vec<PackageSpec>>,
     /// Repositories, shims, links, services and schedules, in declaration order.
     pub extras: Vec<(Statement, Origin)>,
+    /// The `invariant:` lines (#74) — promises about this machine that no sync can converge.
+    ///
+    /// Kept out of `extras`, which is the list `sync` applies: an invariant has no phase, no
+    /// placement and nothing to undo, and putting it there would make every phase dispatch
+    /// answer a question about it. Deliberately not counted by
+    /// [`total_declarations`](Self::total_declarations) either — a line `sync` cannot apply must
+    /// not sit in `sync`'s own numerator, or a config of promises would report itself pending
+    /// forever.
+    pub invariants: Vec<(crate::model::invariant::Invariant, Origin)>,
     /// Dated lines whose date has passed. They linger — **Shall must not rewrite your
     /// files** — so `sync` mentions them, naming the exact file and line (II.16).
     pub lapsed: Vec<(String, Origin)>,
@@ -676,7 +685,8 @@ impl<'a> Resolver<'a> {
                 | Statement::Setting(name, opts)
                 | Statement::Exec(name, opts)
                 | Statement::Dotfiles(name, opts)
-                | Statement::Firewall(name, opts) => {
+                | Statement::Firewall(name, opts)
+                | Statement::Invariant(name, opts) => {
                     *name = crate::model::vars::expand(name, facts, origin)?;
                     for value in opts.values_mut() {
                         *value = crate::model::vars::expand(value, facts, origin)?;
@@ -988,6 +998,15 @@ impl<'a> Resolver<'a> {
                         "a parameter is declared in the module it belongs to and bound by \
                          `use module(name=value)`. A profile has nothing to bind it.",
                     ));
+                }
+                // A promise, not a resource: nothing is placed, so it does not belong in
+                // `extras` (the list `sync` applies) and there is nothing to undo. Parsed here
+                // rather than at `check` time so the value read by a report is the one the
+                // grammar already accepted, not a second reading of the same line.
+                Statement::Invariant(ref name, ref opts) => {
+                    let inv = crate::model::invariant::Invariant::parse(&origin, name, opts)?;
+                    out.invariants.push((inv, origin));
+                    continue;
                 }
                 other => {
                     out.extras.push((other, origin));

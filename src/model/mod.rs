@@ -17,6 +17,7 @@ pub mod firewall;
 pub mod groups;
 pub mod health;
 pub mod introduced;
+pub mod invariant;
 pub mod kernel;
 pub mod layout;
 pub mod modules;

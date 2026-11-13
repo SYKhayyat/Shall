@@ -70,6 +70,7 @@ pub async fn handle_check(app: &App, section: Option<&str>, out: Output) -> Resu
         Section::Security => handle_audit(&app.config, &app.registry, &app.state, out).await,
         Section::Approvals => check_approvals(&app.config, out).await,
         Section::Adapters => check_adapters(&app.config, out).await,
+        Section::Durability => check_durability(app, out).await,
     }
 }
 
@@ -98,6 +99,91 @@ pub async fn check_adapters(config: &Config, out: Output) -> Result<()> {
     // U21's exit 2, as every other section uses it: a read-only command that looked and found
     // work. The listing is already on stdout.
     Err(crate::core::Error::Differences(String::new()).into())
+}
+
+/// `check durability` — is there still a copy of what the config promises, and how old is it
+/// (#74).
+///
+/// **Exit 2 on anything but a fresh copy, including "nothing could answer"** — the same code
+/// every other section uses for found work, and the one place the three failures are held apart
+/// in a sentence: a copy older than promised, no copy at all, and a question nothing on this
+/// machine could ask. Merging the last into the other two would print a verdict about a
+/// measurement nobody took.
+pub async fn check_durability(app: &App, out: Output) -> Result<()> {
+    use crate::app::durability::{self, Verdict};
+
+    let state = app.resolver().await.resolve_model().await?;
+    let rows = crate::backends::backup::adapters(backup_rows(&app.config));
+    let answers = durability::measure(&app.executor, &rows, &state.invariants).await;
+
+    if out.is_json() {
+        let rows: Vec<_> = answers
+            .iter()
+            .map(|a| {
+                serde_json::json!({
+                    "name": a.name,
+                    "path": a.path,
+                    "adapter": a.adapter,
+                    "target": a.target,
+                    "max_age_secs": a.max_age_secs,
+                    "holds": a.verdict.holds(),
+                    "verdict": match &a.verdict {
+                        Verdict::Fresh { age_secs } => serde_json::json!({ "fresh": age_secs }),
+                        Verdict::Stale { age_secs } => serde_json::json!({ "stale": age_secs }),
+                        Verdict::Never => serde_json::json!("never"),
+                        Verdict::Unanswerable(why) => serde_json::json!({ "unanswerable": why }),
+                    },
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&rows)?);
+        return match answers.iter().all(|a| a.verdict.holds()) {
+            true => Ok(()),
+            false => Err(crate::core::Error::Differences(String::new()).into()),
+        };
+    }
+
+    if answers.is_empty() {
+        println!(
+            "No `invariant:` line is in force. An invariant promises a path has a copy \
+             elsewhere: `invariant:NAME @path=…,backed-by=restic:REPO,max-age=7d`."
+        );
+        return Ok(());
+    }
+    for answer in &answers {
+        println!("{}", answer.describe());
+    }
+    let broken = answers.iter().filter(|a| !a.verdict.holds()).count();
+    println!();
+    if broken == 0 {
+        println!("{} invariant(s) hold.", answers.len());
+        return Ok(());
+    }
+    println!(
+        "{broken} of {} invariant(s) do not hold. Nothing in `sync` can make these true — a copy \
+         exists because something took one, so the fix is the backup or the promise.",
+        answers.len()
+    );
+    Err(crate::core::Error::Differences(String::new()).into())
+}
+
+/// The `[[backup]]` rows the repo carries, through the approval every adapter file goes through
+/// (7a/II.12), with a row Shall cannot use saying why in one voice.
+fn backup_rows(config: &Config) -> Vec<crate::backends::backup::BackupAdapter> {
+    let layout = config.layout();
+    let path = layout.adapter_file("backup");
+    let Some(body) =
+        crate::backends::onboarder::read_approved_definitions(&path, &layout.locks_dir())
+    else {
+        return Vec::new();
+    };
+    match toml::from_str::<crate::backends::backup::BackupAdapterFile>(&body) {
+        Ok(f) => f.backup,
+        Err(e) => {
+            warn!("{}", crate::app::adapters::cannot_use_named("backup", e));
+            Vec::new()
+        }
+    }
 }
 
 /// `check approvals` — the event hooks that will not run because they are unapproved (II.12).
@@ -645,6 +731,15 @@ pub async fn check_summary(app: &App, out: Output) -> Result<()> {
         }
         .counting([("not_in_use", inert)]),
     );
+
+    // durability — is there still a copy of what the config promised, and how old is it. The
+    // model was resolved above, so this reuses it rather than reading every file twice.
+    if let Some(state) = state.as_ref() {
+        let rows = crate::backends::backup::adapters(backup_rows(&app.config));
+        let answers =
+            crate::app::durability::measure(&app.executor, &rows, &state.invariants).await;
+        findings.push(crate::app::durability::finding(&answers));
+    }
 
     if out.is_json() {
         let rows: Vec<_> = findings

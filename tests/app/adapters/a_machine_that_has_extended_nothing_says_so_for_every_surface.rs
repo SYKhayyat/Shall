@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn a_machine_that_has_extended_nothing_says_so_for_all_eight() {
+fn a_machine_that_has_extended_nothing_says_so_for_every_surface() {
     let (_d, layout) = layout_with(&[]);
     let all = survey(&layout);
     assert_eq!(all.len(), SURFACES.len());

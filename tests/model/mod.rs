@@ -13,6 +13,7 @@ mod firewall;
 mod groups;
 mod health;
 mod introduced;
+mod invariant;
 mod kernel;
 mod layout;
 mod modules;

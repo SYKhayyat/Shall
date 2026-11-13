@@ -1,10 +1,9 @@
-//! The eight ways to extend Shall, in one table, with a way to ask what this machine has.
+//! The nine ways to extend Shall, in one table, with a way to ask what this machine has.
 //!
 //! Every one of them already worked: a `[[backend]]` row teaches a package manager, a
 //! `[[snapshot]]` row teaches a rollback provider, and both go through II.12's ledger like any
-//! other file Shall executes on your behalf. What was missing is a **front door**. The eight
-//! surfaces were eight paths on `Layout`, eight readers, and eight `warn!("ignoring
-//! adapters/x.toml: …")` lines, and nothing in the program could answer *what have I extended?*
+//! other file Shall executes on your behalf. What was missing is a **front door**. The surfaces
+//! were paths on `Layout`, readers, and `warn!("ignoring adapters/x.toml: …")` lines, and nothing in the program could answer *what have I extended?*
 //!
 //! **The failure that costs the most is not a bad row, it is a row nobody knows was dropped.**
 //! `[[backends]]` instead of `[[backend]]` parses as perfectly good TOML describing a table
@@ -41,7 +40,7 @@ impl Surface {
 /// **Every surface, and there are no others.** A ninth reader that opens a file under
 /// `adapters/` without a row here is invisible to `shall adapters`, which is the whole defect
 /// this table exists to close — `every_adapter_surface_is_in_the_table` fails on it.
-pub const SURFACES: [Surface; 8] = [
+pub const SURFACES: [Surface; 9] = [
     Surface {
         name: "backends",
         key: "backend",
@@ -82,6 +81,11 @@ pub const SURFACES: [Surface; 8] = [
         key: "bootstrap",
         teaches: "how to obtain a manager this machine does not have",
     },
+    Surface {
+        name: "backup",
+        key: "backup",
+        teaches: "how a backup tool says when it last copied a path",
+    },
 ];
 
 /// The surface with this name, if it is one.
@@ -92,7 +96,7 @@ pub fn surface(name: &str) -> Option<&'static Surface> {
 /// What this machine's copy of one surface is doing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Standing {
-    /// No such file. Not a problem — seven of the eight are absent on most machines.
+    /// No such file. Not a problem — most machines have written none of them.
     Absent,
     /// Approved by the ledger and read, with the number of rows the reader will see.
     InUse { rows: usize },
@@ -147,7 +151,7 @@ pub struct Extension {
     pub standing: Standing,
 }
 
-/// Read all eight, in the order they are declared.
+/// Read every surface, in the order they are declared.
 ///
 /// This asks the same two questions the readers ask, in the same order — does II.12 approve
 /// these bytes, and does the file hold rows of the right kind — so a surface reported `in use`
@@ -191,11 +195,23 @@ fn standing_of(surface: &Surface, path: &std::path::Path, locks_dir: &std::path:
     }
 }
 
+/// [`cannot_use`] for a caller that names its surface as a string.
+///
+/// The surface is looked up rather than `expect`ed because a name that is not in [`SURFACES`] is
+/// a missing row in that table, and a panic in the middle of a `check` turns a report into an
+/// abort. The fallback says the same thing without knowing what the rows look like.
+pub fn cannot_use_named(name: &str, error: impl std::fmt::Display) -> String {
+    match surface(name) {
+        Some(surface) => cannot_use(surface, error),
+        None => format!("ignoring `adapters/{name}.toml`: {error}"),
+    }
+}
+
 /// What to say when a surface's file cannot be used — in one voice, from one place.
 ///
-/// The eight readers each wrote their own `warn!("ignoring adapters/x.toml: {e}")`, and a serde
+/// The readers each wrote their own `warn!("ignoring adapters/x.toml: {e}")`, and a serde
 /// message on its own (*"missing field `name` at line 4 column 1"*) tells a user which line and
-/// nothing else: not which of eight files, not what a row of that kind looks like, not that the
+/// nothing else: not which of the files, not what a row of that kind looks like, not that the
 /// rest of the file is inert, and not that there is a command which would have said all three.
 pub fn cannot_use(surface: &Surface, why: impl std::fmt::Display) -> String {
     format!(

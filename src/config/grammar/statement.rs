@@ -250,6 +250,13 @@ pub enum Statement {
     /// `dir:PATH` — an idempotent directory (U71). Creates the directory (and parents)
     /// if absent, sets ownership and permissions. Teardown removes only if empty.
     Dir(String, Options),
+    /// `invariant:NAME @path=…,backed-by=ADAPTER:TARGET,max-age=…` — a promise about this
+    /// machine that no sync can make true (#74).
+    ///
+    /// Not a resource: nothing is placed, so nothing is undone and nothing reaches the extras
+    /// ledger. What the line buys is a question `check` asks of the backup tool's own listing —
+    /// does a copy of the path exist elsewhere, and is the newest one younger than `@max-age`?
+    Invariant(String, Options),
     /// `use editors` / `use workstation(user=shaul, gpu=nvidia)` — bring in a module or profile
     /// (II.2), optionally with **arguments** binding that module's `param`s (U32). The args are
     /// empty for the ordinary form; a profile referenced with args is refused at parse time,
@@ -311,6 +318,7 @@ impl Statement {
             Statement::Dotfiles(n, _) => format!("dotfiles:{}", n),
             Statement::Firewall(n, _) => format!("firewall:{}", n),
             Statement::Dir(n, _) => format!("dir:{}", n),
+            Statement::Invariant(n, _) => format!("invariant:{}", n),
             Statement::Use(r, _) => format!("use {}", r.name()),
             Statement::Param { name, .. } => format!("param {}", name),
             Statement::Exclude(r) => format!("exclude {}", r.name()),
@@ -343,6 +351,7 @@ impl Statement {
             Statement::Dir(..) => ResourceKind::Dir,
             Statement::Package(_)
             | Statement::Absent(_)
+            | Statement::Invariant(..)
             | Statement::Use(..)
             | Statement::Param { .. }
             | Statement::Exclude(_)
@@ -364,7 +373,8 @@ impl Statement {
             | Statement::Generate(_, opts)
             | Statement::Dotfiles(_, opts)
             | Statement::Firewall(_, opts)
-            | Statement::Dir(_, opts) => Some(opts),
+            | Statement::Dir(_, opts)
+            | Statement::Invariant(_, opts) => Some(opts),
             _ => None,
         }
     }
@@ -408,6 +418,10 @@ impl Statement {
             // declarations it prints, so nothing downstream ever sees one. Set math, a
             // `param`, a `use` and a variable are consumed the same way: they say what to
             // read, never what to put on the machine.
+            // An `invariant:` is the one member of this group that survives resolution — it is
+            // carried to `check`, which reads it. It still has no phase work: a sync cannot make
+            // a backup exist, and pretending otherwise would put a 3am `restic backup` inside
+            // every `sync` — a decision, and one this grammar does not make.
             Statement::Generate(..)
             | Statement::Use(..)
             | Statement::Param { .. }
@@ -415,7 +429,8 @@ impl Statement {
             | Statement::Intersect(_)
             | Statement::Subtract(_)
             | Statement::Expr(_)
-            | Statement::Var { .. } => Phase::Resolution,
+            | Statement::Var { .. }
+            | Statement::Invariant(..) => Phase::Resolution,
         }
     }
 }
@@ -437,7 +452,9 @@ impl Statement {
 pub enum Phase {
     /// Not work. Consumed while the desired state is being computed — set math, a `param`, a
     /// `use`, a variable, a `generate:`. None of these survives into `DesiredState::extras`,
-    /// so nothing downstream can be handed one.
+    /// so nothing downstream can be handed one. An `invariant:` is here for the same reason —
+    /// it is a fact, and there is no work — but it is carried in `DesiredState::invariants`
+    /// rather than dropped, because `check` reads it.
     Resolution,
     /// Phase 1 — `repo:`, before the packages. A package from a PPA cannot install until the
     /// PPA is there.
@@ -656,6 +673,12 @@ pub const KEYWORDS: &[Keyword] = &[
         means: "dir:/path/to/directory",
         role: KeywordRole::Prefix,
         build: Some(Statement::Dir),
+    },
+    Keyword {
+        spelling: "invariant:",
+        means: "invariant:NAME @path=…,backed-by=restic:REPO,max-age=7d",
+        role: KeywordRole::Prefix,
+        build: Some(Statement::Invariant),
     },
     // The directives. No colon, no `build` — each has its own parser above the package
     // parser, but only when written with something after it, so the bare word falls through
@@ -1548,6 +1571,12 @@ pub fn validate(origin: &Origin, stmt: &Statement) -> Result<()> {
         }
         Statement::Firewall(name, o) => validate_firewall(origin, name, o),
         Statement::Dir(name, o) => validate_extra_options(origin, OptionKind::Dir, name, o, None),
+        // The shape of the three options is checked by the same parser that later reads them,
+        // so `check` can never meet a `@max-age` the grammar was willing to keep and it is not.
+        Statement::Invariant(name, o) => {
+            validate_extra_options(origin, OptionKind::Invariant, name, o, None)?;
+            crate::model::invariant::Invariant::parse(origin, name, o).map(|_| ())
+        }
         Statement::Repo { .. }
         | Statement::Use(..)
         | Statement::Param { .. }
@@ -1586,6 +1615,7 @@ pub enum OptionKind {
     Dotfiles,
     Firewall,
     Dir,
+    Invariant,
 }
 
 impl OptionKind {
@@ -1602,6 +1632,7 @@ impl OptionKind {
             Self::Dotfiles => "dotfiles",
             Self::Firewall => "firewall",
             Self::Dir => "dir",
+            Self::Invariant => "invariant",
         }
     }
 
@@ -1618,6 +1649,7 @@ impl OptionKind {
         Self::Dotfiles,
         Self::Firewall,
         Self::Dir,
+        Self::Invariant,
     ];
 }
 
@@ -1649,6 +1681,10 @@ pub const DOTFILES_OPTION_KEYS: &[&str] = &["target"];
 /// options: `firewall:22/tcp` is the whole declaration.
 pub const FIREWALL_OPTION_KEYS: &[&str] = &["value"];
 pub const DIR_OPTION_KEYS: &[&str] = &["user", "owner", "mode"];
+/// The three things an invariant says. `backed-by` is `ADAPTER:TARGET` in one value rather than
+/// two keys, because the pair is one statement of where the copy lives — split in two, a reader
+/// could write half of it and the line would still parse.
+pub const INVARIANT_OPTION_KEYS: &[&str] = &["path", "backed-by", "max-age"];
 
 pub const USER_SCOPABLE_KINDS: &[ResourceKind] = &[
     ResourceKind::Link,
@@ -1717,6 +1753,9 @@ pub(crate) const SINGLE_VALUE_OPTION_KEYS: &[&str] = &[
     "user",
     "owner",
     "mode",
+    "path",
+    "backed-by",
+    "max-age",
     "version",
     "hold",
     "expires",
@@ -1831,6 +1870,7 @@ fn keys_for(kind: OptionKind) -> &'static [&'static str] {
         OptionKind::Dotfiles => DOTFILES_OPTION_KEYS,
         OptionKind::Firewall => FIREWALL_OPTION_KEYS,
         OptionKind::Dir => DIR_OPTION_KEYS,
+        OptionKind::Invariant => INVARIANT_OPTION_KEYS,
     }
 }
 

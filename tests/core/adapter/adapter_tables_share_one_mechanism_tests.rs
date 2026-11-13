@@ -75,6 +75,11 @@ const TABLES: &[Table] = &[
         not_an_adapter: None,
     },
     Table {
+        wrapper: "BackupAdapterFile",
+        file: "src/backends/backup.rs",
+        not_an_adapter: None,
+    },
+    Table {
         wrapper: "CustomBackendsFile",
         file: "src/backends/onboarder.rs",
         // Checked and deliberately excluded. `[[backend]]` is the *backend* table (F-5's data

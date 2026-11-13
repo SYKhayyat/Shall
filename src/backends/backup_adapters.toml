@@ -1,0 +1,20 @@
+# `backup_adapters.toml` — the tools that can answer "when did a copy of this path last reach
+# TARGET?".
+#
+# A row is here rather than in Rust so a tool Shall does not ship can be taught to answer
+# without waiting for a release (K17). What a row must be able to do is narrow, and deliberately
+# so: **it must be able to answer the question the invariant asks**, not merely take a backup.
+# `borg` and `timeshift` are absent for exactly that reason — `borg list --json` names archives
+# and their times but never says which paths one covers, and timeshift's snapshots exclude
+# `/home` unless it was configured not to. A row for either would turn "a copy exists" into a
+# guess about a repository nobody looked inside, which is worse than reporting that nothing can
+# be checked.
+
+[[backup]]
+name = "restic"
+# `restic snapshots --json` prints one object per snapshot, each carrying `time` (RFC 3339) and
+# the `paths` it covers; `--path` is what makes the answer about this path rather than about
+# whatever happens to be in the repository.
+detect = "restic"
+list = ["restic", "-r", "{target}", "snapshots", "--json", "--path", "{path}"]
+time_field = "time"

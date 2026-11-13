@@ -567,7 +567,8 @@ fn merge_options(stmt: &mut Statement, extra: Options, origin: &Origin) -> Resul
         | Statement::Exec(_, o)
         | Statement::Dotfiles(_, o)
         | Statement::Firewall(_, o)
-        | Statement::Dir(_, o) => o,
+        | Statement::Dir(_, o)
+        | Statement::Invariant(_, o) => o,
         Statement::Repo { .. }
         | Statement::Use(..)
         | Statement::Param { .. }

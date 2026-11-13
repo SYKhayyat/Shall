@@ -595,6 +595,7 @@ fn offered_managers<'a>(
     std::borrow::Cow::Owned(crate::model::DesiredState {
         packages: desired.clone(),
         extras: Vec::new(),
+        invariants: Vec::new(),
         lapsed: Vec::new(),
         vars: state.vars.clone(),
     })

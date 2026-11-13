@@ -8,6 +8,7 @@ mod bisect;
 mod bundle;
 mod check;
 mod conflicts;
+mod durability;
 mod eval;
 mod events;
 mod export;

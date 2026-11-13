@@ -159,6 +159,7 @@ schedule:NAME                 a scheduled task (only in `schedules`)
 service:NAME                  a service
 link:SOURCE                   a managed file
 dir:PATH                      a directory, created idempotently with ownership and permissions
+invariant:NAME                a promise that a path has a copy elsewhere (`#74`, II.93)
 setting:SCHEMA/KEY            a desktop setting (`@value=…`), read-before-write
 dotfiles:PATH                 a folder mirrored into place, one file at a time
 firewall:PORT/PROTO           a port; `firewall:default/incoming @value=deny` a policy
@@ -225,6 +226,7 @@ remembering — and it is, today:
 ```
 # prefixes — written `word:`, each introduces a typed statement
 absent  repo  shim  schedule  service  link  dir  setting  exec  generate  dotfiles  firewall
+invariant
 # directives — this grammar's words, written bare
 use  param  exclude  intersect  module  when
 # the words people arrive with, refused so a typo cannot install a package
@@ -232,14 +234,14 @@ if  else  end  import  include
 ```
 
 The three groups are `KeywordRole::Prefix`, `Directive` and `Foreign`, and the ratchet checks
-each group against its own role rather than the twenty-two as one bag: promoting `if` to a real
+each group against its own role rather than the twenty-three as one bag: promoting `if` to a real
 keyword is a language change, and a check that only counted words would pass it.
 
 The ruling was measured against thirteen of these; the other nine are the same sentence one
 layer over — `exec`, `dotfiles`, `firewall` and `generate` are statement prefixes this document
 also failed to list when they shipped, and `exclude`, `intersect`, `module`, `use` and `param`
 are directives whose bare form fell through to the package parser by the identical route.
-Refusing thirteen of twenty-two would have left the typo live for `exec`.
+Refusing thirteen of the twenty-two it then held would have left the typo live for `exec`.
 
 ```
 modules/dev.txt:4: `link` is a keyword, not a package name
@@ -4832,3 +4834,39 @@ configured it to do, and reports it at exit **0**.
   `sync`'s exit code.
 - **A configuration's answer is never inferred from a flag.** `--yes` does not turn a policy decline
   into a failure or a success — it answers the prompt and nothing else (`II.91`).
+
+## II.93 An invariant is a promise the files make and `check` measures against the tool's own listing (owner ruling, 2026-11-11, `#74`, V.247)
+
+**`invariant:NAME @path=…,backed-by=ADAPTER:TARGET,max-age=N…` declares that a copy of a path
+exists somewhere else** — a library, a photo archive, a keyring backup. It is the one declaration in
+this grammar that **no sync can converge**: a copy exists because something took one, so there is no
+phase, no placement, no ledger row, and nothing to undo.
+
+- **`check durability` is where it is answered, and the exit code is 2 when it is not kept.**
+  `U21`'s rule, unchanged: a read-only command that looked and found work. `shall check` prints one
+  more line in its summary, and a machine that declares no invariant gets `ok` with `0`, not silence.
+- **The answer comes from the backup tool's own listing, never from a receipt Shall wrote.** A
+  receipt would report the copy it made and would report it just as confidently on the machine whose
+  repository password expired three weeks ago. `check` runs the adapter row's `list` argv and reads
+  the newest moment in the answer. A `~` in `@path` is expanded through the same account helper
+  `link:` uses before the tool is asked — a backup tool cannot read a shell's shorthand.
+- **Three failures, never merged.** A copy older than `@max-age`, no copy at all in the target, and
+  **nothing on this machine could answer** — no such adapter, the tool is not installed, the tool
+  refused, or its output could not be read. The last is reported with its reason and is never a
+  pass: a promise nothing checked is the only outcome this section must never print as green.
+- **`@max-age` is required, and takes `d`, `h` or `m`.** An invariant with no deadline is satisfied
+  by a copy of anything from any year. A unit the grammar does not know is refused where the line is
+  written, naming the three it does.
+- **The adapter is a row in `backup_adapters.toml`**, through the same mechanism every adapter table
+  uses (`K17`): `detect`, the `list` argv with `{path}` and `{target}`, and the field of its JSON
+  answer that carries the time. A `@backed-by` naming a row this machine does not have is reported
+  by name beside the ones it does — never silently skipped.
+- **A row must be able to say *which paths a copy covers*, and that is why the built-in set is
+  one.** `restic` is shipped because `restic snapshots --json --path P` answers exactly the
+  question. `borg`'s listing names archives and times and never which paths an archive holds, and
+  `timeshift` excludes `/home` unless it was configured otherwise — a row for either would turn "a
+  copy exists" into a guess about a repository nobody looked inside.
+- **`sync` never acts on it, and `watch` does not either.** A 3am `restic backup` is a decision, and
+  an unreachable repository would redden every sync on the machine — the cry-wolf `II.92` removed.
+  The promise rides along in `DesiredState::invariants` and is deliberately outside
+  `total_declarations`: a line `sync` cannot apply must not sit in `sync`'s own numerator.
