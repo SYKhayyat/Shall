@@ -86,69 +86,63 @@ pub async fn handle_export(
 /// nothing on the one that has none.
 pub async fn handle_script_export(
     app: &App,
+    source: crate::app::bootstrap::Source,
     format: crate::app::bootstrap::Format,
     best_effort: bool,
     out: &str,
     force: bool,
 ) -> Result<()> {
-    let resolver =
-        crate::app::sync::resolver::StateResolver::new(&app.config, app.registry.clone(), false)
-            .await;
-    let state = resolver.resolve_model().await?;
-    let priority = resolver.priority_for_host().await?;
-
+    // Both sources land on the same loop: a map backend -> specs, which the argv builder turns
+    // into commands. The two sources differ only in what goes in the map and what must be
+    // omitted (a scan sees no secrets and no opted-out lines — it is what the machine *is*).
     let mut script = crate::app::bootstrap::Script::default();
-    let mut omitted = unrepresentable(&state);
+    let mut by_backend: std::collections::BTreeMap<String, Vec<crate::core::PackageSpec>> =
+        std::collections::BTreeMap::new();
+    let priority;
+    let mut omitted: Vec<crate::app::bootstrap::Omission> = Vec::new();
 
-    // A bootstrap installs a compiler before a crate and a manager before its packages, which is
-    // the same order a sync uses and for the same reason (`II.6`, `K1`).
-    let is_foundation = |b: &str| app.registry.get(b).map(|m| m.needs_root()).unwrap_or(false);
-    let declared: Vec<String> = state.packages.keys().cloned().collect();
-    for backend in crate::app::rebuild::order_backends(&declared, priority.order(), &is_foundation)
-    {
-        let Some(specs) = state.packages.get(&backend) else {
-            continue;
-        };
-        // An opted-out line stays declared and stays synced; it is simply not something the
-        // artifact has to be able to say (II.94), so it is not a hole either.
-        let specs: Vec<crate::core::PackageSpec> = specs
-            .iter()
-            .filter(|s| s.present && s.options.one("export") != Some("no"))
-            .cloned()
-            .collect();
-        if specs.is_empty() {
-            continue;
-        }
-        let Some(caps) = app.registry.get(&backend) else {
-            continue;
-        };
-        let planned = caps
-            .as_installable()
-            .and_then(|installable| installable.planned_installs(&specs));
-        match planned {
-            Some(commands) => {
-                for command in commands {
-                    script.command(&command.binary, command.args, caps.sudo_for_write());
+    match source {
+        crate::app::bootstrap::Source::Declarations => {
+            let resolver = crate::app::sync::resolver::StateResolver::new(
+                &app.config,
+                app.registry.clone(),
+                false,
+            )
+            .await;
+            let state = resolver.resolve_model().await?;
+            priority = resolver.priority_for_host().await?;
+            omitted.extend(unrepresentable(&state));
+            for (backend, specs) in &state.packages {
+                // An opted-out line stays declared and stays synced; it is simply not something
+                // the artifact has to be able to say (II.94), so it is not a hole either.
+                let specs: Vec<crate::core::PackageSpec> = specs
+                    .iter()
+                    .filter(|s| s.present && s.options.one("export") != Some("no"))
+                    .cloned()
+                    .collect();
+                if !specs.is_empty() {
+                    by_backend.insert(backend.clone(), specs);
                 }
             }
-            None => omitted.push(crate::app::bootstrap::Omission {
-                line: format!(
-                    "{}: {}",
-                    backend,
-                    specs
-                        .iter()
-                        .map(|s| s.name.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
-                why: format!(
-                    "the `{backend}` backend cannot say which command installs these, so this \
-                     script cannot either"
-                ),
-            }),
         }
-    }
-
+        crate::app::bootstrap::Source::Scan => {
+            let discovery = app.adopter().await.discover().await?;
+            priority = crate::model::priority::Priority::default();
+            for pkg in &discovery.adopt {
+                let key = pkg.backend.clone();
+                by_backend.entry(key).or_default().push(construct_spec(pkg));
+            }
+            // The artifact is what adopt would take, which is the honest scan: a machine's
+            // next bootstrap is the set of things Shall would claim on a fresh copy of it.
+            if by_backend.is_empty() {
+                return Err(crate::core::Error::Differences(
+                    "the scan found nothing `shall adopt` would claim. Nothing was written.".into(),
+                )
+                .into());
+            }
+        }
+    };
+    emit_commands(app, &mut script, by_backend, priority, &mut omitted);
     script.omitted = omitted;
 
     // II.94: an export that cannot say everything prints nothing and names the lines — unless
@@ -178,12 +172,21 @@ pub async fn handle_script_export(
             path.display()
         );
     }
+    let (command, provenance) = match source {
+        crate::app::bootstrap::Source::Declarations => (
+            "--from-declaration",
+            format!("the declarations in {}", state_origin(&app.config)),
+        ),
+        crate::app::bootstrap::Source::Scan => (
+            "--from-scan",
+            "what `shall adopt` found on this machine".to_string(),
+        ),
+    };
     let header = format!(
-        "# Generated by `shall export --from-declaration --format {}`\n\
-         # Reproduces the declarations in {}. Needs a machine of the same OS.\n\
+        "# Generated by `shall export {command} --format {}`\n\
+         # Reproduces {provenance}. Needs a machine of the same OS.\n\
          # Shall is not needed to run it.\n",
-        format.as_str(),
-        state_origin(&app.config)
+        format.as_str()
     );
     let body = script.render(format, &header);
     tokio::fs::create_dir_all(&dir).await.ok();
@@ -273,6 +276,65 @@ fn unrepresentable(
         });
     }
     out
+}
+
+/// Turn `backend -> specs` into commands, and report the backends that cannot answer.
+///
+/// **`None` is a refusal, not a skip** (II.94): a backend that installs by copying a file has no
+/// argv to offer, and a script that quietly left its packages out would read as a complete
+/// bootstrap for a machine that then came up without them.
+fn emit_commands(
+    app: &App,
+    script: &mut crate::app::bootstrap::Script,
+    by_backend: std::collections::BTreeMap<String, Vec<crate::core::PackageSpec>>,
+    priority: crate::model::priority::Priority,
+    omitted: &mut Vec<crate::app::bootstrap::Omission>,
+) {
+    // A bootstrap installs a compiler before a crate and a manager before its packages, which is
+    // the order a sync uses and for the same reason (II.6, K1).
+    let is_foundation = |b: &str| app.registry.get(b).map(|m| m.needs_root()).unwrap_or(false);
+    let names: Vec<String> = by_backend.keys().cloned().collect();
+    for backend in crate::app::rebuild::order_backends(&names, priority.order(), &is_foundation) {
+        let Some(specs) = by_backend.get(&backend) else {
+            continue;
+        };
+        let Some(caps) = app.registry.get(&backend) else {
+            continue;
+        };
+        match caps
+            .as_installable()
+            .and_then(|installable| installable.planned_installs(specs))
+        {
+            Some(commands) => {
+                for command in commands {
+                    script.command(&command.binary, command.args, caps.sudo_for_write());
+                }
+            }
+            None => omitted.push(crate::app::bootstrap::Omission {
+                line: format!(
+                    "{}: {}",
+                    backend,
+                    specs
+                        .iter()
+                        .map(|s| s.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                why: format!(
+                    "the `{backend}` backend cannot say which command installs these, so this \
+                     script cannot either"
+                ),
+            }),
+        }
+    }
+}
+
+fn construct_spec(pkg: &crate::core::Package) -> crate::core::PackageSpec {
+    crate::core::PackageSpec {
+        name: pkg.name.clone(),
+        backend: pkg.backend.clone(),
+        ..Default::default()
+    }
 }
 
 fn state_origin(config: &Config) -> String {

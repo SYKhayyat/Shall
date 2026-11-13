@@ -4918,5 +4918,10 @@ bash` writes `bootstrap.sh` (or into `--out`). One mechanism below this rule clo
   `dotfiles:` line carry ciphertext and plaintext that live in the config and keyring, not in a
   file other people run.
 
-The `--from-scan` half and the ansible/nix formats are `#66`'s and the rest of `#67`'s, closed
-by the same rule.
+**Shipped 2026-11-13 — the same artifact from a scan (`#66`).** `--from-scan --format bash` asks
+the discovery `shall adopt` uses and renders it through the identical argv builder, so the two
+sources cannot disagree about how a package is installed. A scan reports the machine, never the
+declaration files; a scan that finds nothing `adopt` would claim writes nothing and exits 2,
+because an empty script reads as "nothing to reproduce" when the truth is "nothing was found".
+
+The ansible and nix formats are the rest of `#67`, closed by the same rule.

@@ -141,3 +141,15 @@ impl Format {
         }
     }
 }
+
+/// Where an artifact's truth comes from (#67, #66).
+///
+/// **Two sources, not two flags for one thing.** `Declarations` is what the machine is meant to
+/// be and `Scan` is what it is; they disagree on most machines — twenty installed packages
+/// nothing declares, and every `absent:` line invisible to a scan by construction — so a default
+/// would answer one question while looking like the other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Source {
+    Declarations,
+    Scan,
+}

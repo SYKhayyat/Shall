@@ -123,22 +123,57 @@ fn best_effort_writes_the_script_and_still_says_it_is_incomplete() {
 
 #[cfg(unix)]
 #[test]
-fn a_scan_is_not_answered_with_the_declarations() {
-    let f = Fixture::new("67-scan");
+fn a_scan_reports_what_the_machine_has_not_what_the_files_say() {
+    let f = Fixture::new("67-scan-real");
     let stub = declaring(&f);
-    f.write_module("cargo:ripgrep\n");
+    // The declarations ask for `pv`; the machine has `ripgrep` installed. A scan must report the
+    // machine — an export that answered with the declaration files would be `--from-declaration`
+    // wearing a mask.
+    f.write_module(
+        "cargo:pv
+",
+    );
+    std::fs::write(
+        stub.join("cargo"),
+        "#!/bin/sh\ncase \"$1\" in\n  install)\n    if [ \"$2\" = \"--list\" ]; then\n      printf 'ripgrep v14.1.0:\\n    rg\\n'\n      exit 0\n    fi\n    exit 0;;\n  *) exit 0;;\nesac\n",
+    )
+    .unwrap();
 
-    // `--from-scan` is #66's half and is not built: the one thing it must not do is export the
-    // declaration files and let the caller believe a scan happened.
     let (out, code) = f.run_with_path(&stub, &["export", "--from-scan", "--format", "bash"]);
-    assert_eq!(code, 1, "an unimplemented source exited {code}:\n{out}");
+    assert_eq!(code, 0, "a scan with findings exited {code}:\n{out}");
+    let script = std::fs::read_to_string(f.root.join("bootstrap.sh")).unwrap();
     assert!(
-        out.contains("--from-scan") && out.contains("not built yet"),
-        "the refusal did not name the source and why:\n{out}"
+        script.contains("cargo install -- ripgrep"),
+        "the scan script is missing the discovered package:\n{script}"
     );
     assert!(
+        !script.contains("pv"),
+        "the scan script carried a declaration the machine does not have:\n{script}"
+    );
+    assert!(
+        script.contains("from-scan"),
+        "the artifact does not say it came from a scan:\n{script}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_scan_that_finds_nothing_writes_nothing() {
+    let f = Fixture::new("67-scan-empty");
+    let stub = declaring(&f);
+    f.write_module(
+        "cargo:pv
+",
+    );
+    // The machine has nothing `shall adopt` would claim: an empty script would read as "nothing
+    // to reproduce" when really nothing was found.
+    std::fs::write(stub.join("cargo"), "#!/bin/sh\nexit 0\n").unwrap();
+
+    let (out, code) = f.run_with_path(&stub, &["export", "--from-scan", "--format", "bash"]);
+    assert_eq!(code, 2, "an empty scan exited {code}:\n{out}");
+    assert!(
         !f.root.join("bootstrap.sh").exists(),
-        "a scan export wrote a script"
+        "an empty scan wrote a script"
     );
 }
 

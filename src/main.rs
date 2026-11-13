@@ -383,19 +383,15 @@ fn refuse_json_without_dry_run(cli: &Cli) -> Result<()> {
 /// and the manifest half of this verb already writes files: two ways to get one artifact, one of
 /// them lossy about trailing newlines and mixed with whatever else the verb prints, is a second
 /// answer nobody asked for.
-fn check_script_source(from_declaration: bool, from_scan: bool, stdout: bool) -> Result<()> {
+fn check_script_source(
+    from_declaration: bool,
+    from_scan: bool,
+    stdout: bool,
+) -> Result<shall::app::bootstrap::Source> {
     if from_declaration == from_scan {
         return Err(anyhow::anyhow!(
             "a script export needs exactly one source: `--from-declaration` (what the config \
              files say) or `--from-scan` (what this machine is)."
-        ));
-    }
-    if from_scan {
-        // `#66`'s half. Refused by name rather than quietly exporting the declarations, which
-        // would be the wrong answer to the question asked and would look like the right one.
-        return Err(anyhow::anyhow!(
-            "`--from-scan` is not built yet (`#66`): it needs the discovery `shall adopt` uses to \
-             be asked for an argv. Use `--from-declaration` today."
         ));
     }
     if stdout {
@@ -403,7 +399,11 @@ fn check_script_source(from_declaration: bool, from_scan: bool, stdout: bool) ->
             "`--stdout` belongs to the manifest export. Write the script with `--out`."
         ));
     }
-    Ok(())
+    Ok(if from_scan {
+        shall::app::bootstrap::Source::Scan
+    } else {
+        shall::app::bootstrap::Source::Declarations
+    })
 }
 
 pub(crate) async fn dispatch(app: &App, cli: &Cli) -> Result<()> {
@@ -666,8 +666,9 @@ pub(crate) async fn dispatch(app: &App, cli: &Cli) -> Result<()> {
                 .and_then(shall::app::bootstrap::Format::parse);
             match script {
                 Some(script_format) => {
-                    check_script_source(*from_declaration, *from_scan, *stdout)?;
-                    handle_script_export(app, script_format, *best_effort, out, *force).await
+                    let source = check_script_source(*from_declaration, *from_scan, *stdout)?;
+                    handle_script_export(app, source, script_format, *best_effort, out, *force)
+                        .await
                 }
                 None => {
                     if *from_declaration || *from_scan || *best_effort {
