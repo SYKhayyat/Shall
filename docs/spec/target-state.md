@@ -4870,3 +4870,31 @@ phase, no placement, no ledger row, and nothing to undo.
   an unreachable repository would redden every sync on the machine — the cry-wolf `II.92` removed.
   The promise rides along in `DesiredState::invariants` and is deliberately outside
   `total_declarations`: a line `sync` cannot apply must not sit in `sync`'s own numerator.
+
+## II.94 An export refuses what it cannot represent, a line may opt out, and `--best-effort` is the only road to a partial script (owner ruling, 2026-11-13, `#66`, `#67`, V.248)
+
+**`shall export` turns declarations or a live scan into a standalone script in one of three
+formats.** The formats are not equally expressive — a NixOS module cannot write a `gsettings` key,
+and a shell script cannot express "this package's version is pinned by the manager" everywhere — so
+the verb owes a reader an honest answer about what it left out. Three rules, and they are one
+mechanism:
+
+- **Unrepresentable by default is a refusal, and no script is printed.** Every line the format
+  cannot carry is named, in the file and at the line it came from, and the exit is **2** (`U21`).
+  A script that silently covers 80% of a machine reads as "this reproduces my machine" while it
+  does not, which is `#151`'s shape one verb over: a true statement taken as a stronger one.
+- **`@export=no` on a line is the opt-out, and it is the file's business, not the flag's.** Any
+  statement that carries options takes it, in the closed vocabulary `yes`/`no`; anything else is
+  refused at the line naming both words. An opted-out line is **still a live declaration** —
+  `sync` applies it, `check` reports on it — it is simply not something the export must be able to
+  say. This is what makes a Nix export possible on a NixOS machine: the one key a NixOS module
+  cannot hold is marked once, where it lives, instead of being worked around in the exporter.
+- **`--best-effort` is the only way to a partial script**, and it says so twice. Every omission
+  becomes a warning on stderr *and* a comment in the script at the point it would have gone, so a
+  reader who greps the artifact sees the hole. The file is still written and the exit is still
+  **2**: "I made it, and it is not complete" is one answer and it must not be mistaken for the
+  other. An export that exits 0 has covered everything.
+- **An opted-out line is never an omission.** It is not counted, not warned about and not a
+  failure in either mode — the distinction between "the format cannot say this" and "I do not want
+  this exported" is the whole reason the option exists, and a run that conflated them would make
+  the opt-out useless.
