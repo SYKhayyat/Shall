@@ -10,6 +10,7 @@ pub mod conflicts;
 pub mod context;
 pub mod declarations;
 pub mod diagnostics;
+pub mod dotfiles;
 pub mod durability;
 pub mod entrypoint;
 pub mod eval;

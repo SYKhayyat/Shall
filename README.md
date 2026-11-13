@@ -231,7 +231,7 @@ ships, so a line that no longer works fails the build rather than misleading you
 
 | | |
 |---|---|
-| `adopt` | Write the packages you installed by hand into a module |
+| `adopt` | Write the packages you installed by hand — and the config files you already link out of a git repository — into a module |
 | `add` | Vendor someone else's modules into your repo from `github:owner/repo`, a git/file URL, or a path. Their code arrives unapproved until `shall lock` |
 | `unmanage` | Stop managing a package **without** uninstalling it |
 | `remove-orphans` | Remove what each manager considers orphaned — shows the list and asks first |

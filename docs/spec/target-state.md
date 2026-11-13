@@ -4925,3 +4925,38 @@ declaration files; a scan that finds nothing `adopt` would claim writes nothing 
 because an empty script reads as "nothing to reproduce" when the truth is "nothing was found".
 
 The ansible and nix formats are the rest of `#67`, closed by the same rule.
+
+## II.95 `adopt` offers a config path only when it is a symlink into version control (owner request, `#59`, V.249)
+
+**`shall adopt` puts a person's existing dotfiles under management**, so a machine configured by
+`stow`, chezmoi or a shell script for years does not have to be re-declared from memory. The
+evidence is one specific thing, and everything else in `$HOME` is not it:
+
+- **A candidate is a symlink whose target is inside a git working tree.** `.git` is looked for by
+  walking up from the canonical target — a directory in a plain clone, a file in a worktree or
+  submodule — and the roots scanned are `$HOME` (one level), `~/.config`, `~/.local/share` and
+  `~/.ssh`, two levels deep, never descending into a link. `~/.cache`, `~/.local/share/Trash` and a
+  plugin manager's own tree are state, not declarations, and are skipped by name.
+- **A plain file in `$HOME` is an application's output, not a decision.** So is a file's age, its
+  size and its being edited recently. Nothing but the link is evidence, because everything else is
+  what every program on the machine writes on its own.
+- **A link whose target is inside `$HOME` is a rearrangement, not a dotfile.** `~/.config/x ->
+  ~/.local/state/x` points at nothing a second machine could reproduce.
+- **A broken link declares nothing.** Its target is gone, so the line would name a file nobody has,
+  and `sync` would refuse it by name on the next run.
+- **A path this config already speaks for is not offered again** — neither a destination a `link:`
+  line owns, nor anything under a `dotfiles:` tree, nor a line `adopt` itself wrote last time
+  (`II.9`: the manifest is overwritten, so its own links must be re-emitted and not treated as
+  somebody else's declaration).
+- **The line is `link:` with a `~` target and an absolute source**, so it is readable on another
+  machine, and it is spelled by the grammar's own round trip rather than by a second `format!`.
+- **A bare `adopt` takes links; naming a backend on the command line does not.** Naming is how a
+  person says which manager this run is about, and a link belongs to no manager.
+- **No interactive selection.** The manifest is the selection: a link you do not want is a line you
+  delete, exactly as with an adopted package.
+
+Shipped 2026-11-13 — `src/app/dotfiles.rs` (the scan), `Discovery::links` and
+`Adopter::discover_links` (the offer), `AdoptedOutside` (what already speaks for a path), and the
+manifest's `Files you link into a repository` section. Measured on a host with one such link:
+`adopt` wrote `link:/…/repo/app/app.conf@target=~/.config/app/app.conf`, `check config` read it back
+green, and `sync` recognised the link as already in place.

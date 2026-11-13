@@ -96,6 +96,18 @@ pub struct Discovery {
     /// Whole backends this run did not ask, and why — one line each rather than one per
     /// package, because the answer is about the backend and not about any of its names.
     pub skipped_backends: Vec<(String, String)>,
+    /// Config files in `$HOME` that are symlinks into a repository (#59) — the dotfile half of
+    /// what this machine already declares about itself.
+    pub links: Vec<crate::app::dotfiles::ManagedLink>,
+    /// Where the link scan looked, for the manifest header. A reader who disagrees with a
+    /// missing link needs to know which directories were not opened.
+    pub link_roots: Vec<std::path::PathBuf>,
+    /// Links found but not adopted, with the reason each was left out: already declared, or a
+    /// path no `link:` line can spell.
+    pub links_skipped: Vec<(String, String)>,
+    /// Whether the scan stopped at `MAX_LINKS` — said out loud, because a manifest that is
+    /// short for a reason the reader cannot see is the estimate pretending to be a census.
+    pub links_truncated: bool,
 }
 
 /// What this `adopt` was asked for.
@@ -115,6 +127,99 @@ pub struct AdoptScope {
 impl AdoptScope {
     fn asked_for(&self, backend: &str) -> bool {
         self.backends.iter().any(|b| b == backend)
+    }
+}
+
+/// What the config already declares, in the shapes `adopt` must not duplicate.
+///
+/// Two kinds of redundancy, one answer. A package already declared elsewhere is offered again
+/// and the manifest contradicts the hand-written module (the reason this map exists). A path
+/// already spoken for by a `link:` line or a `dotfiles:` tree is the same mistake one resource
+/// over (#59): two lines claiming one destination is a contradiction the resolver refuses, so
+/// the second line wedges the config it was written into.
+#[derive(Debug, Default, Clone)]
+pub struct DeclaredOutside {
+    /// `backend:name` -> the file that declares it.
+    pub packages: HashMap<String, String>,
+    /// Destinations a `link:` line already owns, resolved.
+    link_targets: Vec<std::path::PathBuf>,
+    /// Roots a `dotfiles:` tree already owns — every path under one is that tree's.
+    trees: Vec<std::path::PathBuf>,
+}
+
+impl DeclaredOutside {
+    fn from_model(
+        model: &crate::model::resolve::DesiredState,
+        packages: HashMap<String, String>,
+        config: &Config,
+    ) -> Self {
+        use crate::config::grammar::Statement;
+        let mut link_targets = Vec::new();
+        let mut trees = Vec::new();
+        // `modules/adopted.txt` is this command's own output and it is overwritten every run
+        // (II.9). Counting its lines as "already declared" would make the second `adopt` drop
+        // every link the first one found — the manifest would shrink each time it ran.
+        let ours = crate::model::Landing::Adopted.module();
+        for (statement, origin) in &model.extras {
+            if origin.file.file_stem().and_then(|s| s.to_str()) == Some(ours) {
+                continue;
+            }
+            match statement {
+                Statement::Link(_, opts) => {
+                    if let Some(target) = opts.one("target") {
+                        if let Ok(path) = crate::backends::link::resolve_target(target) {
+                            link_targets.push(path);
+                        }
+                    }
+                }
+                Statement::Dotfiles(tree, _) => {
+                    if let Ok(path) = crate::backends::link::resolve_source(config, tree) {
+                        trees.push(path);
+                    }
+                }
+                _ => {}
+            }
+        }
+        Self {
+            packages,
+            link_targets,
+            trees,
+        }
+    }
+
+    /// Why this discovered link is already somebody's declaration, in words fit to print.
+    fn why_not_a_link(&self, link: &crate::app::dotfiles::ManagedLink) -> Option<String> {
+        if self
+            .link_targets
+            .iter()
+            .any(|owned| same_place(owned, &link.target))
+        {
+            return Some("a `link:` line already declares this path".to_string());
+        }
+        if let Some(tree) = self.trees.iter().find(|t| link.source.starts_with(t)) {
+            return Some(format!(
+                "`dotfiles:{}` already places this file",
+                tree.display()
+            ));
+        }
+        None
+    }
+}
+
+/// Whether two paths name the same place, without requiring either to exist.
+///
+/// `canonicalize` is the wrong tool here: the declared destination may not have been placed
+/// yet, and the bare `==` is the wrong tool everywhere else on this machine, because
+/// `/home/alice/../alice/.vimrc` and `/home/alice/.vimrc` are one file. Canonicalising the
+/// *parent* answers both — the directory must exist for a link to sit in it.
+fn same_place(a: &std::path::Path, b: &std::path::Path) -> bool {
+    let normal = |p: &std::path::Path| {
+        let parent = p.parent().and_then(|d| d.canonicalize().ok())?;
+        Some(parent.join(p.file_name()?))
+    };
+    match (normal(a), normal(b)) {
+        (Some(x), Some(y)) => x == y,
+        _ => a == b,
     }
 }
 
@@ -398,7 +503,7 @@ impl Adopter {
 
         for pkg in candidates {
             let key = format!("{}:{}", pkg.backend, pkg.name);
-            if let Some(file) = declared.get(&key) {
+            if let Some(file) = declared.packages.get(&key) {
                 found.skipped.push(Skipped {
                     reason: format!("you already declare it, in {}", file),
                     package: pkg,
@@ -417,7 +522,45 @@ impl Adopter {
             (&a.package.backend, &a.package.name).cmp(&(&b.package.backend, &b.package.name))
         });
 
+        // The dotfile half (#59). Its evidence is a symlink into version control, which is a
+        // decision a person made in `$HOME` — so it is offered on the same terms as a package,
+        // by a bare `adopt`, and naming backends on the command line means the run is about
+        // packages and this is not its business.
+        if scope.backends.is_empty() {
+            self.discover_links(&mut found, &declared).await;
+        }
+
         Ok(found)
+    }
+
+    /// Fill in `found.links`, and say why the ones left out were left out.
+    async fn discover_links(
+        &self,
+        found: &mut Discovery,
+        declared: &crate::app::adopt::DeclaredOutside,
+    ) {
+        let Some(home) = dirs::home_dir() else {
+            return;
+        };
+        let (links, truncated) = crate::app::dotfiles::scan(&home);
+        found.links_truncated = truncated;
+        found.link_roots = crate::app::dotfiles::roots(&home);
+        for link in links {
+            // A path this config already declares is not a discovery — it is the second line
+            // for one file, which the resolver refuses as a contradiction (II.7 rule 5).
+            let shown = crate::app::dotfiles::tilde(&home, &link.target);
+            if let Some(reason) = declared.why_not_a_link(&link) {
+                found.links_skipped.push((shown, reason));
+                continue;
+            }
+            if Self::link_line(&link).is_none() {
+                found
+                    .links_skipped
+                    .push((shown, "no `link:` line can spell this path".to_string()));
+                continue;
+            }
+            found.links.push(link);
+        }
     }
 
     /// `backend:name` -> the file that declares it, for every declaration the model holds
@@ -431,7 +574,7 @@ impl Adopter {
     /// `modules/adopted.txt` is excluded because `adopt` overwrites it every run (II.9): a line
     /// this command wrote last time must not stop it writing the same line now, or the second
     /// run would answer "the machine plus history" instead of "the machine as it is".
-    async fn declared_outside_the_adoption_manifest(&self) -> HashMap<String, String> {
+    async fn declared_outside_the_adoption_manifest(&self) -> crate::app::adopt::DeclaredOutside {
         let resolver = crate::app::sync::resolver::StateResolver::new(
             &self.config,
             self.backends.registry().clone(),
@@ -452,12 +595,12 @@ impl Adopter {
                     "Note: your modules did not resolve ({e}), so packages you have already\n\
                      declared may be listed below. Run `shall check config`."
                 );
-                return HashMap::new();
+                return crate::app::adopt::DeclaredOutside::default();
             }
         };
 
         let ours = crate::model::Landing::Adopted.module();
-        model
+        let packages = model
             .packages
             .values()
             .flatten()
@@ -469,7 +612,8 @@ impl Adopter {
                 (stem != ours)
                     .then(|| (format!("{}:{}", spec.backend, spec.name), file.to_string()))
             })
-            .collect()
+            .collect();
+        crate::app::adopt::DeclaredOutside::from_model(&model, packages, &self.config)
     }
 
     /// Discovery -> manifest -> acquisition.
@@ -500,10 +644,11 @@ impl Adopter {
         let options = self.adoption_options();
         Self::hold_back_what_cannot_be_written(&mut found, &options);
 
-        if found.adopt.is_empty() {
+        if found.adopt.is_empty() && found.links.is_empty() {
             info!("nothing new to adopt");
             println!("Nothing to adopt: every package your managers report as user-chosen is");
-            println!("already managed, or is protected and deliberately left alone.");
+            println!("already managed, or is protected and deliberately left alone, and no config");
+            println!("file links into a repository without already being declared.");
             if !found.skipped.is_empty() {
                 println!();
                 print_left_alone(&found.skipped);
@@ -585,7 +730,10 @@ impl Adopter {
             // sentence a user saw was `Adopted 112 package(s).` about a file that was never
             // written.
             println!();
-            crate::would_print!("would adopt {} package(s).", found.adopt.len());
+            crate::would_print!(
+                "would adopt {} declaration(s).",
+                found.adopt.len() + found.links.len()
+            );
             println!("{:-<64}", "");
             println!(
                 "Manifest that would be written:  {}",
@@ -596,7 +744,25 @@ impl Adopter {
             return Ok(());
         }
 
-        println!("\nAdopted {} declaration(s).", found.adopt.len());
+        println!(
+            "\nAdopted {} declaration(s).",
+            found.adopt.len() + found.links.len()
+        );
+        if !found.links.is_empty() {
+            println!(
+                "  {} of them link a config file you keep in a repository.",
+                found.links.len()
+            );
+        }
+        if found.links_truncated {
+            println!(
+                "  The scan stopped at {} links; there are more. Declare the rest by hand.",
+                crate::app::dotfiles::MAX_LINKS
+            );
+        }
+        for (path, reason) in &found.links_skipped {
+            println!("  not declared: {path} — {reason}");
+        }
         println!("{:-<64}", "");
         println!("Manifest:  {}", manifest_path.display());
         print_left_alone(&found.skipped);
@@ -694,6 +860,29 @@ impl Adopter {
             .collect()
     }
 
+    /// The `link:` line for a discovered dotfile, spelled by the grammar.
+    ///
+    /// Spelled by `declared_as`, not by `format!`: the same round trip that decides whether a
+    /// package name can be written decides how this one is, and a path with a space in it gets
+    /// the quoted form from one place rather than from a second copy of the rule.
+    fn link_line(link: &crate::app::dotfiles::ManagedLink) -> Option<String> {
+        let home = dirs::home_dir()?;
+        let target = crate::app::dotfiles::tilde(&home, &link.target);
+        let source = link.source.to_string_lossy().to_string();
+        match crate::config::grammar::declared_as(Some("link"), &source, &[("target", &target)]) {
+            crate::config::grammar::Declared::Resource(line) => Some(line),
+            // A path no `link:` line can spell. `adopt`'s rule for packages is the same: it is
+            // dropped with a reason rather than written as a line that fails to parse.
+            _ => {
+                warn!(
+                    "`{}` cannot be written as a `link:` line.",
+                    link.source.display()
+                );
+                None
+            }
+        }
+    }
+
     /// What the grammar makes of this candidate, asked with the options its backend needs
     /// written beside it. One call decides both whether it can be declared and how.
     fn declared_for(
@@ -727,7 +916,9 @@ impl Adopter {
 #   Not every line is a package. A `service:` line is a running service, and it
 #   carries the state it was found in: `@status=running` means keep it running,
 #   and says nothing about whether it starts at boot. That is deliberate — the
-#   init was asked which services are running, not how they are configured.
+#   init was asked which services are running, not how they are configured. A
+#   `link:` line is a config file in `$HOME` that was already a symlink into a git
+#   working tree, so it was a dotfile decision before Shall knew about it.
 #
 # THIS IS AN ESTIMATE
 #   Managers vary in how well they track that difference, and some cannot track it
@@ -737,8 +928,8 @@ impl Adopter {
 #
 # WHAT HAPPENS NEXT
 #   Shall now manages everything on an uncommented line below.
-#   Deleting a line UNDOES it on the next sync: a package is UNINSTALLED, and a
-#   service is STOPPED AND DISABLED.
+#   Deleting a line UNDOES it on the next sync: a package is UNINSTALLED, a
+#   service is STOPPED AND DISABLED, and a `link:` is REMOVED.
 #   Except where the guard refuses. A package you protected, or one the OS itself
 #   calls essential, is declared here so Shall keeps it — deleting its line stops
 #   Shall keeping it, and the guard still refuses to remove it.
@@ -771,6 +962,26 @@ impl Adopter {
                 None => out.push_str(&format!("{}:{}", pkg.backend, pkg.name)),
             }
             out.push('\n');
+        }
+
+        if !found.links.is_empty() || !found.links_skipped.is_empty() {
+            out.push_str(
+                "\n\
+# === Files you link into a repository ===\n\
+#   A symlink in `$HOME` whose target is inside a git working tree is the one kind of\n\
+#   config file a machine keeps that is unambiguous evidence of a decision (V.249):\n\
+#   someone pointed a config path at a file they keep in version control. `~/.config`,\n\
+#   `~/.local/share`, `~/.ssh` and the top level of `$HOME` were scanned two levels\n\
+#   deep. Deleting a line removes the link on the next sync, exactly as with any other\n\
+#   resource.\n\
+",
+            );
+            for link in &found.links {
+                if let Some(line) = Self::link_line(link) {
+                    out.push_str(&line);
+                    out.push('\n');
+                }
+            }
         }
 
         if !found.skipped.is_empty() {

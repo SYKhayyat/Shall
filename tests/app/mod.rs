@@ -9,6 +9,7 @@ mod bootstrap;
 mod bundle;
 mod check;
 mod conflicts;
+mod dotfiles;
 mod durability;
 mod eval;
 mod events;

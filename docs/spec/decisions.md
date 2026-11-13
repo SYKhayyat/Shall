@@ -1,4 +1,4 @@
-﻿# The decision register — 268 entries, none open
+﻿# The decision register — 269 entries, none open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **263** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **264** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 266 are accounted
-for: **263 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 269 are accounted
+for: **264 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay, and whether a policy decline is a failure, and which half of a setting waits for a person, and what an invariant is and how it is measured, and what an export owes a line it cannot express) — 30
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay, and whether a policy decline is a failure, and which half of a setting waits for a person, and what an invariant is and how it is measured, and what an export owes a line it cannot express, and what a config file must be to be evidence of a decision) — 31
 
 | | question | answered |
 |---|---|---|
@@ -549,6 +549,7 @@ deliberately no longer has.*
 | **C29** | `#74` asked for declared invariants — a path whose copy exists elsewhere — and the questions were what an invariant *is* and how it is measured. **RULED 2026-11-11: a promise the files make, measured against the backup tool's own listing, reported by `check durability`.** Not a resource: no phase, no placement, nothing to undo, nothing `sync` acts on. Three failures held apart — older than `@max-age`, no copy at all, and nothing on this machine could answer — with the last one never a pass. One shipped adapter (`restic`, whose listing names which paths a copy covers); the row shape is data, so a tool that can answer can be added without a release. (II.93, V.247) | 2026-11-11 |
 | **C30** | `#66`/`#67` (export) needed a rule for what an export does with a line its format cannot express. Owner ruling 2026-11-13: **refuse by default, with a per-line `@export=no` opt-out, and a `--best-effort` flag that warns and still writes the file.** The opt-out is what makes a Nix export possible on NixOS, because the key a NixOS module cannot hold is marked once, where it lives. An opted-out line is still a live declaration and is never counted as an omission; `--best-effort` produces the script, comments every hole, and still exits 2. (II.94, V.248) | 2026-11-13 |
 
+| **C31** | `#59` asked what in `$HOME` `adopt` may offer as a declaration. Owner ruling 2026-11-13: **a symlink whose target is inside a git working tree, and nothing else.** Everything else fails the evidence test a machine cannot fake: a plain file is what software wrote, age and size select the caches written most often, and "any symlink" selects every package manager's own bookkeeping. Therefore `~/.config`, `~/.local/share`, `~/.ssh` and the top of `$HOME` are scanned two levels deep, a link into `$HOME` is a rearrangement, a broken link declares nothing, and a path already spoken for (`link:`, a `dotfiles:` tree, or what `adopt` wrote last run) is not re-offered. The manifest is the selection — a deleted line is a link Shall stops placing. (II.95, V.249) | 2026-11-13 |
 # The blocking round — thirteen questions, all ruled
 
 *These could not be built around: two reasonable implementations differed. Ruled 2026-07-23/24.*
@@ -11201,3 +11202,39 @@ number a script can read.
 **4. An opted-out line is never an omission.** Not counted, not warned, not a failure in either
 mode: "the format cannot say this" and "I do not want this exported" are different facts, and a run
 that merged them would make the opt-out useless.
+
+## C31
+
+**Status: ANSWERED 2026-11-13, built the same day.** What in `$HOME` `adopt` may offer as a
+declaration. Carried out of `#59`.
+
+**Asked.** The issue proposed scanning well-known config directories, detecting symlinks that
+point at a common parent, detecting "clearly managed" files, skipping caches, and offering an
+interactive selection. The scope questions it left open were how deep to scan, whether file age and
+size should filter, and whether to follow links or record targets. Every one of those is the same
+question: what counts as evidence that a person chose a file?
+
+**Ruled: a symlink whose target is inside a git working tree, and nothing else.**
+
+**1. The link, not the file.** A plain file in `$HOME` is what software wrote; a link into version
+control is a person saying *this file lives there and is mine*. File age and size select caches —
+the newest files in `$HOME` are the ones a browser rewrites constantly. "Any symlink" selects every
+`node_modules/.bin`. A `stow`-shaped heuristic finds the tools that name themselves and misses the
+shell-loop majority.
+
+**2. Two levels, four roots, and a named skip list.** `$HOME` one level, `~/.config`,
+`~/.local/share`, `~/.ssh` two levels. Never descend into a link. `node_modules`, `Trash`, `Cache`
+and the other state directories are skipped by name, and the ceiling (`MAX_LINKS`) is said out loud
+rather than silently truncating a manifest.
+
+**3. A link into `$HOME` is a rearrangement, and a broken link is nothing.** Neither is reproducible
+on another machine; the second would also put a line in the manifest that `sync` refuses by name.
+
+**4. A path already spoken for is not re-offered** — a `link:` destination, anything under a
+`dotfiles:` tree, or a line `adopt` wrote last run. The last is `II.9` rather than deduplication: the
+manifest is overwritten each run, so its own links must be emitted again instead of reading as
+somebody else's declaration.
+
+**5. No interactive selection, in this version.** The manifest is the selection — a line you delete
+is a link Shall stops placing — which is the same offer an adopted package gets. A picker would be a
+second way to say the same thing, and the file is the one that survives the session.
