@@ -11,8 +11,9 @@ use crate::verbs::prelude::*;
 pub async fn handle_unmanaged(adopter: &crate::app::Adopter) -> Result<()> {
     let found = adopter.discover().await?;
 
-    if found.adopt.is_empty() {
-        println!("Nothing to adopt: Shall already manages everything you chose to install.");
+    if found.adopt.is_empty() && found.links.is_empty() {
+        println!("Nothing to adopt: Shall already manages everything you chose to install, and");
+        println!("no config file links into a repository unmanaged.");
     } else {
         println!(
             "{} package(s) `shall adopt` would take:\n",
@@ -25,6 +26,24 @@ pub async fn handle_unmanaged(adopter: &crate::app::Adopter) -> Result<()> {
         println!("\nThis is an estimate — each backend's answer came from:");
         for (backend, source) in &found.sources {
             println!("  {:<10} {}", backend, source);
+        }
+    }
+
+    // The dotfile half (#59). `unmanaged` is defined as "what `adopt` would adopt" (II.8, E6),
+    // so a new kind of thing `adopt` takes without a line here would be the two verbs
+    // disagreeing about one question — the shape the doc comment above was written against.
+    if !found.links.is_empty() {
+        if found.adopt.is_empty() {
+            println!(
+                "{} config file(s) `shall adopt` would take:\n",
+                found.links.len()
+            );
+        } else {
+            println!("\nAnd {} config file(s):\n", found.links.len());
+        }
+        println!("{:<40} LINKED FROM", "IN $HOME");
+        for link in &found.links {
+            println!("{:<40} {}", link.target.display(), link.source.display());
         }
     }
 
@@ -618,17 +637,21 @@ pub async fn check_summary(app: &App, out: Output) -> Result<()> {
 
     // unmanaged — what adopt would take.
     match app.adopter().await.discover().await {
-        Ok(found) if found.adopt.is_empty() => findings.push(
+        Ok(found) if found.adopt.is_empty() && found.links.is_empty() => findings.push(
             Finding::ok(Section::Unmanaged, "everything you chose is managed")
                 .counting([("unmanaged", 0)]),
         ),
         Ok(found) => findings.push(
             Finding::attention(
                 Section::Unmanaged,
-                format!("{} package(s) `shall adopt` would take", found.adopt.len()),
+                format!(
+                    "{} package(s) and {} config file(s) `shall adopt` would take",
+                    found.adopt.len(),
+                    found.links.len()
+                ),
                 "shall adopt",
             )
-            .counting([("unmanaged", found.adopt.len())]),
+            .counting([("unmanaged", found.adopt.len() + found.links.len())]),
         ),
         Err(e) => findings.push(Finding::attention(
             Section::Unmanaged,
