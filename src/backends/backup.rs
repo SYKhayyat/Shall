@@ -111,7 +111,8 @@ impl BackupAdapter {
 /// one Shall ships (K17/U1).
 pub fn adapters(user_rows: Vec<BackupAdapter>) -> Vec<BackupAdapter> {
     let shipped: BackupAdapterFile =
-        toml::from_str(BUILTIN).expect("the shipped backup_adapters.toml must parse");
+        toml::from_str(BUILTIN)
+            .expect("the shipped backup_adapters.toml must parse: it is compiled in, and a test pins that it does");
     adapter::merge(shipped.backup.into_iter().chain(user_rows))
 }
 

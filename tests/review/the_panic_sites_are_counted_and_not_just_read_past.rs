@@ -52,7 +52,11 @@ fn walk_rs(dir: &PathBuf) -> Vec<PathBuf> {
 ///
 /// None of the 81 was a refutable assumption on a value from a user's config, a manager's output
 /// or a path on disk. If one appears above this ceiling, that is the question to ask about it.
-const PRODUCTION_CEILING: usize = 81;
+/// 81 → 82 when `#74` added the third compiled-in adapter table (`backup_adapters.toml`), whose
+/// `expect` sits beside the two already counted (`init_providers.toml`, `setting_stores.toml`).
+/// Same shape, same justification: the table is compiled into the binary and a test pins that it
+/// parses, so the arm that panics cannot be reached by anything a user writes.
+const PRODUCTION_CEILING: usize = 82;
 
 /// **The inventory runs and counts.** A script that silently matched nothing would report "0 sites,
 /// the tree is clean", which is the most reassuring possible failure.
