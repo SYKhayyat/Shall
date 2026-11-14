@@ -10,6 +10,45 @@ prevent; **do not change a target-state rule without reading its why entry first
 code. A decision the register calls open is the owner's to make; a decision it marks *built,
 never ruled* is code that ran ahead of a ruling and is still theirs to reverse.
 
+## The shape of the program: input → file → output (owner's model, 2026-11-14)
+
+**The intent:** an honest, portable description of your machine, which you own. *Inputs keep it
+honest; outputs keep it in charge.*
+
+Shall has three parts, and every command belongs to one of them:
+
+- **The file** — the declaration. It describes a machine; it is the only authority.
+- **Input** — how things get into the file: typing it, imperative commands (`add`, `install`),
+  adopting what the machine already has (`adopt`, `export --from-scan`). Inputs exist because
+  nobody writes a complete description by hand; without them the file is too expensive to keep.
+- **Output** — what is done with the file: syncing, rebuilding, diffing, planning, exporting.
+  Outputs exist so the file is never decorative; without them it drifts into fiction.
+
+**Each part needs its own plumbing**, and the plumbing is part of the model, not incidental to it:
+the file needs one parser and one writer that preserves what the user wrote (II.16); inputs need
+the machine-reading half (scan, adopt) to land as edits; outputs need the plan, the guard and the
+executor. Trust (plan visible first, guard on every removal, *ask, then do*) is plumbing that every
+output path shares — not a feature of any one command.
+
+When building or reviewing, ask which part the code is in:
+
+- **Input code writes the file and nothing else.** It never touches the machine. An input that
+  changes the machine directly is a P1 violation.
+- **Output code reads the file and the machine, and never writes the file.** Its behaviour is a
+  function of those two and nothing else.
+- **A compound verb is an input followed by an output**, built as that composition — not a third
+  code path that happens to have the same effect.
+- **The core primitive is the difference between file and machine.** `diff` shows it, `sync`
+  closes it by changing the machine, `adopt` closes it by changing the file. Two engines computing
+  that difference is two of everything.
+- **Some commands are deliberately outside the model** — ephemeral ones (`try`, `shell`, `run`)
+  and history (`snapshot`, `rollback`, `bisect`). Name them as exceptions; don't bend the model to
+  swallow them, and don't let them grow file-shaped side effects.
+
+This is a lens, not yet a Part I principle. Whether it becomes one, and what the architecture
+should change because of it, is open — see the GitHub issue that tracks it. Do not restructure
+modules around it without a ruling.
+
 ## Asking while building (owner ruling, 2026-07-23)
 
 Build without stopping for permission. **Stop and ask only for these four:**
