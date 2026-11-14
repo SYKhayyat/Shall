@@ -46,7 +46,7 @@ When building or reviewing, ask which part the code is in:
   swallow them, and don't let them grow file-shaped side effects.
 
 This is a lens, not yet a Part I principle. Whether it becomes one, and what the architecture
-should change because of it, is open — see the GitHub issue that tracks it. Do not restructure
+should change because of it, is open — #166. Do not restructure
 modules around it without a ruling.
 
 ## Asking while building (owner ruling, 2026-07-23)
