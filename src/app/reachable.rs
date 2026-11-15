@@ -162,17 +162,22 @@ pub fn conventional_bin_dir(backend: &str) -> Option<PathBuf> {
 
 /// Is `dir` one of the entries in `PATH`?
 ///
+/// Reads the process's `PATH` once and asks the same question every other caller may ask,
+/// so a test does not have to rewrite the process to exercise this predicate.
+pub fn is_on_path(dir: &Path) -> bool {
+    std::env::var_os("PATH").is_some_and(|path| is_on_path_at(&path, dir))
+}
+
+/// Is `dir` one of the entries in `path`?
+///
 /// Compared after `canonicalize`, so `~/go/bin` and `/home/u/go/bin/` and a `PATH` entry
 /// reached through a symlink are one directory rather than three. A path that cannot be
 /// canonicalised has not been created yet, and a directory that does not exist is not on
 /// anyone's `PATH` — but the raw comparison still runs first, because a user may well have
 /// added the entry before the manager created the directory.
-pub fn is_on_path(dir: &Path) -> bool {
-    let Some(path) = std::env::var_os("PATH") else {
-        return false;
-    };
+pub fn is_on_path_at(path: &std::ffi::OsStr, dir: &Path) -> bool {
     let canonical = dir.canonicalize().ok();
-    std::env::split_paths(&path)
+    std::env::split_paths(path)
         .any(|p| p == dir || (canonical.is_some() && p.canonicalize().ok() == canonical))
 }
 
