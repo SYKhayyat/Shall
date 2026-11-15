@@ -120,6 +120,15 @@ jobs:
   # `--locked` for the reason the msrv job uses it: this job answers a question about the
   # compiler, and letting it resolve a different dependency graph would let it answer a
   # different question under this name.
+  #
+  # **The count is recorded, not triaged (#160).** A lint a release adds used to be visible only
+  # as a red X on this job's run page, which is a page nobody opens until something is already
+  # wrong — so the debt the job exists to keep visible sat visible and untriaged for weeks. The
+  # step below writes the number beside the version that produced it. The owner's ruling is that
+  # there is no per-release triage calendar: the number is paid down when `RUST_PINNED` moves,
+  # and between those points this job's whole obligation is to say the count, not to schedule
+  # work against it. Recording it is therefore the entire enforcement — there is deliberately no
+  # ratchet, because a ratchet on a report nobody reads is the same debt with a second file.
   newest-rust:
     name: Compiles on the newest Rust (advisory)
     runs-on: ubuntu-latest
@@ -133,6 +142,31 @@ jobs:
       run: rustc --version
     - run: cargo check --all-targets --locked
     - run: cargo clippy --all-targets --all-features --locked -- -D warnings
+
+    # **The number, where a person looks.** `-D warnings` above answers yes or no; this answers
+    # how far, which is the difference between "0.1.98 added a lint" and "0.1.98 added a lint
+    # we cannot see past". The same command, one `--message-format` apart, so the report cannot
+    # describe a different run from the gate above it.
+    #
+    # `--message-format=short` because the long format wraps one diagnostic across a dozen lines
+    # and a `grep -c` over it counts continuation lines as lints. A lint line in that format is
+    # `path:line:col: severity[code]: message` — **anchored on the path**, because the one line
+    # that starts with a bare `error:` is the `could not compile ... due to N previous errors`
+    # summary, and a pattern that matched it counted the tail as a lint while missing the head.
+    # Measured on a two-lint crate: the bare-severity pattern answered 1, this one answers 2.
+    #
+    # `|| true` on both halves for the reason the fan-out step below uses it: this step is a
+    # report, and a report that reds the job is a gate wearing the wrong name. `$GITHUB_STEP_SUMMARY`
+    # is written even when clippy fails, which is the run where the number matters most.
+    - name: Record how many lints the newest Rust adds
+      if: ${{ !cancelled() }}
+      shell: bash
+      run: |
+        rustc --version >> "$GITHUB_STEP_SUMMARY" || true
+        counted="$(cargo clippy --all-targets --all-features --locked \
+          --message-format=short -- -D warnings 2>&1 \
+          | grep -cE '^[^ ]+: (error|warning)(\[[^]]*\])?:' || true)"
+        echo "newest-rust lint count: ${counted}" >> "$GITHUB_STEP_SUMMARY" || true
 
   msrv:
     name: Builds on the declared MSRV

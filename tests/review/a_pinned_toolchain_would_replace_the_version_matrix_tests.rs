@@ -143,3 +143,54 @@ fn the_drift_detector_cannot_block_a_merge() {
         "`newest-rust` is not continue-on-error, so one new clippy lint blocks every merge"
     );
 }
+
+/// **The advisory job has to say how far the drift goes, not only that there is some (#160).**
+///
+/// The job is `continue-on-error`, so its failure never blocks a merge and nobody is obliged to
+/// look at it. That is the right arrangement and it is also why the lint debt it reported sat
+/// untriaged: a red X says "something changed" and not "eleven things changed", so the first
+/// question anyone asks needs a second run to answer. The owner's ruling was that the count is
+/// paid down when `RUST_PINNED` moves and never on a triage calendar — which leaves exactly one
+/// thing this job owes in between: to record the number, beside the version that produced it.
+///
+/// Asserted on the step and on the two shapes that make it honest: it writes to the run summary,
+/// and it counts a lint line by its `path:line:col:` prefix. Anchoring on a bare severity is the
+/// tempting spelling and the wrong one — measured on a crate with two lints, the bare pattern
+/// answered 1 because the only line it matched was clippy's `could not compile ... due to N
+/// previous errors` summary. A count that reports small is worse than no count at all.
+#[test]
+fn the_advisory_job_records_the_lint_count_it_measures() {
+    let ci = std::fs::read_to_string(repo().join(".github/workflows/ci.yml")).expect("ci.yml");
+    let after = ci
+        .split_once("  newest-rust:")
+        .expect("the advisory job exists")
+        .1;
+    let body = after.split_once("\n  msrv:").map_or(after, |(b, _)| b);
+
+    assert!(
+        body.contains("Record how many lints the newest Rust adds"),
+        "the advisory job no longer records its count, so `newest-rust` is back to a red X with \
+         no number on it — the state three weeks of untriaged lint debt came from"
+    );
+    assert!(
+        body.contains("$GITHUB_STEP_SUMMARY"),
+        "the count is computed and thrown away: it has to land on the run summary, which is the \
+         page a person is already looking at"
+    );
+    assert!(
+        body.contains("rustc --version"),
+        "a count with no version beside it cannot be attributed to a release, which is the whole \
+         question the count is asked to answer"
+    );
+    assert!(
+        body.contains("'^[^ ]+: (error|warning)"),
+        "the count must anchor on `path:line:col: severity`, not on a bare severity: the only \
+         line beginning with one in `--message-format=short` is clippy's compile summary, so the \
+         bare spelling counts the tail and misses every lint"
+    );
+    assert!(
+        !body.contains("--message-format=json"),
+        "the report parses clippy's short format; json here would make the count a second parser \
+         to keep in step with the tool"
+    );
+}

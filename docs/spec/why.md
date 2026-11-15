@@ -9001,3 +9001,27 @@ commit as the fixing of the first.
 **The candidate rules were each rejected for adopting something nobody decided.** File age and size (the issue's own suggestion) select the caches that are written most often — the newest files in `$HOME` are the ones a browser rewrites every second. "Any symlink" selects `node_modules/.bin` and every state directory a tool rearranges. "A `stow`/chezmoi layout" finds the four tools that name themselves and misses the person who wrote a shell loop, which is the majority case. What survives all three tests is **a link into a git working tree**: a person pointed a config path at a file they keep in version control, which is the definition of a dotfile setup and is a fact no program writes by accident. It also happens to be exactly the `link:` line the grammar already has, so adopting one is not a translation — it is the line the person would have written.
 
 **Two smaller rules came out of the same question.** A link pointing inside `$HOME` is a rearrangement (`~/.config/x -> ~/.local/state/x`) and reproducing it on another machine reproduces an accident; and a broken link is dropped because the line would name a file nobody has, which the next `sync` would refuse by name. Both are the same principle as the `#151` family: the manifest may say a true thing, and must not say a bigger one.
+
+**V.250 — Why the newest-Rust job reports a count and gates on nothing (`#160`, `II.96`).** The job
+was written so that a Rust release could not break the tree unnoticed, and it worked: it went red
+when stable changed its lints, and stayed red for weeks. Being visible was not the same as being
+read. A red X on an advisory job is a fact with no number attached — it says "something changed" and
+not "eleven things changed", so the first question anyone asks ("how bad?") needs a second run to
+answer, and the pin move inherits whatever accumulated in between. A count written next to
+`rustc --version` answers that question on the run page that everyone is already on.
+
+The alternatives were worse for this repo. A per-release triage calendar puts a recurring meeting on
+a *report* — the number is only actionable when the pin moves, so the cadence would generate work
+before the work exists. A ratchet on the count in CI would add a second file to keep in step, and
+because the job is advisory, that file would be updated by the same person on the same day as the
+count, which is two places to be wrong instead of one. Neither of those is a bug; both are ways of
+making a small fact expensive.
+
+The one thing the report has to get right is that it counts lints. The obvious pattern anchors on a
+line beginning `error:` or `warning:` — and in `--message-format=short` those lines begin with a
+path. The single bare-`error:` line in the output is the `could not compile ... due to N previous
+errors` summary. Measured on a crate with two lints, the bare-severity pattern answered **1** while
+anchoring on `path:line:col:` answered **2**: the naive version counted the tail and reported the
+number as small, which is the one direction a lint count must never be wrong in. The same crate is
+what proved the step rises at all — a count that only ever prints zero is the reassuring failure
+this job exists to prevent.

@@ -4960,3 +4960,18 @@ Shipped 2026-11-13 — `src/app/dotfiles.rs` (the scan), `Discovery::links` and
 manifest's `Files you link into a repository` section. Measured on a host with one such link:
 `adopt` wrote `link:/…/repo/app/app.conf@target=~/.config/app/app.conf`, `check config` read it back
 green, and `sync` recognised the link as already in place.
+
+## II.96 An advisory drift job records the number it measures, and nothing ratchets it (C32, V.250)
+
+**The newest-Rust job answers one number — how many lints current stable adds — and writes it beside
+the version that produced it. Nothing on the board is gated on that number.**
+
+- **Paid when the pin moves, not on a calendar.** There is no per-release triage item. The job is
+  `continue-on-error`, so it blocks no merge; between pin bumps its obligation is to report, not to
+  schedule. A dated backlog entry the owner never opens is maintenance that protects nothing.
+- **The report is the same command as the gate**, one `--message-format` apart, so the count cannot
+  describe a different run from the one that failed.
+- **The number is written even when the job fails**, because a failing run is exactly when the count
+  matters.
+- **`|| true` on the write, and no ratchet.** A report that reds a job is a gate wearing the wrong
+  name; and a ceiling on a report nobody reads adds a second file to keep in step with the first.
