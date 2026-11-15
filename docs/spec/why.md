@@ -9025,3 +9025,28 @@ anchoring on `path:line:col:` answered **2**: the naive version counted the tail
 number as small, which is the one direction a lint count must never be wrong in. The same crate is
 what proved the step rises at all — a count that only ever prints zero is the reassuring failure
 this job exists to prevent.
+
+**V.251 — Why a declared removal is a command in the script and never an empty list (#67,
+`II.97`).** The exporter resolved the declaration into one map of `backend -> specs` and filtered
+it on `present`, because `present` is what decides whether a package gets installed. That filter is
+correct for building the installs and it was silently doing much more: an `absent:apt:snap` line
+carried `present: false`, so it failed the filter and reached neither the install list nor the
+omission list. Measured on a config of `apt:ripgrep` + `absent:apt:snap`, the artifact contained
+`sudo apt install -y -- ripgrep` and nothing else — one command, no refusal, exit 0.
+
+The reason it survived so long is worth recording, because it is not laziness: `absent:` lines are
+*documented* to be the same map carrying a flag, so from the resolver's side nothing was missing.
+The loss happened one layer up, where a boolean was used as a filter rather than as a branch. A
+filter on a flag that has two meanings keeps one of them and calls the result "the set".
+
+The alternative — leaving it as a refusal rather than a command — was rejected. Removing a package
+is a thing `apt remove -y -- snap` says exactly, and `Installable` had no way to be asked for that
+argv because only `planned_installs` existed. The seam is the fix: `remove_commands` builds the
+line, `remove` executes it, and `planned_removals` hands it to the exporter — one builder, so a
+batch split at the operand cap splits at identical points in both. The `None` case is kept for the
+managers that genuinely have no uninstall verb (cabal, stack), and it is a *named* hole rather than
+an empty list, because the empty list is the silence this whole finding is about.
+
+The order is part of the same rule. Removals run after installs so a failed install leaves the
+package present; a removal that ran first would take away the manager's package and then fail to
+put back what it was replacing.

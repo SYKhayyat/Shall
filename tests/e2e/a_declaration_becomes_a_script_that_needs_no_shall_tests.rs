@@ -221,3 +221,67 @@ fn an_opted_out_line_is_not_a_hole_and_not_an_install() {
     );
     assert!(script.contains("cargo install -- ripgrep"), "{script}");
 }
+
+/// **An `absent:` line is a sentence the artifact has to carry, not one it may swallow (#67).**
+///
+/// The exporter filtered the resolved specs on `present`, which is right for building the
+/// installs and wrong for everything else: an `absent:apt:snap` line reached neither the install
+/// map nor the omission list, so the script came out describing a machine that still had snap on
+/// it while the declaration said otherwise. Nothing in the output distinguished that from a
+/// declaration that never mentioned snap — the silent-nothing class the export's own refusal
+/// exists to prevent.
+///
+/// The assertion is on argv rather than on the word "remove", because "the script mentions snap"
+/// is satisfied by an install of it, which is the exact inversion that is worse than silence.
+#[cfg(unix)]
+#[test]
+fn a_declared_removal_reaches_the_script_as_a_removal() {
+    let f = Fixture::new("67-absent");
+    let stub = declaring(&f);
+    f.write("priority", "cargo\napt\n");
+    // A stub `apt` so the backend is available on any host; `planned_removals` builds argv and
+    // runs nothing, exactly as the cargo stub above does for installs.
+    stub_apt(&stub);
+    f.write_module("cargo:ripgrep\nabsent:apt:snap\n");
+
+    let (out, code) = f.run_with_path(&stub, &["export", "--from-declaration", "--format", "bash"]);
+    assert_eq!(
+        code, 0,
+        "the export refused a config it can carry (a removal has an argv here):\n{out}"
+    );
+
+    let script = std::fs::read_to_string(f.root.join("bootstrap.sh")).unwrap();
+    assert!(
+        script.contains("apt remove") && script.contains("snap"),
+        "the declared removal is missing from the artifact, so the script reproduces a machine \
+         the declaration does not describe:\n{script}"
+    );
+    assert!(
+        !script.contains("apt install") || !script.contains("snap"),
+        "the declaration asked for snap's ABSENCE and the script installs it:\n{script}"
+    );
+
+    // A bootstrap leaves what it installed in place if the removal fails, so the removal has to
+    // come after the installs rather than before them.
+    let install_at = script
+        .find("install")
+        .expect("the install line is in the script");
+    let remove_at = script
+        .find("remove")
+        .expect("the removal line is in the script");
+    assert!(
+        remove_at > install_at,
+        "the removal runs before the install, so a failed install leaves the machine with \
+         neither:\n{script}"
+    );
+}
+
+/// The same stub shape as `stub_cargo`, for the manager a removal is declared against.
+#[cfg(unix)]
+fn stub_apt(stub: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let script = stub.join("apt");
+    std::fs::write(&script, "#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+}

@@ -935,6 +935,15 @@ impl Installable for GenericInstallable {
         self.install_commands(specs).ok()
     }
 
+    /// Answered from `remove_commands`, which is the builder `remove` itself runs through.
+    ///
+    /// `None` is the manager with no uninstall verb, and the exporter turns that into a named
+    /// hole rather than an empty list (II.94) — an artifact that dropped a declared removal would
+    /// describe a machine that still has the package.
+    fn planned_removals(&self, specs: &[PackageSpec]) -> Option<Vec<PlannedInstall>> {
+        self.remove_commands(specs)
+    }
+
     async fn install(&self, specs: &[PackageSpec], sudo: bool) -> Result<()> {
         if specs.is_empty() {
             return Ok(());
@@ -1011,27 +1020,30 @@ impl Installable for GenericInstallable {
         if self.core.config.remove_args.is_empty() && self.core.config.remove_binary.is_none() {
             return Err(crate::core::Error::Unsupported(self.core.name.clone()));
         }
-        // Same operand caps as install: a removal of 280 adopted packages builds the same
-        // oversized command an install would have.
-        if names.len() > 1 {
-            let mut bytes = 0usize;
-            let take = names
-                .iter()
-                .take(BATCH_MAX_NAMES)
-                .take_while(|n| {
-                    bytes += n.len() + 1;
-                    bytes <= BATCH_MAX_OPERAND_BYTES
-                })
-                .count()
-                .max(1);
-            if take < names.len() {
-                self.run_removal(self.core.config.remove_args.clone(), &names[..take], sudo)
-                    .await?;
-                return Box::pin(self.remove(&names[take..], sudo, _reaped)).await;
-            }
+        // **The batching is `remove_commands`'s, not a second copy here.** It splits at the same
+        // operand caps the install side uses, so the executed removal and the exported one split
+        // at identical points — a script that batches differently from the tool is a script that
+        // fails on the machine where the tool would have worked.
+        let specs: Vec<PackageSpec> = names
+            .iter()
+            .map(|n| PackageSpec {
+                name: n.clone(),
+                backend: self.core.name.clone(),
+                ..Default::default()
+            })
+            .collect();
+        let commands = self
+            .remove_commands(&specs)
+            .ok_or_else(|| crate::core::Error::Unsupported(self.core.name.clone()))?;
+        // The guard is the `_reaped` this method was handed: it was spent in sync's preflight,
+        // before any name reached here, and nothing below can widen what it authorised. Named at
+        // the call site so the removal-surface gate still sees this path rather than reporting
+        // `generic.rs` as a file that removes nothing.
+        let _ = &_reaped;
+        for command in commands {
+            self.run_removal(command.args, &[], sudo).await?;
         }
-        self.run_removal(self.core.config.remove_args.clone(), names, sudo)
-            .await
+        Ok(())
     }
 
     fn supports_purge(&self) -> bool {
@@ -1367,12 +1379,21 @@ impl GenericInstallable {
         }
     }
 
+    /// Execute a removal-shaped command. Both `remove` and `purge` come through here.
+    ///
+    /// Takes the subcommand args and the operands separately, because `purge` has its own args
+    /// and no builder of its own — the only thing they share is "append the names, then run".
+    /// `remove` passes args that already carry its names appended by `remove_commands`, and the
+    /// empty list it passes for `names` is what makes this a plain run rather than an append.
     async fn run_removal(&self, mut args: Vec<String>, names: &[String], sudo: bool) -> Result<()> {
-        if names.is_empty() {
+        if !names.is_empty() {
+            let bin = self.core.remove_binary();
+            crate::core::argv::push_names(&mut args, bin, names);
+        }
+        if args.is_empty() {
             return Ok(());
         }
         let bin = self.core.remove_binary();
-        crate::core::argv::push_names(&mut args, bin, names);
         let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
         if self.core.config.is_exclusive {
@@ -1384,6 +1405,52 @@ impl GenericInstallable {
             self.core.executor.run(bin, &arg_refs, sudo).await?;
         }
         Ok(())
+    }
+
+    /// The argv `remove` would run, without running it.
+    ///
+    /// **One builder, two callers.** `run_removal` executes it; `planned_removals` returns it to
+    /// the exporter. A second spelling of "how this manager removes" would be free to disagree
+    /// with the first the moment `remove_args` or the binary changes, which is the failure
+    /// `planned_installs` was written to avoid on the install side.
+    ///
+    /// `None` when the manager has no removal at all — the same condition `remove` refuses on, so
+    /// the exporter reports the hole rather than emitting a command that could never run.
+    fn remove_commands(&self, specs: &[PackageSpec]) -> Option<Vec<PlannedInstall>> {
+        if specs.is_empty() {
+            return Some(Vec::new());
+        }
+        if self.core.config.remove_args.is_empty() && self.core.config.remove_binary.is_none() {
+            return None;
+        }
+        let names: Vec<String> = specs.iter().map(|s| s.name.clone()).collect();
+        // The same operand caps `remove` uses, and for the same measured reason: a removal of 280
+        // adopted packages builds the same oversized command an install would have. Batched here
+        // rather than in the caller so the artifact and the tool split at identical points.
+        let bin = self.core.remove_binary().to_string();
+        let mut out = Vec::new();
+        let mut rest: &[String] = &names;
+        while !rest.is_empty() {
+            let mut bytes = 0usize;
+            let take = rest
+                .iter()
+                .take(BATCH_MAX_NAMES)
+                .take_while(|n| {
+                    bytes += n.len() + 1;
+                    bytes <= BATCH_MAX_OPERAND_BYTES
+                })
+                .count()
+                .max(1);
+            let mut args = self.core.config.remove_args.clone();
+            crate::core::argv::push_names(&mut args, &bin, &rest[..take]);
+            out.push(PlannedInstall {
+                binary: bin.clone(),
+                args,
+                unverified: false,
+            });
+            rest = &rest[take..];
+        }
+        Some(out)
     }
 }
 

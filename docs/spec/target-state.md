@@ -4975,3 +4975,21 @@ the version that produced it. Nothing on the board is gated on that number.**
   matters.
 - **`|| true` on the write, and no ratchet.** A report that reds a job is a gate wearing the wrong
   name; and a ceiling on a report nobody reads adds a second file to keep in step with the first.
+
+## II.97 An export carries a declared removal as a removal, and a backend that cannot say is a named hole (#67, V.251)
+
+**A spec's `present` flag decides which sentence the artifact writes, and neither sentence may be
+silence.**
+
+- **`present: true` is an install; `present: false` is a removal.** They are two different
+  commands in two different places in the script, not one filtered list. The removal comes **after**
+  the installs: a bootstrap installs what the declaration wants and then takes away what it does
+  not, so a failed install leaves the package present rather than the machine with neither.
+- **A backend that cannot name its removal argv is a hole, not a skip.** `planned_removals`
+  answers `None` for a manager with no uninstall verb, and `None` becomes an `Omission` naming the
+  `absent:` line — never an empty list. A quiet drop here describes a machine that still has the
+  package.
+- **One argv builder per direction.** `remove_commands` builds the removal line and both `remove`
+  and the exporter run through it, so the artifact and the tool cannot split a batch at different
+  points. This is `planned_installs`'s rule on the other side, and it is why the export needed a
+  trait seam rather than a second description of "how apt removes a package".

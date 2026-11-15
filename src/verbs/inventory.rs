@@ -98,6 +98,11 @@ pub async fn handle_script_export(
     let mut script = crate::app::bootstrap::Script::default();
     let mut by_backend: std::collections::BTreeMap<String, Vec<crate::core::PackageSpec>> =
         std::collections::BTreeMap::new();
+    // Removals are collected apart from installs and emitted after them: a bootstrap installs
+    // what the declaration wants and then takes away what it does not, which is the order that
+    // leaves a failed install with the package present rather than half-removed (#67).
+    let mut removals_by_backend: std::collections::BTreeMap<String, Vec<crate::core::PackageSpec>> =
+        std::collections::BTreeMap::new();
     let priority;
     let mut omitted: Vec<crate::app::bootstrap::Omission> = Vec::new();
 
@@ -115,13 +120,22 @@ pub async fn handle_script_export(
             for (backend, specs) in &state.packages {
                 // An opted-out line stays declared and stays synced; it is simply not something
                 // the artifact has to be able to say (II.94), so it is not a hole either.
-                let specs: Vec<crate::core::PackageSpec> = specs
+                let live: Vec<crate::core::PackageSpec> = specs
                     .iter()
-                    .filter(|s| s.present && s.options.one("export") != Some("no"))
+                    .filter(|s| s.options.one("export") != Some("no"))
                     .cloned()
                     .collect();
-                if !specs.is_empty() {
-                    by_backend.insert(backend.clone(), specs);
+                // **Present and absent are different sentences, and they used to be the same
+                // silence.** Filtering on `present` alone meant an `absent:` line reached
+                // neither the install map nor the omission list: the script came out claiming a
+                // machine that still had the package on it, with nothing saying the declaration
+                // had asked otherwise (#67).
+                let (present, absent): (Vec<_>, Vec<_>) = live.into_iter().partition(|s| s.present);
+                if !present.is_empty() {
+                    by_backend.insert(backend.clone(), present);
+                }
+                if !absent.is_empty() {
+                    removals_by_backend.insert(backend.clone(), absent);
                 }
             }
         }
@@ -142,7 +156,14 @@ pub async fn handle_script_export(
             }
         }
     };
-    emit_commands(app, &mut script, by_backend, priority, &mut omitted);
+    emit_commands(app, &mut script, by_backend, priority.clone(), &mut omitted);
+    emit_removals(
+        app,
+        &mut script,
+        removals_by_backend,
+        priority,
+        &mut omitted,
+    );
     script.omitted = omitted;
 
     // II.94: an export that cannot say everything prints nothing and names the lines — unless
@@ -322,6 +343,59 @@ fn emit_commands(
                 ),
                 why: format!(
                     "the `{backend}` backend cannot say which command installs these, so this \
+                     script cannot either"
+                ),
+            }),
+        }
+    }
+}
+
+/// Turn `backend -> specs` for the `absent:` lines into removal commands.
+///
+/// The mirror of `emit_commands`, and **`None` is a refusal here too** (II.94): a backend with no
+/// uninstall verb cannot have its declared removal carried by the artifact, so the line is named
+/// as a hole rather than left out. That is the difference between an artifact a reader can trust
+/// and one that silently describes a different machine.
+fn emit_removals(
+    app: &App,
+    script: &mut crate::app::bootstrap::Script,
+    by_backend: std::collections::BTreeMap<String, Vec<crate::core::PackageSpec>>,
+    priority: crate::model::priority::Priority,
+    omitted: &mut Vec<crate::app::bootstrap::Omission>,
+) {
+    // The same foundation-before-language ordering the installs use, applied to removals for the
+    // reason a bootstrap is ordered at all: a removal that takes a manager away before the
+    // packages it holds would leave them orphaned rather than removed.
+    let is_foundation = |b: &str| app.registry.get(b).map(|m| m.needs_root()).unwrap_or(false);
+    let names: Vec<String> = by_backend.keys().cloned().collect();
+    for backend in crate::app::rebuild::order_backends(&names, priority.order(), &is_foundation) {
+        let Some(specs) = by_backend.get(&backend) else {
+            continue;
+        };
+        let Some(caps) = app.registry.get(&backend) else {
+            continue;
+        };
+        match caps
+            .as_installable()
+            .and_then(|installable| installable.planned_removals(specs))
+        {
+            Some(commands) => {
+                for command in commands {
+                    script.command(&command.binary, command.args, caps.sudo_for_write());
+                }
+            }
+            None => omitted.push(crate::app::bootstrap::Omission {
+                line: format!(
+                    "absent:{}: {}",
+                    backend,
+                    specs
+                        .iter()
+                        .map(|s| s.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                why: format!(
+                    "the `{backend}` backend cannot say which command removes these, so this \
                      script cannot either"
                 ),
             }),

@@ -172,6 +172,28 @@ pub trait Installable: Send + Sync {
         None
     }
 
+    /// The command(s) that would remove these, when this backend can say.
+    ///
+    /// The mirror of [`Installable::planned_installs`], and it exists for the same reason: an
+    /// `absent:` line is a thing a declaration asks for, so an artifact that can reproduce the
+    /// machine has to be able to say it or name it. Without a seam here the exporter had no way
+    /// to ask *any* backend what removal looks like, so `absent:apt:snap` was neither rendered
+    /// nor omitted — it was silently dropped, and the script claimed a machine that still had
+    /// snap on it (#67).
+    ///
+    /// **`None` means "I cannot say", never "nothing to do".** Callers must turn it into a
+    /// named hole (II.94) rather than an empty list, or the silence comes back one backend down.
+    ///
+    /// Takes `PackageSpec`s rather than names because a removal is not always just the name:
+    /// the same specs that carried `@version=` into an install decide whether a manager's
+    /// removal wants one, and asking with anything less would be a second guess at the operand.
+    fn planned_removals(
+        &self,
+        _specs: &[PackageSpec],
+    ) -> Option<Vec<crate::backends::generic::PlannedInstall>> {
+        None
+    }
+
     fn created_paths(&self) -> Vec<std::path::PathBuf> {
         Vec::new()
     }
