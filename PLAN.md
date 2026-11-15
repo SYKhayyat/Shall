@@ -1569,7 +1569,10 @@ Done (closed): #22, #23, #24, #26, #32, #33, #45, #46, #47, #48, #49, #50, #51, 
 
 ## Phase 4 — Feature gaps (Info, after core is safe)
 - [ ] Adopt discovery: #59 dotfiles, #60 schedules, #61 repos/PPAs, #62 shell, #63 settings, #64 services, #65 firewall.
-- [ ] Export: #66 from-scan, #67 from-declaration.
+- [x] Export: #66 from-scan, #67 from-declaration (**CLOSED** `c27fb05c`; #67's bash half,
+  including the `absent:` removal seam it was really missing).
+- [ ] #167 export's Ansible and Nix *script* renderers. **Blocked on #166**, because the output
+  wants a `Step` that knows a package from a service rather than only a `Command`.
 - [ ] #72 nixos activation gap (CI leg). #74 crown-jewel invariant is **CLOSED**.
 - [ ] #73 search-index noun.
 - [ ] #124 auto-declare on use (owner ruling 2026-10-25; tracked here because it is the one
