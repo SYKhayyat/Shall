@@ -26,10 +26,7 @@ async fn a_session_registers_its_packages_as_transient() {
         "brew list --versions",
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --create --comments pre_sync --tags D",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_pre_sync_snapshot().await;
     kernel.mock_executor.set_response(
         "sudo -n timeshift --list",
         Ok(shall::core::executor::DryRunOutput::new().into()),
@@ -78,10 +75,7 @@ async fn a_purge_takes_this_sessions_packages_and_leaves_another_sessions() {
         "brew info --json=v1 -- temp-tool-1",
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --create --comments pre_sync --tags D",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_pre_sync_snapshot().await;
     kernel.mock_executor.set_response(
         "sudo -n timeshift --list",
         Ok(shall::core::executor::DryRunOutput::new().into()),

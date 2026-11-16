@@ -826,6 +826,18 @@ impl MockExecutor {
         self.machine.insert(cmd_pattern.to_string(), ());
     }
 
+    /// Every pattern this mock holds an answer for, sorted.
+    ///
+    /// The unused-stub check reads [`unmatched_registrations`](Self::unmatched_registrations),
+    /// which deliberately hides the machine facts and the forbidden list. A test asking "is the
+    /// answer I meant to register actually in here" wants the whole table, and asking it of the
+    /// filtered list is how a correct registration reads as absent.
+    pub fn registered_registrations(&self) -> Vec<String> {
+        let mut out: Vec<String> = self.responses.iter().map(|e| e.key().clone()).collect();
+        out.sort();
+        out
+    }
+
     /// Registered patterns no call ever matched.
     pub fn unmatched_registrations(&self) -> Vec<String> {
         let mut out: Vec<String> = self

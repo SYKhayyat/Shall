@@ -125,10 +125,7 @@ async fn a_machine_converges_forward_backward_and_forward_again() {
 
     // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
     // machine, each with the empty answer it used to receive from silence instead.
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --create --comments pre_sync --tags D",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_pre_sync_snapshot().await;
     kernel.mock_executor.set_response(
         "sudo -n timeshift --list",
         Ok(shall::core::executor::DryRunOutput::new().into()),
@@ -199,10 +196,7 @@ async fn convergence_never_reaches_for_what_shall_did_not_install() {
 
     // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
     // machine, each with the empty answer it used to receive from silence instead.
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --create --comments pre_sync --tags D",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_pre_sync_snapshot().await;
     kernel.mock_executor.set_response(
         "sudo -n timeshift --list",
         Ok(shall::core::executor::DryRunOutput::new().into()),
@@ -265,10 +259,7 @@ async fn a_failed_plan_does_not_undo_the_part_that_worked_and_is_still_declared(
         "cargo install --list",
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --create --comments pre_sync --tags D",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_pre_sync_snapshot().await;
     kernel.mock_executor.set_response(
         "cargo install -- ripgrep",
         Err(shall::core::Error::command_failed(

@@ -194,13 +194,18 @@ impl TestKernel {
         // check like every other. The per-package answers stay per test: `brew info -- pkg`,
         // `zypper search`, every install and every removal are the test's subject, not the
         // fixture's.
+        let snapshot_listing = snapshot_listing_for_this_host();
         for listing in [
             "brew list --versions",
             "cargo install --list",
             "dpkg-query -W -f=${db:Status-Status} ${Package} ${Version}\\n",
             "pacman -Qmq",
             "snap list",
-            "sudo -n timeshift --list",
+            // The snapshot **listing** is the same platform question as the create argv below:
+            // `timeshift --list` is the Linux row, and a `$HOME` that is not Linux gets
+            // `tmutil listlocalsnapshots` or a `Get-ComputerRestorePoint` query instead. Seeding
+            // only the Linux one is the `#175` defect in its other half.
+            snapshot_listing.as_str(),
             "zypper search --installed-only",
         ] {
             mock_executor.set_machine_response(
@@ -286,6 +291,87 @@ impl TestKernel {
             calls
         );
     }
+
+    /// **Register the pre-sync snapshot this host really takes (#175).**
+    ///
+    /// A `sync` with work to do takes a safety snapshot first, and *which program takes it* is
+    /// the product's decision, not the test's: `timeshift` on Linux, `tmutil` on macOS and
+    /// `powershell … Checkpoint-Computer` on Windows, chosen from the built-in rows by the same
+    /// `os =` filter and the same `detect` probe every other adapter uses
+    /// (`src/core/snapshot_builtins.toml`).
+    ///
+    /// So a test that writes one of those three strings as a literal is a test that works on the
+    /// platform its author was sitting at. Everywhere else the product asks a program the stub
+    /// does not name, the call falls through to the empty-success default, and the unused-stub
+    /// check — correctly — fails the test. That is eight macOS failures and most of the Windows
+    /// ones saying the same sentence about `sudo -n timeshift --create`, and the message blames
+    /// the assertion rather than the fixture.
+    ///
+    /// **The answer is asked of the product, not copied from it.** A second table of three
+    /// program names here would be free to drift from the one in `snapshot_builtins.toml` the day
+    /// somebody changes a flag, and it would drift silently — which is the defect being fixed.
+    /// `SnapshotManager::choose` is the function `sync` itself calls, over the same rows and the
+    /// same mock machine, so this registers whatever that run is about to ask for.
+    pub async fn stub_the_pre_sync_snapshot(&self) {
+        use shall::core::snapshot::{ConfigSnapshotProvider, SnapshotManager};
+
+        let providers: Vec<Box<dyn shall::core::SnapshotProvider>> =
+            shall::core::snapshot::builtin_defs_for_a_test(&self.app.config)
+                .into_iter()
+                .map(|def| {
+                    Box::new(ConfigSnapshotProvider {
+                        executor: self.app.executor.clone(),
+                        def,
+                    }) as Box<dyn shall::core::SnapshotProvider>
+                })
+                .collect();
+        let Some(chosen) =
+            SnapshotManager::choose(providers, &self.app.config.snapshot_priority).await
+        else {
+            // No provider on this machine. That is a legitimate fixture — `tests/app/sync/mod.rs`
+            // builds one on purpose, to test the "could not revert" half — and a test that takes
+            // no snapshot has nothing to stub, so this cannot be an error.
+            return;
+        };
+        // `choose` hands back the provider behind the trait object, and the argv seam is on the
+        // row-driven implementation — which is every built-in, and the only kind `choose` returns
+        // here because that is all this fixture built.
+        let config_provider = chosen
+            .as_any()
+            .downcast_ref::<ConfigSnapshotProvider>()
+            .expect("a built-in provider is a ConfigSnapshotProvider");
+        for argv in config_provider.create_argv_for_a_test() {
+            self.mock_executor
+                .set_machine_response(&argv, Ok(shall::core::executor::DryRunOutput::new().into()));
+        }
+    }
+}
+
+/// The listing argv of the snapshot provider this host would use, or the Linux row's when this
+/// host has none.
+///
+/// **Not a second copy of the provider table**: it is read out of `snapshot_builtins.toml` by
+/// the same loader the product uses, filtered by the same `os =` rule. A machine that can
+/// snapshot gets its own program seeded; a machine that cannot gets a row that will never be
+/// asked, which is exactly what `set_machine_response` is for — it is excused from the unused
+/// check because it is a fact about the machine rather than a claim about the product's argv.
+fn snapshot_listing_for_this_host() -> String {
+    let defs = shall::core::snapshot::builtin_defs_for_a_test(&shall::config::Config::default());
+    let Some(def) = defs
+        .iter()
+        .find(|d| !d.detect.is_empty() && d.os.as_deref() == Some(std::env::consts::OS))
+        .or_else(|| defs.iter().find(|d| d.name == "timeshift"))
+    else {
+        return String::new();
+    };
+    // No `{source}` substitution on purpose: only the btrfs row carries a placeholder in `list`,
+    // and its argv is a fixed `subvolume list /`. A function that pretended to substitute one
+    // would invite a row whose placeholder it does not know about.
+    let Some((prog, rest)) = def.list.split_first() else {
+        return String::new();
+    };
+    let refs: Vec<&str> = rest.iter().map(String::as_str).collect();
+    shall::core::executor::CommandExecutor::as_launched(prog, &refs, true)
 }
 
 #[allow(dead_code)]
@@ -508,5 +594,77 @@ pub fn create_dummy_spec(name: &str, backend: &str, source: Option<&str>) -> Pac
         options,
         requires: Vec::new(),
         present: true,
+    }
+}
+
+#[cfg(test)]
+mod the_pre_sync_stub_is_this_hosts_program {
+    /// **What #175 is about, asserted rather than assumed.** If this helper ever disagreed with
+    /// the string the product sends, the fixture fix would put the same class of blindness back
+    /// one level down — a helper that is right on the author's machine and wrong on the next.
+    ///
+    /// The expected value is written per-platform *here*, in the test, which is the one place it
+    /// is legitimate: a test that names the platform it is running on is honest, a product
+    /// fixture that silently assumes one is not.
+    #[tokio::test]
+    async fn the_stub_names_the_argv_this_platform_really_sends() {
+        let kernel = crate::mock_providers::TestKernel::new().await;
+        kernel.stub_the_pre_sync_snapshot().await;
+        let registered = kernel.mock_executor.registered_registrations();
+
+        let expected = if cfg!(target_os = "macos") {
+            "tmutil localsnapshot"
+        } else if cfg!(target_os = "windows") {
+            "powershell -NoProfile -NonInteractive -Command Checkpoint-Computer -Description \
+             'Shall: pre_sync' -RestorePointType 'APPLICATION_INSTALL'; (Get-ComputerRestorePoint \
+             | Sort-Object SequenceNumber | Select-Object -Last 1 -ExpandProperty SequenceNumber)"
+        } else {
+            "sudo -n timeshift --create --comments pre_sync --tags D"
+        };
+        assert!(
+            registered.iter().any(|r| r == expected),
+            "the fixture registered {registered:?}, and this platform's sync asks for `{expected}`"
+        );
+    }
+
+    /// **All three arms, from one machine.** The defect #175 fixes is only *visible* on a host
+    /// that is not the author's, so a test that can only run on the host it is testing is the
+    /// shape that let it sit there. `applies_to(os)` takes the OS as a parameter for exactly this
+    /// reason, and it is what makes the macOS and Windows arms checkable on CI's Linux runners.
+    ///
+    /// What this pins is narrower than the test above and deliberately so: not "the argv is
+    /// right", but **"the row this host would get is the row for this host"** — the selection
+    /// rule, which is the half that was platform-blind.
+    #[test]
+    fn each_platform_selects_its_own_snapshot_row() {
+        use shall::core::adapter::AdapterRow;
+
+        let defs =
+            shall::core::snapshot::builtin_defs_for_a_test(&shall::config::Config::default());
+        let program_for = |os: &str| {
+            let mut names: Vec<&str> = defs
+                .iter()
+                .filter(|d| d.applies_to(os))
+                .map(|d| d.detect.as_str())
+                .collect();
+            names.sort();
+            names
+        };
+
+        // Two, not three: `builtin_defs_for_a_test` drops the zfs row when no dataset is
+        // configured, because a provider that cannot name what to snapshot is a create that
+        // fails rather than a safety net. That is the loader's job and this asserts it holds.
+        assert_eq!(program_for("linux"), ["btrfs", "timeshift"]);
+        assert_eq!(program_for("macos"), ["tmutil"]);
+        assert_eq!(program_for("windows"), ["powershell"]);
+        // And the probe the fixture writes is on the axis the product chooses on: a row is only
+        // seeded for the host the suite runs on, which is what `snapshot_listing_for_this_host`
+        // does and what the arms above say it will pick.
+        assert!(
+            program_for(std::env::consts::OS).contains(&"timeshift")
+                || program_for(std::env::consts::OS).contains(&"tmutil")
+                || program_for(std::env::consts::OS).contains(&"powershell"),
+            "this host picks no snapshot program at all, so the fixture would seed none"
+        );
     }
 }

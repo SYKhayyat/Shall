@@ -242,10 +242,7 @@ async fn a_package_that_fails_still_fails_the_command() {
         "brew list --versions",
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --create --comments pre_sync --tags D",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_pre_sync_snapshot().await;
     let root = kernel.app.config.config_root();
     fs::write(root.join("modules/m.txt"), "brew:neovim\n")
         .await

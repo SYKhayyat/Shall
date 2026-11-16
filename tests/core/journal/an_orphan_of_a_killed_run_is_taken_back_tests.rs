@@ -37,7 +37,7 @@ use crate::mock_providers::TestKernel;
 /// — `apt`, `cargo` and `pacman` hold nothing, and there are no snapshots — and stating it is
 /// not bookkeeping: a test that reached one of these and *meant* it to return something was
 /// reading a silence it never wrote.
-fn other_managers(kernel: &TestKernel, asked: &[Listing]) {
+async fn other_managers(kernel: &TestKernel, asked: &[Listing]) {
     for listing in asked {
         // Two of the answers carry a package name, so they are taken before the shared match:
         // `brew info` for a formula Homebrew has never heard of is `Ok(None)`, which is what an
@@ -59,11 +59,18 @@ fn other_managers(kernel: &TestKernel, asked: &[Listing]) {
             }
             _ => {}
         }
+        if matches!(listing, Listing::SnapshotTaken) {
+            kernel.stub_the_pre_sync_snapshot().await;
+            continue;
+        }
         let cmd = match listing {
             Listing::Cargo => "cargo install --list",
             Listing::Apt => "dpkg-query -W -f=${db:Status-Status} ${Package} ${Version}\\n",
             Listing::Pacman => "pacman -Qmq",
-            Listing::SnapshotTaken => "sudo -n timeshift --create --comments pre_sync --tags D",
+            // The pre-sync snapshot is whatever program *this* host takes it with (#175), so it
+            // is asked for below and not named here — a string in this match is a string that
+            // works only on the platform it was written on.
+            Listing::SnapshotTaken => unreachable!("handled above"),
             Listing::SnapshotsListed => "sudo -n timeshift --list",
             _ => unreachable!("handled below"),
         };
@@ -412,8 +419,9 @@ async fn absent_removes_a_package_shall_does_not_own_and_declares_it_gone() {
             Listing::SnapshotTaken,
             Listing::SnapshotsListed,
         ],
-    );
-    other_managers(&kernel, &[Listing::BrewKnowsNothingAbout("orphan-pkg")]);
+    )
+    .await;
+    other_managers(&kernel, &[Listing::BrewKnowsNothingAbout("orphan-pkg")]).await;
 
     // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
     // machine, each with the empty answer it used to receive from silence instead.
@@ -425,10 +433,7 @@ async fn absent_removes_a_package_shall_does_not_own_and_declares_it_gone() {
         "pacman -Qmq",
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --create --comments pre_sync --tags D",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_pre_sync_snapshot().await;
     kernel.mock_executor.set_response(
         "sudo -n timeshift --list",
         Ok(shall::core::executor::DryRunOutput::new().into()),
@@ -497,8 +502,9 @@ async fn absent_names_the_manager_that_actually_holds_a_bare_name() {
             Listing::SnapshotTaken,
             Listing::SnapshotsListed,
         ],
-    );
-    other_managers(&kernel, &[Listing::BrewKnowsNothingAbout("orphan-pkg")]);
+    )
+    .await;
+    other_managers(&kernel, &[Listing::BrewKnowsNothingAbout("orphan-pkg")]).await;
 
     // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
     // machine, each with the empty answer it used to receive from silence instead.
@@ -518,10 +524,7 @@ async fn absent_names_the_manager_that_actually_holds_a_bare_name() {
         "pacman -Qmq",
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --create --comments pre_sync --tags D",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_pre_sync_snapshot().await;
     kernel.mock_executor.set_response(
         "sudo -n timeshift --list",
         Ok(shall::core::executor::DryRunOutput::new().into()),
@@ -558,7 +561,7 @@ async fn absent_names_the_manager_that_actually_holds_a_bare_name() {
 async fn absent_refuses_a_bare_name_no_manager_holds() {
     let kernel = TestKernel::new().await;
     brew_holds(&kernel, &[]);
-    other_managers(&kernel, &[Listing::Cargo, Listing::Apt, Listing::Pacman]);
+    other_managers(&kernel, &[Listing::Cargo, Listing::Apt, Listing::Pacman]).await;
 
     let err = shall::verbs::apply::handle_apply(
         &confirming(&kernel),
@@ -622,7 +625,8 @@ async fn uninstalling_a_package_shall_owns_is_unaffected() {
             Listing::SnapshotsListed,
             Listing::BrewKnowsNothingAbout("owned-pkg"),
         ],
-    );
+    )
+    .await;
 
     // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
     // machine, each with the empty answer it used to receive from silence instead.
@@ -630,10 +634,7 @@ async fn uninstalling_a_package_shall_owns_is_unaffected() {
         "brew info --json=v1 -- owned-pkg",
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --create --comments pre_sync --tags D",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_pre_sync_snapshot().await;
     kernel.mock_executor.set_response(
         "sudo -n timeshift --list",
         Ok(shall::core::executor::DryRunOutput::new().into()),
@@ -686,7 +687,8 @@ async fn a_bare_name_shall_owns_costs_no_listing_either() {
             Listing::SnapshotsListed,
             Listing::BrewKnowsNothingAbout("owned-pkg"),
         ],
-    );
+    )
+    .await;
 
     // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
     // machine, each with the empty answer it used to receive from silence instead.
@@ -694,10 +696,7 @@ async fn a_bare_name_shall_owns_costs_no_listing_either() {
         "brew info --json=v1 -- owned-pkg",
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --create --comments pre_sync --tags D",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_pre_sync_snapshot().await;
     kernel.mock_executor.set_response(
         "sudo -n timeshift --list",
         Ok(shall::core::executor::DryRunOutput::new().into()),
@@ -907,7 +906,8 @@ async fn recovery_answers_the_total_ceiling_a_sync_answers() {
     other_managers(
         &kernel,
         &[Listing::BrewInstalls("o1"), Listing::BrewInstalls("o2")],
-    );
+    )
+    .await;
 
     // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
     // machine, each with the empty answer it used to receive from silence instead.

@@ -170,6 +170,15 @@ pub trait SnapshotProvider: Send + Sync {
     async fn delete(&self, id: &str) -> Result<()>;
     async fn restore(&self, id: &str) -> Result<()>;
     fn restore_capability(&self) -> RestoreCapability;
+
+    /// Down to the row-driven implementation, for the one caller that needs a seam this trait
+    /// does not otherwise expose — a fixture asking "what argv will your `create` send" (#175).
+    ///
+    /// Defaulted to `None` rather than added to every implementor, so a provider that is not a
+    /// row and has nothing to say about it does not have to answer.
+    fn as_any(&self) -> &dyn std::any::Any {
+        &()
+    }
 }
 
 /// A Windows restore point is a `SequenceNumber`. The delete/restore cmdlets interpolate it
@@ -379,8 +388,55 @@ impl ConfigSnapshotProvider {
             .map(String::as_str)
             .ok_or_else(|| Error::Snapshot(format!("the {} command is empty", what)))
     }
-}
 
+    /// **The argv a `create` will send, without sending it** — the seam #175's fixture fix is
+    /// built on.
+    ///
+    /// A test that stubs the pre-sync snapshot has to register the same argv the product will
+    /// ask for, and the two tables were the drift: the tool's `create` executes through one
+    /// `fill` here and the tests re-typed the result as a literal in fifteen places. The literal
+    /// is gone; this is where the answer lives, and the fixture calls it over the very provider
+    /// `sync` will choose.
+    ///
+    /// It exists for the tests' sake and is deliberately small: `pub`, and a sibling to the
+    /// argv the existing `#162` gate already treats as the product's contract for every other
+    /// backend.
+    pub fn create_argv_for_a_test(&self) -> Vec<String> {
+        let label = "pre_sync";
+        if self.def.powershell {
+            let line = self
+                .fill_ps(
+                    self.first_command(&self.def.create, "create").unwrap_or(""),
+                    None,
+                    label,
+                )
+                .unwrap_or_default();
+            // `create` runs `powershell -NoProfile -NonInteractive -Command <line>`, elevated —
+            // and `as_launched` is what puts the escalation prefix on, so a stub built here is
+            // matched by the mock for the same reason every other stub is.
+            vec![CommandExecutor::as_launched(
+                "powershell",
+                &["-NoProfile", "-NonInteractive", "-Command", &line],
+                true,
+            )]
+        } else {
+            // The id a stub cannot know, and does not need to: `run_output`'s slot for it is empty
+            // here because the tool names its own snapshot where `create_id_pattern` exists, and
+            // `generated_id` is stable enough otherwise — a stub that must match the exact id is a
+            // stub asserting the timestamp, which no test in the suite does.
+            let pattern_named = self.def.create_id_pattern.is_some();
+            let id = if pattern_named {
+                String::new()
+            } else {
+                self.generated_id(SnapshotLabel::PreSync)
+            };
+            let cmd = Self::fill(&self.def.create, &id, label, &self.def.source);
+            let (prog, args) = cmd.split_at(1);
+            let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+            vec![CommandExecutor::as_launched(&prog[0], &refs, true)]
+        }
+    }
+}
 #[async_trait]
 impl SnapshotProvider for ConfigSnapshotProvider {
     fn name(&self) -> &str {
@@ -554,6 +610,10 @@ impl SnapshotProvider for ConfigSnapshotProvider {
             }
         }
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -643,6 +703,10 @@ fn detect_zfs_root() -> String {
 /// The built-in provider rows, with btrfs/zfs's machine-specific `source`/`detect_path` filled
 /// from config. A row whose source is still unresolved (zfs with no dataset) is dropped, because
 /// a provider that cannot name what to snapshot is a create that fails, not a safety net.
+pub fn builtin_defs_for_a_test(config: &Config) -> Vec<SnapshotProviderDef> {
+    builtin_snapshot_defs(config)
+}
+
 fn builtin_snapshot_defs(config: &Config) -> Vec<SnapshotProviderDef> {
     let mut file: SnapshotProviderFile = toml::from_str(BUILTIN_SNAPSHOT_DEFS)
         .expect("built-in snapshot defs are compiled in and must parse");
