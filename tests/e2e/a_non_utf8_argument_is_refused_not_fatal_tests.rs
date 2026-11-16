@@ -150,11 +150,22 @@ fn a_config_path_that_is_not_utf8_is_opened_by_its_bytes() {
             "the refusal must name the file it read:\n{text}"
         );
     } else {
-        // No file to read, so the run must still have got past its argv into the repo it could
-        // not build — an abort on the argument never reaches this message.
+        // **No file to read, so what is left to prove is that argv was *read*.** macOS's `open`
+        // refuses a filename that is not valid UTF-8, so there is nothing here for the flag to
+        // name — and the run says so by name rather than aborting on the argument. Asserting the
+        // repo message ("priority") was wrong: a `--config` that names a file which is not there
+        // stops before the repo is built, and that is the *correct* order — the flag said where
+        // to read from and it could not. What must not happen is an abort or a silent fallback to
+        // the default location, and `is not valid UTF-8` in a panic, an `EILSEQ`, or a
+        // `Lossy`-mangled path would each be one of those (#178).
         assert!(
-            text.contains("priority"),
-            "the run did not get past argv:\n{text}"
+            text.contains("does not exist") || text.contains("priority"),
+            "the run neither read the named file nor said it was not there — it may have \
+             fallen back to the default location or aborted on the argument:\n{text}"
+        );
+        assert!(
+            !text.contains("invalid utf-8") && !text.contains("EILSEQ"),
+            "the argument was converted rather than read as bytes:\n{text}"
         );
     }
 }

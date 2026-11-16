@@ -255,8 +255,102 @@ fn an_opted_out_line_is_not_a_hole_and_not_an_install() {
 /// declaration that never mentioned snap — the silent-nothing class the export's own refusal
 /// exists to prevent.
 ///
+/// **A backend this host does not have is named as a hole, never dropped** (#178).
+///
+/// This is the half of the defect that a single-platform test cannot see, so it is written
+/// against a backend *no* platform registers — the assertion is the same on every host, which is
+/// what makes it a test of the product rather than of the runner. The real instance was macOS
+/// silently losing `absent:apt:snap`: the artifact described a machine with snap on it and said
+/// nothing, because `app.registry.get("apt")` is `None` there and the loop `continue`d.
+///
+/// **The name has to be in `priority` to get this far**, and that is the point: a name priority
+/// does not list is refused by the config loader with `is not a backend Shall uses`, which is a
+/// *better* answer than an omission and is already tested. The case #178 is about is the one that
+/// gets past that check — a manager this config legitimately uses that this host's build does not
+/// register — and macOS's `absent:apt:snap` is exactly it, because `apt` is in the fixture's
+/// priority file.
+#[cfg(unix)]
+#[test]
+fn a_line_for_a_backend_this_host_does_not_have_is_a_named_hole() {
+    let f = Fixture::new("178-absent-unregistered");
+    let stub = declaring(&f);
+    f.write("priority", "cargo\nnosuchmanager\n");
+    f.write_module("cargo:ripgrep\nabsent:nosuchmanager:snap\n");
+
+    let (out, code) = f.run_with_path(&stub, &["export", "--from-declaration", "--format", "bash"]);
+    assert_ne!(
+        code, 0,
+        "the export wrote an artifact that silently drops a line it cannot carry:\n{out}"
+    );
+    assert!(
+        out.contains("absent:nosuchmanager: snap"),
+        "the refusal did not name the line at fault:\n{out}"
+    );
+    assert!(
+        out.contains("no `nosuchmanager` backend registered"),
+        "the refusal did not say why the line could not be carried:\n{out}"
+    );
+
+    // And the whole point: no artifact. A file written here would be a machine described by a
+    // document that admits it is incomplete.
+    assert!(
+        !f.root.join("bootstrap.sh").exists(),
+        "a script was written despite the refused line"
+    );
+}
+
+/// The same line, but with `--best-effort`: the holes are marked and the artifact is written,
+/// which is the only way a partial artifact may exist (II.94).
+#[cfg(unix)]
+#[test]
+fn best_effort_writes_the_artifact_and_marks_the_hole_it_knows_about() {
+    let f = Fixture::new("178-absent-best-effort");
+    let stub = declaring(&f);
+    f.write("priority", "cargo\nnosuchmanager\n");
+    f.write_module("cargo:ripgrep\nabsent:nosuchmanager:snap\n");
+
+    let (out, code) = f.run_with_path(
+        &stub,
+        &[
+            "export",
+            "--from-declaration",
+            "--format",
+            "bash",
+            "--best-effort",
+        ],
+    );
+    // **Non-zero, and that is the contract, not a wart.** `--best-effort` writes the artifact and
+    // still exits non-zero because the exit code is where "complete" lives (II.94): a 0 here would
+    // be a claim of completeness in the one number a script can read.
+    assert_ne!(
+        code, 0,
+        "a partial artifact must not report completeness:\n{out}"
+    );
+    assert!(
+        out.contains("hole(s) marked"),
+        "`--best-effort` did not write and mark the artifact:\n{out}"
+    );
+    let script = std::fs::read_to_string(f.root.join("bootstrap.sh")).unwrap();
+    assert!(
+        script.contains("nosuchmanager") && script.contains("snap"),
+        "the written artifact does not mark the line it could not carry:\n{script}"
+    );
+    assert!(
+        script.contains("cargo install -- ripgrep"),
+        "the line it *could* carry was lost too:\n{script}"
+    );
+}
+
 /// The assertion is on argv rather than on the word "remove", because "the script mentions snap"
 /// is satisfied by an install of it, which is the exact inversion that is worse than silence.
+///
+/// **Two hosts, two honest answers, and the test asserts the one this host can give** (#178).
+/// Where `apt` is a registered backend the removal reaches the script. Where it is not — macOS,
+/// where the native managers are behind `cfg!(target_os = "linux")` — the export must *name* the
+/// line as a hole instead of dropping it, which is what it used to do: the script came out
+/// describing a machine with snap on it and said nothing, the same silent-nothing class this
+/// whole test exists to prevent. Asserting "exit 0" on both would have made the macOS half claim
+/// a removal that host cannot make.
 #[cfg(unix)]
 #[test]
 fn a_declared_removal_reaches_the_script_as_a_removal() {
@@ -269,6 +363,25 @@ fn a_declared_removal_reaches_the_script_as_a_removal() {
     f.write_module("cargo:ripgrep\nabsent:apt:snap\n");
 
     let (out, code) = f.run_with_path(&stub, &["export", "--from-declaration", "--format", "bash"]);
+
+    // Does this host have an `apt` backend at all? The registry is the authority, not `cfg!`: the
+    // mock executor answers `true` for every existence probe, so a stub binary does not make a
+    // backend that was never registered.
+    let apt_is_a_backend_here = cfg!(target_os = "linux");
+
+    if !apt_is_a_backend_here {
+        assert_ne!(
+            code, 0,
+            "this host has no `apt` backend, so the export must name the line it cannot carry \
+             rather than write a script that silently drops it:\n{out}"
+        );
+        assert!(
+            out.contains("absent:apt: snap") && out.contains("no `apt` backend registered"),
+            "the refusal did not name the line and the reason:\n{out}"
+        );
+        return;
+    }
+
     assert_eq!(
         code, 0,
         "the export refused a config it can carry (a removal has an argv here):\n{out}"

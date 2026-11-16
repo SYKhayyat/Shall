@@ -319,7 +319,21 @@ fn emit_commands(
         let Some(specs) = by_backend.get(&backend) else {
             continue;
         };
+        // **A backend the config names but this host does not have is a hole, not a silence.**
+        // `continue` here dropped the line entirely, so the artifact described a machine without
+        // the packages and said nothing about why — the same silent-nothing class the `None` arm
+        // below exists to prevent, one step earlier. Measured on macOS, where `apt` is not
+        // registered at all (`registry/mod.rs` gates the native managers on
+        // `cfg!(target_os = "linux")`) (#178).
         let Some(caps) = app.registry.get(&backend) else {
+            omitted.push(crate::app::bootstrap::Omission {
+                line: named_lines(&backend, specs),
+                why: format!(
+                    "this host has no `{backend}` backend registered, so it cannot say which \
+                     command installs these. Either the line names a manager this machine does \
+                     not use, or it is meant for a machine that does."
+                ),
+            });
             continue;
         };
         match caps
@@ -372,7 +386,16 @@ fn emit_removals(
         let Some(specs) = by_backend.get(&backend) else {
             continue;
         };
+        // The removal side of the same hole (#178): see `emit_commands` above.
         let Some(caps) = app.registry.get(&backend) else {
+            omitted.push(crate::app::bootstrap::Omission {
+                line: named_lines(&backend, specs),
+                why: format!(
+                    "this host has no `{backend}` backend registered, so it cannot say which \
+                     command removes these. Either the line names a manager this machine does \
+                     not use, or it is meant for a machine that does."
+                ),
+            });
             continue;
         };
         match caps
@@ -401,6 +424,31 @@ fn emit_removals(
             }),
         }
     }
+}
+
+/// One omission line, spelled the way the config spells it: `present:apt: a, b`.
+///
+/// Shared by the install and removal paths because both hit the same hole — a backend this host
+/// does not have — and two spellings of one refusal is how a reader comes to distrust both.
+fn named_lines(backend: &str, specs: &[crate::core::PackageSpec]) -> String {
+    let key = if specs.iter().all(|s| s.present) {
+        "present"
+    } else if specs.iter().all(|s| !s.present) {
+        "absent"
+    } else {
+        // A mixed set does not occur on these paths — present and absent are partitioned before
+        // they reach a backend — but a guess here would be a lie about which line is at fault.
+        "package"
+    };
+    format!(
+        "{key}:{}: {}",
+        backend,
+        specs
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
 }
 
 fn construct_spec(pkg: &crate::core::Package) -> crate::core::PackageSpec {
