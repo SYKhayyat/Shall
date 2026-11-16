@@ -303,17 +303,26 @@ impl TestKernel {
     /// fails with `no package manager this line accepts has …` — a sentence about a package that
     /// is perfectly findable, on a machine the fixture lied about.
     ///
-    /// `apt` on Linux, `brew` everywhere else, because `brew` is registered on every platform and
-    /// is the manager that really exists on the hosts the CI legs use.
+    /// `apt` on Linux, `brew` everywhere else: `brew` is registered unconditionally and is the
+    /// manager that really exists on the hosts the CI legs use.
     pub async fn this_machines_manager_has(&self, name: &str) {
+        // The probe is built through `push_names`, the way the backend builds it, not spelled by
+        // hand. The hand-spelled version produced `brew search dos2unix`, but brew terminates
+        // options, so the product sends `brew search -- dos2unix` and the stub went unmatched on
+        // macOS exactly as if it had not been written (#170; the `--` is asserted by
+        // `tests/backends/brew/every_brew_command_ends_its_options_before_the_name.rs`).
         let (probe, line) = if cfg!(target_os = "linux") {
+            let mut args = vec!["search".to_string()];
+            shall::core::argv::push_names(&mut args, "apt-cache", [name]);
             (
-                format!("apt-cache search -- {name}"),
+                format!("apt-cache {}", args.join(" ")),
                 format!("{name} - a program this machine has\n"),
             )
         } else {
+            let mut args = vec!["search".to_string()];
+            shall::core::argv::push_names(&mut args, "brew", [name]);
             (
-                format!("brew search {name}"),
+                format!("brew {}", args.join(" ")),
                 format!("==> Formulae\n{name}\n"),
             )
         };
@@ -695,14 +704,17 @@ mod the_pre_sync_stub_is_this_hosts_program {
 
     /// **The arm a Linux CI runner cannot otherwise see.**
     ///
-    /// `this_machines_manager_has` picks `apt-cache search` on Linux and `brew search` elsewhere,
-    /// and the "elsewhere" arm is the one #170 is about — so it must be checkable from the Linux
-    /// runner that exists. The argv is not guessed here: `brew`'s own `Searchable` builds it, so
-    /// this fails when brew changes what it runs rather than when someone edits a string below.
+    /// `this_machines_manager_has` picks `apt-cache search` on Linux and `brew search --`
+    /// elsewhere, and the "elsewhere" arm is the one #170 is about — so it must be checkable
+    /// from the Linux runner that exists, which this test is.
     ///
-    /// The Linux half is asserted from `apt`'s declaration in `builtin_backends.toml` for the
-    /// same reason: `search_binary` is `apt-cache` and `search_args` is `search`, and the `--`
-    /// comes from `push_names`.
+    /// **It is deliberately a comparison against the product's own argv, split across two files**
+    /// so nobody rewrites both sides to agree: this test holds that the helper writes exactly the
+    /// string this host resolves through, and
+    /// `backends::brew::every_brew_command_ends_its_options_before_the_name` holds that brew's
+    /// `Searchable::search` sends `brew search -- <name>`. Together they compose into "the stub
+    /// this machine's manager really answers". The `--` is the byte the first version of this fix
+    /// got wrong; the brew test is what would have caught it.
     #[tokio::test]
     async fn each_managers_bare_name_probe_is_the_one_the_helper_writes() {
         let kernel = crate::mock_providers::TestKernel::new().await;
@@ -714,7 +726,7 @@ mod the_pre_sync_stub_is_this_hosts_program {
         let expected = if cfg!(target_os = "linux") {
             "apt-cache search -- dos2unix"
         } else {
-            "brew search dos2unix"
+            "brew search -- dos2unix"
         };
         assert!(
             registered.iter().any(|r| r == expected),
