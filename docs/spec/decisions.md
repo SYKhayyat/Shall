@@ -11274,3 +11274,36 @@ report that only ever prints zero is the reassuring failure the job exists to pr
 
 **4. No ratchet.** A ceiling on a report nobody reads is the same debt with a second file to keep
 in step.
+
+## C33
+
+**Status: ANSWERED 2026-11-16.** What the platform policy is for scheduled tasks, services, and
+every capability that could live on more than one OS. Carried out of #177 and the conversation
+that produced it.
+
+**Asked.** `service:` and the schedule/task backends were asserting the Linux argv (`systemctl`)
+in tests that ran on every host, so macOS reported dead `systemctl` stubs. The fixture question
+was really a product question: is a capability that *could* work on Windows supposed to?
+
+**Ruled: if a capability would genuinely be useful on Windows, it must exist on Windows, and the
+test that exercises it must pass there.**
+
+**1. Usefulness is the test, and it is the same for tests.** "Would a human on this OS want this?"
+decides both whether the product ships the capability there and whether the test row exists. A
+feature whose value is real on Windows gets a Windows implementation and a Windows-passing test;
+a test that cannot assert it does not get to pass silently.
+
+**2. Absent a Windows path, the test is gated with the reason stated.** A genuinely unix-only
+test — one whose subject *is* a unix mechanism — is `#[cfg(unix)]` with a comment saying what
+Windows cannot reach. The gate is a statement about the product, not a way to hide a red row.
+
+**3. The argv is queried, not copied.** A fixture that names another platform's command string is
+the defect (#170, #175): it passes on the author's host and fails on the next one with a sentence
+that blames the wrong thing. The fixture asks the product which program this host uses — the
+`init_providers.toml` rows, the snapshot rows, the scheduler's per-OS provisioners — and stubs
+what comes back.
+
+**4. The tables already comply.** `src/app/scheduler/mod.rs` provisioners, the `init_providers.toml`
+rows (systemd/openrc/sysvinit on Linux, launchd on macOS, `windows-sc` on Windows), the snapshot
+rows, and the firewall rows all key on `applies_to(os)`. The work is in the fixtures that bypass
+them, not in the product.
