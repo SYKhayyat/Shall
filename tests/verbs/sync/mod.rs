@@ -37,15 +37,11 @@ async fn declaring(
     use shall::model::Landing;
 
     let mut kernel = crate::mock_providers::TestKernel::new().await;
+    // The manager this platform can actually resolve through (#170): `apt` is not a backend
+    // off Linux, so a fixture that only teaches `apt-cache search` has nothing to fall back on
+    // there and reports the package as missing on a machine it simply never asked.
     for line in lines.iter().filter(|l| !l.contains(':')) {
-        kernel.mock_executor.set_response(
-            &format!("apt-cache search -- {line}"),
-            Ok(shall::core::executor::DryRunOutput {
-                stdout: format!("{line} - a program this machine has\n").into_bytes(),
-                stderr: Vec::new(),
-            }
-            .into()),
-        );
+        kernel.this_machines_manager_has(line).await;
     }
     for line in lines {
         kernel

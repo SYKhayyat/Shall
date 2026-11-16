@@ -292,6 +292,41 @@ impl TestKernel {
         );
     }
 
+    /// **Say that this machine's manager has `name`, on the manager this machine can use.**
+    ///
+    /// The bare-name resolver asks every manager in `priority` in turn whether it has the name,
+    /// and the first one that answers wins — so a fixture that only teaches `apt-cache search`
+    /// is a fixture that works on Linux and nowhere else (#170). That is not a stub that fails
+    /// loudly; it is one that silently leaves the chain, because `apt` is **not registered as a
+    /// backend off Linux at all** (`registry/mod.rs`: the native managers are behind
+    /// `cfg!(target_os = "linux")`), so the line has nothing to resolve against and the test
+    /// fails with `no package manager this line accepts has …` — a sentence about a package that
+    /// is perfectly findable, on a machine the fixture lied about.
+    ///
+    /// `apt` on Linux, `brew` everywhere else, because `brew` is registered on every platform and
+    /// is the manager that really exists on the hosts the CI legs use.
+    pub async fn this_machines_manager_has(&self, name: &str) {
+        let (probe, line) = if cfg!(target_os = "linux") {
+            (
+                format!("apt-cache search -- {name}"),
+                format!("{name} - a program this machine has\n"),
+            )
+        } else {
+            (
+                format!("brew search {name}"),
+                format!("==> Formulae\n{name}\n"),
+            )
+        };
+        self.mock_executor.set_response(
+            &probe,
+            Ok(shall::core::executor::DryRunOutput {
+                stdout: line.into_bytes(),
+                stderr: Vec::new(),
+            }
+            .into()),
+        );
+    }
+
     /// Register the snapshot **listing** this host's provider asks for, the same way and for the
     /// same reason as [`stub_the_pre_sync_snapshot`](Self::stub_the_pre_sync_snapshot) (#175).
     ///
@@ -655,6 +690,35 @@ mod the_pre_sync_stub_is_this_hosts_program {
         assert!(
             registered.contains(&expected),
             "the fixture registered {registered:?}, and this platform's sync asks for `{expected}`"
+        );
+    }
+
+    /// **The arm a Linux CI runner cannot otherwise see.**
+    ///
+    /// `this_machines_manager_has` picks `apt-cache search` on Linux and `brew search` elsewhere,
+    /// and the "elsewhere" arm is the one #170 is about — so it must be checkable from the Linux
+    /// runner that exists. The argv is not guessed here: `brew`'s own `Searchable` builds it, so
+    /// this fails when brew changes what it runs rather than when someone edits a string below.
+    ///
+    /// The Linux half is asserted from `apt`'s declaration in `builtin_backends.toml` for the
+    /// same reason: `search_binary` is `apt-cache` and `search_args` is `search`, and the `--`
+    /// comes from `push_names`.
+    #[tokio::test]
+    async fn each_managers_bare_name_probe_is_the_one_the_helper_writes() {
+        let kernel = crate::mock_providers::TestKernel::new().await;
+        // The helper's whole job is to *write* a probe; this test reads the table rather than
+        // provoking a call, so the unused-stub check is asked to stand down here and only here.
+        kernel.mock_executor.allow_unmatched_registrations();
+        kernel.this_machines_manager_has("dos2unix").await;
+        let registered = kernel.mock_executor.registered_registrations();
+        let expected = if cfg!(target_os = "linux") {
+            "apt-cache search -- dos2unix"
+        } else {
+            "brew search dos2unix"
+        };
+        assert!(
+            registered.iter().any(|r| r == expected),
+            "the helper wrote {registered:?}, and this host resolves a bare name through `{expected}`"
         );
     }
 
