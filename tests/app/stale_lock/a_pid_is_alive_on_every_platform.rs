@@ -67,3 +67,44 @@ fn a_pid_no_process_holds_is_not_alive() {
         u32::MAX
     );
 }
+
+/// **The class, not the one value (#169).** `u32::MAX` was the reported case, and it was one of a
+/// family: every pid above `i32::MAX` wraps when it is cast to a platform's signed `pid_t`, and a
+/// wrapped value reaching `kill` is a wildcard (`kill(-1, 0)` means *every* process) rather than a
+/// name — so the whole family answered "alive" and a dead session's protection never relaxed.
+///
+/// The three values are the boundaries of the cast rather than three arbitrary numbers:
+///
+/// - `i32::MAX` is the largest value that still fits a `pid_t`, and it **stays** answerable — a
+///   refusal here would be a second bug in the safe-looking direction.
+/// - `i32::MAX + 1` is the first value the truncation can reach, which is the exact edge.
+/// - `u32::MAX` is what a `Some(u32::MAX)` stamp actually holds, and it truncates to `-1`.
+///
+/// The middle one is the reason this test is not a duplicate of the one above: a fix that special-
+/// cases `u32::MAX` passes that test and fails this one.
+#[test]
+fn a_pid_above_the_signed_range_is_not_alive() {
+    let procs = ProcFs;
+    for pid in [i32::MAX as u32 + 1, u32::MAX - 1, u32::MAX] {
+        assert!(
+            !procs.pid_alive(pid),
+            "pid {pid} is above the largest pid any platform can hold and was reported alive, so \
+             a stamp left by a killed session protects its packages for ever"
+        );
+    }
+}
+
+/// The other side of the same boundary, and it is here so the fix cannot be "refuse large numbers".
+/// `i32::MAX` fits a `pid_t`, so it is a question the platform is allowed to answer — and the
+/// answer is whatever the machine says, not a refusal invented above the syscall.
+#[test]
+fn the_largest_pid_that_fits_is_still_asked_about() {
+    let procs = ProcFs;
+    // Not asserted to be alive: nothing is guaranteed to hold it. Asserted to be *asked*, which is
+    // what fails if the boundary is set one step too low.
+    let _ = procs.pid_alive(i32::MAX as u32);
+    assert!(
+        a_pid_can_name_a_process(1) && a_pid_can_name_a_process(i32::MAX as u32),
+        "the boundary rejected a pid the platform's own `pid_t` can hold"
+    );
+}

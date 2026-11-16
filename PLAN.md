@@ -35,14 +35,21 @@ No later gate can be met while this is red.*
   (#67) and `tests/e2e/an_invariant_is_a_promise_the_config_files_make_tests.rs` (#74); two more
   modules were compiled to nothing on every platform by an inner `#![cfg(unix)]`. `cargo check
   --target x86_64-pc-windows-gnu --all-targets` is now clean, 0 errors and 0 warnings.
-- [ ] **macOS (aarch64): 21 tests fail**, in three causes, each filed:
+- [ ] **macOS (aarch64): 21 tests fail**, in four causes, each filed:
   - #169 `pid_alive` says yes for a pid above `i32::MAX` (`kill(-1, 0)` is *every* process), so a
-    killed session's packages stay protected for ever. A production bug, not a test one.
+    killed session's packages stay protected for ever. A production bug, not a test one. **Fixed;**
+    the boundary is now one refusal in `ProcFs`, ahead of all three platform arms.
   - #170 eleven of them are one family: fixtures that assume a Linux host (a `#!/bin/sh` stub
     beside a bare package name, so the host's real `brew`/`cargo` wins) and report "the package is
     missing" instead of "the fixture is wrong".
   - #171 `adopt` compares a canonicalised link source against a raw `$HOME`, so a symlinked
     `/tmp` (or `/home`) makes a rearranging link look like a dotfile — also a production bug.
+  - **#175 the pre-sync snapshot stub is the Linux program in 15 places.** `timeshift` on macOS and
+    `Checkpoint-Computer` on Windows are never registered, so every test that syncs fails on an
+    unused registration. This is the same string in 8 of the macOS failures *and* most of the
+    Windows ones, and #170's table had it under its `/bin/sh` family where it does not belong —
+    there is no shell in it, it is a program *name* the product chooses by platform.
+- [ ] **Windows (msvc): 28 tests fail** (#174) — five families, of which #175 is the largest.
 - [ ] **Linux gnu: red in the same run, and it is a separate cause** (#172). `test result: FAILED`
   nowhere in the job; the failure is `harness predicates: 112/113`, and the one BAD line is
   `the index has a row for C32, and no entry answers to that ID` — `C32` was ruled in an index

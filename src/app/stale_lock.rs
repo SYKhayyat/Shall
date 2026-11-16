@@ -226,6 +226,9 @@ pub struct ProcFs;
 
 impl Processes for ProcFs {
     fn pid_alive(&self, pid: u32) -> bool {
+        if !a_pid_can_name_a_process(pid) {
+            return false;
+        }
         pid_alive_here(pid)
     }
 
@@ -261,6 +264,32 @@ impl Processes for ProcFs {
 #[cfg(target_os = "linux")]
 fn pid_alive_here(pid: u32) -> bool {
     Path::new(&format!("/proc/{pid}")).is_dir()
+}
+
+/// Whether an answer about this pid can mean anything at all, asked **before** any syscall that
+/// would take the value at face value.
+///
+/// A u32 is not a pid. Every pid a machine reports is a positive `pid_t`, which is a signed 32-bit
+/// on Linux and a `DWORD` on Windows — so the largest value a stamp can legitimately hold is
+/// `i32::MAX`, and everything above it is a number no process can be. Casting such a value down
+/// to `pid_t` does not say "no such process": it wraps, and what it wraps to is often a
+/// **negative** pid, which every one of these syscalls reads as a wildcard rather than as a name.
+/// `kill(-1, 0)` is POSIX's "every process the caller may signal" — it succeeds, so a stamp a
+/// killed shell left at `u32::MAX` protected its packages for ever on macOS (#169). The same
+/// truncation makes `OpenProcess(0xFFFFFFFF)` a question about no particular process.
+///
+/// A refusal rather than a clamp, because there is no process to ask about: this is the one
+/// answer that costs nothing and can be wrong in neither direction.
+///
+/// It is asked in [`ProcFs`] rather than at each call site so the platform arms cannot disagree
+/// about it — the three of them answer the same question three different ways underneath, and
+/// `a_pid_above_the_signed_range_is_not_alive` is what holds all of them to it.
+///
+/// **`pub` for the integration tests' sake**, the same reason [`is_zombie`] is: the suite links the
+/// release-shaped library, and the test that pins which pid this boundary lets through has to be
+/// able to ask it what the boundary is.
+pub fn a_pid_can_name_a_process(pid: u32) -> bool {
+    (1..=i32::MAX as u32).contains(&pid)
 }
 
 #[cfg(all(unix, not(target_os = "linux")))]
