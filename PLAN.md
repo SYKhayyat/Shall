@@ -30,16 +30,23 @@ M5  🚀 1.0.0 — ready for other people
 so every check below `Build` (integration, install scripts, mutation, release) has been skipped.
 No later gate can be met while this is red.*
 
-- [ ] **Windows: the test suite does not compile.** `std::os::unix` and `Permissions::from_mode`
-  are used without a `cfg(unix)` gate in `tests/e2e/a_declaration_becomes_a_script_that_needs_no_shall_tests.rs:19,25`
-  (#67) and `tests/e2e/an_invariant_is_a_promise_the_config_files_make_tests.rs:18,33` (#74). The family:
-  every other test written in those two sessions. `cargo check --target x86_64-pc-windows-gnu` (CLAUDE.md)
-  catches it locally. *File the issue first.*
-- [ ] **macOS (aarch64): 21 tests fail**, among them `stale_lock::a_pid_is_alive_on_every_platform`,
-  the planner's `a_plan_reaps_only_what_it_was_asked_about` pair, and
-  `registry::every_backend_sends_the_argv_its_manager_expects`. Find the commit that broke them;
-  `pid_alive` is #152's code. *File the issue first.*
-- [ ] **Linux gnu: red in the same run.** Find out whether it is the same tests or a separate cause.
+- [x] **Windows: the test suite does not compile** (#168, 2026-11-16). `std::os::unix` and
+  `Permissions::from_mode` were ungated in `tests/e2e/a_declaration_becomes_a_script_that_needs_no_shall_tests.rs`
+  (#67) and `tests/e2e/an_invariant_is_a_promise_the_config_files_make_tests.rs` (#74); two more
+  modules were compiled to nothing on every platform by an inner `#![cfg(unix)]`. `cargo check
+  --target x86_64-pc-windows-gnu --all-targets` is now clean, 0 errors and 0 warnings.
+- [ ] **macOS (aarch64): 21 tests fail**, in three causes, each filed:
+  - #169 `pid_alive` says yes for a pid above `i32::MAX` (`kill(-1, 0)` is *every* process), so a
+    killed session's packages stay protected for ever. A production bug, not a test one.
+  - #170 eleven of them are one family: fixtures that assume a Linux host (a `#!/bin/sh` stub
+    beside a bare package name, so the host's real `brew`/`cargo` wins) and report "the package is
+    missing" instead of "the fixture is wrong".
+  - #171 `adopt` compares a canonicalised link source against a raw `$HOME`, so a symlinked
+    `/tmp` (or `/home`) makes a rearranging link look like a dotfile — also a production bug.
+- [ ] **Linux gnu: red in the same run, and it is a separate cause** (#172). `test result: FAILED`
+  nowhere in the job; the failure is `harness predicates: 112/113`, and the one BAD line is
+  `the index has a row for C32, and no entry answers to that ID` — `C32` was ruled in an index
+  row and the entry was never written. Fixed; the doc gate is green locally.
 - [ ] **One full nightly, green**, including integration (all distros), the install scripts run for
   real, and mutation. A night that is still red gets each red job filed as its own issue, here.
 

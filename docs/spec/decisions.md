@@ -1,4 +1,4 @@
-﻿# The decision register — 269 entries, none open
+﻿# The decision register — 270 entries, none open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -24,7 +24,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
 | **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **264** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **265** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 269 are accounted
-for: **264 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 270 are accounted
+for: **265 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay, and whether a policy decline is a failure, and which half of a setting waits for a person, and what an invariant is and how it is measured, and what an export owes a line it cannot express, and what a config file must be to be evidence of a decision) — 31
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay, and whether a policy decline is a failure, and which half of a setting waits for a person, and what an invariant is and how it is measured, and what an export owes a line it cannot express, and what a config file must be to be evidence of a decision, and whether an advisory lint count is a gate or a report) — 32
 
 | | question | answered |
 |---|---|---|
@@ -11239,3 +11239,38 @@ somebody else's declaration.
 **5. No interactive selection, in this version.** The manifest is the selection — a line you delete
 is a link Shall stops placing — which is the same offer an adopted package gets. A picker would be a
 second way to say the same thing, and the file is the one that survives the session.
+
+## C32
+
+**Status: ANSWERED 2026-11-15, built the same day.** When a new Rust release's lint debt is paid,
+and where the number is seen. Carried out of `#160`.
+
+**Asked.** `newest-rust` — the advisory drift detector — had been red long enough that a pin move
+would have arrived with an unknown number of releases' worth of breakage at once, and the lint debt
+it was reporting was visible on a run page nobody opens until something is already wrong. The
+code half was done (`a78c044a`, 43 lints cleared). What was left was the owner's two questions: is
+the job triaged per Rust release or paid down when the pin moves, and should a gating leg report
+the advisory count.
+
+**Ruled: paid when the pin moves, and seen as a count written next to the version that produced
+it.**
+
+**1. No per-release triage calendar.** A dated backlog item the owner never reads is maintenance
+that protects nothing. The number is only actionable when `RUST_PINNED` moves, so a cadence would
+generate work before the work exists. `continue-on-error: true` already keeps the job from
+blocking a merge, which leaves it one obligation between pin bumps — *say the number*.
+
+**2. The number, not a red X.** A failed advisory job says "something changed" and not "eleven
+things changed", so the first question anyone asks needs a second run to answer. The step writes
+`rustc --version` and the count into `$GITHUB_STEP_SUMMARY`, from the same command the gate runs
+one `--message-format` apart, so the report cannot describe a different run from the one it
+reports on.
+
+**3. The count anchors on `path:line:col: severity`.** A bare `error:`/`warning:` counts the
+`could not compile … due to N previous errors` summary and misses every lint: on a crate with two
+lints it answers 1. A count that reports small is the one direction a lint count must never be
+wrong in. The step is pinned against a planted lint as well as against the clean tree, because a
+report that only ever prints zero is the reassuring failure the job exists to prevent.
+
+**4. No ratchet.** A ceiling on a report nobody reads is the same debt with a second file to keep
+in step.

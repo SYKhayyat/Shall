@@ -9,11 +9,21 @@
 //! **`restic` stands in on `PATH`, as the scheduler stub does next door.** The program really
 //! runs, really parses the JSON the report reads, and never reaches a repository.
 
+/// Unix-only: every test here puts a shell-script stand-in for `restic` on `PATH`.
+#[cfg(unix)]
 use crate::harness::Fixture;
 
+#[cfg(unix)]
 const LINE: &str = "invariant:seforim @path=/srv/seforim,backed-by=restic:b2:seforim,max-age=7d\n";
 
 /// A `restic` that prints `body` for `snapshots --json`, and records that it was asked at all.
+///
+/// **Unix-only, and the gate is here rather than on the `use` alone.** `PermissionsExt` does not
+/// exist on Windows, so a file-level import of it did not make these tests skip there — it made
+/// the whole `suite` target fail to compile on that platform, taking every other test with it
+/// (#168). A `cfg` on the function that needs the import is what keeps the other platforms
+/// compiling; the stub is only reachable from `#[cfg(unix)]` tests below.
+#[cfg(unix)]
 fn stub_restic(f: &Fixture, body: &str) -> std::path::PathBuf {
     use std::os::unix::fs::PermissionsExt;
 
@@ -34,6 +44,7 @@ fn stub_restic(f: &Fixture, body: &str) -> std::path::PathBuf {
     stub
 }
 
+#[cfg(unix)]
 fn now() -> String {
     chrono::Utc::now().to_rfc3339()
 }

@@ -6,14 +6,22 @@
 //! the ways that rule could be widened by accident until `adopt` offers a cache directory as a
 //! declaration.
 
+#[cfg(unix)]
 use shall::app::dotfiles::{scan, tilde, ManagedLink};
-
+#[cfg(unix)]
 use std::path::{Path, PathBuf};
 
+/// **Unix-only, and the gate has to be on the struct rather than on each user.** Every fixture
+/// here is a symlink (`std::os::unix::fs::symlink`), and Windows had already made every test in
+/// this file `#[cfg(unix)]`; the trouble was that the *support* code carried no gate, so the
+/// platform that cannot run a single one of these tests still had to compile it and got three
+/// dead-code warnings for its trouble — fatal under CI's `-D warnings` (#168).
+#[cfg(unix)]
 struct Home {
     root: PathBuf,
 }
 
+#[cfg(unix)]
 impl Home {
     fn new(name: &str) -> Self {
         // **Not `CARGO_TARGET_TMPDIR`**, which is inside this repository: a scratch directory

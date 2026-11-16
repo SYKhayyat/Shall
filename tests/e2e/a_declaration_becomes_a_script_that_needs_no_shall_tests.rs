@@ -13,19 +13,43 @@
 
 use crate::harness::Fixture;
 
-/// A `cargo` on `PATH` that answers nothing and succeeds — enough for the backend to be
-/// available, which is all the exporter asks of it. `install_commands` is pure argv building.
-fn stub_cargo(f: &Fixture) -> std::path::PathBuf {
-    use std::os::unix::fs::PermissionsExt;
+/// The one unix-only import in this file, in a module no other platform can reach.
+///
+/// **It was at file scope, and that is why the whole test target failed to build on Windows.**
+/// `PermissionsExt` does not exist there, so `tests/e2e/…::a_declaration…` and the invariant file
+/// next door were E0433/E0599 errors rather than four tests being skipped — and a suite target
+/// that does not compile takes every test in it, on that row, with it (#168).
+#[cfg(unix)]
+mod hosting {
+    use crate::harness::Fixture;
 
-    let stub = f.root.join("stub-bin");
-    std::fs::create_dir_all(&stub).unwrap();
-    let script = stub.join("cargo");
-    std::fs::write(&script, "#!/bin/sh\nexit 0\n").unwrap();
-    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
-    stub
+    pub(super) fn stub_cargo(f: &Fixture) -> std::path::PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+
+        let stub = f.root.join("stub-bin");
+        std::fs::create_dir_all(&stub).unwrap();
+        let script = stub.join("cargo");
+        std::fs::write(&script, "#!/bin/sh\nexit 0\n").unwrap();
+        // The exporter asks the manager whether it is *there*; on unix "there" for a stub is
+        // "executable", so this line is load-bearing and not decoration.
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        stub
+    }
+
+    /// The same stub shape as `stub_cargo`, for the manager a removal is declared against.
+    pub(super) fn stub_apt(stub: &std::path::Path) {
+        use std::os::unix::fs::PermissionsExt;
+
+        let script = stub.join("apt");
+        std::fs::write(&script, "#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
 }
 
+#[cfg(unix)]
+use hosting::{stub_apt, stub_cargo};
+
+#[cfg(unix)]
 fn declaring(f: &Fixture) -> std::path::PathBuf {
     f.write("priority", "cargo\n");
     stub_cargo(f)
@@ -274,14 +298,4 @@ fn a_declared_removal_reaches_the_script_as_a_removal() {
         "the removal runs before the install, so a failed install leaves the machine with \
          neither:\n{script}"
     );
-}
-
-/// The same stub shape as `stub_cargo`, for the manager a removal is declared against.
-#[cfg(unix)]
-fn stub_apt(stub: &std::path::Path) {
-    use std::os::unix::fs::PermissionsExt;
-
-    let script = stub.join("apt");
-    std::fs::write(&script, "#!/bin/sh\nexit 0\n").unwrap();
-    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
 }
