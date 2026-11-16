@@ -292,6 +292,22 @@ impl TestKernel {
         );
     }
 
+    /// Register the snapshot **listing** this host's provider asks for, the same way and for the
+    /// same reason as [`stub_the_pre_sync_snapshot`](Self::stub_the_pre_sync_snapshot) (#175).
+    ///
+    /// These two are one defect in two halves and both were Linux literals: the create argv and
+    /// the listing. Fixing only the create left `sudo -n timeshift --list` registered on a Mac,
+    /// which is the same unused-stub failure with a different string — measured on the first run
+    /// after the create half landed, in eight tests.
+    pub async fn stub_the_snapshot_listing(&self) {
+        let argv = snapshot_listing_for_this_host();
+        if argv.is_empty() {
+            return;
+        }
+        self.mock_executor
+            .set_machine_response(&argv, Ok(shall::core::executor::DryRunOutput::new().into()));
+    }
+
     /// **Register the pre-sync snapshot this host really takes (#175).**
     ///
     /// A `sync` with work to do takes a safety snapshot first, and *which program takes it* is
@@ -355,7 +371,7 @@ impl TestKernel {
 /// snapshot gets its own program seeded; a machine that cannot gets a row that will never be
 /// asked, which is exactly what `set_machine_response` is for — it is excused from the unused
 /// check because it is a fact about the machine rather than a claim about the product's argv.
-fn snapshot_listing_for_this_host() -> String {
+pub fn snapshot_listing_for_this_host() -> String {
     let defs = shall::core::snapshot::builtin_defs_for_a_test(&shall::config::Config::default());
     let Some(def) = defs
         .iter()

@@ -126,10 +126,7 @@ async fn a_machine_converges_forward_backward_and_forward_again() {
     // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
     // machine, each with the empty answer it used to receive from silence instead.
     kernel.stub_the_pre_sync_snapshot().await;
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --list",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_snapshot_listing().await;
     kernel.mock_executor.set_response(
         "brew uninstall -- neovim",
         Ok(DryRunOutput::default().into()),
@@ -197,10 +194,7 @@ async fn convergence_never_reaches_for_what_shall_did_not_install() {
     // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
     // machine, each with the empty answer it used to receive from silence instead.
     kernel.stub_the_pre_sync_snapshot().await;
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --list",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_snapshot_listing().await;
     // A machine with something on it that Shall has never heard of.
     machine_holds(&kernel.mock_executor, &["fd"]).await;
 

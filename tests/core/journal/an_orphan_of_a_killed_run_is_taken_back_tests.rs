@@ -63,6 +63,10 @@ async fn other_managers(kernel: &TestKernel, asked: &[Listing]) {
             kernel.stub_the_pre_sync_snapshot().await;
             continue;
         }
+        if matches!(listing, Listing::SnapshotsListed) {
+            kernel.stub_the_snapshot_listing().await;
+            continue;
+        }
         let cmd = match listing {
             Listing::Cargo => "cargo install --list",
             Listing::Apt => "dpkg-query -W -f=${db:Status-Status} ${Package} ${Version}\\n",
@@ -71,7 +75,7 @@ async fn other_managers(kernel: &TestKernel, asked: &[Listing]) {
             // is asked for below and not named here — a string in this match is a string that
             // works only on the platform it was written on.
             Listing::SnapshotTaken => unreachable!("handled above"),
-            Listing::SnapshotsListed => "sudo -n timeshift --list",
+            Listing::SnapshotsListed => unreachable!("handled above"),
             _ => unreachable!("handled below"),
         };
         kernel
@@ -434,10 +438,7 @@ async fn absent_removes_a_package_shall_does_not_own_and_declares_it_gone() {
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     kernel.stub_the_pre_sync_snapshot().await;
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --list",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_snapshot_listing().await;
     std::fs::write(kernel.tmp.path().join("profiles/Main"), "brew:orphan-pkg\n").unwrap();
     brew_holds(&kernel, &["orphan-pkg"]);
     kernel.mock_executor.set_response(
@@ -525,10 +526,7 @@ async fn absent_names_the_manager_that_actually_holds_a_bare_name() {
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     kernel.stub_the_pre_sync_snapshot().await;
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --list",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_snapshot_listing().await;
     kernel.mock_executor.set_response(
         "brew uninstall -- orphan-pkg",
         Ok(DryRunOutput::default().into()),
@@ -635,10 +633,7 @@ async fn uninstalling_a_package_shall_owns_is_unaffected() {
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     kernel.stub_the_pre_sync_snapshot().await;
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --list",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_snapshot_listing().await;
     std::fs::write(kernel.tmp.path().join("profiles/Main"), "brew:owned-pkg\n").unwrap();
     {
         let mut state = kernel.app.state.lock().await;
@@ -697,10 +692,7 @@ async fn a_bare_name_shall_owns_costs_no_listing_either() {
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     kernel.stub_the_pre_sync_snapshot().await;
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --list",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_snapshot_listing().await;
     std::fs::write(kernel.tmp.path().join("profiles/Main"), "brew:owned-pkg\n").unwrap();
     {
         let mut state = kernel.app.state.lock().await;

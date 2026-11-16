@@ -772,10 +772,7 @@ async fn deleting_the_last_exec_line_runs_its_undo_through_the_sync_verb() {
         &format!("sh {}/./enrol.sh", kernel.tmp.path().display()),
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --list",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_snapshot_listing().await;
     shall::verbs::sync::watch_reconcile(&kernel.app)
         .await
         .expect("the first sync runs the script");

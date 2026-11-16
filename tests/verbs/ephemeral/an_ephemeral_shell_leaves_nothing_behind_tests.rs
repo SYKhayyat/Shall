@@ -27,10 +27,7 @@ async fn a_session_registers_its_packages_as_transient() {
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     kernel.stub_the_pre_sync_snapshot().await;
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --list",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_snapshot_listing().await;
     let shell = kernel.app.shell();
 
     kernel
@@ -76,10 +73,7 @@ async fn a_purge_takes_this_sessions_packages_and_leaves_another_sessions() {
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     kernel.stub_the_pre_sync_snapshot().await;
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --list",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_snapshot_listing().await;
     let shell = kernel.app.shell();
 
     let target_session_id = "purge-this-session";

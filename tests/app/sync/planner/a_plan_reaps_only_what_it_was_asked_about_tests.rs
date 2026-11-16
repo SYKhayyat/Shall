@@ -209,10 +209,7 @@ async fn the_transient_shell_plans_no_removal_of_the_machines_packages() {
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     kernel.stub_the_pre_sync_snapshot().await;
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --list",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_snapshot_listing().await;
 
     kernel
         .app
@@ -232,10 +229,7 @@ async fn the_transient_shell_plans_no_removal_of_the_machines_packages() {
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     kernel.stub_the_pre_sync_snapshot().await;
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --list",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_snapshot_listing().await;
 
     // Nothing the machine held was touched. Read from the registry rather than from the plan,
     // because the question is about the machine and a plan is only a claim about it.
@@ -278,10 +272,7 @@ async fn activating_a_profile_reaps_only_the_backends_priority_names() {
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     kernel.stub_the_pre_sync_snapshot().await;
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --list",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_snapshot_listing().await;
     let root = kernel.app.config.config_root();
 
     // `priority` lists cargo alone: brew and npm are managers this host does not use.
@@ -309,10 +300,7 @@ async fn activating_a_profile_reaps_only_the_backends_priority_names() {
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     kernel.stub_the_pre_sync_snapshot().await;
-    kernel.mock_executor.set_response(
-        "sudo -n timeshift --list",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    kernel.stub_the_snapshot_listing().await;
 
     // The resolver's answer is the list `activate` must plan against. Asserted here rather than
     // trusted, so a `priority` this fixture failed to write cannot make the test vacuous.
