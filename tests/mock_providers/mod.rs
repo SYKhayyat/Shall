@@ -612,17 +612,32 @@ mod the_pre_sync_stub_is_this_hosts_program {
         kernel.stub_the_pre_sync_snapshot().await;
         let registered = kernel.mock_executor.registered_registrations();
 
+        // **The escalation prefix belongs in the expectation, not in a `cfg` the product does
+        // not have.** A snapshot create is elevated on every platform, and `as_launched` puts
+        // `sudo -n` on it wherever `escalates()` says so — which excludes Windows and root. This
+        // arm is what caught that when it was first written; a test that left the prefix off was
+        // asserting a string the product never sends.
+        let escalated = |line: &str| {
+            if cfg!(windows) || shall::core::CommandExecutor::is_root() {
+                line.to_string()
+            } else {
+                format!("sudo -n {line}")
+            }
+        };
         let expected = if cfg!(target_os = "macos") {
-            "tmutil localsnapshot"
+            escalated("tmutil localsnapshot")
         } else if cfg!(target_os = "windows") {
-            "powershell -NoProfile -NonInteractive -Command Checkpoint-Computer -Description \
-             'Shall: pre_sync' -RestorePointType 'APPLICATION_INSTALL'; (Get-ComputerRestorePoint \
-             | Sort-Object SequenceNumber | Select-Object -Last 1 -ExpandProperty SequenceNumber)"
+            // Windows has no `sudo`, so this is already the whole line.
+            escalated(
+                "powershell -NoProfile -NonInteractive -Command Checkpoint-Computer -Description \
+                 'Shall: pre_sync' -RestorePointType 'APPLICATION_INSTALL'; (Get-ComputerRestorePoint \
+                 | Sort-Object SequenceNumber | Select-Object -Last 1 -ExpandProperty SequenceNumber)",
+            )
         } else {
-            "sudo -n timeshift --create --comments pre_sync --tags D"
+            escalated("timeshift --create --comments pre_sync --tags D")
         };
         assert!(
-            registered.iter().any(|r| r == expected),
+            registered.contains(&expected),
             "the fixture registered {registered:?}, and this platform's sync asks for `{expected}`"
         );
     }
