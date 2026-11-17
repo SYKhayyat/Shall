@@ -534,6 +534,17 @@ impl SchedulerManager {
 
 /// Is this schedule meant to fire? An option nobody wrote leaves the schedule armed, which is
 /// what every schedule did before the option existed.
+/// The three characters XML cares about, escaped for a `<string>` element.
+///
+/// Text in a plist is not markup, so `&`, `<` and `>` are the whole list: a schedule named
+/// `a & b` or a path with a `<` in it would otherwise make the plist unparseable, and launchd
+/// answers an unparseable plist by not running the job at all.
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
 fn armed(config: &ScheduleConfig) -> bool {
     config.enabled.unwrap_or(true)
 }
@@ -578,6 +589,10 @@ impl LinuxSystemdProvisioner {
             name = config.name,
             bin = shall_bin.display(),
             roots_flags = target.roots.flag_spellings(),
+            // One `<string>` per word, because `ProgramArguments` goes to `execve` whole: a
+            // single element holding `sync --dry-run` arrives as one argument and the schedule
+            // dies in argument parsing on every firing (#195). The split is
+            // `schedule::words`, the same one `refuse_self_named` asks for the first word.
             cmd = config.command,
             log = log.display(),
         );
@@ -1165,7 +1180,7 @@ impl MacLaunchdProvisioner {
             <plist version=\"1.0\">\n<dict>\n\
             <key>Label</key><string>{label}</string>\n\
             <key>ProgramArguments</key>\n<array>\n\
-            <string>{bin}</string>{roots}<string>{cmd}</string>\n</array>\n\
+            <string>{bin}</string>{roots}{cmd}\n</array>\n\
             {schedule}\n\
             {disabled}\
             <key>StandardOutPath</key><string>{log}</string>\n\
@@ -1180,11 +1195,18 @@ impl MacLaunchdProvisioner {
                 .map(|a| {
                     format!(
                         "<string>{}</string>",
-                        a.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+                        xml_escape(a)
                     )
                 })
                 .collect::<String>(),
-            cmd = config.command,
+            // One `<string>` per word, because `ProgramArguments` goes to `execve` whole: a
+            // single element holding `sync --dry-run` arrives as one argument and the schedule
+            // dies in argument parsing on every firing (#195). The split is
+            // `schedule::words`, the same one `refuse_self_named` asks for the first word.
+            cmd = crate::model::schedule::words(&config.command)
+                .iter()
+                .map(|w| format!("<string>{}</string>", xml_escape(w)))
+                .collect::<String>(),
             schedule = schedule_xml,
             disabled = disabled,
             log = target.log_path().display()

@@ -183,6 +183,51 @@ fn refuse_unattended(
     Ok(())
 }
 
+/// **The words of a `run`, split the way the OS will receive them** (#195).
+///
+/// `run` is arguments, not a verb, and the three renderers deliver it differently: systemd and
+/// Task Scheduler are given a *line* that the OS splits, launchd is given a `ProgramArguments`
+/// array that goes to `execve` whole. So `run = sync --dry-run` used to arrive on macOS as one
+/// argument, `"sync --dry-run"`, and die in argument parsing on every firing — the same shape as
+/// the unit that asked Shall to run a subcommand called `shall`, which this file already has a
+/// ruling about, one space away.
+///
+/// A quote holds a word together, because a program path with a space in it is one program:
+/// `"C:\Program Files\Shall\shall.exe" sync` is two words and the quotes are not part of
+/// either. That rule lives here, in one function, because `refuse_self_named` decides what the
+/// first word is and launchd writes what every word is — and two answers to "where does the first
+/// word end" is how a schedule is refused as safe and then fired as something else.
+pub fn words(command: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut current = String::new();
+    let mut quote: Option<char> = None;
+    let mut started = false;
+    for c in command.trim().chars() {
+        match quote {
+            Some(q) if c == q => quote = None,
+            Some(_) => current.push(c),
+            None if c == '"' || c == '\'' => {
+                quote = Some(c);
+                started = true;
+            }
+            None if c.is_whitespace() => {
+                if started || !current.is_empty() {
+                    out.push(std::mem::take(&mut current));
+                    started = false;
+                }
+            }
+            None => {
+                current.push(c);
+                started = true;
+            }
+        }
+    }
+    if started || !current.is_empty() {
+        out.push(current);
+    }
+    out
+}
+
 /// Refuse a `run` that names the program itself (owner ruling, 2026-11-10, `#158`).
 ///
 /// `run` is the **arguments**: the OS carries out `ExecStart=<shall> <run>` (systemd), the
@@ -194,16 +239,8 @@ fn refuse_unattended(
 /// declaration names the file and line rather than surfacing when the scheduler runs it — and
 /// the command half had no such check.
 fn refuse_self_named(name: &str, command: &str, origin: &Origin) -> Result<()> {
-    // A program path with a space in it arrives quoted, and the quote is part of the word the
-    // split sees — `"C:\Program Files\Shall\shall.exe" sync` is one program and one argument.
-    let command = command.trim();
-    let head = match command
-        .strip_prefix('"')
-        .or_else(|| command.strip_prefix('\''))
-    {
-        Some(rest) => rest.split(['"', '\'']).next().unwrap_or(rest),
-        None => command.split_whitespace().next().unwrap_or(""),
-    };
+    let words = words(command);
+    let head = words.first().map(String::as_str).unwrap_or("");
     let stem = head.rsplit(['/', '\\']).next().unwrap_or(head);
     let stem = stem.strip_suffix(".exe").unwrap_or(stem);
     if stem != "shall" {
