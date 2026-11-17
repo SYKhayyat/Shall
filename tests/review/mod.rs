@@ -41,6 +41,7 @@ mod backend_is_data_not_code_tests;
 mod deploy_refusal_precedes_the_download_tests;
 mod dirty_host_fixture_isolation_tests;
 mod dry_run_marker_tests;
+mod every_command_is_classified_in_the_audit_tests;
 mod every_documentation_link_resolves_tests;
 mod every_example_is_checked_tests;
 mod every_ruling_cited_in_code_resolves_to_one_tests;

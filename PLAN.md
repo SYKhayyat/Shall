@@ -190,6 +190,17 @@ No later gate can be met while this is red.*
   a gate named only in a header is a name, not a gate (the `grader_gate_parity` lesson). The one
   deliberate pair is `install.sh`/`install.ps1`, each script's own installer, declared as such.
 
+  **The command classification is now complete, and the completeness is checked** (#189's test
+  half, not its naming question): `tests/review/every_command_is_classified_in_the_audit_tests.rs`
+  derives the command list from clap and the classification from
+  `docs/AUDIT-2026-11-17-command-classification.md`, and requires each command exactly once. Running
+  it found the audit was **not** complete: 7 commands had no row (`fleet`, `watch`, `service`,
+  `update`, `hooks`, `policy`, `help`), 3 rows sat in two classes at once (`snapshot`, `clean-cache`,
+  `self-upgrade`), 2 named commands the binary does not have (`install`, `uninstall`), and the
+  stated 54 was a total the tables could not produce. The document is now 64 commands in four tables
+  that add to the number in its header — and the read-only section, which was prose, is a table,
+  because a list in a paragraph is not countable by anything.
+
   **Also fixed while the night ran: #191**, `export --help` naming four of five manifests and
   `src/main.rs`'s refusal hint naming four of five as well. `Format::NAMES` is now the one table
   that `parse`, `Format::all`, `Format::WORDS` and the help all read, and the tests hold the help

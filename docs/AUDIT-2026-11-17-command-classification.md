@@ -5,8 +5,11 @@
 exception**, by reading what each actually does rather than by what it is called. Read-only: this
 audit rules nothing and changes nothing.
 
-**54 top-level commands.** 21 output, 13 input, 11 read-only, 9 named exceptions — and the eight
+**64 top-level commands.** 18 output, 18 input, 17 read-only, 11 named exceptions — and the eight
 the issue named as suspected P1 leaks are not leaks. One command is the surprise instead.
+`tests/review/every_command_is_classified_in_the_audit_tests.rs` holds the arithmetic and the
+membership: every command in the binary is classified exactly once, every row names a command the
+binary has, and the four counts add to the number the header states.
 
 ---
 
@@ -50,22 +53,19 @@ convergence by subtraction and it belongs in the model under a name.
 | `apply` | call | one declared line, through the same planner and guard (`handle_named`). |
 | `rebuild` | read | `sync` with the snapshot/receipt wrapping. |
 | `upgrade` | contract | bumps installed versions; the file names packages, not versions, unless `lock versions` froze one. |
-| `install` | read | `declare` → `sync` (`S15`). The edit is the operation. |
-| `uninstall` | read | `undeclare` → `sync` (`S15`). Symmetric. |
 | `teleport` | read | `retarget` → named sync. Edit-the-line-then-sync, exactly `P1`. |
 | `execute` | read | applies a captured plan, after refusing a schema mismatch **and** system drift. |
-| `purge-undeclared` | read | convergence by subtraction — see the finding above. |
+| `purge-undeclared` | read | convergence by subtraction — see F2. |
 | `remove-orphans` | call | the removal half of the same subtraction, under the guard. |
-| `heal` | read | repairs the machine outside the file — see the finding below. |
+| `heal` | read | repairs the machine outside the file — see F1. |
 | `reset` | read | forgets ownership so the machine reads unmanaged. Changes the ledger, not the machine. |
 | `rollback` | contract | restores machine + state to a recorded point. |
 | `restore` | contract | restores from a bundle. |
 | `bisect` | contract | converges to a revision, then back. |
 | `init` | contract | writes the first declaration *and* provisions what it names. |
 | `activate` / `deactivate` | call | `declarations()` edit of the profile pointer, then the caller syncs. |
-| `snapshot` | call | takes a backup; nothing in the grammar can ask for one. |
-| `clean-cache` | contract | deletes archives and caches. Removes no package, writes no file. |
-| `self-upgrade` | contract | replaces Shall's own binary. |
+| `fleet` | read | runs this file against *other* hosts (`fleet(&config, hosts, sync, apply)`): each host converges to it, and this machine's declaration is untouched. |
+| `watch` | read | re-runs `sync` on an interval. The convergence, and the guard on it, are `sync`'s. |
 
 ### Input — changes the file (the machine is only read, or read then converged by an output)
 
@@ -84,13 +84,26 @@ convergence by subtraction and it belongs in the model under a name.
 | `lock` / `unlock` | read | the lockfile: versions, backend bindings, script approvals. State, not the declaration. |
 | `hold` / `unhold` | read | `state.hold` + `snapshot`. A ledger row, nothing else. |
 | `git` / `repo` / `profile` | contract | wrappers over the repo and the profile pointer. |
+| `service` | read | `enable`/`disable` edit the manifest and then move the machine; `start`/`stop`/`restart` move the machine only; `status`/`list` read. The handler says so in its first sentence. |
 
 ### Read-only — never changes the machine and never changes the file
 
-`check`, `plan`, `diff`, `list`, `info`, `why`, `search`, `vars`, `sbom`, `history`, `path`
-(without `--set`), `protected`, `adapters`, `export`, `bundle`, `completions`, `init --help`-class
-verbs. *(Contract, except `why` and `path`, whose handlers were read: `why` reads the executor's
-queries, `path --set` writes the PATH fragment and is therefore input.)*
+| command | basis | why |
+|---|---|---|
+| `check` | read | runs every question and prints a line each. The handler says it plainly: *"It never changes anything; `shall heal` is what repairs."* |
+| `plan` | read | computes the plan; `--out` writes it as an artefact beside the declaration. |
+| `diff` | contract | the manifests are package declarations, so a git diff of them *is* the package-level change. |
+| `list` / `info` / `search` / `why` | read | inventory queries against the machine. (`why` reads the executor's queries rather than the config.) |
+| `vars` | read | resolves the variables a reader wants to see, through the resolver, and prints them. |
+| `sbom` | read | prints the inventory as an SBOM. |
+| `history` | read | reads the journal and the VCS. |
+| `path` | read | prints where the declaration was found. `--set` writes the *locate settings* file, which is not the declaration — the same exception `config` names for `preferences.toml`. |
+| `protected` | read | "show what the removal guard will refuse to touch", so the guard is inspectable. |
+| `adapters` | read | reports the eight extension surfaces and whether each is doing anything. |
+| `export` | read | renders a script from the declaration or from a scan. The file it writes is not the declaration. |
+| `bundle` | read | writes a rebuildable bundle *beside* the declaration. |
+| `policy` | read | *"report whether the desired state complies with the `[guard]` rules"* — the handler's own first line. |
+| `help` | contract | clap's usage text. Prints. |
 
 ### Named exceptions — deliberate, and none of them leaves anything file-shaped behind
 
@@ -101,9 +114,19 @@ queries, `path --set` writes the PATH fragment and is therefore input.)*
 | `try` | a throwaway container or temp prefix. Nothing persists. |
 | `completions` | writes a shell completion script to stdout. |
 | `eval` / `repl` | reads the model; prints. |
-| `snapshot` / `rollback` / `restore` | artefacts beside the declaration, not in it. |
-| `self-upgrade` | replaces the tool, not the machine's declarations. |
-| `execute` | an output over a *captured* plan; listed above for that reason. |
+| `snapshot` | takes a backup; nothing in the grammar can ask for one, and the backup is an artefact beside the declaration. |
+| `clean-cache` | deletes archives and caches. Removes no package, writes no file. |
+| `self-upgrade` | replaces Shall's own binary, not the machine's declarations. |
+| `update` | refreshes the managers' own indexes (`managers.update()`): a cache, not a package. |
+| `hooks` | runs the package manager's hook program (`pm_hooks`), which records what the manager did. The manager acts; this reports. |
+
+**Three rows sat in two classes in the first edition, and two named commands the binary does not
+have.** `snapshot`, `clean-cache` and `self-upgrade` were listed under output *and* under the
+exceptions, which is why the stated totals added to 54 while the tables held 52: `install` and
+`uninstall` are not commands in this tree (the contract they described is `add`/`unmanage` plus
+`S15`'s declare-then-sync). By the class definitions above they are exceptions — the machine
+changes, but not toward the declaration — so that is where they are now. `update`, `hooks`,
+`fleet`, `watch`, `service`, `policy` and `help` had no row at all.
 
 ---
 
