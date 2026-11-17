@@ -1274,47 +1274,55 @@ jobs:
           - { what: the transaction 4/4, file: src/core/transaction.rs, slug: transaction-4, shard: 3/4 }
           # **`M3` split `src/core/batch.rs` out of the file above, and a shard follows the code.
           # Without this row the narrowing, the retry loop and the manager-lock wait would have
-          # left mutation coverage on the day they moved - four shards still green over a file
-          # that no longer holds them.
+          # left mutation coverage on the day they moved.
           #
-          # **Eleven shards, four mutants each, and every number here was measured on a night
+          # **Twenty-two shards, two mutants each, and every number here was measured on a night
           # that failed.** `cargo mutants --list` counts 43 in this file, fewer than `datalock`
           # (48) or `sync engine` (78), both of which finish — so the count was never the problem
-          # and three attempts to fix it by counting went wrong before this one:
+          # and four attempts to fix it by counting went wrong before this one:
           #
           # - as `0/1` it died at 115 and 126 minutes, leaving no log and no survivor list;
           # - as `0/2`+`1/2` one half finished at 86 and the other died at 74;
-          # - as `0/4`..`3/4`, shards finished at **47 and 38** while another died at **72** and
-          #   a third was cancelled at 33;
-          # - as `0/8`..`7/8`, six finished in **10 to 29 minutes** and two died at **59 and 62**.
+          # - as `0/4`..`3/4`, shards finished at **47 and 38** while another died at **72**;
+          # - as `0/8`..`7/8`, six finished in **10 to 29 minutes** and two died at **59 and 62**;
+          # - as `0/11`..`10/11`, nine finished in **10 to 29 minutes**, one died at **56** and one
+          #   was cancelled at 11.
           #
-          # That last night is the one that gives the number, because it is the only one where the
-          # same split produced both outcomes. Same mutant count in each shard, and the difference
-          # is duration: **the leg costs ~10 minutes per mutant** (a rebuild of `shall` and
-          # `suite`, then the whole 170s suite under `-j2` on four cores), so six mutants is an
-          # hour and four is forty minutes. Everything under 30 minutes came back; everything over
-          # 50 did not. Four mutants per shard is the largest shard that stays under the line.
+          # Two things this night settled that the earlier ones could not:
           #
-          # 43 mutants do not divide by four, so this is `0/11`..`10/11` — measured as
-          # 4,4,4,4,4,4,4,4,4,4,3 = 43, with no empty shard, which `0/12` would have produced.
+          # 1. **The cost is the rebuild, not the test run.** `--no-fail-fast` was removed for this
+          #    night on the theory that a mutant breaking two hundred tests paid for two hundred;
+          #    the shard that died took **56 minutes against 61** the night before, which is no
+          #    change at all. Per mutant it is a rebuild of `shall` and `suite` and then the whole
+          #    suite under `-j2`, about **14 minutes** each, and that is what sets a shard's size.
+          # 2. **A cancelled or lost job is not a measurement**, and it can happen at 11 minutes, so
+          #    no shard size makes a night immune. What a smaller shard buys is that the re-run is
+          #    `gh run rerun <id> --failed` over two mutants instead of four.
           #
-          # **If a shard still loses its runner, re-run it rather than re-derive this:** the
-          # answer is `gh run rerun <id> --failed`, which costs the shard and not the night. A
-          # lost runner is not a measurement, and no `if:` can rescue its artifact — the runner
-          # that would upload it is the one that is gone.
+          # 43 = 21 x 2 + 1, so `0/22`..`21/22` is 2,2,...,2,1 with no empty shard.
           #
-          # Sharding partitions the file, so nothing about what the leg measures changes.
-          - { what: the batch narrowing 1/11, file: src/core/batch.rs, slug: batch-1, shard: 0/11 }
-          - { what: the batch narrowing 2/11, file: src/core/batch.rs, slug: batch-2, shard: 1/11 }
-          - { what: the batch narrowing 3/11, file: src/core/batch.rs, slug: batch-3, shard: 2/11 }
-          - { what: the batch narrowing 4/11, file: src/core/batch.rs, slug: batch-4, shard: 3/11 }
-          - { what: the batch narrowing 5/11, file: src/core/batch.rs, slug: batch-5, shard: 4/11 }
-          - { what: the batch narrowing 6/11, file: src/core/batch.rs, slug: batch-6, shard: 5/11 }
-          - { what: the batch narrowing 7/11, file: src/core/batch.rs, slug: batch-7, shard: 6/11 }
-          - { what: the batch narrowing 8/11, file: src/core/batch.rs, slug: batch-8, shard: 7/11 }
-          - { what: the batch narrowing 9/11, file: src/core/batch.rs, slug: batch-9, shard: 8/11 }
-          - { what: the batch narrowing 10/11, file: src/core/batch.rs, slug: batch-10, shard: 9/11 }
-          - { what: the batch narrowing 11/11, file: src/core/batch.rs, slug: batch-11, shard: 10/11 }
+          - { what: the batch narrowing 1/22, file: src/core/batch.rs, slug: batch-1, shard: 0/22 }
+          - { what: the batch narrowing 2/22, file: src/core/batch.rs, slug: batch-2, shard: 1/22 }
+          - { what: the batch narrowing 3/22, file: src/core/batch.rs, slug: batch-3, shard: 2/22 }
+          - { what: the batch narrowing 4/22, file: src/core/batch.rs, slug: batch-4, shard: 3/22 }
+          - { what: the batch narrowing 5/22, file: src/core/batch.rs, slug: batch-5, shard: 4/22 }
+          - { what: the batch narrowing 6/22, file: src/core/batch.rs, slug: batch-6, shard: 5/22 }
+          - { what: the batch narrowing 7/22, file: src/core/batch.rs, slug: batch-7, shard: 6/22 }
+          - { what: the batch narrowing 8/22, file: src/core/batch.rs, slug: batch-8, shard: 7/22 }
+          - { what: the batch narrowing 9/22, file: src/core/batch.rs, slug: batch-9, shard: 8/22 }
+          - { what: the batch narrowing 10/22, file: src/core/batch.rs, slug: batch-10, shard: 9/22 }
+          - { what: the batch narrowing 11/22, file: src/core/batch.rs, slug: batch-11, shard: 10/22 }
+          - { what: the batch narrowing 12/22, file: src/core/batch.rs, slug: batch-12, shard: 11/22 }
+          - { what: the batch narrowing 13/22, file: src/core/batch.rs, slug: batch-13, shard: 12/22 }
+          - { what: the batch narrowing 14/22, file: src/core/batch.rs, slug: batch-14, shard: 13/22 }
+          - { what: the batch narrowing 15/22, file: src/core/batch.rs, slug: batch-15, shard: 14/22 }
+          - { what: the batch narrowing 16/22, file: src/core/batch.rs, slug: batch-16, shard: 15/22 }
+          - { what: the batch narrowing 17/22, file: src/core/batch.rs, slug: batch-17, shard: 16/22 }
+          - { what: the batch narrowing 18/22, file: src/core/batch.rs, slug: batch-18, shard: 17/22 }
+          - { what: the batch narrowing 19/22, file: src/core/batch.rs, slug: batch-19, shard: 18/22 }
+          - { what: the batch narrowing 20/22, file: src/core/batch.rs, slug: batch-20, shard: 19/22 }
+          - { what: the batch narrowing 21/22, file: src/core/batch.rs, slug: batch-21, shard: 20/22 }
+          - { what: the batch narrowing 22/22, file: src/core/batch.rs, slug: batch-22, shard: 21/22 }
           # **The classification lives here, and no shard could see it.** `VI.11` and `M4`
           # put three decision functions into these two files - `Retryability::and_also`,
           # `Error::with_note` and `summarise` - and neither file had a row, so the branch

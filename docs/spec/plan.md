@@ -166,17 +166,18 @@ what blocks the next one.
     **six of eight finished in 10 to 29 minutes and two died at 59 and 62.** The difference is
     duration and the rate is ~10 minutes per mutant — rebuild `shall` and `suite`, then the whole
     170s suite under `-j2` — so six mutants is an hour and four is forty minutes. The row is now
-    **`0/11` … `10/11`, four mutants each (4×10 + 3 = 43)**, no empty shard, which `0/12` would
-    have produced. Ten of those eleven answered on the first night; `8/11` still lost its runner at
-    **61 minutes with four mutants**, so the per-mutant rate is not uniform — some mutants are
-    pathological. **The lever for those is `--no-fail-fast`, which the mutation step no longer
-    passes:** a mutant that breaks two hundred tests used to run all two hundred, twice per retried
-    failure, and the question this leg asks is one bit per mutant — *is it caught* — which the first
-    failing test already answers. A mutant that is **not** caught is unaffected, because the suite
-    passes and the whole thing runs either way, so the survivor list cannot shrink. That is the
-    last change made from theory here rather than from a night's numbers, and the next night is
-    what measures it. For a shard that still loses its runner the operational answer is
-    `gh run rerun <id> --failed`: it costs the shard, not the night. Two corrections to what this paragraph first
+    **`0/11` … `10/11`, four mutants each (4×10 + 3 = 43)**: nine answered in 10–29 minutes, one
+    died at 56 and one was cancelled at 11. Two things that night settled:
+
+    **The cost is the rebuild, not the test run.** `--no-fail-fast` was removed on the theory that
+    a mutant breaking two hundred tests paid for two hundred; the shard that died took **56
+    minutes against 61** the night before — no change. Per mutant it is a rebuild of `shall` and
+    `suite` plus the whole suite under `-j2`, about **14 minutes**, and that is what sizes a shard.
+
+    **A lost or cancelled job is not a measurement, and it can happen at 11 minutes**, so no shard
+    size makes a night immune. What a smaller shard buys is a cheap re-run. Hence **`0/22` … `21/22`,
+    two mutants each** (43 = 21×2 + 1, no empty shard), with `gh run rerun <id> --failed` as the
+    operational answer when a shard is still lost: it costs the shard, not the night. Two corrections to what this paragraph first
     said: the split is eight and not two, and
     **the artifact condition was never the gap.** `!cancelled()` already uploaded on a *failing*
     shard — `mutants-out-datalock` is in run `44006078594`, whose data-lock shard failed with five
