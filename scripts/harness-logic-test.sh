@@ -1771,6 +1771,60 @@ for _src in $SOURCES; do
     fi
 done
 
+# `fails_saying` — the fourth corner, and the one #181 needed.
+#
+# It exists because the `unsupported` remove-mode site was checked with `grep_ok`, a predicate for
+# commands that ANSWER, at a site whose contract is that the command FAILS. The product exited 1
+# with `Error: Operation not supported by backend 'cabal'`, which `src/core/exit.rs` makes the
+# correct row, and the tools leg called that "it did not answer" for five nights.
+#
+# The near neighbours are driven as controls, because both pass a strictly weaker property:
+# `nok_saying` alone accepts 2 and 3, and `grep_ok` alone accepts a success.
+for _src in $SOURCES; do
+    TOTAL=$((TOTAL + 1))
+    (
+        PASS=0; FAILC=0; SOFTC=0; FAILED_NAMES=""
+        _credit_section() { :; }
+        excerpt() { :; }
+        never_ran() { [ "$1" = 127 ] || [ "$1" = 126 ] || [ "$1" = 124 ]; }
+        _body="$(lift fails_saying "$_src")"
+        if [ -z "$_body" ]; then
+            echo "  BAD   $(basename "$_src") has no fails_saying — a failure check there can only assert one half"
+            exit 1
+        fi
+        eval "$_body"
+        _bad=0
+        _line='echo "Error: Operation not supported by backend cabal"'
+        # (1) The only shape that passes: exit 1, and the output says why.
+        fails_saying "the unsupported removal" "not supported" sh -c "$_line; exit 1" >/dev/null
+        [ "$PASS" -eq 1 ] || { echo "  BAD   a failure that said why was not scored a pass"; _bad=1; }
+        # (2) It succeeded. The manager has no uninstall verb, so this cannot be right, and
+        # `grep_ok` would have passed it.
+        fails_saying "succeeded anyway" "not supported" sh -c "$_line; exit 0" >/dev/null
+        [ "$FAILC" -eq 1 ] || { echo "  BAD   a success was scored a pass at a site that must fail"; _bad=1; }
+        # (3) The guard refused (3) — a different answer from `Shall failed`, which
+        # `nok_saying` alone cannot tell apart.
+        fails_saying "the guard refused" "not supported" sh -c "$_line; exit 3" >/dev/null
+        [ "$FAILC" -eq 2 ] || { echo "  BAD   exit 3 was scored a pass where 3 is the wrong answer"; _bad=1; }
+        # (4) It reported differences (2) — `check`'s answer, not `apply`'s.
+        fails_saying "reported differences" "not supported" sh -c "$_line; exit 2" >/dev/null
+        [ "$FAILC" -eq 3 ] || { echo "  BAD   exit 2 was scored a pass where 2 is the wrong answer"; _bad=1; }
+        # (5) The right code for the wrong reason: a crash that never said why.
+        fails_saying "failed silently" "not supported" sh -c 'exit 1' >/dev/null
+        [ "$FAILC" -eq 4 ] || { echo "  BAD   exit 1 without the sentence was scored a pass"; _bad=1; }
+        # (6) It never ran — rc 124/126/127 is not a failure of the product.
+        fails_saying "never ran" "not supported" sh -c 'exit 127' >/dev/null
+        [ "$FAILC" -eq 5 ] || { echo "  BAD   a never-ran was scored a pass"; _bad=1; }
+        [ "$PASS" -eq 1 ] || { echo "  BAD   an unrelated case credited a pass (PASS=$PASS)"; _bad=1; }
+        exit "$_bad"
+    )
+    if [ $? -eq 0 ]; then
+        echo "  ok    $(basename "$_src") asserts a FAILURE's exit code (1 exactly) and its reason"
+    else
+        echo "  BAD   $(basename "$_src")'s fails_saying does not pin the code or the reason"; BAD=$((BAD + 1))
+    fi
+done
+
 # `plan_names` — the package names in a saved plan, which `#151` needed and no count carries.
 #
 # Driven on a real plan document's shape rather than a hand-typed one-liner, because the whole

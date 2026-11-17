@@ -78,11 +78,20 @@ No later gate can be met while this is red.*
     is no git dir, verified identical (242 files, 82 sites), pinned by
     `the_inventory_still_counts_in_a_tree_with_no_git`, which copies `src/` and `scripts/` into a
     tree with no `.git` and demands the same count.
-  - **Integration (gentoo)** and **Integration (guix)**: the image build puts the suite binary at
-    `target/release/build/shall/<hash>/out/suite-<hash>`, and `Dockerfile.gentoo:42` /
+  - #180 **Integration (gentoo)** and **Integration (guix)**: the image build puts the suite binary
+    at `target/release/build/shall/<hash>/out/suite-<hash>`, and `Dockerfile.gentoo:42` /
     `Dockerfile.guix:43` guess at `target/release/deps/suite-*`, which does not exist — `cp: cannot
-    stat ''`. The guess is the defect; cargo will name the path if asked.
-  - **Integration (tools)**: a different cause, in the image build rather than the suite.
+    stat ''`. The guess is the defect; cargo names the path when asked, and now both ask it with
+    `--message-format=json`. **Fixed**, pending the leg. *Why* those two images move the artefact
+    is recorded as unexplained rather than invented.
+  - #181 **Integration (tools)**: one check, `cabal: removal reports a graceful unsupported`, and
+    the product was right. `apply --delete` on a backend with no uninstall verb fails with `Error:
+    Operation not supported by backend 'cabal'` and exits 1, which is the only row of
+    `src/core/exit.rs` that applies; the harness checked it with `grep_ok`, a predicate for
+    commands that *answer* (0 or 2), so a correct failure read as "it did not answer". **Fixed**:
+    `fails_saying` pins exit 1 plus the reason, in both harnesses, and
+    `scripts/harness-logic-test.sh` drives it against 2, 3, 127 and a silent 1 — 109 → 111
+    predicates, all ok.
 
 **Gate:** `main` CI is green and one nightly is green on the same commit.
 

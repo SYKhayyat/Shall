@@ -1,4 +1,41 @@
 #!/usr/bin/env bash
+# fails_saying "desc" pattern cmd... — the command FAILS with 1, and says why.
+#
+# **The fourth corner of the predicate set, and a different claim from `nok_saying`.** `ok` is
+# 0, `refuses_with_3` is 3-saying, `answers` is 0-or-2, and `nok_saying` is any-non-zero-saying —
+# which accepts 2 and 3. At a site whose contract is "Shall could not carry the command out",
+# both of those are the *wrong answer*, and a reader has to see that from the predicate: 2 is a
+# read-only command reporting work to do, and 3 is the guard refusing on purpose.
+#
+# It exists because the `unsupported` remove-mode site was checked with `grep_ok` — a predicate
+# for commands that ANSWER — at a site whose contract is that the command FAILS (#181). Shall
+# exits 1 there, which `src/core/exit.rs`'s table makes the correct row, and the check called
+# that "it did not answer".
+fails_saying() { # description pattern command...
+    desc="$1"; pat="$2"; shift 2
+    "$@" >/tmp/itw.out 2>&1; rc=$?
+    if [ "$rc" = 1 ] && grep -q "$pat" /tmp/itw.out; then
+        PASS=$((PASS + 1)); _credit_section; echo "  PASS  $desc (failed on purpose, saying so)"; return 0
+    fi
+    FAILC=$((FAILC + 1))
+    if [ "$rc" = 1 ]; then
+        _rw="failed, but nothing said /$pat/"
+    elif [ "$rc" = 0 ]; then
+        _rw="it succeeded — the manager has no uninstall verb, so it cannot have"
+    elif [ "$rc" = 3 ]; then
+        _rw="the guard refused; this is not a guard refusal"
+    elif [ "$rc" = 2 ]; then
+        _rw="it reported differences; apply converges or fails, it does not report"
+    elif never_ran "$rc"; then
+        _rw="rc=$rc: the command never ran"
+    else
+        _rw="rc=$rc: expected 1"
+    fi
+    FAILED_NAMES="$FAILED_NAMES
+    - $desc ($_rw)"
+    echo "  FAIL  $desc ($_rw)"; excerpt; return 1
+}
+
 # ============================================================================
 # Shall v7 native Windows/macOS sweep — host-native backends (scoop/winget/
 # choco/brew) driven through the real `shall` binary. These OSes can't run in a
@@ -1841,7 +1878,12 @@ lifecycle() {
     fi
 
     if [ "$cmode" = "unsupported" ]; then
-        grep_ok "$be: removal reports a graceful unsupported" \
+        # `fails_saying`, not `grep_ok`: the one site in the sweep whose contract is that the
+        # command FAILS. `src/core/exit.rs` makes that exit 1 (`Shall failed — it could not
+        # carry the command out`): nothing converged, `apply` does not report, and the guard was
+        # never consulted. Read against `grep_ok`'s 0-or-2 this is scored as "it did not
+        # answer" (#181).
+        fails_saying "$be: removal refused as unsupported, saying so" \
             "not support\|unsupport\|cannot remove\|no remove" \
             lx -y apply "$be:$cpkg" --delete
         # That refusal is correct AND it leaves the line, so take it out by hand.

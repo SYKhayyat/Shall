@@ -39,8 +39,19 @@ RUN cargo build --release && cp target/release/shall /usr/local/bin/shall && chm
 #
 # `--release`, so it reuses the artefacts `cargo build --release` above just produced rather than
 # compiling the whole dependency graph a second time in debug.
-RUN cargo test --release --no-run --test suite \
-    && cp "$(ls -t target/release/deps/suite-* | grep -v '\.d$' | head -1)" /usr/local/bin/suite \
+# **Ask cargo where it put the binary; do not guess at `deps/`.** The guess was
+# `ls -t target/release/deps/suite-*`, and on 2026-11-17 it matched nothing here
+# (`cp: cannot stat ''`) while cargo's own line above said the executable was at
+# `target/release/build/shall/<hash>/out/suite-<hash>` — a directory this repository never
+# names and does not control. `--message-format=json` prints the path cargo actually used.
+# The `"kind":["test"]` filter is not decoration: a suite build emits three executables
+# (`shall`, `shim`, `suite`) and the test is not the only one. `test -s` turns an empty
+# answer into a failure instead of a `cp` of nothing. (#180)
+RUN cargo test --release --no-run --test suite --message-format=json \
+    | grep '"kind":\["test"\]' \
+    | grep -o '"executable":"[^"]*"' | tail -1 | cut -d'"' -f4 > /tmp/suite-path \
+    && test -s /tmp/suite-path \
+    && cp "$(cat /tmp/suite-path)" /usr/local/bin/suite \
     && chmod 0755 /usr/local/bin/suite
 
 FROM metacall/guix:latest
