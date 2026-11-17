@@ -414,7 +414,7 @@ fn the_local_mutation_gate_names_a_target_that_has_tests() {
             let Some(rest) = line.split("--file").nth(1) else {
                 continue;
             };
-            let mutated = rest.trim().split_whitespace().next().unwrap_or("");
+            let mutated = rest.split_whitespace().next().unwrap_or("");
             let source = read(&repo().join(mutated));
 
             // `-- --lib` is the scope, and it is only ever right for a file with a test module.
