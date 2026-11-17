@@ -1277,27 +1277,34 @@ jobs:
           # left mutation coverage on the day they moved - four shards still green over a file
           # that no longer holds them.
           #
-          # **Four shards, and the number is measured rather than reasoned.** `cargo mutants
-          # --list` counts 43 here, fewer than `datalock` (48) or `sync engine` (78), both of
-          # which finish, so it is not the count: every one of these lands in a hot path dozens of
-          # tests depend on, and each mutant costs a full recompile of `shall` and `suite` plus
-          # that 170s suite, with `-j2` putting two of them on a four-core runner at once.
+          # **Eight shards, and the number is measured through four that were not enough.**
+          # `cargo mutants --list` counts 43 here, and the cost is *per mutant, varying with which
+          # mutant breaks how many tests*: each one lands in a hot path, so every mutant rebuilds
+          # `shall` and `suite` and runs the whole 170s suite, and a mutant that fails many tests
+          # runs it several times (`--no-fail-fast` plus `--retries 2`). Nobody had to reason
+          # about this because the shards themselves measured it:
           #
-          # **Two shards was the first attempt and it was not enough** (#190). `0/2` finished and
-          # `1/2` died at **74 minutes** with `The hosted runner lost communication with the
-          # server` - while `the error vocabulary` (41 min) and `the transaction 4/4` (84 min)
-          # both finished, so it is not a wall-clock ceiling either, it is a runner that gives out
-          # under this load somewhere between those. Reproduced locally from the same commit: 21
-          # mutants, **8 caught, 0 missed, 0 timeouts** in 65 minutes, no hang, ~1.1 GB resident
-          # for one suite and a `rustc` beside it. So the work is real and the death is the
-          # *duration* of it. Four shards is 11 + 11 + 11 + 10, ~40 minutes each, which is under
-          # the 41-minute leg that has never died.
+          # - `0/4` finished green at **47 minutes**, `1/4` at **38** — the split to four was
+          #   already better than the two-shard shape of #190, which died at 74 and 115 and 126.
+          # - `2/4` died at **72 minutes** with `The hosted runner lost communication with the
+          #   server` — a heavier batch of mutants, same count.
+          # - `3/4` was cancelled at **33 minutes** and the survivors step is `skipped` in its
+          #   log, which is what a cancellation looks like whatever a step's `if` says.
+          #
+          # So an eleven-mutant shard can take anywhere from 38 to over 72 minutes depending on
+          # who is in it, and this one is the leg that always dies. Six mutants is the measured
+          # ceiling underneath the 38-minute shard: `0/8`..`6/8` = 6 each, `7/8` = 1
+          # (43 total), and a six-mutant shard of the worst batch is ~40 minutes.
           #
           # Sharding partitions the file, so nothing about what the leg measures changes.
-          - { what: the batch narrowing 1/4, file: src/core/batch.rs, slug: batch-1, shard: 0/4 }
-          - { what: the batch narrowing 2/4, file: src/core/batch.rs, slug: batch-2, shard: 1/4 }
-          - { what: the batch narrowing 3/4, file: src/core/batch.rs, slug: batch-3, shard: 2/4 }
-          - { what: the batch narrowing 4/4, file: src/core/batch.rs, slug: batch-4, shard: 3/4 }
+          - { what: the batch narrowing 1/8, file: src/core/batch.rs, slug: batch-1, shard: 0/8 }
+          - { what: the batch narrowing 2/8, file: src/core/batch.rs, slug: batch-2, shard: 1/8 }
+          - { what: the batch narrowing 3/8, file: src/core/batch.rs, slug: batch-3, shard: 2/8 }
+          - { what: the batch narrowing 4/8, file: src/core/batch.rs, slug: batch-4, shard: 3/8 }
+          - { what: the batch narrowing 5/8, file: src/core/batch.rs, slug: batch-5, shard: 4/8 }
+          - { what: the batch narrowing 6/8, file: src/core/batch.rs, slug: batch-6, shard: 5/8 }
+          - { what: the batch narrowing 7/8, file: src/core/batch.rs, slug: batch-7, shard: 6/8 }
+          - { what: the batch narrowing 8/8, file: src/core/batch.rs, slug: batch-8, shard: 7/8 }
           # **The classification lives here, and no shard could see it.** `VI.11` and `M4`
           # put three decision functions into these two files - `Retryability::and_also`,
           # `Error::with_note` and `summarise` - and neither file had a row, so the branch

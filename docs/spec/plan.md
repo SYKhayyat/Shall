@@ -156,7 +156,14 @@ what blocks the next one.
     so nothing hangs and nothing leaks; it is simply a long, heavy leg that a hosted runner gives
     out under at some duration between 41 and 84 minutes. The row is therefore **`0/4` … `3/4`,
     11 + 11 + 11 + 10 = 43** (~40 minutes each), which is under the 41-minute leg that has never
-    died. Two corrections to what this paragraph first said: the split is four and not two, and
+    died. **Four was not enough either, and the four shards measured why the number cannot be
+    reasoned about from a count:** `0/4` finished green at 47 minutes and `1/4` at 38, while
+    `2/4` died at 72 with the same annotation and `3/4` was cancelled at 33. Same mutant count in
+    each — so the cost varies with *which* mutant, because the expensive ones are the ones that
+    fail many tests and run the suite again per retry. An eleven-mutant shard is therefore 38
+    minutes or 72, depending on who is in it. The row is now **`0/8` … `7/8`, six mutants each**
+    (43 total), whose worst batch is ~40 minutes. Two corrections to what this paragraph first
+    said: the split is eight and not two, and
     **the artifact condition was never the gap.** `!cancelled()` already uploaded on a *failing*
     shard — `mutants-out-datalock` is in run `44006078594`, whose data-lock shard failed with five
     survivors — and `always()` does not help where the evidence was actually missing: nothing runs
