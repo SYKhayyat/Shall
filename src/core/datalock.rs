@@ -77,6 +77,21 @@ pub const WAIT_SECS: u64 = 120;
 static HELD: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<PathBuf>>> =
     std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
 
+/// **The check-and-take in `for_this_write_in`, made one step.**
+///
+/// Two threads of one process can both ask *"is the lock ours?"* in the same instant and both
+/// hear *"no"*: the first takes the handle, the second walks into `take`, finds the owner stamp
+/// naming its own pid, and is refused with *"this process already holds the lock"*. That is
+/// `#185`'"'"'s residual flake — a full suite run has dozens of ledger writes from dozens of
+/// threads — and the refusal means *"another thread of mine won a race"*, which is not a failure
+/// and not something a caller can act on. Measured with
+/// `a_write_from_eight_threads_at_once_is_not_refused` against the previous code: **1 to 10
+/// refusals in 160 attempts.**
+///
+/// Serialising the decision — not the write, the decision — closes the window without changing
+/// who decides what.
+static WRITE_GATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// The held set, ignoring poisoning: it is touched on the drop path, where a panic in another
 /// thread must not turn releasing a lock into a second panic.
 fn held_dirs() -> std::sync::MutexGuard<'static, std::collections::HashSet<PathBuf>> {
@@ -182,6 +197,15 @@ pub struct DataLock {
     recorded_as: PathBuf,
 }
 
+/// What `take` can come back with: a real failure, or the state that means *"you are already
+/// inside it"* — which belongs to the door to interpret, because the two doors disagree about
+/// whether it is an answer or a refusal.
+enum TakeFailure {
+    /// This process already holds the handle on that directory.
+    SelfContended,
+    Failed(Error),
+}
+
 impl DataLock {
     /// Take the lock from an `async` command, without parking a runtime worker.
     ///
@@ -272,11 +296,20 @@ impl DataLock {
     /// lock protecting a directory their writes never reach. Two writers of *different* stores
     /// were excluded from each other for no reason, which is the safest way to be wrong and the
     /// hardest to notice.
+    /// **`SelfContended` is folded into `Ok(None)` here rather than surfaced as an error**, and
+    /// the choice belongs to this door. `acquire_reentrant` reports the state as the refusal its
+    /// name promises, because its caller asked to be told; this door'"'"'s caller asked *"may I
+    /// write"*, and being inside one'"'"'s own lock **is** the answer yes.
     pub fn for_this_write_in(data_dir: &Path, what: &str) -> Result<Option<Self>> {
+        let _gate = WRITE_GATE.lock().unwrap_or_else(|e| e.into_inner());
         if held_on(data_dir) {
             return Ok(None);
         }
-        Self::acquire_reentrant(data_dir, what, Duration::from_secs(WAIT_SECS)).map(Some)
+        match Self::take(data_dir, what, Duration::from_secs(WAIT_SECS), true) {
+            Ok(lock) => Ok(Some(lock)),
+            Err(TakeFailure::SelfContended) => Ok(None),
+            Err(TakeFailure::Failed(e)) => Err(e),
+        }
     }
 
     /// Take the lock, waiting up to `timeout` for whoever holds it.
@@ -284,7 +317,11 @@ impl DataLock {
     /// Waiting with no reason given is indistinguishable from hanging, so the wait announces
     /// the holder — the lock file carries the pid and the command that took it.
     pub fn acquire(data_dir: &Path, command: &str, timeout: Duration) -> Result<Self> {
-        Self::take(data_dir, command, timeout, false)
+        Self::take(data_dir, command, timeout, false).map_err(|f| match f {
+            TakeFailure::Failed(e) => e,
+            // Unreachable while the flag is `false`, and answered rather than assumed.
+            TakeFailure::SelfContended => Self::self_contended(data_dir),
+        })
     }
 
     /// The acquire behind [`for_this_write`](Self::for_this_write), which refuses at once
@@ -300,11 +337,29 @@ impl DataLock {
     /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a
     /// test crate links the library without `cfg(test)`, so a private item is invisible there.
     pub fn acquire_reentrant(data_dir: &Path, command: &str, timeout: Duration) -> Result<Self> {
-        Self::take(data_dir, command, timeout, true)
+        Self::take(data_dir, command, timeout, true).map_err(|f| match f {
+            TakeFailure::Failed(e) => e,
+            TakeFailure::SelfContended => Self::self_contended(data_dir),
+        })
     }
 
-    fn take(data_dir: &Path, command: &str, timeout: Duration, refuse_self: bool) -> Result<Self> {
-        let (file, owner_path) = Self::open_lock_file(data_dir)?;
+    /// The refusal both direct doors turn `SelfContended` into — the text that used to be inline
+    /// in `take`, kept where a reader looking for *"already holds the lock"* will find it.
+    fn self_contended(data_dir: &Path) -> Error {
+        Error::Other(format!(
+            "this process already holds the lock on {}, and a second handle on it would wait for              that one.
+  A command takes this lock once, in `main`; a write reached from inside              it asks `DataLock::for_this_write`, which declines instead of taking it again.",
+            data_dir.display()
+        ))
+    }
+
+    fn take(
+        data_dir: &Path,
+        command: &str,
+        timeout: Duration,
+        refuse_self: bool,
+    ) -> std::result::Result<Self, TakeFailure> {
+        let (file, owner_path) = Self::open_lock_file(data_dir).map_err(TakeFailure::Failed)?;
         let path = data_dir.join("shall.lock");
 
         match file.try_lock_exclusive() {
@@ -317,14 +372,7 @@ impl DataLock {
                     // already inside. Contention between two processes is the case the wait is
                     // for; this is the case it exists to refuse.
                     if refuse_self && Self::holder_is_this_process(&owner_path) {
-                        return Err(Error::Other(format!(
-                            "this process already holds the lock on {}, and a second handle on \
-                             it would wait for that one.\n  \
-                             A command takes this lock once, in `main`; a write reached from \
-                             inside it asks `DataLock::for_this_write`, which declines instead of \
-                             taking it again.",
-                            data_dir.display()
-                        )));
+                        return Err(TakeFailure::SelfContended);
                     }
                     eprintln!(
                         "shall: waiting for the data directory — held by {}",
@@ -336,11 +384,11 @@ impl DataLock {
                             Ok(()) => break,
                             Err(e) => match classify_lock_failure(e) {
                                 LockFailure::Other(e) => {
-                                    return Err(Error::Io(format!(
+                                    return Err(TakeFailure::Failed(Error::Io(format!(
                                         "could not lock {}: {}",
                                         path.display(),
                                         e
-                                    )));
+                                    ))));
                                 }
                                 LockFailure::Contended => {}
                             },
@@ -351,7 +399,7 @@ impl DataLock {
                             // released when the holding process exits — so a lock that is still
                             // contended after the wait proves a live holder, and deleting the file
                             // takes the lock away from it rather than from a corpse.
-                            return Err(Error::Other(format!(
+                            return Err(TakeFailure::Failed(Error::Other(format!(
                             "the Shall data directory is locked by {}, and still was after {}s.\n  \
                              {} is where state lives, and two writers make a removal out of a race.\n  \
                              The lock is held by a running process, not by the file: {} exists\n  \
@@ -361,17 +409,17 @@ impl DataLock {
                             timeout.as_secs(),
                             data_dir.display(),
                             path.display()
-                        )));
+                        ))));
                         }
                         std::thread::sleep(Duration::from_millis(100));
                     }
                 }
                 LockFailure::Other(e) => {
-                    return Err(Error::Io(format!(
+                    return Err(TakeFailure::Failed(Error::Io(format!(
                         "could not lock {}: {}",
                         path.display(),
                         e
-                    )));
+                    ))));
                 }
             },
         }
