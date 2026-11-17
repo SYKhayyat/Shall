@@ -68,6 +68,21 @@ No later gate can be met while this is red.*
   3274 passed, 0 failed.
 - [ ] **One full nightly, green**, including integration (all distros), the install scripts run for
   real, and mutation. A night that is still red gets each red job filed as its own issue, here.
+  The nightly of 2026-11-17 (`43994114130`) was dispatched to answer this box, and answered it with
+  18 red jobs. Four of them are M0's own macOS/Windows boxes above. The other fourteen are new, and
+  each is filed here:
+  - #179 **every one of the thirteen mutation shards**, and none of them is mutation debt: the
+    baseline — the *unmutated* tree — fails, because `scripts/panic-inventory.sh` enumerated its
+    files with `git ls-files` and the `cargo mutants` sandbox has no `.git`, so it counted zero
+    sites and its three guard tests failed. **Fixed**: the file list falls back to `find` when there
+    is no git dir, verified identical (242 files, 82 sites), pinned by
+    `the_inventory_still_counts_in_a_tree_with_no_git`, which copies `src/` and `scripts/` into a
+    tree with no `.git` and demands the same count.
+  - **Integration (gentoo)** and **Integration (guix)**: the image build puts the suite binary at
+    `target/release/build/shall/<hash>/out/suite-<hash>`, and `Dockerfile.gentoo:42` /
+    `Dockerfile.guix:43` guess at `target/release/deps/suite-*`, which does not exist — `cp: cannot
+    stat ''`. The guess is the defect; cargo will name the path if asked.
+  - **Integration (tools)**: a different cause, in the image build rather than the suite.
 
 **Gate:** `main` CI is green and one nightly is green on the same commit.
 

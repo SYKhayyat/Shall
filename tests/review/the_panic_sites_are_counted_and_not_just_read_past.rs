@@ -169,3 +169,84 @@ fn the_test_sites_are_excluded_from_the_production_count() {
          production"
     );
 }
+
+/// **The inventory does not need git, because the mutation sandbox does not have one.**
+///
+/// This is `#179`, and it cost thirteen mutation shards and six hours a night. `cargo mutants`
+/// copies the tree into a sandbox that holds the files and no `.git`, so `git ls-files` answered
+/// nothing, the script printed "no sites", and every shard's **baseline** failed — the exact
+/// `ERROR cargo test failed in an unmutated tree` shape the workflow's own comment calls "a shard
+/// that answers nothing". The red said "mutation survivors" when there were none.
+///
+/// The test builds a tree that is the sandbox in the only particular that matters: `scripts/` and
+/// `src/` present, `.git` absent. It asserts the script still counts, and counts the *same* as it
+/// does in this repository — a fallback that found a different set of files would be a second
+/// silent way to read the wrong tree.
+#[test]
+fn the_inventory_still_counts_in_a_tree_with_no_git() {
+    let scratch = std::env::temp_dir().join(format!(
+        "shall-panic-inventory-no-git-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&scratch);
+    std::fs::create_dir_all(scratch.join("scripts")).expect("a scratch scripts dir");
+
+    std::fs::copy(
+        repo().join("scripts/panic-inventory.sh"),
+        scratch.join("scripts/panic-inventory.sh"),
+    )
+    .expect("the script copies");
+    for entry in walk_rs(&repo().join("src")) {
+        let rel = entry.strip_prefix(repo()).expect("a path under the repo");
+        let dest = scratch.join(rel);
+        std::fs::create_dir_all(dest.parent().expect("a parent")).expect("a parent dir");
+        std::fs::copy(&entry, &dest).expect("a source file copies");
+    }
+    assert!(
+        !scratch.join(".git").exists(),
+        "the scratch tree must not be a git repository, or this test proves nothing"
+    );
+
+    let counted_in = |dir: &std::path::Path| -> usize {
+        let out = Command::new(super::bash())
+            .arg(dir.join("scripts/panic-inventory.sh"))
+            .arg("--summary")
+            .current_dir(dir)
+            .output()
+            .expect("the inventory script runs");
+        assert!(
+            out.status.success(),
+            "the inventory failed in {}: {}",
+            dir.display(),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+        let n = stdout
+            .lines()
+            .find_map(|l| l.trim().strip_prefix("production panic sites: "))
+            .and_then(|n| n.parse().ok())
+            .unwrap_or_else(|| {
+                panic!(
+                    "no count in {} — this is the #179 failure:\n{stdout}",
+                    dir.display()
+                )
+            });
+        n
+    };
+
+    let here = counted_in(&repo());
+    let sandboxed = counted_in(&scratch);
+    let _ = std::fs::remove_dir_all(&scratch);
+
+    assert_eq!(
+        here, sandboxed,
+        "the script counted {here} sites here and {sandboxed} in a copy of `src/` with no `.git`. \
+         It is meant to inventory the files under `src/`; git is only how it skips scratch files, \
+         so a tree without one must give the same answer rather than zero."
+    );
+    assert!(
+        sandboxed > 0,
+        "a zero in the no-git tree is the #179 bug back again: every mutation shard's baseline \
+         fails against it and the shards report survivors that do not exist"
+    );
+}

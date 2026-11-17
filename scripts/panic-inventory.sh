@@ -21,6 +21,21 @@ set -u
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "$0")/.." && pwd))"
 cd "$REPO_ROOT" || { echo "cannot cd to repo root"; exit 2; }
 
+# **The file list must not require git.** This was `git ls-files` alone, and `cargo mutants`
+# copies the tree into a sandbox with no `.git` — so the script found zero files, printed
+# "no sites", and the *baseline* of every mutation shard failed. Thirteen shards answered
+# nothing for six hours a night, and the red said "mutation survivors" when there were none
+# (`#179`). `find` and `git ls-files` were verified to produce the identical 242 files and the
+# same count on a clean tree; git is used when it is there because it excludes untracked
+# scratch files, and `src/` has no ignored `.rs` file either way.
+rs_files() {
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+        git ls-files 'src/*.rs' 'src/**/*.rs' 2>/dev/null | sort -u
+    else
+        find src -name '*.rs' -type f 2>/dev/null | sort
+    fi
+}
+
 MODE="production"
 for arg in "$@"; do
     case "$arg" in
@@ -57,7 +72,7 @@ trap 'rm -f "$tmp"' EXIT
 
 while IFS= read -r file; do
     classify "$file" >> "$tmp"
-done < <(git ls-files 'src/*.rs' 'src/**/*.rs' 2>/dev/null | sort -u)
+done < <(rs_files)
 
 total="$(wc -l < "$tmp" | tr -d ' ')"
 
@@ -83,7 +98,7 @@ if [ "$MODE" = "all" ]; then
     while IFS= read -r file; do
         grep -nE '\.unwrap\(\)|\.expect\(|panic!\(|unreachable!\(|todo!\(|unimplemented!\(' \
             "$file" | sed "s|^|$file:|" | awk -F: '{ printf "%s\t%s\t%s\n", $1, $2, $3 }' >> "$tmp"
-    done < <(git ls-files 'src/*.rs' 'src/**/*.rs' 2>/dev/null | sort -u)
+    done < <(rs_files)
 fi
 
 echo "production panic sites: $total"
