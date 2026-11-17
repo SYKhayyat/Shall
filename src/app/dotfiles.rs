@@ -66,11 +66,23 @@ pub fn roots(home: &Path) -> Vec<PathBuf> {
 pub fn scan(home: &Path) -> (Vec<ManagedLink>, bool) {
     let mut out = Vec::new();
     let mut memo = HashMap::new();
+    // **Two spellings of one directory, and the comparison needs the resolved one.** A link's
+    // source is canonicalised (`as_managed_link`), because "must exist" and "is it in a
+    // repository" are questions about the file itself. `$HOME` arrives as the user's spelling.
+    // On macOS those differ for every home under `/var`, which is `/private/var` on disk — so
+    // `~/.config/x -> ~/.local/state/x` had a canonical source that did not start with the raw
+    // home, and `adopt` offered to declare a rearrangement as a dotfile (#171).
+    //
+    // Canonicalised **once**, not per link: this is a scan of a home directory and `walk` meets
+    // hundreds of links. `home` itself is still the walking root and still what `tilde` spells
+    // declarations against, because a manifest naming `/private/var/folders/…` is one no second
+    // machine can use.
+    let home_resolved = std::fs::canonicalize(home).unwrap_or_else(|_| home.to_path_buf());
     for root in roots(home) {
         // `$HOME` itself is walked one level only: `.bashrc` and `.gitconfig` are dotfiles, and
         // `~/Documents/2024/notes` is not something to crawl.
         let depth = if root == home { 1 } else { DEPTH };
-        walk(&root, depth, home, &mut memo, &mut out);
+        walk(&root, depth, home, &home_resolved, &mut memo, &mut out);
         if out.len() >= MAX_LINKS {
             out.truncate(MAX_LINKS);
             out.sort();
@@ -112,6 +124,7 @@ fn walk(
     dir: &Path,
     depth: usize,
     home: &Path,
+    home_resolved: &Path,
     memo: &mut HashMap<PathBuf, bool>,
     out: &mut Vec<ManagedLink>,
 ) {
@@ -127,7 +140,7 @@ fn walk(
             continue;
         };
         if meta.file_type().is_symlink() {
-            if let Some(link) = as_managed_link(&path, home, memo) {
+            if let Some(link) = as_managed_link(&path, home, home_resolved, memo) {
                 out.push(link);
             }
             // Never descended into: a link to `$HOME` or to a repository root would walk the
@@ -142,13 +155,14 @@ fn walk(
                 continue;
             }
         }
-        walk(&path, depth - 1, home, memo, out);
+        walk(&path, depth - 1, home, home_resolved, memo, out);
     }
 }
 
 fn as_managed_link(
     path: &Path,
     home: &Path,
+    home_resolved: &Path,
     memo: &mut HashMap<PathBuf, bool>,
 ) -> Option<ManagedLink> {
     // A relative target is relative to the link's own directory, which is how `readlink` and the
@@ -163,7 +177,13 @@ fn as_managed_link(
     let source = std::fs::canonicalize(&resolved).ok()?;
     // A link that stays inside `$HOME` is a rearrangement, not a dotfile kept in a repository —
     // and following it would offer `~/.config/x -> ~/.local/state/x` as a declaration to adopt.
-    if source.starts_with(home) {
+    //
+    // **Both spellings, because `source` is canonical and `home` is not.** The defect this
+    // closes: on macOS every home under `/var` is really `/private/var`, so a canonical source
+    // never started with the raw home, the check never fired, and `adopt` offered to declare the
+    // user's own rearrangements (#171). Asking both also covers the other direction — a `$HOME`
+    // that is itself a symlink, which is how a great many servers are set up.
+    if source.starts_with(home) || source.starts_with(home_resolved) {
         return None;
     }
     if !in_a_repository(&source, memo) {

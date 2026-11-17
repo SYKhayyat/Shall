@@ -53,10 +53,18 @@ No later gate can be met while this is red.*
     the test asserted the wrong thing about. **Fixed** (`aa065ea3`): a backend this host's registry
     does not hold is now a named hole rather than a `continue`, so the export refuses instead of
     writing an artifact that silently describes a different machine. 21 → 6 → **4**.
-  - **Still open, both assigned to the Windows host:** #171 `adopt` compares a canonicalised link
-    source against a raw `$HOME` (2 tests, a production bug); #177 the scheduled-task and service
-    tests stub `systemctl` on a host with no systemd (2 tests) — C33 now rules the policy, so that
-    one is fixture work against tables that already have `windows-sc` and `launchd` rows.
+  - #171 `adopt` compared a **canonicalised** link source against `$HOME` **as the caller spelled
+    it**. Those differ for every home under `/var` on macOS (`/private/var` on disk) and for every
+    `$HOME` that is itself a symlink, and when they differ the "inside the home" rule does not
+    become imprecise — it stops existing, so a tool tidying itself up (`~/.config/x ->
+    ~/.local/state/x`) was offered as a dotfile to declare. **Fixed** (`ba0db47f`'s successor):
+    `scan` resolves the home once and the comparison asks both spellings. Tested by building the
+    `/var` shape in a fixture rather than needing a Mac to see it, plus the negative control — a
+    repository genuinely outside a symlinked home is still adopted, which is what stops the fix
+    from being "answer `None` whenever in doubt".
+  - #177 the scheduled-task and service tests stubbed `systemctl` on every platform. **Fixed** as
+    part of #174's family: the stubs are the host's init system (`sc` / `launchctl` /
+    `systemctl`), which is what C33 ruled and what the assertions already said.
 - [x] **Windows (msvc): 28 → 0 tests fail on this host** (#174, 2026-11-17). Twenty-eight became
   fifteen after #175, and fifteen became **one** here, and that one was not mine (#184). Every
   family had the same shape — **a fixture that spelled an argv by hand where the product decides
