@@ -133,6 +133,14 @@ No later gate can be met while this is red.*
     `scripts/harness-logic-test.sh` drives it against 2, 3, 127 and a silent 1 — 109 → 111
     predicates, all ok.
 
+  **Where the nightly actually stands after those three.** Run `44006078594` on `a5f2a61e`:
+  gentoo, guix, tools, both install-script legs, the Linux suite and the whole container matrix
+  **green**; macOS and the Windows host still red on their own boxes above. The mutation gate went
+  from *thirteen shards that answered nothing* to **eleven green and one survivor**: #183, the
+  data lock's `&&` → `||`, whose fix landed after this run. Two odd ones out, neither a finding:
+  `Mutation (the batch narrowing)` failed with its step still `pending` and its log blob
+  `BlobNotFound` — a runner that went away is not a measurement, so it is re-run rather than filed
+  — and `Mutation (the sync engine)` is the largest shard and was still running when the rest finished.
 **Gate:** `main` CI is green and one nightly is green on the same commit.
 
 ---
