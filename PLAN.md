@@ -182,6 +182,14 @@ No later gate can be met while this is red.*
   any scheduler test uses). It is the same shape `refuse_self_named`'s own doc records: a unit that
   failed at 03:00 every night with nothing saying why.
 
+  **The two release scripts now gate the same things** (#196, in the review suite, not an issue):
+  `scripts/release-check.sh` ran `decision-count.sh --check` as a hard gate and
+  `scripts/release-check.ps1` did not run it at all, so Windows could print `GO` on a tree the
+  Linux script refused. Added the step to the PowerShell script and a test that derives every
+  gate from the shell script and asserts the PowerShell one runs each — comment lines excluded, so
+  a gate named only in a header is a name, not a gate (the `grader_gate_parity` lesson). The one
+  deliberate pair is `install.sh`/`install.ps1`, each script's own installer, declared as such.
+
   **Also fixed while the night ran: #191**, `export --help` naming four of five manifests and
   `src/main.rs`'s refusal hint naming four of five as well. `Format::NAMES` is now the one table
   that `parse`, `Format::all`, `Format::WORDS` and the help all read, and the tests hold the help

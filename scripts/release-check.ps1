@@ -5,6 +5,9 @@
 #      cargo test --release --no-fail-fast   (HARD)
 #      cargo build --release       (HARD)
 #      cargo fmt -- --check        (HARD - CI fails the build on it, so this must too)
+#   1b. scripts/decision-count.sh --check (HARD) - every documented count matches the register
+#      (release-check.sh has run this since it was added; this script did not, so the two could
+#      disagree about what "ready to ship" means)
 #   2. scripts/integration-windows.sh - real install/list/remove for every backend installable
 #      on this host (scoop + any bootstrapped ecosystem managers + winget/choco if present),
 #      full feature coverage, and the self-checking coverage audit.
@@ -150,6 +153,18 @@ if ($null -eq $msrv) {
     else { Fail "does NOT build on rust-version = $msrv - raise it deliberately or fix the use" }
 } else {
     Info "toolchain $msrv not installed (rustup toolchain install $msrv); CI runs it regardless"
+}
+
+# The decision register is a gate on Linux and was not one here, so the two scripts could
+# disagree about what "ready" means: a documented count that no longer matches the register is
+# exactly what this check exists to catch, and `release-check.sh` already refuses to pass it.
+Write-Host "-> scripts/decision-count.sh --check"
+$bashForDecisions = Find-Bash
+if ($null -eq $bashForDecisions) {
+    Fail "no real bash found (install Git for Windows): cannot check the decision register"
+} else {
+    & $bashForDecisions "scripts/decision-count.sh" "--check"
+    if ($LASTEXITCODE -eq 0) { Pass "decision register" } else { Fail "decision register FAILED" }
 }
 
 # CI runs this on every push and this gate did not run it at all, so the one check that asks

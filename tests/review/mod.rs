@@ -75,6 +75,7 @@ mod the_review_apparatus_is_rust_tests;
 mod the_section_vocabulary_is_said_once_tests;
 mod the_smoke_tier_reports_what_it_did_not_run;
 mod the_stated_lifecycle_coverage_matches_the_ratchet_tests;
+mod the_two_release_scripts_run_the_same_gates_tests;
 mod wal_enumeration_tests;
 mod why_entries_are_attached_to_something_tests;
 mod windows_ci_runs_nimble_canary_tests;
