@@ -143,8 +143,13 @@ No later gate can be met while this is red.*
 invariants, #94 receipts, #124's prerequisites, and the whole #120 test layout. None of it can be
 installed without building from source.*
 
-- [ ] `CHANGELOG.md`: a `0.9.0` entry written from `git log v0.8.0..HEAD`, in the shape of 0.8.0's
-  entry: what a user notices first, then the fixes grouped by what they protect.
+- [x] `CHANGELOG.md`: a `0.9.0` entry written from `git log v0.8.0..HEAD`, in the shape of 0.8.0's
+  entry: what a user notices first, then the fixes grouped by what they protect. **Written**
+  (188 lines over 418 non-merge commits): `adopt` dotfiles, `export` (both sources, and
+  the refusal that makes a partial script honest), `invariant:`, the three-way `[declare] install`,
+  the `link:` content modes, session protection on every platform — then the fixes under *what it no
+  longer touches*, *what it says*, *the suite*, and the platform work. Not ticked as "shipped":
+  the entry is written, the number is not released until the two boxes below are.
 - [ ] `scripts/release-check.sh` and `scripts/release-check.ps1` both green.
 - [ ] Bump `Cargo.toml`, tag `v0.9.0`, and confirm that all seven `shall-<target>` binaries are attached to the release.
 - [ ] **Install it the way a user would**, on a clean Linux VM and a clean Windows VM: `install.sh` /

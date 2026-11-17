@@ -2,6 +2,198 @@
 
 All notable changes to Shall are documented here.
 
+## [0.9.0] — 2026-11-17 — adopt the machine you have, export it as a script, and a promise `check` keeps
+
+**`0.8.0` made Shall installable. It could still only converge a file somebody had written by
+hand, and there were two ways to produce that file: write it, or nothing.** That is the one gap
+standing between this project and its point — take the laptop you are sitting at, and get the
+laptop you want — and `0.9.0` closes it from both ends. `adopt` reads the machine and offers a
+declaration; `export` writes a declaration back out as a standalone script, so a machine can be
+reproduced by something that has never heard of Shall.
+
+Between the two, 418 commits. What follows is what a user notices, then the fixes grouped by what
+they protect.
+
+### `adopt` finds the dotfiles you already keep in a repository
+
+A machine configured by `stow`, chezmoi or a shell script for years no longer has to be re-declared
+from memory. The evidence is deliberately one thing: **a symlink whose target is inside a git
+working tree**. `.git` is looked for by walking up from the canonical target — a directory in a
+plain clone, a file in a worktree or a submodule — and the roots scanned are `$HOME` one level
+deep, then `~/.config`, `~/.local/share` and `~/.ssh` two levels deep, never descending into a
+link.
+
+Everything else in a home directory is not evidence. A plain file is an application's output, not a
+decision, and so are its age, its size and its being edited recently. A link whose target is inside
+`$HOME` is a rearrangement (`~/.config/x -> ~/.local/state/x` points at nothing a second machine
+could reproduce), and a broken link declares nothing at all. `~/.cache`, `~/.local/share/Trash`
+and a plugin manager's own tree are state, not declarations, and are skipped by name.
+
+The line it writes is a `link:` with a `~` target and an absolute source, spelled by the grammar's
+own round trip rather than by a second `format!`, and it lands in the manifest's own *files you
+link into a repository* section. `check unmanaged` reports the same set without adopting it, so
+"what would you take?" is a question you can ask before `sync` acts on the answer. **II.95.**
+
+### `export` writes a script that reproduces a machine, from the machine or from the files
+
+Two sources and one artifact. `--from-scan` reads what this machine actually has; `--from-declaration`
+reads what the config files say; both write a bash script a machine can run with no Shall on it.
+
+The interesting half is the refusal. **Formats are not equally expressive** — a shell script cannot
+express a version pinned by a manager, and a NixOS module cannot write a `gsettings` key — so
+`export` refuses by default, names every line the format cannot carry with the file and line it came
+from, and exits **2**. A script that silently covers 80% of a machine reads as "this reproduces my
+machine" while it does not. Three rules make a partial artifact possible without making a lie
+possible:
+
+- **`@export=no` on a line is the opt-out**, in the file, where the line lives — not a flag. An
+  opted-out line is still a live declaration: `sync` applies it, `check` reports on it, only the
+  export does not have to be able to say it. This is what makes a Nix export possible on a machine
+  whose one unsayable key is marked once instead of worked around in the exporter.
+- **`--best-effort` is the only road to a partial script**, and it says so twice: a warning on
+  stderr *and* a comment in the script where the omission sits. The file is written and the exit is
+  still **2**.
+- **A declared removal reaches the script as a removal.** `absent:` lines are not silently dropped
+  — and a backend this host's registry does not hold is a **named hole**, not a silence, because an
+  artifact that describes a different machine than the one in front of you is the worst possible
+  export. **II.94, II.97.**
+
+### `invariant:` — the promise no `sync` can converge, and `check` measures anyway
+
+Some facts about a machine are expensive and unrecoverable and are not packages: a library, a photo
+archive, a keyring backup. Nothing in Shall could declare "this path must be mirrored off-box", so
+the day the disk died `check` had nothing to say.
+
+`invariant:NAME @path=…,backed-by=ADAPTER:TARGET,max-age=N` is that declaration, and it is
+deliberately outside everything else in the grammar: no phase, no placement, no ledger row, nothing
+to undo. `check durability` answers it, and **the answer comes from the backup tool's own listing,
+never from a receipt Shall wrote** — a receipt reports the copy it made just as confidently on the
+machine whose repository password expired three weeks ago. Three failures are never merged: a copy
+older than `@max-age`, no copy at all, and **nothing on this machine could answer**. The last is
+reported with its reason and is never a pass; a promise nothing checked is the only outcome this
+section must never print green.
+
+`restic` is the only shipped adapter, and that is the point rather than a shortcoming: a row must be
+able to say *which paths a copy covers*, and `borg`'s listing names archives and times and never
+paths, while `timeshift` excludes `/home` unless it was configured otherwise. A row for either
+would turn "a copy exists" into a guess about a repository nobody looked inside. **II.93.**
+
+### A bare tool name is installed only as far as `[declare] install` allows
+
+`rg` with no `backend:` prefix is a declaration of a tool the machine may not have. `ask` (the
+default), `always` and `never` are the three answers, and the shape is three-way because a flag can
+only say one of them: `--yes` answers "do it without asking", and nothing a command line carries
+means "and do not even do it". A machine mirroring another machine's intent and a CI image that
+installs whatever it names are both ordinary and need opposite answers to the same prompt.
+
+**`never` outranks `--yes`**, and the refusal names the setting that declined and how to change it —
+a fact a person wrote months ago and will not remember. A decline leaves the declaration in the file
+and the package owed, and **a decline by policy is a warning and exit 0; a decline by a person is
+exit 1**. The distinction is the source of the answer, not the size of the shortfall. And every
+reconcile reads the policy, including `watch`, which is the run that most needs the answer its owner
+wrote down because it cannot put the question to anybody. **II.91, II.92.**
+
+### Content modes: a `link:` that writes instead of pointing
+
+`link:` lines now carry at most one content mode, in precedence order: inline `@content=`, a
+`@template=true` source rendered with the machine's facts (`OS`, `ARCH`, `USER`, `HOSTNAME`,
+`HOME`, `FAMILY`), a `@decrypt=` source, or a plain symlink. A line naming two is refused by the
+grammar. `check` reads a rendered template back *rendered* — a destination holding the raw source is
+drift, not `unverifiable` — and only the plain mode places a symlink, because the managed modes
+compare bytes.
+
+Secrets compose into that: a template can carry a decrypted value, so a generated config is not the
+one thing that has to be copied by hand. **And a secret never gets a backup**, because `backup_once`
+exists so a user is not silently robbed of a file they hand-wrote, and a plaintext copy under the
+ordinary umask beside a `0600` file is a worse robbery.
+
+### Session protection runs on every platform now
+
+A package a live shell is holding must not be planned for removal. That worked on Linux and nowhere
+else: without `/proc`, `pid_alive` answered "dead", and **`procfs` said "not alive" rather than "I
+cannot tell"** — the difference between a wrong answer and no answer. It is now answered per
+platform, and a **pid no platform can hold is not a process**: on macOS `kill(-1, 0)` is *every*
+process, so a negative or above-`i32::MAX` pid used to keep a killed session's packages protected
+for ever.
+
+Two more of the same family: a stale session stops protecting and reaps nothing, and a closed stdout
+is an exit rather than a silent success — the broken-pipe hook used to report success and skip every
+destructor, so a `sync` interrupted by a closed pipe left the transaction unrolled-back.
+
+### What it no longer touches
+
+- **A download no longer truncates a live `PATH` binary before the bytes arrive** (`#75`). The
+  file was opened for writing where it stood, so an interrupted download left a working tool
+  emptied.
+- **The secret-in-repo guard resolves symlinks in the path before it answers** (`#76`), so a link
+  parent no longer walks around it.
+- **A zip's unpacked-size sum cannot wrap past the bomb bound** (`#86`), and **a JSON
+  external-vars file with a BOM or a banner is still read** (`#83`).
+- **`--config` naming a file that does not exist is a mistake, not a preference-free run**
+  (`#154`). A one-character typo used to apply no preferences at all, silently.
+- **A schedule's `run` may not name the program**, so the unit Shall provisions is one that can
+  actually work, and a schedule the files stopped declaring is taken off the machine (`#158`).
+  `schedule.log` rotation runs under its own lock, so a concurrent run can no longer delete the log
+  the other one just rotated (`#149`). And a removal that is refused now names the cure — elevation
+  — instead of failing every `sync` on the machine with an `Io` error about a task the running
+  config never declared (`#173`).
+
+### What it says
+
+- **Refusal and rollback messages print `—`, not `â€”`** (`#144`), and the class is gated rather
+  than the strings.
+- **Every `preferences.toml` error stops saying "the key no longer exists, delete the line"**
+  (`#146`) — that is the right sentence for a key that is gone and the wrong one for a type error or
+  a duplicate key. The parser is asked what went wrong instead of being spoken for.
+- **A non-UTF-8 argument no longer panics**, and a shim can forward one to its target (`#147`).
+- **A checkout with CRLF line endings still passes the review gates** (`#156`), and the gates run
+  where they are checked (`#155`, `#159`) — bare `bash` on Windows resolves to WSL's System32
+  launcher, which has no distro and emits UTF-16.
+
+### The suite, and the gates that say it is green
+
+This is the largest single body of work in the release, and it is invisible to a user on purpose.
+
+- **Every `src/` file has a home in `tests/`** (`#120`), one target, module for module.
+- **141 tests asserted from an empty string they never wrote** (`#162`). A fixture that cannot
+  reach the product sees the fall-through value, and the assertion passes on nothing. Every one of
+  them now states what its machine holds.
+- **`grep_ok` scored a crashed command as a PASS when its last line matched** (`#157`), across 105
+  call sites; the integration harness had roughly half its checks unable to see the product absent
+  (`#39`), and two oracles that could not fail (`#40`). A check that names an effect is now followed
+  by a look for that effect (`#85`).
+- **The mutation gate can no longer report a mutant caught when nothing caught it** (`#116`), and
+  the guards around the sync engine's safety checks, the data lock's contention detection, and the
+  removal guard's undo door are pinned (`#117`, `#118`, `#115`, `#122`).
+- **Budgets measure cost rather than the machine's mood**: the startup budget is a ratio of the
+  host's own pace (`#143`), the registry budget is not load-sensitive (`#123`), and a mutant's
+  timeout is derived from a contended baseline (`#141`).
+- **A crash in CI names itself** (`#102`), a harness section that stops running is visible (`#99`),
+  and an upstream 5xx is no longer scored as a product defect and then as lost coverage (`#139`).
+
+### Windows and macOS stop being second-class in the checks
+
+The suite compiles for Windows (`#168`), and the tests that were silently asserting the *Linux*
+program — a snapshot stub, a service stub, a hand-written `powershell`-or-`sh` switch — now ask the
+product which program it would run (`#174`, `#175`, `#177`). That is the difference between a test
+that proves a behaviour and a test that proves a string: `MockExecutor` fails on a stub nobody
+matched, and every one of those fixtures was registering a response for a program the platform would
+never invoke.
+
+Thirty-four Windows tests and twenty-one macOS tests were fixed this way, in five families, and each
+family is named in `PLAN.md` rather than absorbed into one line. The last four on macOS were the
+opposite defect in the same place: an `absent:` line for a backend the host's registry does not hold
+used to drop silently, so the export wrote an artifact describing a different machine than the one in
+front of it.
+
+### Install it
+
+```text
+curl -fsSL https://raw.githubusercontent.com/SYKhayyat/Shall/HEAD/scripts/install.sh | sh
+# Windows, in PowerShell:
+irm https://raw.githubusercontent.com/SYKhayyat/Shall/HEAD/scripts/install.ps1 | iex
+```
+
 ## [0.8.0] — 2026-08-18 — published binaries, NixOS as a system, and schedules that report
 
 **The first release anyone can install without a Rust toolchain.** `0.7.0` named the rewrite in
