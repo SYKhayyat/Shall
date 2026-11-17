@@ -241,6 +241,9 @@ laptop each one covers:
   `hold`/`unhold` and `unmanage`. A command that changes the machine without going through the file
   breaks P1, and on a laptop that is a safety bug: **file each one, and fix it here.** This part
   needs no ruling, because it only reads.
+  **The read is done** — `docs/AUDIT-2026-11-17-command-classification.md`: 54 top-level commands
+  classified, and the eight suspects came back clean, which is the fact the fix below has to work
+  from rather than a reason to close this.
 
   **Done** — `docs/AUDIT-2026-11-17-command-classification.md`: 54 commands, 21 output / 13 input /
   11 read-only / 9 named exceptions, each row saying whether the handler was read for this audit or

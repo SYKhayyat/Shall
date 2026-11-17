@@ -86,8 +86,12 @@ fn every_ignored_advisory_says_what_would_end_it() {
 #[test]
 fn the_ignore_list_does_not_grow_quietly() {
     let (ids, _) = ignore_block(&deny_toml());
+    // **2, raised deliberately on 2026-11-17, and this number is the diff.** RUSTSEC-2026-0543
+    // (`chrono` unmaintained, `deny.toml` names the 39 call sites and what ends it) is a second
+    // entry, so the bound moved with it in the same change rather than being found by the next
+    // person at 1. The mechanism is unchanged: growth is a decision somebody makes with a diff.
     assert!(
-        ids.len() <= 1,
+        ids.len() <= 2,
         "{} advisories are silenced. Each one is a build made green by a decision rather than \
          a fix: {ids:?}",
         ids.len()

@@ -1363,10 +1363,16 @@ jobs:
       run: cargo mutants --no-shuffle -j2 --minimum-test-timeout 1800 --test-tool nextest --file ${{ matrix.file }} --shard ${{ matrix.shard }} -- --no-fail-fast --retries 2
     # **`always()`, not `!cancelled()`.** The name says "whether the run passed or failed", and
     # those are the two outcomes the job's own conclusion already shows. The one outcome whose
-    # reason lives nowhere else is a *cancelled* job - a starved runner, a lost runner, a killed
-    # step - and `!cancelled()` discarded the partial `mutants.out/` in exactly that case. That is
-    # how #190 spent two nights with no log and no survivor list and could not say how far the
-    # shard had got. A killed shard's partial output is the only evidence of where it died.
+    # reason lives nowhere else is a *cancelled* job, and `!cancelled()` discarded the partial
+    # `mutants.out/` in exactly that case. That is how #190 spent two nights with no log and no
+    # survivor list and could not say how far the shard had got.
+    #
+    # **What this does not cover, measured rather than assumed:** a step cancelled while its
+    # runner is alive. When the runner itself is lost - `The hosted runner lost communication
+    # with the server` - nothing runs afterwards, so no upload happens however the condition is
+    # spelled; the batch shard came back with no `mutants-out-batch-2` artifact on the first
+    # night this step was `always()` (#190). A lost runner kills the evidence with the job, so
+    # the remedy for that one is to keep the job inside what a runner survives, not to record it.
     - name: The survivors, kept whether the run passed, failed, or was cancelled
       if: ${{ always() }}
       uses: actions/upload-artifact@v7
