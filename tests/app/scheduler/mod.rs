@@ -20,7 +20,10 @@ fn cfg(cron: &str) -> ScheduleConfig {
 }
 
 fn here() -> TaskTarget {
-    TaskTarget { account: None }
+    TaskTarget {
+        account: None,
+        roots: Default::default(),
+    }
 }
 
 fn me() -> TaskTarget {
@@ -57,6 +60,7 @@ mod a_removal_that_cannot_happen_is_an_error_naming_the_file;
 mod a_rotation_that_cannot_take_its_lock_leaves_the_log_alone;
 mod a_schedule_declared_silent_is_rendered_disarmed_everywhere;
 mod a_schedule_for_an_account_that_does_not_exist_is_refused;
+mod a_schedule_names_the_config_it_was_declared_from;
 mod a_systemd_unit_written_and_read_back_is_the_same_spec;
 mod a_task_shall_created_reads_back_equal_to_what_shall_rendered;
 mod a_trigger_shall_does_not_write_is_unreadable_rather_than_wrong;

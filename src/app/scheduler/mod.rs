@@ -148,6 +148,91 @@ pub fn rotate_log_if_large(verbose: bool) {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskTarget {
     pub account: Option<crate::core::account::Account>,
+    /// The config and data roots the **declaring** run used, so a firing run resolves the same
+    /// machine description. Default (empty) means the defaults then, so a legacy task written
+    /// before this field existed is spelled exactly as it was.
+    pub roots: Roots,
+}
+
+/// The roots a run was declared from — the two flags a firing task needs to fire against the
+/// same store it was declared from (#192).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Roots {
+    pub config: PathBuf,
+    pub data: PathBuf,
+}
+
+impl Roots {
+    /// The roots of the run that is declaring: what it resolved, not what the OS default is.
+    pub fn of(config: &crate::config::Config) -> Self {
+        Self {
+            config: config.config_root(),
+            data: config.data_root(),
+        }
+    }
+
+    /// `--config-dir <root>` when the run did not use the OS default, nothing otherwise. Same
+    /// rule and same absences for data — a common-case task is spelled exactly as it was, and a
+    /// non-default task cannot forget itself.
+    fn flag(&self, which: &'static str, root: &Path, default: &Path) -> Option<String> {
+        if root == default {
+            return None;
+        }
+        let value = if root.as_os_str().is_empty() {
+            return None;
+        } else if root.to_string_lossy().contains(char::is_whitespace) {
+            // Double quotes, the quoting both systemd's ExecStart and schtasks' /TR parse in
+            // their own (non-shell) way. Bare is fine for launchd because it is an argv array,
+            // not a command line.
+            format!("{which} \"{}\"", root.display())
+        } else {
+            format!("{which} {}", root.display())
+        };
+        Some(value)
+    }
+
+    fn config_flag(&self) -> Option<String> {
+        self.flag(
+            "--config-dir",
+            &self.config,
+            &crate::utils::safe_config_dir(),
+        )
+    }
+
+    fn data_flag(&self) -> Option<String> {
+        self.flag("--data-dir", &self.data, &crate::utils::safe_data_dir())
+    }
+
+    /// The flags as they sit in a command line, each preceded by its space: `" --config-dir X"`.
+    /// Empty when the run used the defaults, so the common task is byte-for-byte what it was.
+    fn flag_spellings(&self) -> String {
+        let mut out = String::new();
+        for flag in [self.config_flag(), self.data_flag()].into_iter().flatten() {
+            out.push(' ');
+            out.push_str(&flag);
+        }
+        out
+    }
+
+    /// The same two flags as argv elements, for a renderer whose job is an array — launchd hands
+    /// `ProgramArguments` to `execve` directly, so a quoted string would arrive with its quotes.
+    fn as_argv(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        for (which, root, default) in [
+            (
+                "--config-dir",
+                &self.config,
+                crate::utils::safe_config_dir(),
+            ),
+            ("--data-dir", &self.data, crate::utils::safe_data_dir()),
+        ] {
+            if root != &default && !root.as_os_str().is_empty() {
+                out.push(which.to_string());
+                out.push(root.display().to_string());
+            }
+        }
+        out
+    }
 }
 
 impl TaskTarget {
@@ -157,7 +242,14 @@ impl TaskTarget {
                 None => None,
                 Some(name) => Some(crate::core::account::Account::resolve(name)?),
             },
+            roots: Roots::default(),
         })
+    }
+
+    /// The roots of the run that declared the task, for when this target is provisioned.
+    pub fn with_roots(mut self, roots: Roots) -> Self {
+        self.roots = roots;
+        self
     }
 
     pub fn account(&self) -> Result<crate::core::account::Account> {
@@ -282,6 +374,11 @@ pub trait TaskProvisioner: Send + Sync {
 pub struct SchedulerManager {
     provisioner: std::sync::Arc<dyn TaskProvisioner>,
     shall_bin_path: PathBuf,
+    /// The roots of the run that is declaring schedules. **Everything a task fires with has to be
+    /// resolvable later, and a path is the only thing that survives the process that wrote it**
+    /// (#192): `shall --config-dir X sync` used to register `X`'s schedules and then have them
+    /// fire `shall sync` against the default config, which is a different machine description.
+    roots: Roots,
 }
 
 impl SchedulerManager {
@@ -296,7 +393,19 @@ impl SchedulerManager {
         Ok(Self {
             provisioner,
             shall_bin_path,
+            roots: Roots::default(),
         })
+    }
+
+    /// A manager that writes the roots of `config` into every task it registers.
+    pub fn for_config(config: &crate::config::Config) -> Result<Self> {
+        Ok(Self::new()?.with_roots(Roots::of(config)))
+    }
+
+    /// The same manager, told which roots the declaring run used.
+    pub fn with_roots(mut self, roots: Roots) -> Self {
+        self.roots = roots;
+        self
     }
 
     pub fn detect() -> Result<Box<dyn TaskProvisioner>> {
@@ -324,7 +433,7 @@ impl SchedulerManager {
         self.provisioner
             .refuse_unsupported(cfg)
             .map_err(|e| Error::Refused(format!("`schedule:{}`: {}", cfg.name, e)))?;
-        let target = TaskTarget::resolve(cfg.user.as_deref())?;
+        let target = TaskTarget::resolve(cfg.user.as_deref())?.with_roots(self.roots.clone());
         self.provisioner
             .add_task(executor, cfg, &self.shall_bin_path, &target)
             .await
@@ -459,7 +568,7 @@ impl LinuxSystemdProvisioner {
         let log = target.log_path();
         let mut unit = format!(
             "[Unit]\nDescription=Shall {kind}: {name}\n\n\
-             [Service]\nType=oneshot\nExecStart={bin} {cmd}\n\
+             [Service]\nType=oneshot\nExecStart={bin}{roots_flags} {cmd}\n\
              StandardOutput=append:{log}\nStandardError=append:{log}\n",
             kind = if config.cron == "@reboot" {
                 "Reboot Job"
@@ -468,6 +577,7 @@ impl LinuxSystemdProvisioner {
             },
             name = config.name,
             bin = shall_bin.display(),
+            roots_flags = target.roots.flag_spellings(),
             cmd = config.command,
             log = log.display(),
         );
@@ -1055,7 +1165,7 @@ impl MacLaunchdProvisioner {
             <plist version=\"1.0\">\n<dict>\n\
             <key>Label</key><string>{label}</string>\n\
             <key>ProgramArguments</key>\n<array>\n\
-            <string>{bin}</string><string>{cmd}</string>\n</array>\n\
+            <string>{bin}</string>{roots}<string>{cmd}</string>\n</array>\n\
             {schedule}\n\
             {disabled}\
             <key>StandardOutPath</key><string>{log}</string>\n\
@@ -1063,6 +1173,17 @@ impl MacLaunchdProvisioner {
             </dict>\n</plist>",
             label = label,
             bin = shall_bin.display(),
+            roots = target
+                .roots
+                .as_argv()
+                .iter()
+                .map(|a| {
+                    format!(
+                        "<string>{}</string>",
+                        a.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+                    )
+                })
+                .collect::<String>(),
             cmd = config.command,
             schedule = schedule_xml,
             disabled = disabled,
@@ -1819,8 +1940,15 @@ impl WindowsTaskProvisioner {
         Some(account.sid().unwrap_or_else(|| account.name().to_string()))
     }
 
-    fn command_line(config: &ScheduleConfig, shall_bin: &Path) -> String {
-        format!("{} {}", shall_bin.display(), config.command)
+    /// **`pub` for the tests' sake** — the same exception `service_unit` documents: a test crate
+    /// links the library without `cfg(test)`, so a private item is invisible there.
+    pub fn command_line(config: &ScheduleConfig, shall_bin: &Path, target: &TaskTarget) -> String {
+        format!(
+            "{}{} {}",
+            shall_bin.display(),
+            target.roots.flag_spellings(),
+            config.command
+        )
     }
 
     /// Did `schtasks` refuse because this shell is not elevated?
@@ -1890,7 +2018,7 @@ impl TaskProvisioner for WindowsTaskProvisioner {
         })?;
         Ok(Provisioned {
             spec: schtasks_spec(
-                &Self::command_line(config, shall_bin),
+                &Self::command_line(config, shall_bin, target),
                 &when,
                 config.elevated == Some(true),
                 Self::principal(target).as_deref(),

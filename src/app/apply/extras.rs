@@ -789,7 +789,7 @@ pub async fn in_effect(
                 &config.guard.never_unattended,
             )
             .ok()?;
-            crate::app::scheduler::SchedulerManager::new()
+            crate::app::scheduler::SchedulerManager::for_config(config)
                 .ok()?
                 .standing(executor, &cfg)
                 .await

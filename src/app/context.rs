@@ -168,7 +168,7 @@ impl App {
         let snapshot_manager = Arc::new(snapshot_manager);
         let journal = Arc::new(Mutex::new(journal));
 
-        let scheduler = Arc::new(SchedulerManager::new()?);
+        let scheduler = Arc::new(SchedulerManager::for_config(&config)?);
         let network_parallel = config.network_parallel.max(1);
         let config_arc = Arc::new(config);
 
