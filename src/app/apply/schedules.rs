@@ -136,16 +136,50 @@ impl Schedules<'_> {
                 orphans.join(", ")
             )));
         }
+        let mut left_behind: Vec<String> = Vec::new();
         for name in &orphans {
-            self.scheduler
+            // **One orphan that will not come off is not a failed sync.** This was `?`, and the
+            // consequence was measured: a task this shell may not delete (Task Scheduler answers
+            // `Access is denied.` to a filtered token) failed *every* `sync` on the machine, over
+            // a schedule the run had not declared and could not remove — so a converge whose every
+            // declared line was already in effect reported failure (#173).
+            //
+            // `extras::reconcile` already answers this exact question the other way and says so in
+            // its own doc — *"a backend that cannot undo one extra must not block the rest, so
+            // each failure warns and the run continues"* — and the two paths remove schedules by
+            // the same means. This is that rule, applied to the path that asks the machine instead
+            // of the ledger.
+            //
+            // **Not silent.** The name, the reason the OS gave and the fact that it is still
+            // registered are all reported, and the next run tries again, so the state is visible
+            // and it does not go stale.
+            if let Err(e) = self
+                .scheduler
                 .deprovision(self.executor, name, None, reaped)
-                .await?;
+                .await
+            {
+                tracing::warn!(
+                    "Schedule: `{}` is no longer declared and could not be removed, so it is \
+                     still registered on this machine and still fires: {}",
+                    name,
+                    e
+                );
+                left_behind.push(name.clone());
+            }
+        }
+        let removed: Vec<&str> = orphans
+            .iter()
+            .filter(|n| !left_behind.contains(n))
+            .map(String::as_str)
+            .collect();
+        if removed.is_empty() {
+            return Ok(());
         }
         tracing::warn!(
             "Schedule: removed {} schedule(s) this machine still ran and the files no longer \
              declare: {}. Shall put them there and its records did not name them any more.",
-            orphans.len(),
-            orphans.join(", ")
+            removed.len(),
+            removed.join(", ")
         );
         Ok(())
     }

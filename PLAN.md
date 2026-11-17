@@ -62,6 +62,16 @@ No later gate can be met while this is red.*
   `backends::registry`, and #177's `systemctl`. **Assigned to the Windows host**, with C33's rule
   to work by and the shape that works (`TestKernel::this_machines_manager_has`,
   `stub_the_pre_sync_snapshot`) named in the handoff comment on the issue.
+- [x] **16 of the 50 local failures were one stale task** (#173, 2026-11-17). Not a test defect: a
+  `Shall_nightly` this shell may not delete (`schtasks` answers `Access is denied.` to a filtered
+  token) was listed by the `#158` sweep, and the sweep's first `?` ended *every* `sync` on the
+  machine — over a schedule the run had not declared and could not remove. Two defects, one
+  sentence each: the removal **diagnosed its own symptom** (`let _ =` on `/Delete`, then `still
+  exists after removal`) instead of forwarding the reason, and the sweep's failure class was
+  `?` where `extras::reconcile` — removing schedules by the same means — had already ruled
+  "warns and the run continues". 50 → 15, measured against the very task that could not be
+  deleted. The stale task is still on this host; the fix is that it no longer decides whether
+  anything else converges.
 - [x] **Linux gnu: green** (#172). Was `harness predicates: 112/113` — `C32` ruled in an index
   row with no entry written. Fixed, and the same gate caught the same omission when C33 was added
   (`2f6fd99d`), which is the gate earning its keep twice. `harness predicates: 113/113 ok`, suite

@@ -1822,6 +1822,33 @@ impl WindowsTaskProvisioner {
     fn command_line(config: &ScheduleConfig, shall_bin: &Path) -> String {
         format!("{} {}", shall_bin.display(), config.command)
     }
+
+    /// Did `schtasks` refuse because this shell is not elevated?
+    ///
+    /// **One reading, because there were about to be two.** `/Create` and `/Delete` both answer
+    /// `ERROR: Access is denied.` when the token is filtered, and that sentence names neither the
+    /// cause nor the cure — it reads like a permissions problem with the *config*. `/Create` had
+    /// been taught to say so; `/Delete` had not, and answered `the scheduled task … still exists
+    /// after removal`, which is a description of the symptom by the one party who knows the cause
+    /// (#173). Two copies of "contains `access is denied`" would have drifted the same way.
+    ///
+    /// The text, not the exit code: `schtasks` exits 1 for a task that does not exist as well, so
+    /// the code cannot tell *refused* from *already gone*. Matched case-insensitively and on the
+    /// phrase rather than the whole line, because the message is translated on a non-English
+    /// Windows and the code page is not the one this file is written in.
+    fn refused_for_elevation(e: &crate::core::Error) -> bool {
+        e.to_string().to_lowercase().contains("access is denied")
+    }
+
+    /// The sentence a person needs when Task Scheduler says no: what to do, not what happened.
+    fn needs_elevation(verb: &str, name: &str) -> crate::core::Error {
+        crate::core::Error::Permission(format!(
+            "{} the scheduled task `{}` needs an elevated shell — Windows Task Scheduler \
+             refuses to {} one otherwise, whatever `/RU` says. Re-run `shall sync` from a \
+             terminal opened with \"Run as administrator\".",
+            verb, name, verb
+        ))
+    }
 }
 
 #[async_trait]
@@ -1976,18 +2003,9 @@ impl TaskProvisioner for WindowsTaskProvisioner {
             args.extend(["/RU", user]);
         }
 
-        // `ERROR: Access is denied.` is what Task Scheduler says when the shell is not
-        // elevated, and on its own it names neither the cause nor the cure — it reads like a
-        // permissions problem with the config. Registering a task needs an administrator here
-        // whatever `/RU` says (measured), so say that instead of forwarding four words.
         executor.run("schtasks", &args, true).await.map_err(|e| {
-            if e.to_string().to_lowercase().contains("access is denied") {
-                Error::Permission(format!(
-                    "creating the scheduled task `{}` needs an elevated shell — Windows Task \
-                     Scheduler refuses to register one otherwise. Re-run `shall sync` from a \
-                     terminal opened with \"Run as administrator\".",
-                    name
-                ))
+            if Self::refused_for_elevation(&e) {
+                Self::needs_elevation("creating", &name)
             } else {
                 e
             }
@@ -2010,17 +2028,31 @@ impl TaskProvisioner for WindowsTaskProvisioner {
         target: &TaskTarget,
     ) -> Result<()> {
         let tn = Self::task_name(name);
-        // `/Delete` on a task that does not exist exits non-zero, so the exit code cannot
-        // tell "already gone" from "refused"; the end state can.
-        let _ = executor
+        // **The reason is kept, not discarded.** This was `let _ = …`, so the one party that
+        // knew why the removal failed threw the answer away and then reported the symptom —
+        // `Access is denied.` reached the user as "still exists after removal", which reads as a
+        // scheduler problem and not as "this shell is not elevated" (#173). A task that is
+        // already gone also exits non-zero, so the exit code cannot be the test; the text can,
+        // and the end state decides what happens next either way.
+        let tried = executor
             .run("schtasks", &["/Delete", "/TN", &tn, "/F"], true)
             .await;
         if self.is_task_active(executor, name, target).await {
-            return Err(Error::Io(format!(
-                "the scheduled task `{}` still exists after removal. Check \
-                 `schtasks /Query /TN {}`.",
-                name, tn
-            )));
+            return Err(match &tried {
+                Err(e) if Self::refused_for_elevation(e) => Self::needs_elevation("removing", name),
+                Err(e) => Error::Io(format!(
+                    "the scheduled task `{}` could not be removed and is still registered: {}\n\
+                     Check `schtasks /Query /TN {}`.",
+                    name, e, tn
+                )),
+                // It said it deleted the task and the task is still there: nothing answered for
+                // this, and guessing at a cause would be worse than naming the two facts.
+                Ok(_) => Error::Io(format!(
+                    "`schtasks /Delete` reported success for `{}` and the task is still \
+                     registered. Check `schtasks /Query /TN {}`.",
+                    name, tn
+                )),
+            });
         }
         Ok(())
     }
