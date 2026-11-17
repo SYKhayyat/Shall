@@ -467,21 +467,9 @@ impl Execs<'_> {
     /// Run a command line through the platform's shell. Used only for `@undo=`, which is
     /// written as a command rather than a script path.
     async fn run_shell_command(&self, command: &str) -> Result<()> {
-        #[cfg(windows)]
-        let (program, args) = (
-            "powershell",
-            vec![
-                "-NoProfile".to_string(),
-                "-ExecutionPolicy".to_string(),
-                "Bypass".to_string(),
-                "-Command".to_string(),
-                command.to_string(),
-            ],
-        );
-        #[cfg(not(windows))]
-        let (program, args) = ("sh", vec!["-c".to_string(), command.to_string()]);
+        let (program, args) = shell_argv(command);
         let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-        self.executor.run(program, &refs, false).await.map(|_| ())
+        self.executor.run(&program, &refs, false).await.map(|_| ())
     }
     /// Execute one script through the interpreter its first line names, or this platform's
     /// shell if it names none — `sh` on Unix and PowerShell on Windows. A repo that must ship
@@ -543,6 +531,44 @@ impl Execs<'_> {
             .run(&launch.program, &refs, false)
             .await
             .map(|_| ())
+    }
+}
+
+/// **This platform's shell, told to run one command line** — the argv behind an `@undo=`.
+///
+/// `@undo=` is written as a command rather than a path, so there is no first line to read and no
+/// interpreter to choose; the shell is whatever this machine calls one, `sh -c` on Unix and
+/// `powershell -NoProfile -ExecutionPolicy Bypass -Command` on Windows.
+///
+/// **Public, and not `#[cfg(test)]`, for the reason [`CommandExecutor::as_launched`] is a
+/// function**: the integration suite registers stubs against the argv Shall will really run, and a
+/// stub that spells the prefix by hand is a stub that goes unmatched — and an unmatched stub reads
+/// as *the product did the wrong thing*, which is a false accusation `#162` made impossible to
+/// ignore. Five tests here were exactly that on Windows (#174): they spelled `sh -c echo unenrol`
+/// while the product ran
+/// `powershell -NoProfile -ExecutionPolicy Bypass -Command echo unenrol`.
+///
+/// [`CommandExecutor::as_launched`]: crate::core::CommandExecutor::as_launched
+pub fn shell_argv(command: &str) -> (String, Vec<String>) {
+    #[cfg(windows)]
+    {
+        (
+            "powershell".to_string(),
+            vec![
+                "-NoProfile".to_string(),
+                "-ExecutionPolicy".to_string(),
+                "Bypass".to_string(),
+                "-Command".to_string(),
+                command.to_string(),
+            ],
+        )
+    }
+    #[cfg(not(windows))]
+    {
+        (
+            "sh".to_string(),
+            vec!["-c".to_string(), command.to_string()],
+        )
     }
 }
 

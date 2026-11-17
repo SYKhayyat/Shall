@@ -10,7 +10,7 @@ async fn a_resource_a_system_manager_owns_is_removed_through_that_manager() {
 
     // Stated rather than fallen through (`#162`): what this test asks its manager, and the
     // answer it read from silence before. The assertions here are about the argv.
-    mock.set_response("sudo -n -v", Ok(DryRunOutput::default().into()));
+    answer_the_credential_probe(&mock);
     let url = "https://example.invalid/fd_10.2.0_amd64.deb";
     record(&web.core, url, handed_to("dpkg", "fd", url)).await;
 

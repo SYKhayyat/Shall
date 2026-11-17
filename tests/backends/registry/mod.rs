@@ -183,6 +183,56 @@ impl ArgvCase {
         self
     }
 }
+/// The `service:` stubs, for the init system **this host** has.
+///
+/// `service:` dispatches on the provider table (`init_providers.toml`), not on the OS the code was
+/// compiled for, and the table ships `windows-sc`, `launchd`, `systemd` and `openrc`. The assertion
+/// in the row already says `RunsOneOf`; these are the answers for it, and they were written as
+/// four `systemctl` rows — so on Windows four registered responses were never matched and the row
+/// failed over a fixture rather than over the product (#174). The third appearance of this shape
+/// in this file is why the row below picks its own argv the same way.
+const SERVICE_INSTALL_STUBS: &[(&str, &str)] = &[
+    #[cfg(windows)]
+    ("sc config nginx start= auto", ""),
+    #[cfg(windows)]
+    ("sc start nginx", ""),
+    #[cfg(not(windows))]
+    ("systemctl --no-pager start -- nginx", ""),
+    #[cfg(not(windows))]
+    ("systemctl --no-pager enable -- nginx", ""),
+];
+
+const SERVICE_REMOVE_STUBS: &[(&str, &str)] = &[
+    #[cfg(windows)]
+    ("sc config nginx start= disabled", ""),
+    #[cfg(windows)]
+    ("sc stop nginx", ""),
+    #[cfg(not(windows))]
+    ("systemctl --no-pager stop -- nginx", ""),
+    #[cfg(not(windows))]
+    ("systemctl --no-pager disable -- nginx", ""),
+];
+
+fn service_install_stubs() -> &'static [(&'static str, &'static str)] {
+    SERVICE_INSTALL_STUBS
+}
+
+fn service_remove_stubs() -> &'static [(&'static str, &'static str)] {
+    SERVICE_REMOVE_STUBS
+}
+
+/// The read `setting:` makes before it writes — this host's settings store.
+const SETTING_PROBE_STUBS: &[(&str, &str)] = &[
+    #[cfg(windows)]
+    ("reg query HKCU\\Software\\ShallProbe /v Value", ""),
+    #[cfg(not(windows))]
+    ("gsettings get org.shall.probe key", ""),
+];
+
+fn setting_probe_stub() -> &'static [(&'static str, &'static str)] {
+    SETTING_PROBE_STUBS
+}
+
 fn argv_cases() -> Vec<ArgvCase> {
     // `mut` is used by the BSD-target pushes at the end; other targets never touch it.
     #[allow(unused_mut)]
@@ -577,16 +627,8 @@ fn argv_cases() -> Vec<ArgvCase> {
              RunsOneOf(&["sc start nginx", "launchctl", "systemctl", "rc-service nginx start"]),
              RunsOneOf(&["sc stop nginx", "launchctl", "systemctl", "rc-service nginx stop"]),
         )
-        .with_install_stubs(&[
-            // Provisioning starts and enables; the answer is a success either way, and the argv is
-            // what the row asserts.
-            ("systemctl --no-pager start -- nginx", ""),
-            ("systemctl --no-pager enable -- nginx", ""),
-        ])
-        .with_remove_stubs(&[
-            ("systemctl --no-pager stop -- nginx", ""),
-            ("systemctl --no-pager disable -- nginx", ""),
-        ]),
+        .with_install_stubs(service_install_stubs())
+        .with_remove_stubs(service_remove_stubs()),
         ArgvCase::shaped(
             "setting",
             &|r, e| shall::backends::setting::register(r, e, &Config::default()),
@@ -628,8 +670,11 @@ fn argv_cases() -> Vec<ArgvCase> {
                 })
             },
         )
-        .with_install_stubs(&[("gsettings get org.shall.probe key", "")])
-        .with_remove_stubs(&[("gsettings get org.shall.probe key", "")]),
+        // The probe, not the write: the argv above is asserted by `Runs`, and what a stubbed
+        // read answers is nobody's question here. Spelled for this host's store, for the same
+        // reason the row above is: a `gsettings` stub on Windows is a stub nobody calls (#174).
+        .with_install_stubs(setting_probe_stub())
+        .with_remove_stubs(setting_probe_stub()),
         // ---- Backends that run no command. Each fetches over HTTP or writes to the
         // filesystem directly, so "no argv" is the right answer and not a hole — but it is
         // asserted, because a download backend that started shelling out to `curl` would

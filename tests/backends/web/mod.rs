@@ -60,6 +60,19 @@ fn removal_argv(line: &str) -> String {
     let args: Vec<&str> = parts.collect();
     CommandExecutor::as_launched(cmd, &args, true)
 }
+/// Answer the `sudo` credential probe — **only where this host raises one**.
+///
+/// The probe is a fact about the platform (`CommandExecutor::escalates`), not about the test, and
+/// the three `web` removals below registered it unconditionally. On a host that does not escalate
+/// — Windows, or a Linux runner already uid 0 — the product never asks, the stub is never matched,
+/// and #162's own check fails the test for a stub nobody could have called. The assertions that
+/// follow already ask `escalates` before expecting the probe; this is the same question, asked one
+/// line earlier so that the fixture stops believing it too (#174).
+fn answer_the_credential_probe(mock: &MockExecutor) {
+    if CommandExecutor::escalates(true) {
+        mock.set_response("sudo -n -v", Ok(DryRunOutput::default().into()));
+    }
+}
 mod a_commit_beside_a_removal_keeps_both_answers;
 mod a_failed_removal_keeps_the_record_rather_than_forgetting_the_resource;
 mod a_resource_a_system_manager_owns_is_removed_through_that_manager;

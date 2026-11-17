@@ -57,11 +57,26 @@ No later gate can be met while this is red.*
     source against a raw `$HOME` (2 tests, a production bug); #177 the scheduled-task and service
     tests stub `systemctl` on a host with no systemd (2 tests) — C33 now rules the policy, so that
     one is fixture work against tables that already have `windows-sc` and `launchd` rows.
-- [ ] **Windows (msvc): 28 → 15 tests fail** (#174) — #175 took the largest family; what is left is
-  `app::apply::execs` (the `sh` stub family, the largest), `backends::web`, `backends::nixos`,
-  `backends::registry`, and #177's `systemctl`. **Assigned to the Windows host**, with C33's rule
-  to work by and the shape that works (`TestKernel::this_machines_manager_has`,
-  `stub_the_pre_sync_snapshot`) named in the handoff comment on the issue.
+- [x] **Windows (msvc): 28 → 0 tests fail on this host** (#174, 2026-11-17). Twenty-eight became
+  fifteen after #175, and fifteen became **one** here, and that one was not mine (#184). Every
+  family had the same shape — **a fixture that spelled an argv by hand where the product decides
+  it per platform** — so the fix is never a new expectation, it is a call to the function the
+  product calls:
+  - `app::apply::execs` (9) — `script_answers` wrote `sh <path>` into the mock while the product
+    ran `powershell -NoProfile -ExecutionPolicy Bypass -File <path>`. Now asks
+    `model::script::launch_for`, which is the ruling that a repo must not ship two spellings of
+    every script. The `@undo=` half was a *second* copy of the same switch, so `shell_argv` is now
+    the product's single answer, public for the suite's sake like `as_launched`.
+  - `backends::web` (3) — the `sudo -n -v` credential probe registered unconditionally. Whether a
+    run escalates is `CommandExecutor::escalates`' fact, and the assertions in those tests already
+    asked it; only the stub did not. `answer_the_credential_probe` asks it too.
+  - `backends::nixos` (1), `backends::registry` (2 rows), `integration::automation_lifecycle` (1)
+    — `sudo -n install …` → `as_launched`; the `service:` and `setting:` stub tables → this host's
+    init system and settings store (`sc` / `reg` on Windows); the `systemctl` stubs in the
+    `@reboot` test → `not(windows)`, where the test already asserted `schtasks`.
+
+  50 → 1 on a full local run, and the 1 was a lock flake in a test that reaches the machine's real
+  data directory (#184).
 - [x] **16 of the 50 local failures were one stale task** (#173, 2026-11-17). Not a test defect: a
   `Shall_nightly` this shell may not delete (`schtasks` answers `Access is denied.` to a filtered
   token) was listed by the `#158` sweep, and the sweep's first `?` ended *every* `sync` on the

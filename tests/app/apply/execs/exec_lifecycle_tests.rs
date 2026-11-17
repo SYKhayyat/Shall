@@ -25,16 +25,46 @@ async fn declare_exec(kernel: &TestKernel, line: &str, script_rel: &str, body: &
 
 /// **The declared script, answered at the path `exec:` actually runs it from.**
 ///
-/// A step is a file under the config root and `sh` is handed that absolute path, so the stub is
-/// the path — stated here rather than fallen through (`#162`), where the empty success it read
-/// before was a silence the test never wrote. The assertions below are about how often the ledger
-/// says it ran, not about what it printed.
+/// A step is a file under the config root, and the interpreter is the one the script's first line
+/// names — or **this platform's shell** when it names none, which is `sh` on Unix and
+/// `powershell -NoProfile -ExecutionPolicy Bypass -File` on Windows (`model::script::launch_for`,
+/// whose doc is the ruling: a repo that must ship two spellings of every script cannot be shared).
+///
+/// So the stub cannot spell `sh` by hand. Written that way it went unmatched on every Windows run —
+/// twelve tests, and the failure read `1 registered mock response(s) were never matched by any
+/// call`, which is a true statement about the stub and says nothing about the product, because the
+/// product had done the right thing three times over, in the same message's own "what actually
+/// ran" list (#174). The argv is asked of the function the product asks, so there is one spelling
+/// of this rule and it is not in a test.
+/// An `@undo=` command, answered at the argv this platform's shell is invoked with.
+///
+/// The sibling of `script_answers`, and the same defect one line over: `sh -c echo unenrol` was
+/// hardcoded here while the product ran `powershell -NoProfile -ExecutionPolicy Bypass -Command
+/// echo unenrol` on Windows (#174). `shell_argv` is the product's own answer to "what is this
+/// machine's shell", asked rather than restated.
+fn undo_answers(kernel: &TestKernel, command: &str) {
+    let (program, args) = shall::app::apply::execs::shell_argv(command);
+    let argv = std::iter::once(program.as_str())
+        .chain(args.iter().map(String::as_str))
+        .collect::<Vec<&str>>()
+        .join(" ");
+    kernel
+        .mock_executor
+        .set_response(&argv, Ok(shall::core::executor::DryRunOutput::new().into()));
+}
+
 fn script_answers(kernel: &TestKernel, script_rel: &str) {
     let path = kernel.app.config.config_root().join(script_rel);
-    kernel.mock_executor.set_response(
-        &format!("sh {}", path.display()),
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    let contents = std::fs::read_to_string(&path).unwrap_or_default();
+    let launch = shall::model::script::launch_for(&path, &contents)
+        .expect("this platform can run a script with no shebang");
+    let argv = std::iter::once(launch.program.as_str())
+        .chain(launch.args.iter().map(String::as_str))
+        .collect::<Vec<&str>>()
+        .join(" ");
+    kernel
+        .mock_executor
+        .set_response(&argv, Ok(shall::core::executor::DryRunOutput::new().into()));
 }
 
 /// What `shall lock` does: record the script's current hash as approved.
@@ -196,7 +226,7 @@ async fn a_false_when_runs_nothing_and_keeps_the_count() {
     // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
     // machine, each with the empty answer it used to receive from silence instead.
     kernel.mock_executor.set_response(
-        &format!("sh {}/./enroll.sh", kernel.tmp.path().display()),
+        &exec_command_for(&kernel.tmp.path().join("./enroll.sh")),
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     let root = kernel.app.config.config_root();
@@ -242,16 +272,19 @@ async fn a_false_when_runs_nothing_and_keeps_the_count() {
 
 /// The command Shall issues for a script, matching `App::run_exec_script`, so a test can prime
 /// the mock executor to fail exactly that invocation.
+/// **The argv this platform launches a script with, asked of the product.**
+///
+/// This was a second copy of the rule — `if cfg!(windows) { powershell … } else { sh … }` —
+/// written out in a test while `model::script::launch_for` decided the same thing in the product.
+/// Two spellings of one rule is how the Windows suites came to register `sh <path>` against a
+/// product that runs `powershell -NoProfile -ExecutionPolicy Bypass -File <path>` (#174).
 fn exec_command_for(path: &std::path::Path) -> String {
-    let script = path.to_string_lossy().to_string();
-    if cfg!(windows) {
-        format!(
-            "powershell -NoProfile -ExecutionPolicy Bypass -File {}",
-            script
-        )
-    } else {
-        format!("sh {}", script)
-    }
+    let launch = shall::model::script::launch_for(path, "")
+        .expect("this platform can run a script with no shebang");
+    std::iter::once(launch.program.as_str())
+        .chain(launch.args.iter().map(String::as_str))
+        .collect::<Vec<&str>>()
+        .join(" ")
 }
 
 /// A script that failed did not happen. Recording it would mean the next sync skips a step
@@ -316,10 +349,7 @@ async fn removing_an_exec_runs_the_undo_it_declared() {
 
     // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
     // machine, each with the empty answer it used to receive from silence instead.
-    kernel.mock_executor.set_response(
-        "sh -c echo unenrol",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    undo_answers(&kernel, "echo unenrol");
     // The line is deleted — the declaration no longer exists anywhere.
     let root = kernel.app.config.config_root();
     std::fs::write(root.join("modules/tools.txt"), "# gone\n").unwrap();
@@ -399,7 +429,7 @@ async fn a_false_when_does_not_run_the_undo() {
     // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
     // machine, each with the empty answer it used to receive from silence instead.
     kernel.mock_executor.set_response(
-        &format!("sh {}/./enrol.sh", kernel.tmp.path().display()),
+        &exec_command_for(&kernel.tmp.path().join("./enrol.sh")),
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     let root = kernel.app.config.config_root();
@@ -458,11 +488,11 @@ async fn a_step_names_the_verb_that_runs_it_and_the_other_verb_leaves_it_alone()
     // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
     // machine, each with the empty answer it used to receive from silence instead.
     kernel.mock_executor.set_response(
-        &format!("sh {}/./bin/firmware.sh", kernel.tmp.path().display()),
+        &exec_command_for(&kernel.tmp.path().join("./bin/firmware.sh")),
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     kernel.mock_executor.set_response(
-        &format!("sh {}/./bin/plain.sh", kernel.tmp.path().display()),
+        &exec_command_for(&kernel.tmp.path().join("./bin/plain.sh")),
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     let root = kernel.app.config.config_root();
@@ -764,12 +794,9 @@ async fn deleting_the_last_exec_line_runs_its_undo_through_the_sync_verb() {
 
     // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
     // machine, each with the empty answer it used to receive from silence instead.
+    undo_answers(&kernel, "echo unenrol");
     kernel.mock_executor.set_response(
-        "sh -c echo unenrol",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
-    kernel.mock_executor.set_response(
-        &format!("sh {}/./enrol.sh", kernel.tmp.path().display()),
+        &exec_command_for(&kernel.tmp.path().join("./enrol.sh")),
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
     kernel.stub_the_snapshot_listing().await;

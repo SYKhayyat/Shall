@@ -236,14 +236,22 @@ async fn test_scheduler_reboot_mapping_fidelity() {
 
     // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
     // machine, each with the empty answer it used to receive from silence instead.
-    kernel.mock_executor.set_response(
-        "systemctl --no-pager --user daemon-reload",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
-    kernel.mock_executor.set_response(
-        "systemctl --no-pager --user enable shall-reboot-cleanup.service",
-        Ok(shall::core::executor::DryRunOutput::new().into()),
-    );
+    //
+    // **`not(windows)` because the two provisioners share this test and only one is systemd.**
+    // The Windows arm below asserts the `schtasks` argv that actually runs there; registering
+    // `systemctl` on Windows is a stub nobody can call, and `#162`'s own check says so — four
+    // years of a red Windows job over a fixture rather than a product (#174).
+    #[cfg(not(windows))]
+    {
+        kernel.mock_executor.set_response(
+            "systemctl --no-pager --user daemon-reload",
+            Ok(shall::core::executor::DryRunOutput::new().into()),
+        );
+        kernel.mock_executor.set_response(
+            "systemctl --no-pager --user enable shall-reboot-cleanup.service",
+            Ok(shall::core::executor::DryRunOutput::new().into()),
+        );
+    }
 
     kernel
         .app

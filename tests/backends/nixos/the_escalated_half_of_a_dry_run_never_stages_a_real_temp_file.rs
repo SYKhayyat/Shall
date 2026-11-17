@@ -16,8 +16,16 @@ async fn the_escalated_half_of_a_dry_run_never_stages_a_real_temp_file() {
     // carries the destination this test just chose and the word `(staged)` where the dry run never
     // wrote a file, so it is the one string here that cannot be spelled before the run — and the
     // assertion below is a substring, which is why nothing caught the missing answer.
+    // **`as_launched` rather than the escalation prefix spelled by hand.** Whether this run
+    // escalates is a fact about the host — `sudo -n ` on Unix, nothing on Windows or as uid 0 —
+    // and a fixture that wrote `sudo -n ` itself went unmatched on every Windows run, which
+    // `#162`'s check reports as a stub the product disagreed with (#174).
     mock.set_response(
-        &format!("sudo -n install -m 0644 (staged) {}", dest.display()),
+        &CommandExecutor::as_launched(
+            "install",
+            &["-m", "0644", "(staged)", &dest.display().to_string()],
+            true,
+        ),
         Ok(shall::core::executor::DryRunOutput::new().into()),
     );
 

@@ -10,7 +10,7 @@ async fn the_rpm_twin_removes_by_name_too() {
 
     // Stated rather than fallen through (`#162`): what this test asks its manager, and the
     // answer it read from silence before. The assertions here are about the argv.
-    mock.set_response("sudo -n -v", Ok(DryRunOutput::default().into()));
+    answer_the_credential_probe(&mock);
     let url = "https://example.invalid/fd-10.2.0.x86_64.rpm";
     record(&web.core, url, handed_to("rpm", "fd", url)).await;
 
