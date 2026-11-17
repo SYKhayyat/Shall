@@ -179,6 +179,14 @@ No later gate can be met while this is red.*
   that `parse`, `Format::all`, `Format::WORDS` and the help all read, and the tests hold the help
   against it in both directions — a word that parses but is unnamed is how the drift happened, so
   the test fails the same way twice.
+
+  **And #186, which is #191's third copy:** `check --help` named seven of the ten sections, and the
+  three it omitted were the three most recently added, `durability` among them — the section this
+  release added. `Section::vocabulary()` has existed since the fourth section "so the parser and the
+  error cannot disagree"; a `#[arg]` doc-comment cannot call it, so the help was a third reader that
+  could. Fixed and gated (`the_section_vocabulary_is_said_once`), and the gate's first version
+  *passed on the mutation* because the paragraph explaining the fix contained the word it was looking
+  for — it now reads only the `One of:` sentence.
 **Gate:** `main` CI is green and one nightly is green on the same commit.
 
 ---
