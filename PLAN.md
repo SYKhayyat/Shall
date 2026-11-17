@@ -35,7 +35,7 @@ No later gate can be met while this is red.*
   (#67) and `tests/e2e/an_invariant_is_a_promise_the_config_files_make_tests.rs` (#74); two more
   modules were compiled to nothing on every platform by an inner `#![cfg(unix)]`. `cargo check
   --target x86_64-pc-windows-gnu --all-targets` is now clean, 0 errors and 0 warnings.
-- [ ] **macOS (aarch64): 21 → 6 tests fail**, and the six left are three causes, each filed:
+- [ ] **macOS (aarch64): 21 → 4 tests fail**, in five causes, four of them fixed; the two left are assigned:
   - #169 `pid_alive` says yes for a pid above `i32::MAX` (`kill(-1, 0)` is *every* process), so a
     killed session's packages stay protected for ever. A production bug, not a test one. **Fixed**
     (`4e44baf9`); the boundary is one refusal in `ProcFs`, ahead of all three platform arms.
@@ -49,17 +49,23 @@ No later gate can be met while this is red.*
     and the run said "no package manager … has dos2unix" on a machine that never asked. **Fixed**
     (`4d37325e`, `71ad264c` — the second commit because the first hand-wrote `brew search` without
     the `--` brew requires, which is this issue's own defect committed while fixing it).
-  - **Still open, and none of them is a fixture:** #171 `adopt` compares a canonicalised link
+  - #178 an `absent:` export that dropped the line silently off Linux, and a non-UTF-8 path that
+    the test asserted the wrong thing about. **Fixed** (`aa065ea3`): a backend this host's registry
+    does not hold is now a named hole rather than a `continue`, so the export refuses instead of
+    writing an artifact that silently describes a different machine. 21 → 6 → **4**.
+  - **Still open, both assigned to the Windows host:** #171 `adopt` compares a canonicalised link
     source against a raw `$HOME` (2 tests, a production bug); #177 the scheduled-task and service
-    tests stub `systemctl` on a host with no systemd (2 tests, needs an owner ruling on whether the
-    feature is cross-platform); #178 an `absent:` export that drops the line silently off Linux,
-    and a non-UTF-8 path that is not found on Darwin (2 tests, both real).
+    tests stub `systemctl` on a host with no systemd (2 tests) — C33 now rules the policy, so that
+    one is fixture work against tables that already have `windows-sc` and `launchd` rows.
 - [ ] **Windows (msvc): 28 → 15 tests fail** (#174) — #175 took the largest family; what is left is
-  five families of its own.
-- [ ] **Linux gnu: red in the same run, and it is a separate cause** (#172). `test result: FAILED`
-  nowhere in the job; the failure is `harness predicates: 112/113`, and the one BAD line is
-  `the index has a row for C32, and no entry answers to that ID` — `C32` was ruled in an index
-  row and the entry was never written. Fixed; the doc gate is green locally.
+  `app::apply::execs` (the `sh` stub family, the largest), `backends::web`, `backends::nixos`,
+  `backends::registry`, and #177's `systemctl`. **Assigned to the Windows host**, with C33's rule
+  to work by and the shape that works (`TestKernel::this_machines_manager_has`,
+  `stub_the_pre_sync_snapshot`) named in the handoff comment on the issue.
+- [x] **Linux gnu: green** (#172). Was `harness predicates: 112/113` — `C32` ruled in an index
+  row with no entry written. Fixed, and the same gate caught the same omission when C33 was added
+  (`2f6fd99d`), which is the gate earning its keep twice. `harness predicates: 113/113 ok`, suite
+  3274 passed, 0 failed.
 - [ ] **One full nightly, green**, including integration (all distros), the install scripts run for
   real, and mutation. A night that is still red gets each red job filed as its own issue, here.
 
