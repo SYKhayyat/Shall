@@ -1371,18 +1371,24 @@ jobs:
       # has to fail a test — and it is not the `#138` shape of buying time by changing what the
       # leg measures, because the leg still measures the whole suite.
       run: cargo mutants --no-shuffle -j2 --minimum-test-timeout 1800 --test-tool nextest --file ${{ matrix.file }} --shard ${{ matrix.shard }} -- --no-fail-fast --retries 2
-    # **`always()`, not `!cancelled()`.** The name says "whether the run passed or failed", and
-    # those are the two outcomes the job's own conclusion already shows. The one outcome whose
-    # reason lives nowhere else is a *cancelled* job, and `!cancelled()` discarded the partial
-    # `mutants.out/` in exactly that case. That is how #190 spent two nights with no log and no
-    # survivor list and could not say how far the shard had got.
+    # **What this condition does, and does not, buy — all three measured.**
     #
-    # **What this does not cover, measured rather than assumed:** a step cancelled while its
-    # runner is alive. When the runner itself is lost - `The hosted runner lost communication
-    # with the server` - nothing runs afterwards, so no upload happens however the condition is
-    # spelled; the batch shard came back with no `mutants-out-batch-2` artifact on the first
-    # night this step was `always()` (#190). A lost runner kills the evidence with the job, so
-    # the remedy for that one is to keep the job inside what a runner survives, not to record it.
+    # `!cancelled()` is what it was, and it *already* ran on a failing shard: `mutants-out-datalock`
+    # is in run 44006078594, whose data-lock shard failed with five survivors. So the failure case
+    # - the one the survivors exist for - was never the gap, and `always()` changes nothing there.
+    #
+    # Two cases nothing can cover, and neither condition can be blamed for them:
+    # - **The runner is lost.** `The hosted runner lost communication with the server` leaves
+    #   nothing to run afterwards: the batch shard came back with no `mutants-out-batch-2` (#190).
+    # - **The job is cancelled.** `batch 4/4` in run 44100087004 was cancelled at 32 minutes and
+    #   this step is `skipped` in its log - a cancelled job skips its remaining steps whatever
+    #   their condition, `always()` included.
+    #
+    # The one case `always()` adds is a **run** cancelled while the job's runner is still alive:
+    # there `cancelled()` is already true during the grace window, so `!cancelled()` skipped and
+    # `always()` still uploads. That case is unproven here and is why the condition is `always()`:
+    # it is a superset, not a promise. **A lost runner or a cancelled job still needs the leg to be
+    # short enough to finish, which is what the sharding above does.**
     - name: The survivors, kept whether the run passed, failed, or was cancelled
       if: ${{ always() }}
       uses: actions/upload-artifact@v7

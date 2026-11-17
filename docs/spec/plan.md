@@ -157,10 +157,15 @@ what blocks the next one.
     out under at some duration between 41 and 84 minutes. The row is therefore **`0/4` … `3/4`,
     11 + 11 + 11 + 10 = 43** (~40 minutes each), which is under the 41-minute leg that has never
     died. Two corrections to what this paragraph first said: the split is four and not two, and
-    **`always()` does not cover a *lost* runner** — the batch shard came back with no
-    `mutants-out-batch-2` artifact on the first night the step was `always()`, because nothing
-    runs after the runner is gone. That condition is still right for a *cancelled* step; a lost
-    runner has to be prevented by keeping the job short, not recorded.
+    **the artifact condition was never the gap.** `!cancelled()` already uploaded on a *failing*
+    shard — `mutants-out-datalock` is in run `44006078594`, whose data-lock shard failed with five
+    survivors — and `always()` does not help where the evidence was actually missing: nothing runs
+    after a *lost* runner (no `mutants-out-batch-2` on the first `always()` night), and a
+    *cancelled job* skips its remaining steps whatever their condition (`batch 4/4` in
+    `44100087004`, cancelled at 32 minutes, artifact step `skipped`). `always()` stays because it
+    is a superset — it covers a *run* cancelled while the runner is alive, which is unproven here
+    — but the real fix for both dead cases is that the leg has to finish inside what a runner
+    survives, which is what the sharding does.
     is now on the trigger; the tag itself is still the owner's to push, and `readme.md` says so
     at the install command until it happens.
 0f. **macOS is exercised nightly, and four things on it are still unproven.** *(Corrected
