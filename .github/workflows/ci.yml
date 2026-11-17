@@ -1277,17 +1277,27 @@ jobs:
           # left mutation coverage on the day they moved - four shards still green over a file
           # that no longer holds them.
           #
-          # **Two shards, and not because of the count.** `cargo mutants --list` counts 43 here,
-          # fewer than `datalock` (48) or `sync engine` (78), both of which finish. It is the cost
-          # per mutant: every one of these lands in a hot path dozens of tests depend on, nextest
-          # re-runs each failing test twice (`--retries 2`), and `-j2` puts two of those on a
-          # four-core hosted runner at once. As `0/1` this shard died at 115 and 126 minutes on two
-          # nights with `The hosted runner lost communication with the server` and left no log and
-          # no survivor list (#190). Sharding partitions the file, so nothing about what the leg
-          # measures changes; it only halves the wall clock to ~57 minutes, which is below where
-          # this one has died.
-          - { what: the batch narrowing 1/2, file: src/core/batch.rs, slug: batch-1, shard: 0/2 }
-          - { what: the batch narrowing 2/2, file: src/core/batch.rs, slug: batch-2, shard: 1/2 }
+          # **Four shards, and the number is measured rather than reasoned.** `cargo mutants
+          # --list` counts 43 here, fewer than `datalock` (48) or `sync engine` (78), both of
+          # which finish, so it is not the count: every one of these lands in a hot path dozens of
+          # tests depend on, and each mutant costs a full recompile of `shall` and `suite` plus
+          # that 170s suite, with `-j2` putting two of them on a four-core runner at once.
+          #
+          # **Two shards was the first attempt and it was not enough** (#190). `0/2` finished and
+          # `1/2` died at **74 minutes** with `The hosted runner lost communication with the
+          # server` - while `the error vocabulary` (41 min) and `the transaction 4/4` (84 min)
+          # both finished, so it is not a wall-clock ceiling either, it is a runner that gives out
+          # under this load somewhere between those. Reproduced locally from the same commit: 21
+          # mutants, **8 caught, 0 missed, 0 timeouts** in 65 minutes, no hang, ~1.1 GB resident
+          # for one suite and a `rustc` beside it. So the work is real and the death is the
+          # *duration* of it. Four shards is 11 + 11 + 11 + 10, ~40 minutes each, which is under
+          # the 41-minute leg that has never died.
+          #
+          # Sharding partitions the file, so nothing about what the leg measures changes.
+          - { what: the batch narrowing 1/4, file: src/core/batch.rs, slug: batch-1, shard: 0/4 }
+          - { what: the batch narrowing 2/4, file: src/core/batch.rs, slug: batch-2, shard: 1/4 }
+          - { what: the batch narrowing 3/4, file: src/core/batch.rs, slug: batch-3, shard: 2/4 }
+          - { what: the batch narrowing 4/4, file: src/core/batch.rs, slug: batch-4, shard: 3/4 }
           # **The classification lives here, and no shard could see it.** `VI.11` and `M4`
           # put three decision functions into these two files - `Retryability::and_also`,
           # `Error::with_note` and `summarise` - and neither file had a row, so the branch

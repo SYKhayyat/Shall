@@ -147,10 +147,20 @@ what blocks the next one.
     runner lost communication with the server"* at minute 115 of `--shard 0/1`, with a second
     occurrence at 126 minutes the night before and both log blobs missing. Not the mutant count —
     `cargo mutants --list` puts 43 here, fewer than `datalock` (48) or `sync engine` (78), which
-    finish; it is the cost per mutant, and `-j2` on a four-core runner is what starves it. So the
-    row is now `0/2` + `1/2` (verified an exact partition: 22 + 21 = 43), which halves the wall
-    clock without changing what the leg measures, and the survivors artifact is uploaded on
-    `always()` so the next cancellation leaves the partial list instead of nothing.
+    finish; it is the cost per mutant, and `-j2` on a four-core runner is what starves it.
+    **Two shards was not enough, and the night that proved it also disproved the wall-clock
+    theory:** `0/2` finished and `1/2` died at **74 minutes**, while `the error vocabulary`
+    (41 min) and `the transaction 4/4` (84 min) both finished on the same runner image. The local
+    reproduction from that commit is what settles what the work costs — 21 mutants, **8 caught, 0
+    missed, 0 timeouts** in 65 minutes, ~1.1 GB resident for one suite plus a `rustc` beside it,
+    so nothing hangs and nothing leaks; it is simply a long, heavy leg that a hosted runner gives
+    out under at some duration between 41 and 84 minutes. The row is therefore **`0/4` … `3/4`,
+    11 + 11 + 11 + 10 = 43** (~40 minutes each), which is under the 41-minute leg that has never
+    died. Two corrections to what this paragraph first said: the split is four and not two, and
+    **`always()` does not cover a *lost* runner** — the batch shard came back with no
+    `mutants-out-batch-2` artifact on the first night the step was `always()`, because nothing
+    runs after the runner is gone. That condition is still right for a *cancelled* step; a lost
+    runner has to be prevented by keeping the job short, not recorded.
     is now on the trigger; the tag itself is still the owner's to push, and `readme.md` says so
     at the install command until it happens.
 0f. **macOS is exercised nightly, and four things on it are still unproven.** *(Corrected
