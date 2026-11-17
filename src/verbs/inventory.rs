@@ -46,7 +46,14 @@ pub async fn handle_export(
         None => None,
     };
     if stdout && fmt.is_none() {
-        anyhow::bail!("--stdout needs a single --format (brew|pip|npm|apt).");
+        anyhow::bail!(
+            "--stdout needs a single --format ({}).",
+            // **`Format::WORDS`, not a fourth hand-written list.** This said
+            // `(brew|pip|npm|apt)` and was missing `nix`, in the message a person reads
+            // *after* getting the flag wrong (#186). `#191` made the vocabulary one table;
+            // this sentence was the copy it did not reach.
+            crate::app::export::Format::WORDS.join(" | ")
+        );
     }
     let out_dir = std::path::PathBuf::from(out);
     let results = export(state, registry, config, fmt, &out_dir, stdout, force).await?;

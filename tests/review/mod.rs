@@ -72,6 +72,7 @@ mod the_planner_never_reads_the_filesystem_tests;
 mod the_readme_install_promise_matches_reality_tests;
 mod the_release_publishes_what_the_installers_ask_for_tests;
 mod the_review_apparatus_is_rust_tests;
+mod the_section_vocabulary_is_said_once_tests;
 mod the_smoke_tier_reports_what_it_did_not_run;
 mod the_stated_lifecycle_coverage_matches_the_ratchet_tests;
 mod wal_enumeration_tests;

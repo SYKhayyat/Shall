@@ -290,7 +290,15 @@ pub enum Commands {
     /// One section per question. With no section it prints a line for each and names the
     /// command that acts on it. `check` only ever looks — `shall heal` is what repairs.
     Check {
-        /// One of: config, drift, unmanaged, absent, conflicts, health, security
+        /// One of: config, drift, unmanaged, absent, conflicts, health, security, approvals,
+        /// adapters, durability
+        ///
+        /// **Ten, not seven.** This sentence said seven for as long as the enum had ten, and the
+        /// three it omitted were the three most recently added — `durability` is the section `#74`
+        /// shipped, and it answers a question no other section can. `Section::vocabulary()` exists
+        /// so the parser and the error cannot disagree, but a `#[arg]` doc-comment cannot call a
+        /// function, so this copy drifted. `the_section_vocabulary_is_said_once_tests` reads this
+        /// file and holds the sentence to `Section::ALL`.
         section: Option<String>,
 
         /// Machine-readable output
