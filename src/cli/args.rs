@@ -820,8 +820,14 @@ pub enum Commands {
     /// what the machine is. A line the format cannot carry is refused; `@export=no` on the line
     /// opts it out, and `--best-effort` writes the script anyway with a comment at each hole.
     Export {
-        /// One of: brew | pip | npm | apt (manifests) or bash (a script).
-        #[arg(long)]
+        // **No doc comment, because a doc comment here is a fourth copy of the vocabulary**
+        // (#191). This field's help was `One of: brew | pip | npm | apt (manifests) or bash (a
+        // script)` — which named four of the five manifests and none of the aliases, and could
+        // not be checked by anything. The words now come from `export::Format::HELP`, which
+        // `tests/app/export/the_help_names_every_format_and_every_alias.rs` holds against the
+        // parse table.
+        #[arg(long, help = crate::app::export::Format::HELP,
+              long_help = crate::app::export::Format::HELP)]
         format: Option<String>,
 
         /// Export the standalone script from the declaration files

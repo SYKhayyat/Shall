@@ -13,4 +13,5 @@ mod free_path_steps_past_a_fallback_that_is_also_taken;
 mod no_nix_packages_means_no_nix_file;
 mod package_json_is_valid_and_scoped_to_node;
 mod requirements_pins_versions_and_falls_back;
+mod the_help_names_every_format_and_every_alias;
 mod the_nix_format_takes_both_prefixes_and_renders_a_module;

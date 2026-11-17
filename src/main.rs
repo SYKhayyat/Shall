@@ -672,12 +672,17 @@ pub(crate) async fn dispatch(app: &App, cli: &Cli) -> Result<()> {
                 }
                 None => {
                     if *from_declaration || *from_scan || *best_effort {
+                        // **The hint is the vocabulary, not a copy of it.** This said
+                        // `brew|pip|npm|apt` — four of the five, missing `nix` — in the one
+                        // message a user sees after mistyping `--format` (#191).
                         anyhow::bail!(
                             "--from-declaration, --from-scan and --best-effort belong to a \
                              script format ({}). `--format {}` writes a manager's own manifest \
                              from the state.",
                             shall::app::bootstrap::Format::WORDS.join(", "),
-                            format.as_deref().unwrap_or("brew|pip|npm|apt")
+                            format
+                                .as_deref()
+                                .unwrap_or(&shall::app::export::Format::WORDS.join("|"))
                         );
                     }
                     handle_export(

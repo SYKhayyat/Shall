@@ -120,15 +120,55 @@ pub enum Format {
 }
 
 impl Format {
+    /// **Every format and the words it answers to, canonical first — the one list.**
+    ///
+    /// `parse`, [`Format::all`], [`Format::WORDS`] and the `--help` text all read this, so a word
+    /// cannot be accepted without being advertised or advertised without being accepted. Before
+    /// this the vocabulary existed three times: a `match` in `parse`, a hand-written `One of:`
+    /// line in the clap doc comment, and `brew|pip|npm|apt` in `src/main.rs`'s refusal hint — and
+    /// the three disagreed: `nix`, the NixOS module `J5` added, was accepted and unnamed (#191).
+    ///
+    /// The aliases are not decoration. `brewfile`, `requirements.txt` and `package.json` are the
+    /// names of the files these formats *are*, and somebody typing the filename is asking for the
+    /// format, not making a mistake.
+    pub const NAMES: [(Format, &'static [&'static str]); 5] = [
+        (Format::Brew, &["brew", "brewfile"]),
+        (Format::Pip, &["pip", "requirements", "pipx"]),
+        (Format::Npm, &["npm", "node", "package.json"]),
+        (Format::Apt, &["apt", "aptfile", "deb"]),
+        (Format::Nix, &["nix", "nixos"]),
+    ];
+
+    /// The canonical words, in the order the help lists them.
+    pub const WORDS: &'static [&'static str] = &["brew", "pip", "npm", "apt", "nix"];
+
+    /// The `--help` line, and the only place a reader learns what `--format` takes.
+    ///
+    /// Written by hand because clap's derive wants a `&'static str` at compile time, and checked
+    /// against [`Format::NAMES`] by
+    /// `tests/app/export/the_help_names_every_format_and_every_alias.rs`. That is the difference
+    /// between a help text and a help text somebody verifies: the first drifts, the second fails a
+    /// test when it does.
+    pub const HELP: &'static str = "brew | pip | npm | apt (a manager's own manifest), nix (a \
+NixOS module), or bash (a script calling the managers). Also accepts brewfile, requirements, \
+pipx, node, package.json, aptfile, deb, nixos";
+
     pub fn parse(s: &str) -> Option<Self> {
-        Some(match s.to_ascii_lowercase().as_str() {
-            "brew" | "brewfile" => Format::Brew,
-            "pip" | "requirements" | "pipx" => Format::Pip,
-            "npm" | "node" | "package.json" => Format::Npm,
-            "apt" | "aptfile" | "deb" => Format::Apt,
-            "nix" | "nixos" => Format::Nix,
-            _ => return None,
-        })
+        let word = s.to_ascii_lowercase();
+        Self::NAMES
+            .iter()
+            .find(|(_, words)| words.contains(&word.as_str()))
+            .map(|(format, _)| *format)
+    }
+
+    /// The word this format answers to, canonical and not an alias.
+    pub fn as_str(self) -> &'static str {
+        Self::NAMES
+            .iter()
+            .find(|(format, _)| *format == self)
+            .and_then(|(_, words)| words.first())
+            .copied()
+            .unwrap_or("brew")
     }
 
     pub fn filename(self) -> &'static str {
@@ -145,13 +185,8 @@ impl Format {
     }
 
     pub fn all() -> [Format; 5] {
-        [
-            Format::Brew,
-            Format::Pip,
-            Format::Npm,
-            Format::Apt,
-            Format::Nix,
-        ]
+        let [a, b, c, d, e] = Self::NAMES;
+        [a.0, b.0, c.0, d.0, e.0]
     }
 
     /// True if a backend's packages belong in this format's output.
