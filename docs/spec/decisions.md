@@ -1,4 +1,4 @@
-﻿# The decision register — 272 entries, one open
+﻿# The decision register — 274 entries, three open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -22,7 +22,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | status | means | what it needs | count |
 |---|---|---|---|
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
-| **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **1** |
+| **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **3** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
 | **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **266** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 272 are accounted
-for: **266 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 1 OPEN** — and this line
+is waiting now. All 274 are accounted
+for: **266 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 3 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay, and whether a policy decline is a failure, and which half of a setting waits for a person, and what an invariant is and how it is measured, and what an export owes a line it cannot express, and what a config file must be to be evidence of a decision, and whether an advisory lint count is a gate or a report, and what a platform policy owes a capability that could live on more than one OS, and whether one config may retire another's schedule) — 34
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay, and whether a policy decline is a failure, and which half of a setting waits for a person, and what an invariant is and how it is measured, and what an export owes a line it cannot express, and what a config file must be to be evidence of a decision, and whether an advisory lint count is a gate or a report, and what a platform policy owes a capability that could live on more than one OS, whether one config may retire another's schedule, what `heal` owes the model, and whether subtraction is an output class) — 36
 
 | | question | answered |
 |---|---|---|
@@ -553,6 +553,8 @@ deliberately no longer has.*
 | **C32** | `newest-rust` — the advisory drift detector — had been red long enough that a pin move would have arrived with an unknown number of releases' worth of breakage at once, and the lint debt it was reporting was visible on a run page nobody opens until something is already wrong (`#160`). The code half is done (43 lints cleared, `a78c044a`). What was left was the owner's two questions: is the job triaged per Rust release or paid down when the pin moves, and should a gating leg report the advisory count. **When is a new Rust release's lint debt paid, and where is it seen?** — RULED 2026-11-15: **paid when the pin moves, and seen as a count written next to the version that produced it.** There is no per-release triage calendar, because a dated backlog item the owner never reads is maintenance that protects nothing; `continue-on-error: true` already keeps the job from blocking a merge, so its obligation between pin bumps is to *say the number*, not to schedule work. The count is recorded into `$GITHUB_STEP_SUMMARY` by the same command the gate runs, one `--message-format` apart, and **there is deliberately no ratchet**: a ceiling on a report nobody reads is the same debt with a second file to maintain. The report is anchored on `path:line:col:` rather than on a bare severity, because the only line starting with a bare `error:` is the `could not compile ... due to N previous errors` summary — a pattern matching that counted the tail and missed the head. (II.96, V.250) | 2026-11-15 |
 | **C33** | `service:` and the schedule/task backends asserted the Linux argv (`systemctl`) in tests that ran on every host, so macOS reported dead `systemctl` stubs and two of its tests failed — and that fixture question turned out to be a product one. What is the platform policy for a capability that could live on more than one OS? — RULED 2026-11-16: **if it would genuinely be useful on Windows, it must exist on Windows, and the test that exercises it must pass there.** `#177`, `#170` and `#175` were one shape: a fixture naming another platform's command string, which passes on the author's host and fails on the next one with a sentence that blames the wrong thing. The tables already comply — `scheduler/mod.rs`'s provisioners, `init_providers.toml` (systemd/openrc/sysvinit, launchd, `windows-sc`), the snapshot rows, the firewall rows — so the work this rule implies is in the fixtures that bypassed them, done by querying `applies_to(os)` rather than by copying argv. | 2026-11-16 |
 | **C34** | `#182` asked what the `#158` schedule sweep may remove on a machine with two configs: `installed()` answers with every `shall-*` task the machine holds, and the sweep removes all the running config does not declare, so `sync` in one config deletes another's schedules. **May one config's `sync` retire a schedule another config registered, and what may it do with a task it cannot identify?** — OPEN 2026-11-17: three resolutions, and `#192` has since built a third of one (every task now carries `--config-dir`), but nothing reads it back — `TaskProvisioner::installed` returns names only. The ruling has to say what happens to a task with no marker, which is every task registered before `c7dd0b67`: sweeping it keeps `#158` working for upgraders, and not sweeping it retires the feature exactly where it is needed. (II.97, V.251) | 2026-11-17 |
+| **C35** | `#188` / `#166`'s audit (F1): `heal` is the one command whose primary job is to change the machine in ways no declaration asked for — a manager's wedged lock file, a WAL-resumed transaction, the three repairs that were `doctor --fix` — and nothing in `P1`, `ARCHITECTURE.md`'s pipeline or the model says so. **Does the model carry `heal` as a written exception, does `history` record the repair, or does `heal` get split from a read-only diagnosis?** — OPEN 2026-11-17: three options with different costs; (1) and (2) are not alternatives, because one makes the model true and the other is what a person needs at 03:00, and (3) is `U9`'s move made once already. (VI.12) | 2026-11-17 |
+| **C36** | `#189` / `#166`'s audit (F2): `purge-undeclared` reads the file and the machine, writes the machine, writes no file — output by the mechanical test, but convergence by *subtraction*, and the model has no word for it. Its cost was visible: the most destructive command in the binary was not on the list of commands needing a close look. **Is "make the machine equal the file" one output class with `purge-undeclared` as its strong form, or is subtraction a second output kind with its own statement of what the guard owes it?** — OPEN 2026-11-17: the classification is now complete and checked (`1b95e419`), so the remaining question is naming and the guard's obligation, which is a ruling rather than a reading. (VI.13) | 2026-11-17 |
 # The blocking round — thirteen questions, all ruled
 
 *These could not be built around: two reasonable implementations differed. Ruled 2026-07-23/24.*
@@ -11367,4 +11369,80 @@ binary's, because that is the one thing about a legacy task that identifies its 
 `shall_bin_path` is already in the handed information. If that is wrong the cost is the `#158`
 class of bug on a pre-`0.9.0` task, which is a red sync at worst; if it is right, nothing is
 deleted that this config did not write.
+
+## C35
+
+**Status: OPEN — waits on a ruling from the owner.** Whether `heal`'s machine mutation outside the
+file is written into the model, recorded where a person can read it, or split off. Carried out of
+#188 and the `#166` audit (`docs/AUDIT-2026-11-17-command-classification.md`, F1).
+
+**Asked.** `P1` — the principle the repository is organised around — says every imperative command
+is a shortcut for editing a file and syncing: **the edit is the operation**. `heal` is the
+counterexample, and it was measured rather than suspected:
+
+- `settle_manager_locks` deletes a wedged manager's lock file. `pacman`'s `db.lck` makes every
+  manager command on the machine fail; removing it is a machine mutation by any reading.
+- `SyncEngine::heal` resumes an interrupted transaction from the WAL.
+- `repair_environment` performs the three repairs that used to be `doctor --fix`, split out under
+  `U9` precisely because a command that changes things is not one you run to find out whether you
+  want things changed.
+
+All three are defensible. An interrupted transaction is not a declaration, and a lock file is not
+something the grammar could ever express. **What is not defensible is that it is an exception
+nobody wrote down**: `P1`, `ARCHITECTURE.md`'s pipeline and the `#166` model all describe the
+command surface as file-mediated, and a reader who takes that seriously cannot tell a leak from a
+deliberate exception. There is a second half: **after a repair there is no record of it** —
+`shall history` shows the transactions Shall ran, not that a lock was cleared, a WAL resumed or an
+environment repaired, so a person asking "why did this machine change at 03:00" has nothing to read.
+
+**The three options, and what each costs.**
+
+1. **Write the exception into `P1`** — one sentence saying `heal` repairs the machine outside the
+   file because what it repairs is Shall's own bookkeeping and a wedged manager's lock, neither of
+   which the grammar can express. Cheapest, and it makes the model honest.
+2. **Record the repair in `history`** — a row per repair with the output the command already prints.
+   A little plumbing, and the second half gets an answer.
+3. **Split `heal` into a read-only `check --broken` and an explicit repair verb**, so the diagnosis
+   never mutates. `U9` already made this move once, for `doctor --fix`.
+
+**Recommendation, and it is not a ruling.** (1) and (2) are not alternatives: (1) makes the model
+true and (2) makes the machine's history complete, and the second is what a person actually needs at
+03:00. (3) is the largest and the only one that removes the exception rather than documenting it,
+and `U9` is evidence that it can be done — but it also moves a command users already type.
+
+## C36
+
+**Status: OPEN — waits on a ruling from the owner.** Whether "make the machine equal the file" is one
+output class with `purge-undeclared` as its strong form, or subtraction is a second output kind with
+its own name and its own rules about what the guard owes it. Carried out of #189 and the `#166`
+audit (F2).
+
+**Asked.** `#166` defines the two directions precisely: **input** moves the file toward the machine,
+and **output** *"reads the file and the machine and never writes the file"* and moves the machine
+toward the file. `purge-undeclared` does neither: it reads the file, reads the machine, writes the
+machine, writes no file — so it passes the mechanical test for output, but it is not convergence
+*toward* a declaration, it is convergence by **subtraction**. The cost of not having the word is
+visible in the issue that asked for the audit: `purge-undeclared` was not on `#166`'s list of
+commands needing a close look, although it is the most destructive command in the binary and the only
+one whose effect is "remove everything I did not mention". `remove-orphans` is the same shape at a
+smaller radius, and `check unmanaged` is its read-only view.
+
+**Why it cannot simply be called output.** Output's guarantee is *"the machine now equals the
+file"*, and a reader of that sentence expects `sync` to be the thing that establishes it. If
+`purge-undeclared` is output, output comes in two strengths — add and remove declared drift, versus
+remove everything undeclared — and nothing in the definition says which commands are which. That
+matters for a review rule: "does this output go through the plan and the guard?" is answerable for
+`sync` and needs a different answer for `purge-undeclared`, which carries its own
+`--allow-mass-purge` and its own ceiling.
+
+**The two options.** (a) `sync` is *"make the machine equal the file, in both directions"* and
+`purge-undeclared` is its strong form, named as such. (b) subtraction is a second output kind,
+named, with its own statement of what the guard owes it.
+
+**What is already settled, and by whom.** The classification itself is complete and checked —
+`tests/review/every_command_is_classified_in_the_audit_tests.rs` requires every command in the binary
+to appear exactly once in the audit, and every row to name a command the binary has. That test found
+the audit missing seven commands, holding three rows in two classes and naming two commands the
+binary does not have, all fixed in `1b95e419`. What that test cannot say is *which* class
+`purge-undeclared` belongs in — that is the question above, and it is a ruling, not a reading.
 
