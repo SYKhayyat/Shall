@@ -35,7 +35,16 @@ No later gate can be met while this is red.*
   (#67) and `tests/e2e/an_invariant_is_a_promise_the_config_files_make_tests.rs` (#74); two more
   modules were compiled to nothing on every platform by an inner `#![cfg(unix)]`. `cargo check
   --target x86_64-pc-windows-gnu --all-targets` is now clean, 0 errors and 0 warnings.
-- [ ] **macOS (aarch64): 21 → 4 tests fail**, in five causes, four of them fixed; the two left are assigned:
+- [x] **macOS (aarch64): 21 → 0 suite failures** (#169, #170, #171, #174, #175, #177, #178,
+  2026-11-17). Run `44074628006` is the one that settled it: **3272 passed, 1 failed**, and the one
+  was not a test of the product at all — a dated essay of mine that nothing durable cited (`C24`),
+  fixed in the next commit. The last four failures were mine and all one mistake: a fixture spelling,
+  by hand, something the product decides per platform. `cfg(windows)` / `cfg(not(windows))` for a
+  three-platform fact (`sc` / `launchctl` / `systemctl`), a `link:` source written where the product
+  canonicalises it (`/var` → `/private/var` — which passes on the x86_64 runner, whose `$TMPDIR` is
+  already canonical, and fails on aarch64), and a `#173` test that wrote a systemd unit and called
+  itself "hermetic on every Unix". **The lesson, recorded because it will recur: "not Windows" is a
+  statement about the machine the author is on, not about any platform.** All four in `9a0c0857`.
   - #169 `pid_alive` says yes for a pid above `i32::MAX` (`kill(-1, 0)` is *every* process), so a
     killed session's packages stay protected for ever. A production bug, not a test one. **Fixed**
     (`4e44baf9`); the boundary is one refusal in `ProcFs`, ahead of all three platform arms.
