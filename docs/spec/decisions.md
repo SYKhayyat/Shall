@@ -1,4 +1,4 @@
-﻿# The decision register — 271 entries, none open
+﻿# The decision register — 272 entries, one open
 **One file, six features, four questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -22,7 +22,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | status | means | what it needs | count |
 |---|---|---|---|
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
-| **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **0** |
+| **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **1** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
 | **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **266** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 271 are accounted
-for: **266 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 0 OPEN** — and this line
+is waiting now. All 272 are accounted
+for: **266 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 1 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay, and whether a policy decline is a failure, and which half of a setting waits for a person, and what an invariant is and how it is measured, and what an export owes a line it cannot express, and what a config file must be to be evidence of a decision, and whether an advisory lint count is a gate or a report, and what a platform policy owes a capability that could live on more than one OS) — 33
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay, and whether a policy decline is a failure, and which half of a setting waits for a person, and what an invariant is and how it is measured, and what an export owes a line it cannot express, and what a config file must be to be evidence of a decision, and whether an advisory lint count is a gate or a report, and what a platform policy owes a capability that could live on more than one OS, and whether one config may retire another's schedule) — 34
 
 | | question | answered |
 |---|---|---|
@@ -552,6 +552,7 @@ deliberately no longer has.*
 | **C31** | `#59` asked what in `$HOME` `adopt` may offer as a declaration. Owner ruling 2026-11-13: **a symlink whose target is inside a git working tree, and nothing else.** Everything else fails the evidence test a machine cannot fake: a plain file is what software wrote, age and size select the caches written most often, and "any symlink" selects every package manager's own bookkeeping. Therefore `~/.config`, `~/.local/share`, `~/.ssh` and the top of `$HOME` are scanned two levels deep, a link into `$HOME` is a rearrangement, a broken link declares nothing, and a path already spoken for (`link:`, a `dotfiles:` tree, or what `adopt` wrote last run) is not re-offered. The manifest is the selection — a deleted line is a link Shall stops placing. (II.95, V.249) | 2026-11-13 |
 | **C32** | `newest-rust` — the advisory drift detector — had been red long enough that a pin move would have arrived with an unknown number of releases' worth of breakage at once, and the lint debt it was reporting was visible on a run page nobody opens until something is already wrong (`#160`). The code half is done (43 lints cleared, `a78c044a`). What was left was the owner's two questions: is the job triaged per Rust release or paid down when the pin moves, and should a gating leg report the advisory count. **When is a new Rust release's lint debt paid, and where is it seen?** — RULED 2026-11-15: **paid when the pin moves, and seen as a count written next to the version that produced it.** There is no per-release triage calendar, because a dated backlog item the owner never reads is maintenance that protects nothing; `continue-on-error: true` already keeps the job from blocking a merge, so its obligation between pin bumps is to *say the number*, not to schedule work. The count is recorded into `$GITHUB_STEP_SUMMARY` by the same command the gate runs, one `--message-format` apart, and **there is deliberately no ratchet**: a ceiling on a report nobody reads is the same debt with a second file to maintain. The report is anchored on `path:line:col:` rather than on a bare severity, because the only line starting with a bare `error:` is the `could not compile ... due to N previous errors` summary — a pattern matching that counted the tail and missed the head. (II.96, V.250) | 2026-11-15 |
 | **C33** | `service:` and the schedule/task backends asserted the Linux argv (`systemctl`) in tests that ran on every host, so macOS reported dead `systemctl` stubs and two of its tests failed — and that fixture question turned out to be a product one. What is the platform policy for a capability that could live on more than one OS? — RULED 2026-11-16: **if it would genuinely be useful on Windows, it must exist on Windows, and the test that exercises it must pass there.** `#177`, `#170` and `#175` were one shape: a fixture naming another platform's command string, which passes on the author's host and fails on the next one with a sentence that blames the wrong thing. The tables already comply — `scheduler/mod.rs`'s provisioners, `init_providers.toml` (systemd/openrc/sysvinit, launchd, `windows-sc`), the snapshot rows, the firewall rows — so the work this rule implies is in the fixtures that bypassed them, done by querying `applies_to(os)` rather than by copying argv. | 2026-11-16 |
+| **C34** | `#182` asked what the `#158` schedule sweep may remove on a machine with two configs: `installed()` answers with every `shall-*` task the machine holds, and the sweep removes all the running config does not declare, so `sync` in one config deletes another's schedules. **May one config's `sync` retire a schedule another config registered, and what may it do with a task it cannot identify?** — OPEN 2026-11-17: three resolutions, and `#192` has since built a third of one (every task now carries `--config-dir`), but nothing reads it back — `TaskProvisioner::installed` returns names only. The ruling has to say what happens to a task with no marker, which is every task registered before `c7dd0b67`: sweeping it keeps `#158` working for upgraders, and not sweeping it retires the feature exactly where it is needed. (II.97, V.251) | 2026-11-17 |
 # The blocking round — thirteen questions, all ruled
 
 *These could not be built around: two reasonable implementations differed. Ruled 2026-07-23/24.*
@@ -11308,3 +11309,62 @@ what comes back.
 rows (systemd/openrc/sysvinit on Linux, launchd on macOS, `windows-sc` on Windows), the snapshot
 rows, and the firewall rows all key on `applies_to(os)`. The work is in the fixtures that bypass
 them, not in the product.
+## C34
+
+**Status: OPEN — waits on a ruling from the owner.** Whether one config's `sync` may remove a
+scheduled task another config registered. Carried out of #182, and its option space changed
+after #192 shipped.
+
+**Asked.** `remove_what_is_no_longer_declared` — the `#158` sweep in
+`src/app/apply/schedules.rs` — asks the machine what schedules it holds and removes every one the
+running config does not declare:
+
+```rust
+let Some(held) = self.scheduler.installed(self.executor, None).await else { return Ok(()) };
+let orphans: Vec<String> = held.into_iter().filter(|n| !declared.contains(n)).collect();
+```
+
+`declared` is *this* config. `held` is every `shall-*` / `com.shall.*` / `Shall_*` row the machine
+has, from a directory scan on Linux and macOS and from `schtasks /Query /FO CSV` on Windows. So on
+a machine with two configs, `sync` in one deletes the other's schedules. Measured on the Windows
+host: the task the sweep picked was registered by a **different checkout's** `shall.exe`, and the
+run had nothing to do with it. It was undeletable there, which is the only reason the bug was seen
+— a permission refusal is a better outcome than the deletion.
+
+`#158`'s own case is the one that is right and has to keep working: the owner's
+`shall-nightly.timer` kept firing after the `schedules` file was deleted, and that timer *was*
+this config's. The defect is only that the sweep cannot tell *"mine, retracted"* from *"somebody
+else's"*.
+
+**Why this is a decision and not a bug fix.** The three ways out are different products, and one
+of them is now half-built:
+
+1. **Marker on the resource.** The task carries the declaring config's identity and the sweep
+   compares. Windows has `<Description>`, systemd has `Description=`, launchd has no free field.
+   Adding it to `schtasks /Create` means moving that call to `/XML`.
+2. **Scope by the extras ledger**, and make `schedule add` write a row it currently does not. Then
+   the candidates are `machine ∩ ledger`, which is per-config by construction. Costs: a task
+   registered by an older `shall` has no row and is never swept, and a hand-edited
+   `locks/extras.toml` can hide one.
+3. **The command line, which needs no new metadata field** — and which `#192` has now implemented
+   for a different reason: every task registered since `c7dd0b67` carries `--config-dir <root>` (and
+   `--data-dir`), written only when the run's root is not the OS default. So the declaring config
+   is already in the one place the OS hands back, and reading it needs no `/XML` move and no plist
+   key.
+
+**What option 3 does not settle, and what the ruling is therefore about.** The root is written and
+never read: `TaskProvisioner::installed` returns names only. Reading it means the sweep classifies
+each task as *provably mine* (root equals this run's), *provably not mine* (another root), or
+*unidentified* (no flag — everything registered before `c7dd0b67`). The open question is what the
+third class may do: sweeping it keeps `#158` working on every machine that upgraded, and deleting
+it is exactly the damage #182 is about. Reporting it and leaving it registered retires the sweep
+for legacy tasks — safe, and it makes the feature silently not work on the machines that need it
+most.
+
+**Recommendation, and it is not a ruling.** Read the root where it exists, refuse to remove a task
+that names another root, and for an unidentified task: remove it only when its binary path is this
+binary's, because that is the one thing about a legacy task that identifies its author — and
+`shall_bin_path` is already in the handed information. If that is wrong the cost is the `#158`
+class of bug on a pre-`0.9.0` task, which is a red sync at worst; if it is right, nothing is
+deleted that this config did not write.
+
