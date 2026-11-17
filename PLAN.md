@@ -178,6 +178,24 @@ installed without building from source.*
   longer touches*, *what it says*, *the suite*, and the platform work. Not ticked as "shipped":
   the entry is written, the number is not released until the two boxes below are.
 - [ ] `scripts/release-check.sh` and `scripts/release-check.ps1` both green.
+  - **Linux, `SKIP_DOCKER=1`, 2026-11-17: `=====> GO: every hard gate passed.`** — `cargo fmt`,
+    `clippy`, **`cargo test --release`** (the release profile, 3283 tests, doc-tests included),
+    `release build`, the decision register, `harness predicates: 113/113`, the harness mutation
+    budget, and the container harness mutation budget. Four `[INFO]`s, all said-so: `unix-check`
+    (needs a docker daemon) and cargo-mutants / cargo-deny / shellcheck / rustup 1.89, which CI
+    installs and this host does not.
+  - **The local mutation step was wrong and is now measured, not asserted** (`956e4fba`, mine to
+    verify because I had filed the same class of bug twice): `-- --lib` compiled **zero** tests —
+    `src/core/exit.rs` has had no `#[cfg(test)]` module since every test moved to the folder that
+    owns it — and reported five survivors on a correct tree. Ran locally as the script now has it,
+    `cargo mutants --no-shuffle --file src/core/exit.rs -- --test suite core::exit`:
+    **`5 mutants tested in 18m: 5 caught`**.
+  - **The doc-test failure in the first run was this machine, not the tree.** `cargo test
+    --release` reported `E0514: found crate 'tracing' compiled by an incompatible version of
+    rustc`: the rustup toolchain's `rustdoc` was unpatched for this NixOS host and fell back to
+    the nix 1.95 one. `patchelf --set-interpreter … --set-rpath …` on `$T/bin/rustdoc` and the
+    doc-tests pass. Worth knowing because **nextest skips doc-tests, so CI never runs them** —
+    this gate is the only place they are compiled at all.
 - [ ] Bump `Cargo.toml`, tag `v0.9.0`, and confirm that all seven `shall-<target>` binaries are attached to the release.
 - [ ] **Install it the way a user would**, on a clean Linux VM and a clean Windows VM: `install.sh` /
   `install.ps1` → `shall --version` → `shall init` → `shall check`. Do not use the checkout.
