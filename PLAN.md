@@ -168,7 +168,17 @@ No later gate can be met while this is red.*
   and one the config grammar's timestamp parsing, so it is a migration and not a swap, and it is
   not a vulnerability. Recorded as a decision in `deny.toml` with the call sites named and **what
   ends it** ("the migration, filed as #193"), which is the only shape that file allows: `advisories
-  ok, bans ok, licenses ok, sources ok` locally with the entry in place.
+  ok, bans ok, licenses ok, sources ok` locally with the entry in place. Two review gates went red
+  on that change and are fixed in the same day's work: `the_ignore_list_does_not_grow_quietly`
+  holds the silenced advisories at 1 and the bound moved to 2 with the reason beside it, and
+  `#166`'s new audit essay was cited by no living document, so the dated-essay gate was red too —
+  PLAN's `#166` item now sends a reader to it.
+
+  **Also fixed while the night ran: #191**, `export --help` naming four of five manifests and
+  `src/main.rs`'s refusal hint naming four of five as well. `Format::NAMES` is now the one table
+  that `parse`, `Format::all`, `Format::WORDS` and the help all read, and the tests hold the help
+  against it in both directions — a word that parses but is unnamed is how the drift happened, so
+  the test fails the same way twice.
 **Gate:** `main` CI is green and one nightly is green on the same commit.
 
 ---
