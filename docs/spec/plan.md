@@ -167,7 +167,15 @@ what blocks the next one.
     duration and the rate is ~10 minutes per mutant — rebuild `shall` and `suite`, then the whole
     170s suite under `-j2` — so six mutants is an hour and four is forty minutes. The row is now
     **`0/11` … `10/11`, four mutants each (4×10 + 3 = 43)**, no empty shard, which `0/12` would
-    have produced. And the operational answer for a shard that still loses its runner is
+    have produced. Ten of those eleven answered on the first night; `8/11` still lost its runner at
+    **61 minutes with four mutants**, so the per-mutant rate is not uniform — some mutants are
+    pathological. **The lever for those is `--no-fail-fast`, which the mutation step no longer
+    passes:** a mutant that breaks two hundred tests used to run all two hundred, twice per retried
+    failure, and the question this leg asks is one bit per mutant — *is it caught* — which the first
+    failing test already answers. A mutant that is **not** caught is unaffected, because the suite
+    passes and the whole thing runs either way, so the survivor list cannot shrink. That is the
+    last change made from theory here rather than from a night's numbers, and the next night is
+    what measures it. For a shard that still loses its runner the operational answer is
     `gh run rerun <id> --failed`: it costs the shard, not the night. Two corrections to what this paragraph first
     said: the split is eight and not two, and
     **the artifact condition was never the gap.** `!cancelled()` already uploaded on a *failing*

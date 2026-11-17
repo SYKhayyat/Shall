@@ -1387,7 +1387,16 @@ jobs:
       # scale with a solo one. It is not a loosening of what counts as caught — a mutant still
       # has to fail a test — and it is not the `#138` shape of buying time by changing what the
       # leg measures, because the leg still measures the whole suite.
-      run: cargo mutants --no-shuffle -j2 --minimum-test-timeout 1800 --test-tool nextest --file ${{ matrix.file }} --shard ${{ matrix.shard }} -- --no-fail-fast --retries 2
+      # **`--no-fail-fast` is gone from this command, and that is the fix for the shard that would
+      # not finish** (#190). It is right for the *product*'s own suite runs, where the list of
+      # everything that broke is the point; here the question is one bit per mutant — is this
+      # mutation caught — and the first failing test answers it. With `--no-fail-fast` a mutant
+      # that breaks two hundred tests ran all two hundred, and `--retries 2` re-ran each of the
+      # failed ones twice, which is how a four-mutant shard took **61 minutes** and lost its runner
+      # while an eleven-mutant shard finished in 38. A mutant that is NOT caught is unaffected: the
+      # suite passes, so the whole suite runs either way, which is exactly the survivor list this
+      # leg exists to produce.
+      run: cargo mutants --no-shuffle -j2 --minimum-test-timeout 1800 --test-tool nextest --file ${{ matrix.file }} --shard ${{ matrix.shard }} -- --retries 2
     # **What this condition does, and does not, buy — all three measured.**
     #
     # `!cancelled()` is what it was, and it *already* ran on a failing shard: `mutants-out-datalock`
