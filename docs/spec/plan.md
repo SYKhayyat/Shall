@@ -161,8 +161,14 @@ what blocks the next one.
     `2/4` died at 72 with the same annotation and `3/4` was cancelled at 33. Same mutant count in
     each — so the cost varies with *which* mutant, because the expensive ones are the ones that
     fail many tests and run the suite again per retry. An eleven-mutant shard is therefore 38
-    minutes or 72, depending on who is in it. The row is now **`0/8` … `7/8`, six mutants each**
-    (43 total), whose worst batch is ~40 minutes. Two corrections to what this paragraph first
+    minutes or 72, depending on who is in it. Eight shards was the next attempt and it produced
+    the measurement that settles it, because for the first time one split produced both outcomes:
+    **six of eight finished in 10 to 29 minutes and two died at 59 and 62.** The difference is
+    duration and the rate is ~10 minutes per mutant — rebuild `shall` and `suite`, then the whole
+    170s suite under `-j2` — so six mutants is an hour and four is forty minutes. The row is now
+    **`0/11` … `10/11`, four mutants each (4×10 + 3 = 43)**, no empty shard, which `0/12` would
+    have produced. And the operational answer for a shard that still loses its runner is
+    `gh run rerun <id> --failed`: it costs the shard, not the night. Two corrections to what this paragraph first
     said: the split is eight and not two, and
     **the artifact condition was never the gap.** `!cancelled()` already uploaded on a *failing*
     shard — `mutants-out-datalock` is in run `44006078594`, whose data-lock shard failed with five
