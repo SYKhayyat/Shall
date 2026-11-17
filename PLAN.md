@@ -94,6 +94,13 @@ No later gate can be met while this is red.*
     stat ''`. The guess is the defect; cargo names the path when asked, and now both ask it with
     `--message-format=json`. **Fixed**, pending the leg. *Why* those two images move the artefact
     is recorded as unexplained rather than invented.
+  - #183 **Mutation (the data lock)**: the one shard with a real survivor after #179 —
+    `replace && with || in DataLock::take`, in one of the four safety files. It had already been
+    written off as an *equivalent* mutant in a comment that argued from `refuse_self = true`; the
+    `||` fires on the other side, where `acquire` — reached by `watch`, `shell`, `run` and
+    `history rollback` through `for_one_step` — would stop waiting for a lock its own process is
+    holding and start naming the wrong door. **Fixed**: two tests pin the condition from each side,
+    the stale paragraph is replaced, and the mutant fails both.
   - #181 **Integration (tools)**: one check, `cabal: removal reports a graceful unsupported`, and
     the product was right. `apply --delete` on a backend with no uninstall verb fails with `Error:
     Operation not supported by backend 'cabal'` and exits 1, which is the only row of

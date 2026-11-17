@@ -14,15 +14,25 @@
 //! Nothing asserted the comparison, because the one existing test took the lock in *this* process
 //! and so the stamp really did name it.
 //!
-//! **The other shard survivor on this arm is recorded here rather than tested.** `cargo mutants`
-//! also reported `refuse_self && holder_is_this_process` → `||` in `DataLock::take`. It is
-//! unreachable, and that was measured: the only caller passing `refuse_self = true` is
-//! `for_this_write`, which returns before `take()` whenever `held_on` says this process holds a
-//! lock on that directory — so the `refuse_self = false` side reaching a self-held stamp is not a
-//! state the product can be in. A test for it would have to call `take` with a combination no
-//! caller uses, and it passed under the mutation, which is the honest evidence that the mutant is
-//! equivalent rather than missed. The `&&` is left as written because reading `refuse_self` first
-//! is what makes that caller's intent legible.
+//! **The other shard survivor on this arm used to be written off here, and it was not
+//! equivalent.** `cargo mutants` also reported `refuse_self && holder_is_this_process` → `||` in
+//! `DataLock::take`, and this file argued it was unreachable from the fact that `refuse_self =
+//! true` is only passed by `for_this_write`, which returns before `take()` whenever `held_on` says
+//! this process is inside a lock on that directory.
+//!
+//! **That is the wrong half of the condition.** The `||` fires when `refuse_self = false` and the
+//! stamp names this process, and that side has callers: `acquire` is `for_one_step`, which
+//! `watch`, `shell`, `run` and `history rollback` all take. Under the mutant a run that holds the
+//! lock for its whole life refuses its own next step instead of waiting for itself to release —
+//! with a message telling the caller to use a door it did not use. The doc on `DataLock::acquire`
+//! says the intended behaviour out loud, so the comment and this paragraph contradicted each other and the
+//! survivor was the tie-breaker.
+//!
+//! The arm is pinned from both sides now:
+//! `a_direct_acquire_waits_for_a_lock_this_process_holds` and
+//! `the_reentrant_door_refuses_a_lock_this_process_holds_at_once`, in the folder that owns the
+//! behaviour. Recorded here because the lesson is this one: a paragraph claiming a survivor is
+//! equivalent is how the survivor stays a survivor.
 use super::*;
 
 /// **A stamp naming a different pid is not this process.**
