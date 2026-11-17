@@ -384,3 +384,59 @@ fn every_build_row_can_name_its_own_crash() {
          reason that has nothing to do with the crash it exists to explain."
     );
 }
+
+/// **The local mutation gate must name the target the mutated file's tests actually live in.**
+///
+/// A mutation score is a statement about the test command it was given — the lesson this file's
+/// siblings were written for — and `scripts/release-check.{sh,ps1}` asked for the wrong one.
+/// `cargo mutants --file src/core/exit.rs -- --lib` compiles **zero** tests, because
+/// `src/core/exit.rs` has had no `#[cfg(test)]` module since `b2e9466f` moved every test into the
+/// folder that owns it. The gate did not go quietly green; it reported five survivors on a correct
+/// tree, which is worse for a release gate: a check that reds for its own reason is one people
+/// learn to read past.
+///
+/// Measured, not argued: `-- --lib` gives "5 mutants tested: 5 missed"; `-- --test suite core::exit`
+/// gives "5 caught" in five minutes.
+///
+/// **The premise is read off the tree rather than asserted as a string**, so this test stays true
+/// if `exit.rs` grows lib tests later: if the file has a test module, `--lib` is a legitimate
+/// scope and the assertion below does not fire.
+#[test]
+fn the_local_mutation_gate_names_a_target_that_has_tests() {
+    let mut offenders: Vec<String> = Vec::new();
+
+    for name in ["scripts/release-check.sh", "scripts/release-check.ps1"] {
+        let body = read(&repo().join(name));
+        for line in body.lines() {
+            if !line.contains("cargo mutants") || !line.contains("--file") {
+                continue;
+            }
+            let Some(rest) = line.split("--file").nth(1) else {
+                continue;
+            };
+            let mutated = rest.trim().split_whitespace().next().unwrap_or("");
+            let source = read(&repo().join(mutated));
+
+            // `-- --lib` is the scope, and it is only ever right for a file with a test module.
+            let scoped_to_lib = line
+                .split(" -- ")
+                .nth(1)
+                .is_some_and(|a| a.contains("--lib"));
+            let has_lib_tests = source.contains("#[cfg(test)]") || source.contains("mod tests");
+            if scoped_to_lib && !has_lib_tests {
+                offenders.push(format!(
+                    "{name}: mutates {mutated} with `-- --lib`, and that file has no test module"
+                ));
+            }
+        }
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "a local mutation gate scoped to `--lib` over a file whose tests live in `tests/` \
+         compiles zero tests and reports every mutant as a survivor:\n  {}\n\n\
+         Point it at the target the tests are in (`-- --test suite <module path>`), and say in the \
+         comment which mutants that filter can and cannot see.",
+        offenders.join("\n  ")
+    );
+}

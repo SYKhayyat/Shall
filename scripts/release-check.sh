@@ -76,15 +76,24 @@ else info "unix-check did not pass — the cfg(unix) blocks are unverified on th
 # roughly seven minutes each. A release script that takes an afternoon is a release script nobody
 # runs, and this predicate asks that a developer can find out locally — not that they repeat CI.
 #
-# **`--lib` here is correct for THIS file and would not be for the others.** Lesson 13 of the
-# 2026-08-13 review: a mutation score is a statement about the test command you gave it, and
-# scoping to the wrong target is what reported `GuardScope::reconciles` as an uncaught mutant when
-# a lib test asserts it for all twelve scopes. `exit.rs` is covered entirely by lib tests, so
-# `--lib` is the whole of its coverage rather than a slice of it. The nightly gives the other
-# three the full suite.
+# **`--lib` was wrong here, and it measured nothing at all.** Lesson 13 of the 2026-08-13 review:
+# a mutation score is a statement about the test command you gave it, and scoping to the wrong
+# target is what reported `GuardScope::reconciles` as an uncaught mutant when a lib test asserts
+# it for all twelve scopes. This script then made that mistake in the other direction and in the
+# same shape: `src/core/exit.rs` has had **no `#[cfg(test)]` module** since `b2e9466f` moved every
+# test to the folder that owns it, so `--lib` compiled zero tests and could not have caught a
+# mutant. It did not report a false green either — it reported the opposite, five survivors, and a
+# release gate that reds on a correct tree is one people learn to read past.
+#
+# Measured rather than reasoned: `-- --lib` gives "5 mutants tested: 5 missed", and
+# `-- --test suite core::exit` gives "5 mutants tested: 5 caught" in five minutes. The filter is
+# the whole of exit.rs's observability because the only file outside `tests/core/exit/` that calls
+# `code()` is `src/main.rs`, which calls `Exit::Failed` — and `the_codes_are_fixed` pins that
+# number, so the survivor list cannot move without the filtered tests moving. CI runs the nightly
+# shard over the whole suite; this is the cheap local predicate, and now it is a real one.
 echo "-> cargo mutants over src/core/exit.rs"
 if command -v cargo-mutants >/dev/null 2>&1; then
-    if cargo mutants --no-shuffle --file src/core/exit.rs -- --lib; then
+    if cargo mutants --no-shuffle --file src/core/exit.rs -- --test suite core::exit; then
         pass "mutation: the exit codes and their meanings are guarded"
     else fail "mutation: a mutant of src/core/exit.rs survived — see mutants.out/"; fi
 else

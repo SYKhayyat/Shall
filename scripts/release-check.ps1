@@ -101,11 +101,13 @@ if (Get-Command wsl -ErrorAction SilentlyContinue) {
 # the nightly mutates guard.rs, exit.rs, datalock.rs and transaction.rs against the whole suite,
 # which is hours - guard.rs alone is 125 mutants. A release script that takes an afternoon is one
 # nobody runs, and the parity predicate asks that a developer can find out locally, not that they
-# repeat CI. `--lib` is correct for THIS file and would not be for the others: exit.rs is covered
-# entirely by lib tests, so --lib is the whole of its coverage rather than a slice of it.
+# repeat CI. **`--lib` was wrong here and measured nothing**: src/core/exit.rs has had no
+# #[cfg(test)] module since b2e9466f moved every test into the folder that owns it, so `--lib`
+# compiled zero tests and reported five survivors on a correct tree. Measured: `-- --lib` gives
+# "5 mutants tested: 5 missed"; `-- --test suite core::exit` gives "5 caught" in five minutes.
 Write-Host "-> cargo mutants over src/core/exit.rs"
 if (Get-Command cargo-mutants -ErrorAction SilentlyContinue) {
-    cargo mutants --no-shuffle --file src/core/exit.rs -- --lib
+    cargo mutants --no-shuffle --file src/core/exit.rs -- --test suite core::exit
     if ($LASTEXITCODE -eq 0) { Pass "mutation: the exit codes and their meanings are guarded" }
     else { Fail "mutation: a mutant of src/core/exit.rs survived - see mutants.out/" }
 } else {
