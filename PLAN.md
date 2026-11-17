@@ -235,12 +235,24 @@ laptop each one covers:
 
 ### Make sure no input touches the machine (safety, from #166)
 
-- [ ] **The command classification from #166, before any architecture ruling.** Read what each of
+- [x] **The command classification from #166, before any architecture ruling.** Read what each of
   the ~60 top-level commands actually does, and classify it as input, output, or a named exception.
   The suspects are `heal`, `reset`, `teleport`, `execute`, `purge-undeclared`, `remove-orphans`,
   `hold`/`unhold` and `unmanage`. A command that changes the machine without going through the file
   breaks P1, and on a laptop that is a safety bug: **file each one, and fix it here.** This part
   needs no ruling, because it only reads.
+
+  **Done** — `docs/AUDIT-2026-11-17-command-classification.md`: 54 commands, 21 output / 13 input /
+  11 read-only / 9 named exceptions, each row saying whether the handler was read for this audit or
+  the command's own contract was taken as written. **The eight suspects are clean**: every one either
+  edits the file first or changes nothing but a ledger, and the two that change the machine
+  (`purge-undeclared`, `remove-orphans`) do it toward the file under the guard, which is what output
+  is. Two findings, both filed and both needing a word from the owner rather than a patch:
+  **#188** `heal` is the one command that changes the machine outside the file (a wedged manager
+  lock, an interrupted WAL, the environment) and neither `P1` nor `history` says so; **#189** the
+  model has no word for `purge-undeclared`, which writes no file and changes both — convergence by
+  subtraction. The most destructive command in the binary being the one the model cannot classify is
+  the finding worth the audit.
 
 ### The rehearsal: a fresh machine from the file (VM first, then the laptop)
 
