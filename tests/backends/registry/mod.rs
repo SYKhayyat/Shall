@@ -191,14 +191,25 @@ impl ArgvCase {
 /// four `systemctl` rows — so on Windows four registered responses were never matched and the row
 /// failed over a fixture rather than over the product (#174). The third appearance of this shape
 /// in this file is why the row below picks its own argv the same way.
+// **Three platforms, three init systems, because that is the fact.** These two tables were
+// `cfg(windows)` / `cfg(not(windows))`, and "not Windows" is not "Linux": the first aarch64 macOS
+// run after they were written answered `launchctl load -w -- nginx` against four registered
+// `systemctl` answers and reported every one of them unmatched. That is `#174`'s defect exactly,
+// committed in the change that was fixing `#174`'s family — an argv written by hand where the
+// product decides it from a table. The row below already said so in a comment ("the test had two
+// branches for three cases") and these two tables were the branches it was describing.
 const SERVICE_INSTALL_STUBS: &[(&str, &str)] = &[
     #[cfg(windows)]
     ("sc config nginx start= auto", ""),
     #[cfg(windows)]
     ("sc start nginx", ""),
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    ("launchctl load -w -- nginx", ""),
+    #[cfg(target_os = "macos")]
+    ("launchctl start -- nginx", ""),
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     ("systemctl --no-pager start -- nginx", ""),
-    #[cfg(not(windows))]
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     ("systemctl --no-pager enable -- nginx", ""),
 ];
 
@@ -207,9 +218,13 @@ const SERVICE_REMOVE_STUBS: &[(&str, &str)] = &[
     ("sc config nginx start= disabled", ""),
     #[cfg(windows)]
     ("sc stop nginx", ""),
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    ("launchctl stop -- nginx", ""),
+    #[cfg(target_os = "macos")]
+    ("launchctl unload -w -- nginx", ""),
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     ("systemctl --no-pager stop -- nginx", ""),
-    #[cfg(not(windows))]
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     ("systemctl --no-pager disable -- nginx", ""),
 ];
 
@@ -221,11 +236,16 @@ fn service_remove_stubs() -> &'static [(&'static str, &'static str)] {
     SERVICE_REMOVE_STUBS
 }
 
-/// The read `setting:` makes before it writes — this host's settings store.
+/// The read `setting:` makes before it writes — this host's settings store, or nothing.
+///
+/// **Empty on macOS, because the backend runs nothing there.** `setting_stores.toml` ships
+/// `gsettings` (`os = "linux"`) and the Windows registry and nothing else, so a Mac finds no
+/// adapter and refuses by name — which the row below asserts with `NoCommand`. A stub for a program
+/// the product never runs is an unmatched registration, i.e. a test that reds for its own reason.
 const SETTING_PROBE_STUBS: &[(&str, &str)] = &[
     #[cfg(windows)]
     ("reg query HKCU\\Software\\ShallProbe /v Value", ""),
-    #[cfg(not(windows))]
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     ("gsettings get org.shall.probe key", ""),
 ];
 

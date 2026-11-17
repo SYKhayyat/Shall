@@ -37,7 +37,13 @@ fn a_dotfile_the_user_kept_in_a_repository_is_declared() {
     assert_eq!(code, 0, "adopt should succeed:\n{out}");
 
     let manifest = std::fs::read_to_string(f.cfg().join("modules/adopted.txt")).unwrap();
-    let source = repo.join("app/app.conf");
+    // **Canonicalised, because the line is** (`II.95`: "an absolute source", spelled by the
+    // grammar). `repo` is under `std::env::temp_dir()`, which on macOS is `/var/folders/…` — and
+    // `/var` is a symlink to `/private/var`, so the two spellings differ on exactly the platform
+    // where this test cannot be run before pushing. Writing the expectation by hand made it pass
+    // on the x86_64 runner (whose `$TMPDIR` is already canonical) and fail on aarch64: an
+    // assertion about a path the product canonicalises has to canonicalise too.
+    let source = repo.join("app/app.conf").canonicalize().unwrap();
     let line = format!("link:{}@target=~/.config/app/app.conf", source.display());
     assert!(
         manifest.contains(&line),

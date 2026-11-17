@@ -15,17 +15,25 @@
 //! so. The fix is that rule, and the two facts it must keep: the run **succeeds**, and the
 //! schedule that is still firing is **named** rather than dropped.
 //!
-//! Hermetic on every Unix, because the refusal is the scheduler's own sentence about a unit that
-//! a stub says is still `active` — no permission, no root, no session. The unit is a file in the
-//! fixture's own `$XDG_CONFIG_HOME`, which is how `installed()` finds it.
+//! **Linux only, and it said "every Unix" until an aarch64 Mac ran it.** The unit is a file in the
+//! fixture's `~/.config/systemd/user`, which is how the systemd provisioner's `installed()` finds
+//! it; macOS's provisioner lists `~/Library/LaunchAgents/*.plist` and would find nothing here, so
+//! the sweep would have no orphan to fail on and the assertion below would fail for the fixture's
+//! reason rather than the product's. The refusal itself is hermetic — a stub says the unit is
+//! still `active` after removal — but the *fixture* is systemd's, and a Mac needs a plist.
+//!
+//! The Windows half of `#173` is `tests/app/scheduler/a_refused_removal_says_what_to_do_not_what_is_wrong.rs`,
+//! which is where the refusal it was measured on actually happens (a filtered token, elevation).
+//! The behaviour this test guards — one unremovable orphan does not fail the run, and it is named
+//! — is platform-independent, and `remove_what_is_no_longer_declared` gives it to every platform.
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 use crate::harness::Fixture;
 
 /// A `systemctl` that says nothing and refuses nothing, and an `is-active` that always answers
 /// `active` — so a unit Shall is told to remove is still running afterwards, which is exactly the
 /// end state `remove_task` reports as a failure.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn systemctl_that_never_stops() -> &'static str {
     "#!/bin/sh\n\
      case \"$*\" in\n\
@@ -34,7 +42,7 @@ fn systemctl_that_never_stops() -> &'static str {
      exit 0\n"
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 #[test]
 fn an_orphan_that_cannot_be_removed_does_not_fail_the_sync() {
     let f = Fixture::new("173-orphan-sweep");

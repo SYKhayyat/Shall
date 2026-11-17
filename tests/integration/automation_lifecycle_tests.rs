@@ -237,11 +237,13 @@ async fn test_scheduler_reboot_mapping_fidelity() {
     // Stated rather than fallen through (`#162`): the commands this test provokes on the mock
     // machine, each with the empty answer it used to receive from silence instead.
     //
-    // **`not(windows)` because the two provisioners share this test and only one is systemd.**
-    // The Windows arm below asserts the `schtasks` argv that actually runs there; registering
-    // `systemctl` on Windows is a stub nobody can call, and `#162`'s own check says so — four
-    // years of a red Windows job over a fixture rather than a product (#174).
-    #[cfg(not(windows))]
+    // **`target_os = "linux"`, not `not(windows)`.** The three provisioners share this test and
+    // exactly one of them is systemd, so "not Windows" was never the right question — it just
+    // happened to be right for the platform the author was on. On macOS the provisioner writes a
+    // plist and runs `launchctl`, so these two `systemctl --user` answers were registered and
+    // never matched, and `#162`'s own check reported it. Three platforms, three init systems
+    // (`#174`'s family, in the change that was fixing that family).
+    #[cfg(target_os = "linux")]
     {
         kernel.mock_executor.set_response(
             "systemctl --no-pager --user daemon-reload",
