@@ -259,11 +259,24 @@ impl DataLock {
     /// `Ok(None)` means the lock is already this process's and the caller writes as it is;
     /// re-taking it would be `flock` waiting for the same process's other handle, for ever.
     pub fn for_this_write(what: &str) -> Result<Option<Self>> {
-        let data_dir = crate::utils::safe_data_dir();
-        if held_on(&data_dir) {
+        Self::for_this_write_in(&crate::utils::safe_data_dir(), what)
+    }
+
+    /// The same door, told **which store it is writing** rather than assuming the machine's.
+    ///
+    /// **`for_this_write` defaulted to `safe_data_dir()` and that was wrong twice** (#185).
+    /// `Config::data_root` is the store a run writes — it is configurable, and
+    /// `Config::sandbox` points it at a temp directory for tests — so a ledger write under a
+    /// sandboxed config took a lock on the developer's real data directory: an in-process test
+    /// contended with every other `shall` on the host, and a user who sets `data_root` gets a
+    /// lock protecting a directory their writes never reach. Two writers of *different* stores
+    /// were excluded from each other for no reason, which is the safest way to be wrong and the
+    /// hardest to notice.
+    pub fn for_this_write_in(data_dir: &Path, what: &str) -> Result<Option<Self>> {
+        if held_on(data_dir) {
             return Ok(None);
         }
-        Self::acquire_reentrant(&data_dir, what, Duration::from_secs(WAIT_SECS)).map(Some)
+        Self::acquire_reentrant(data_dir, what, Duration::from_secs(WAIT_SECS)).map(Some)
     }
 
     /// Take the lock, waiting up to `timeout` for whoever holds it.

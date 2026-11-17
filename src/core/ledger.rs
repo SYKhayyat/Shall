@@ -113,15 +113,22 @@ pub trait LockFile: Default + Serialize + DeserializeOwned + Sized {
     /// A change that fails writes nothing: half of a set of approvals is worse than none of
     /// them, because the half that landed looks deliberate. The error type is the caller's, so
     /// a verb that speaks `anyhow` keeps speaking it.
+    /// `lock_root` is the store this file belongs to — `Config::data_root()`, the directory the
+    /// lock file lives in. **It is a parameter and not `safe_data_dir()` for the reason `save`'s
+    /// doc gives**: a leaf function reaching for the process-wide default takes a lock on a
+    /// directory the write does not land in, which is how a sandboxed config came to contend with
+    /// the developer's real `shall` (#185). The compiler now asks every caller which store it is
+    /// writing, and the answer is already in its hand.
     fn update<T, E>(
         path: &Path,
+        lock_root: &Path,
         change: impl FnOnce(&mut Self) -> std::result::Result<T, E>,
     ) -> std::result::Result<T, E>
     where
         E: From<Error>,
     {
-        let _guard =
-            crate::core::datalock::DataLock::for_this_write(Self::WHAT).map_err(E::from)?;
+        let _guard = crate::core::datalock::DataLock::for_this_write_in(lock_root, Self::WHAT)
+            .map_err(E::from)?;
         let mut current = Self::load(path).map_err(E::from)?;
         let outcome = change(&mut current)?;
         current.save(path).map_err(E::from)?;

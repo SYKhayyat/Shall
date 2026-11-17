@@ -43,6 +43,9 @@ pub struct EventHook {
 pub struct EventHooks {
     hooks: Vec<EventHook>,
     locks_dir: PathBuf,
+    /// The store the ledger's lock is taken on — `Config::data_root()`, not the machine's
+    /// default (#185).
+    data_root: PathBuf,
 }
 
 impl EventHooks {
@@ -64,6 +67,7 @@ impl EventHooks {
         EventHooks {
             hooks,
             locks_dir: config.layout().locks_dir(),
+            data_root: config.data_root(),
         }
     }
 
@@ -143,7 +147,7 @@ impl EventHooks {
             return Ok(0);
         }
         let path = HookLedger::path_in(&self.locks_dir);
-        HookLedger::update(&path, |ledger| {
+        HookLedger::update(&path, &self.data_root, |ledger| {
             for hook in &self.hooks {
                 ledger.approve(&hook.id, &hash_script(&hook.script));
             }

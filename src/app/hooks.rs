@@ -70,6 +70,9 @@ pub struct LuaHooks {
     pub hooks: HashMap<String, HashMap<String, String>>,
     /// The repo's `locks/` directory, where the hook approval ledger lives (II.12).
     locks_dir: PathBuf,
+    /// The store the ledger's lock is taken on — `Config::data_root()`, not the machine's
+    /// default (#185).
+    data_root: PathBuf,
 }
 
 impl LuaHooks {
@@ -78,6 +81,7 @@ impl LuaHooks {
             rhai_engine: Arc::new(crate::core::rhai_stdlib::engine("hook")),
             hooks: config.hooks.clone(),
             locks_dir: config.layout().locks_dir(),
+            data_root: config.data_root(),
         })
     }
 
@@ -115,7 +119,7 @@ impl LuaHooks {
     /// so approval stays a deliberate act.
     pub fn approve_all_hooks(&self) -> Result<usize> {
         let path = HookLedger::path_in(&self.locks_dir);
-        HookLedger::update(&path, |ledger| {
+        HookLedger::update(&path, &self.data_root, |ledger| {
             let mut count = 0;
             for (id, script) in self.each_hook() {
                 ledger.approve(&id, &hash_script(&script));

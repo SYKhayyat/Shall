@@ -7,12 +7,15 @@ pub use shall::model::event::{Event, Payload};
 pub use std::path::{Path, PathBuf};
 pub use tracing::{debug, warn};
 
+/// A config whose **both** roots are the fixture — `Config::sandboxed`, the product's own
+/// constructor for "this is a sandbox".
+///
+/// It used to set only `config_root` and take the rest from `Default`, so `data_root` stayed
+/// `safe_data_dir()` — the machine's — and every ledger write in these tests took a lock on the
+/// developer's real data directory (#185). The lock is now the store the write lands in, and this
+/// is the fixture saying which store that is.
 fn config_at(root: &Path) -> Config {
-    Config {
-        config_root: root.to_path_buf(),
-        preferences_file: root.join("preferences.toml"),
-        ..Default::default()
-    }
+    Config::sandboxed(root)
 }
 fn write_repo_hook(root: &Path, event: Event, body: &str) {
     let dir = root.join("hooks");
@@ -44,6 +47,7 @@ fn exit_with(code: i32) -> String {
 }
 mod a_failing_hook_does_not_fail_the_sync;
 mod a_file_named_after_a_typo_is_not_loaded;
+mod a_fixture_write_takes_the_fixtures_lock;
 mod a_repo_hook_and_a_machine_hook_for_one_event_both_load;
 mod an_after_sync_under_hooks_is_not_an_event_hook;
 mod an_approved_hook_runs_and_is_told_what_happened;

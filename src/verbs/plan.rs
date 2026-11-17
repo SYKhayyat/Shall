@@ -1224,6 +1224,7 @@ pub fn approve_generate_commands(
     use crate::core::hook_lock::{generate_id, hash_script, HookLedger};
 
     let layout = config.layout();
+    let data_root = config.data_root();
     let known = |name: &str| registry.get(name).is_some();
     let mut commands: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for dir in [layout.modules_dir(), layout.profiles_dir()] {
@@ -1253,7 +1254,7 @@ pub fn approve_generate_commands(
     }
     let locks = layout.locks_dir();
     let ledger_path = HookLedger::path_in(&locks);
-    HookLedger::update(&ledger_path, |ledger| {
+    HookLedger::update(&ledger_path, &data_root, |ledger| {
         let mut approved = 0usize;
         for cmd in &commands {
             let declared = std::path::Path::new(cmd);
@@ -1301,7 +1302,7 @@ pub async fn approve_exec_scripts(
     }
     let locks = config.layout().locks_dir();
     let path = HookLedger::path_in(&locks);
-    HookLedger::update(&path, |ledger| {
+    HookLedger::update(&path, &config.data_root(), |ledger| {
         let mut approved = 0usize;
         for (script, _opts, origin) in state.execs() {
             // A catalogued step (`H8`) has no file to hash and no approval to give: it is a row
@@ -1364,7 +1365,7 @@ pub async fn approve_health_checks(
         return Ok(0);
     }
     let path = HookLedger::path_in(&config.layout().locks_dir());
-    HookLedger::update(&path, |ledger| {
+    HookLedger::update(&path, &config.data_root(), |ledger| {
         let mut approved = 0usize;
         for cmd in commands {
             ledger.approve(&health_id(&cmd), &hash_script(&cmd));
@@ -1446,7 +1447,7 @@ pub fn approve_vars_provider(config: &Config) -> Result<Option<String>> {
     let body = std::fs::read_to_string(&selected.path)?;
     let locks = config.layout().locks_dir();
     let path = HookLedger::path_in(&locks);
-    HookLedger::update(&path, |ledger| {
+    HookLedger::update(&path, &config.data_root(), |ledger| {
         ledger.approve(&vars_id(&filename), &hash_script(&body));
         Ok(Some(filename))
     })

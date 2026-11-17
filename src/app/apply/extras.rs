@@ -408,6 +408,7 @@ impl Extras<'_> {
         let made_here = self.created_dirs();
         crate::core::LockFile::update(
             &path,
+            &self.config.data_root(),
             |ledger: &mut crate::core::extras_lock::ExtrasLedger| {
                 let created = if key.kind == crate::config::grammar::ResourceKind::Dir {
                     Some(Self::dir_origin(ledger, &key, &made_here))
@@ -437,6 +438,7 @@ impl Extras<'_> {
     ) -> Result<()> {
         crate::core::LockFile::update(
             path,
+            &self.config.data_root(),
             |ledger: &mut crate::core::extras_lock::ExtrasLedger| {
                 let kept: Vec<_> = ledger
                     .records()
