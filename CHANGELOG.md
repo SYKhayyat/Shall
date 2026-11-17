@@ -140,8 +140,9 @@ destructor, so a `sync` interrupted by a closed pipe left the transaction unroll
 
 ### What it says
 
-- **Refusal and rollback messages print `—`, not `â€”`** (`#144`), and the class is gated rather
-  than the strings.
+- **Refusal and rollback messages print an em dash, not its cp1252 round trip** (`#144`), and the
+  class is gated rather than the strings — so the next message that gets saved through the wrong
+  encoding is caught wherever it lands, not the five that were known.
 - **Every `preferences.toml` error stops saying "the key no longer exists, delete the line"**
   (`#146`) — that is the right sentence for a key that is gone and the wrong one for a type error or
   a duplicate key. The parser is asked what went wrong instead of being spoken for.
