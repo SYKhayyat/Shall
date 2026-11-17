@@ -1276,7 +1276,18 @@ jobs:
           # Without this row the narrowing, the retry loop and the manager-lock wait would have
           # left mutation coverage on the day they moved - four shards still green over a file
           # that no longer holds them.
-          - { what: the batch narrowing, file: src/core/batch.rs, slug: batch, shard: 0/1 }
+          #
+          # **Two shards, and not because of the count.** `cargo mutants --list` counts 43 here,
+          # fewer than `datalock` (48) or `sync engine` (78), both of which finish. It is the cost
+          # per mutant: every one of these lands in a hot path dozens of tests depend on, nextest
+          # re-runs each failing test twice (`--retries 2`), and `-j2` puts two of those on a
+          # four-core hosted runner at once. As `0/1` this shard died at 115 and 126 minutes on two
+          # nights with `The hosted runner lost communication with the server` and left no log and
+          # no survivor list (#190). Sharding partitions the file, so nothing about what the leg
+          # measures changes; it only halves the wall clock to ~57 minutes, which is below where
+          # this one has died.
+          - { what: the batch narrowing 1/2, file: src/core/batch.rs, slug: batch-1, shard: 0/2 }
+          - { what: the batch narrowing 2/2, file: src/core/batch.rs, slug: batch-2, shard: 1/2 }
           # **The classification lives here, and no shard could see it.** `VI.11` and `M4`
           # put three decision functions into these two files - `Retryability::and_also`,
           # `Error::with_note` and `summarise` - and neither file had a row, so the branch
@@ -1350,8 +1361,14 @@ jobs:
       # has to fail a test — and it is not the `#138` shape of buying time by changing what the
       # leg measures, because the leg still measures the whole suite.
       run: cargo mutants --no-shuffle -j2 --minimum-test-timeout 1800 --test-tool nextest --file ${{ matrix.file }} --shard ${{ matrix.shard }} -- --no-fail-fast --retries 2
-    - name: The survivors, kept whether the run passed or failed
-      if: ${{ !cancelled() }}
+    # **`always()`, not `!cancelled()`.** The name says "whether the run passed or failed", and
+    # those are the two outcomes the job's own conclusion already shows. The one outcome whose
+    # reason lives nowhere else is a *cancelled* job - a starved runner, a lost runner, a killed
+    # step - and `!cancelled()` discarded the partial `mutants.out/` in exactly that case. That is
+    # how #190 spent two nights with no log and no survivor list and could not say how far the
+    # shard had got. A killed shard's partial output is the only evidence of where it died.
+    - name: The survivors, kept whether the run passed, failed, or was cancelled
+      if: ${{ always() }}
       uses: actions/upload-artifact@v7
       with:
         name: mutants-out-${{ matrix.slug }}

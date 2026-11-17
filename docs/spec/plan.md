@@ -140,10 +140,17 @@ what blocks the next one.
       `tests/an_orphan_of_a_killed_run_is_taken_back_tests.rs` drives `heal` end to end. One
       test per posture, seeded from that file's journal helpers.
 
-    The sibling row added the same day — `the batch narrowing` — failed twice with NO step logs
-    (job 97317397287: steps never executed), which is infrastructure-shaped, not code. A
-    `--failed` rerun was requested 2026-08-24; if it goes green, nothing to do; if it repeats,
-    suspect the runner and re-dispatch before touching code.
+    The sibling row added the same day — `the batch narrowing` — failed with NO step logs on
+    2026-08-24 (job 97317397287: steps never executed), which was infrastructure-shaped, not code,
+    and the instruction was to re-dispatch rather than touch it. **It repeated, and the suspicion
+    is now a measurement (#190):** the nightly `44030863803` carries the annotation *"The hosted
+    runner lost communication with the server"* at minute 115 of `--shard 0/1`, with a second
+    occurrence at 126 minutes the night before and both log blobs missing. Not the mutant count —
+    `cargo mutants --list` puts 43 here, fewer than `datalock` (48) or `sync engine` (78), which
+    finish; it is the cost per mutant, and `-j2` on a four-core runner is what starves it. So the
+    row is now `0/2` + `1/2` (verified an exact partition: 22 + 21 = 43), which halves the wall
+    clock without changing what the leg measures, and the survivors artifact is uploaded on
+    `always()` so the next cancellation leaves the partial list instead of nothing.
     is now on the trigger; the tag itself is still the owner's to push, and `readme.md` says so
     at the install command until it happens.
 0f. **macOS is exercised nightly, and four things on it are still unproven.** *(Corrected
