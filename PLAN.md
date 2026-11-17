@@ -139,8 +139,18 @@ No later gate can be met while this is red.*
   from *thirteen shards that answered nothing* to **eleven green and one survivor**: #183, the
   data lock's `&&` → `||`, whose fix landed after this run. Two odd ones out, neither a finding:
   `Mutation (the batch narrowing)` failed with its step still `pending` and its log blob
-  `BlobNotFound` — a runner that went away is not a measurement, so it is re-run rather than filed
-  — and `Mutation (the sync engine)` is the largest shard and was still running when the rest finished.
+  `BlobNotFound` — a runner that went away is not a measurement, so it is re-run rather than filed.
+  **(Re-run, and it is filed now: #190.)** `Mutation (the sync engine)` finished **green** at 160
+  minutes, the longest leg of the night.
+
+  **The second night, `44030863803` on `7f9782f7`:** twelve of the thirteen mutation shards
+  **green** — including `the data lock`, which is #183 verified — and the one failure carries the
+  annotation that settles it: *"The hosted runner lost communication with the server"* at minute
+  115 of `the batch narrowing`. `cargo mutants --list` counts 43 mutants there, fewer than
+  `datalock` (48) and `sync engine` (78) which both finish, so it is the cost per mutant against
+  `-j2` on a four-core runner, not the size. **Fixed** (#190): the row is `0/2` + `1/2` (an exact
+  partition, 22 + 21 = 43), and the survivors artifact is uploaded on `always()` instead of
+  `!cancelled()`, so the next cancellation leaves the partial list rather than nothing at all.
 **Gate:** `main` CI is green and one nightly is green on the same commit.
 
 ---
