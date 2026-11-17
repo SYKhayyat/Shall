@@ -41,6 +41,24 @@ ignore = [
     # smartstring. `cargo tree -i smartstring` is the check, and it is a one-line change here
     # when it comes back empty.
     "RUSTSEC-2026-0249",
+
+    # RUSTSEC-2026-0543 — `chrono` is unmaintained: all versions are affected, and the advisory
+    # names `jiff` and `time` as the successors. **Not a vulnerability**, and the recommendation
+    # is a migration rather than a patch, so the question here is only *when*.
+    #
+    # **Not on the way to a release, which is why this entry exists today.** `chrono` is a direct
+    # dependency (`Cargo.toml`) used at 39 sites, and they are not interchangeable: a
+    # `chrono::DateTime<Utc>` sits in a signature (`src/app/durability.rs`), the config grammar
+    # parses timestamps a user writes with `DateTime::parse_from_rfc3339` and
+    # `NaiveDateTime::parse_from_str` (`src/config/grammar/statement.rs`), and the rhai standard
+    # library is built on its `Datelike`/`Timelike` calendar traits (`src/core/rhai_stdlib.rs`).
+    # A date-and-time rewrite bundled into `v0.9.0` — the release whose job is to show that the
+    # suite is green on what is already built — is the load-bearing change nobody asked for.
+    #
+    # **What would end this entry:** the migration, filed as #193 with the call sites
+    # enumerated and `jiff` named as the target. `cargo tree -i chrono` coming back empty is the
+    # check, and then this row is deleted in the same change that removes the dependency.
+    "RUSTSEC-2026-0543",
 ]
 
 [licenses]

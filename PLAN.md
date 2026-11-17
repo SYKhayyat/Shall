@@ -151,6 +151,15 @@ No later gate can be met while this is red.*
   `-j2` on a four-core runner, not the size. **Fixed** (#190): the row is `0/2` + `1/2` (an exact
   partition, 22 + 21 = 43), and the survivors artifact is uploaded on `always()` instead of
   `!cancelled()`, so the next cancellation leaves the partial list rather than nothing at all.
+
+  **The third night, `44071616689` on `5177549b`, found one new red that is not a flake:** #193,
+  `Advisories and licences`. Nothing in the tree changed — `cargo-deny` fetches the database every
+  run, and **RUSTSEC-2026-0543** was published: *`chrono` is unmaintained, all versions affected*.
+  `chrono` is a direct dependency at 39 call sites, one of them a `DateTime<Utc>` in a signature
+  and one the config grammar's timestamp parsing, so it is a migration and not a swap, and it is
+  not a vulnerability. Recorded as a decision in `deny.toml` with the call sites named and **what
+  ends it** ("the migration, filed as #193"), which is the only shape that file allows: `advisories
+  ok, bans ok, licenses ok, sources ok` locally with the entry in place.
 **Gate:** `main` CI is green and one nightly is green on the same commit.
 
 ---
