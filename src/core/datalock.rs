@@ -347,8 +347,10 @@ impl DataLock {
     /// in `take`, kept where a reader looking for *"already holds the lock"* will find it.
     fn self_contended(data_dir: &Path) -> Error {
         Error::Other(format!(
-            "this process already holds the lock on {}, and a second handle on it would wait for              that one.
-  A command takes this lock once, in `main`; a write reached from inside              it asks `DataLock::for_this_write`, which declines instead of taking it again.",
+            "this process already holds the lock on {}, and a second handle on it would wait \
+             for that one. A command takes this lock once, in `main`; a write reached from \
+             inside it asks `DataLock::for_this_write`, which declines instead of taking it \
+             again.",
             data_dir.display()
         ))
     }

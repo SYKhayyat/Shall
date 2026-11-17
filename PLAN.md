@@ -174,6 +174,14 @@ No later gate can be met while this is red.*
   `#166`'s new audit essay was cited by no living document, so the dated-essay gate was red too —
   PLAN's `#166` item now sends a reader to it.
 
+  **Filed, not fixed: #195** — `MacLaunchdProvisioner::plist` writes `run` as a single
+  `ProgramArguments` element, so a schedule whose `run` carries an argument (`sync --dry-run`)
+  succeeds on Linux and Windows, whose renderers write a *line*, and arrives at `execve` on macOS
+  as one word. Filed with the exact interpolation, the `refuse_self_named` split that proves the
+  field is arguments, and the test gap (`command: "sync"` in the shared fixture, the only value
+  any scheduler test uses). It is the same shape `refuse_self_named`'s own doc records: a unit that
+  failed at 03:00 every night with nothing saying why.
+
   **Also fixed while the night ran: #191**, `export --help` naming four of five manifests and
   `src/main.rs`'s refusal hint naming four of five as well. `Format::NAMES` is now the one table
   that `parse`, `Format::all`, `Format::WORDS` and the help all read, and the tests hold the help
