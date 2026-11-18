@@ -13,6 +13,7 @@ Tick a box when its issue closes, in the same commit. The previous version of th
 `git show 9a3eb5bd:PLAN.md`. Its reasoning lives in the issues and in `docs/spec/plan.md`.
 
 ```
+D   tech debt — always first, above every milestone
 M0  main is green
 M1  🚀 0.9.0 — the 399 commits since v0.8.0, released
 M2  🚀 0.10.0 — your own laptop, every day, reliably
@@ -21,6 +22,29 @@ M4  independent audit (not Claude), and its findings fixed
 M5  🚀 1.0.0 — ready for other people
 ──  after 1.0: features
 ```
+
+---
+
+## D — tech debt (always first)
+
+*Owner ruling: clearing technical debt comes before every milestone, with no "pay when X" deferral.
+New debt is filed here, at the bottom of this list, labelled `tech-debt`.*
+
+**Modularity (graded C+, 2026-11-18).** There are four production modules over 100 KB, the longest
+methods run 290–409 lines, and seven clippy parameter-count allows remain. All of these are splits
+and regroupings that change no behaviour. None of them is the #166 architecture question, so none
+of them moves a responsibility across a module boundary. Work top to bottom: the ratchet comes
+first, so a split cannot regrow while the next one is in progress.
+
+- [ ] **#204** ratchet: `too_many_lines` plus a per-file line cap with a baseline that only shrinks
+- [ ] **#203** the seven `too_many_arguments` / `fn_params_excessive_bools` allows → parameter
+  structs, as `app/machinery.rs` already does. Goes before #199, which needs its struct.
+- [ ] **#199** `core/transaction.rs`: `execute_batch_with_retry` (409), `execute_internal` (341)
+  and `rollback` (290) split by phase
+- [ ] **#200** `core/executor.rs` → `core/executor/{layer,raw,dry_run,mock,command}.rs`
+- [ ] **#201** `backends/generic.rs` → `backends/generic/`, one file per capability trait
+- [ ] **#202** `config/grammar/statement.rs` → types / `parse.rs` / `validate.rs`, and
+  `validate_backend_options` (249) split per option family
 
 ---
 
@@ -474,6 +498,7 @@ capabilities, so by the routing rule none of them goes above an open safety or c
 File every new issue into **the earliest milestone it blocks**, and within that milestone in
 safety → correctness → quality → features order (`AI_ISSUE_ROUTING.md`). Questions to ask:
 
+- Is it technical debt (structure, duplication, a silenced lint)? → **D**, label `tech-debt`.
 - Does it make `main` red? → **M0**.
 - Would it bite you on the laptop: loss of data, a wrong sync, a crash that will not recover, a gap
   in capturing a machine? → **M2** (or earlier).
