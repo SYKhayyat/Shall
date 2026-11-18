@@ -401,6 +401,11 @@ pub async fn narrow_batch(
             }
             continue;
         };
+        assert!(
+            mid > lo && mid < hi,
+            "midpoint({lo}, {hi}) = {mid} is not inside the range, so the halves would include \
+             the range itself and the narrowing would ask the manager without end"
+        );
         let left = err_of(ask(lo, mid).await);
         let right = err_of(ask(mid, hi).await);
 
