@@ -108,8 +108,12 @@ No later gate can be met while this is red.*
   row with no entry written. Fixed, and the same gate caught the same omission when C33 was added
   (`2f6fd99d`), which is the gate earning its keep twice. `harness predicates: 113/113 ok`, suite
   3274 passed, 0 failed.
-- [ ] **One full nightly, green**, including integration (all distros), the install scripts run for
-  real, and mutation. A night that is still red gets each red job filed as its own issue, here.
+- [x] **One full nightly, green**, including integration (all distros), the install scripts run for
+  real, and mutation. **Answered `44302180799` on `669bbbe5`: 65 jobs, 65 success, 0 failure** —
+  the first night with no red job. The last three to fall were the batch shards (#190): a split
+  point that a mutant could make non-shrinking, which no derived timeout could bound, fixed by
+  refusing it in the product. The night before it answered 18 of 22 batch shards with three real
+  survivors, all three fixed (`db8476ce`). A night that is still red gets each red job filed as its own issue, here.
   The nightly of 2026-11-17 (`43994114130`) was dispatched to answer this box, and answered it with
   18 red jobs. Four of them are M0's own macOS/Windows boxes above. The other fourteen are new, and
   each is filed here:

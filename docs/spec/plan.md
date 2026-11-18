@@ -184,8 +184,23 @@ what blocks the next one.
     blocks its net…"*. `-j2` started two mutation workers, each building the crate and then running
     the whole 3,300-test nextest suite at nextest's default parallelism — on a four-core runner. A
     two-mutant shard failed at 54 and 61 minutes with no log; two-mutant shards also finished in 7
-    to 29. **`-j1`** is the fix: the leg is nightly, and a shard that reports is worth more than a
-    shard that runs twice as fast and leaves nothing behind. Two corrections to what this paragraph first
+    to 29. **`-j1`** helped and was not the fix the leg needed.
+    **What the leg finally measured, and what it cost to learn:** with `-j1` and the same
+    session's shards, 18 of 22 answered and **three came back with real verdicts instead of an
+    exit** — three survivors, each one a real gap or an honest equivalent (the narrowing's
+    single-member guard, and a comparison in the split point that no correct arithmetic could make
+    false). That is the leg working. What was left was three shards dying at **56 to 60 minutes**,
+    and the arithmetic is the diagnosis: `--timeout-multiplier 2` derives the per-mutant ceiling
+    from the *unmutated* suite, which is about fifteen minutes on a four-core runner, so the
+    ceiling came out at thirty minutes per mutant — two mutants, one hour, and a runner that was
+    growing the loop's memory the whole time. **A ceiling derived from a baseline cannot bound a
+    hang.** The loop itself had to stop being reachable: `narrow_batch` now refuses a split point
+    that is not inside its range, as an `assert!` rather than a report, because no correct answer
+    reaches it and a mutant that does must fail in the first test that narrows. Measured with
+    `midpoint -> Some(0)`: eight tests fail in 0.64s. It costs no equivalent survivors, because
+    cargo-mutants generates no mutants inside an `assert!` (49 before and after).
+    With that, the batch leg is **22 of 22 green** (`44302180799`), the first night it has ever
+    answered in full. Two corrections to what this paragraph first
     said: the split is eight and not two, and
     **the artifact condition was never the gap.** `!cancelled()` already uploaded on a *failing*
     shard — `mutants-out-datalock` is in run `44006078594`, whose data-lock shard failed with five
