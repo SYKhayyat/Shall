@@ -88,8 +88,21 @@ async fn building_the_registry_asks_nothing_and_therefore_costs_almost_nothing()
     // process that had deliberately slept 240 ms.
     // Generous enough to clear the budget by a wide margin whatever the machine's pace: the
     // budget is a ratio, so the control has to be expressed in the same unit.
+    // **Sized from the control's OWN pace, not from the best run's.** These were the same number
+    // until a machine under load made them 9 ms and 27.7 ms: the delay was 324 ms, the control
+    // spent it, and the ratio still came out 12.5x against a threshold of 18x, so the *control*
+    // reported that the instrument cannot detect an over-budget construction when what had
+    // actually moved was the pace between two processes (#198). A ratio is only
+    // machine-independent when the delay it is judged against and its denominator come from the
+    // same regime, so the pace is measured here, twice, and the slower of the two sizes the
+    // delay — a loaded machine then makes the delay larger rather than making the ratio smaller.
+    let mut control_pace = Duration::ZERO;
+    for _ in 0..2 {
+        let (_, pace, _) = measure_registry_in_a_fresh_process(None).await;
+        control_pace = control_pace.max(pace);
+    }
     let control_delay =
-        (best_baseline.as_millis() as u64) * (REGISTRY_BUDGET_IN_BASELINES as u64 * 3);
+        (control_pace.as_millis() as u64) * (REGISTRY_BUDGET_IN_BASELINES as u64 * 3);
     let (control, control_baseline, _) =
         measure_registry_in_a_fresh_process(Some(control_delay)).await;
     let control_ratio = duration_ratio(control, control_baseline);
