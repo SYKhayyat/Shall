@@ -1294,12 +1294,17 @@ jobs:
           #    night on the theory that a mutant breaking two hundred tests paid for two hundred;
           #    the shard that died took **56 minutes against 61** the night before, which is no
           #    change at all. Per mutant it is a rebuild of `shall` and `suite` and then the whole
-          #    suite under `-j2`, about **14 minutes** each, and that is what sets a shard's size.
+          #    suite, and that is what sets a shard's size.
           # 2. **A cancelled or lost job is not a measurement**, and it can happen at 11 minutes, so
           #    no shard size makes a night immune. What a smaller shard buys is that the re-run is
           #    `gh run rerun <id> --failed` over two mutants instead of four.
           #
-          # 43 = 21 x 2 + 1, so `0/22`..`21/22` is 2,2,...,2,1 with no empty shard.
+          # The count is **not restated here**: `cargo mutants --list --file src/core/batch.rs | wc
+          # -l` answers it, and this comment said 43 while the file held 49 — the shards were never
+          # wrong, because cargo-mutants divides whatever it is given, but a reader checking the
+          # arithmetic was being told the number of mutants in the wrong year. 22 shards of two or
+          # three is the size that keeps a shard inside what a runner survives; if the file grows
+          # past about 66, add rows rather than letting a shard hold four.
           #
           - { what: the batch narrowing 1/22, file: src/core/batch.rs, slug: batch-1, shard: 0/22 }
           - { what: the batch narrowing 2/22, file: src/core/batch.rs, slug: batch-2, shard: 1/22 }

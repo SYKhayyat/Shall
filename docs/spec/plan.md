@@ -175,7 +175,9 @@ what blocks the next one.
     `suite` plus the whole suite under `-j2`, about **14 minutes**, and that is what sizes a shard.
 
     **A lost or cancelled job is not a measurement**, and it can happen at 11 minutes. Hence
-    **`0/22` … `21/22`, two mutants each** (43 = 21×2 + 1, no empty shard), with
+    **`0/22` … `21/22`, two or three mutants each** — the shard count is fixed and the file's
+    mutant count is not restated anywhere, because this line said 43 while `batch.rs` held 49, and
+    cargo-mutants divides whatever it is handed, so only the sentence was wrong — with
     `gh run rerun <id> --failed` as the answer when a shard is still lost: it costs the shard, not
     the night.
 
