@@ -194,6 +194,20 @@ No later gate can be met while this is red.*
   a gate named only in a header is a name, not a gate (the `grader_gate_parity` lesson). The one
   deliberate pair is `install.sh`/`install.ps1`, each script's own installer, declared as such.
 
+  **The Windows sweep can now be run twice on one host** (#197). Its lifecycle section installs a
+  canary, the manager's uninstall keeps the shim, and the section passes because
+  `removal_leaves_binary` said the product was honest about it — so the file stays. The next
+  section then installs the same canary, finds the name resolving exactly where it resolved
+  before, and has nothing to prove delivery with, because Shall's warning about a bin directory
+  exists only when that directory is *off* `PATH` and a leftover shim that resolves is by
+  definition in one that is on it. Measured twice in two runs on one Windows host: `pipx:
+  pycowsay`, then, after removing that shim by hand, `nimble: nimjson`. `clear_own_leftover` now
+  removes what the section's *own* install left, with the resolution read before that install as
+  its only authority (empty means the file is this section's; non-empty is somebody else's and is
+  left alone), on both removal paths. Pinned twice: `harness-logic-test.sh` for what it does
+  (114/114), and a review test for the half that was missing — that `lifecycle()` calls it, since
+  a cleanup defined and never called *is* the defect.
+
   **The command classification is now complete, and the completeness is checked** (#189's test
   half, not its naming question): `tests/review/every_command_is_classified_in_the_audit_tests.rs`
   derives the command list from clap and the classification from

@@ -80,8 +80,12 @@ run_against() {
         esac
     }
 
-    for _fn in removal_leaves_binary never_ran assert_binary_gone on_path named_bin_dir off_path_copy binary_present assert_binary_reachable conflicts_reported; do
+    for _fn in removal_leaves_binary never_ran assert_binary_gone on_path named_bin_dir off_path_copy binary_present assert_binary_reachable clear_own_leftover conflicts_reported; do
         _body="$(lift "$_fn" "$SRC")"
+        # `clear_own_leftover` belongs to the sweep that installs onto the host it runs on. The
+        # container sweep installs into a throwaway image and leaves nothing behind to clean, so
+        # the function is absent there by design and its cases are skipped below.
+        [ "$_fn" = clear_own_leftover ] && [ -z "$_body" ] && continue
         if [ -z "$_body" ]; then
             echo "  FATAL: could not lift $_fn() from this harness"
             TOTAL=$((TOTAL + 1)); BAD=$((BAD + 1)); return 1
@@ -256,6 +260,50 @@ run_against() {
     # The lifted bodies assign to globals — there are no locals in a POSIX shell — so the three
     # cases above left `$_rbin` reading `hello`. Restored, because the checks below share it.
     FAKE=""; _rbin=shall-reach-zzz
+
+    # ---- #197: the sweep cleans up what its own section installed -------------
+    #
+    # `removal_leaves_binary` lets a section pass when its manager keeps its shim, and the file
+    # stays. The NEXT section then installs the same canary, finds the name resolving where it
+    # resolved before, and - because Shall warns only about directories that are OFF PATH - has
+    # no evidence left. Measured on one Windows host in two consecutive runs, pipx then nimble.
+    #
+    # The cleanup's only authority is this section's own bookkeeping: the resolution read before
+    # the install. Empty means the file is this section's; non-empty means it is not.
+    if ! command -v clear_own_leftover >/dev/null 2>&1; then
+        echo "  ..    this harness installs into a throwaway image: nothing to clean"
+    else
+    _cl_dir="${TMPDIR:-/tmp}/shall-clear-$$"
+    rm -rf "$_cl_dir"; mkdir -p "$_cl_dir"
+    : > "$_cl_dir/leftover-bin"
+    FAKE="$_cl_dir/leftover-bin"; FAKE_NAME="$FAKE_NAME"
+    TOTAL=$((TOTAL + 1))
+    clear_own_leftover "$FAKE_NAME" "" >/dev/null 2>&1
+    if [ ! -e "$FAKE" ]; then
+        echo "  ok    clear_own_leftover removes a file this run's own install made"
+    else
+        echo "  BAD   clear_own_leftover left the file this run made at $FAKE"; BAD=$((BAD + 1))
+    fi
+
+    : > "$_cl_dir/somebody-elses"
+    FAKE="$_cl_dir/somebody-elses"
+    TOTAL=$((TOTAL + 1))
+    clear_own_leftover "$FAKE_NAME" "/root/.cabal/bin/hello" >/dev/null 2>&1
+    if [ -e "$FAKE" ]; then
+        echo "  ok    a name that resolved before this install is somebody else's and is left alone"
+    else
+        echo "  BAD   clear_own_leftover removed a file that predated this section"; BAD=$((BAD + 1))
+    fi
+
+    FAKE=""
+    TOTAL=$((TOTAL + 1))
+    if clear_own_leftover "$FAKE_NAME" "" >/dev/null 2>&1; then
+        echo "  ok    nothing resolving is nothing to clean"
+    else
+        echo "  BAD   clear_own_leftover failed when there was nothing to clean"; BAD=$((BAD + 1))
+    fi
+    rm -rf "$_cl_dir"
+    fi
 
     # The warning belongs to the backend that printed it. One sync can warn about two
     # managers, and handing yarn's directory to go would answer for the wrong install.

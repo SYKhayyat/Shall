@@ -1707,6 +1707,39 @@ assert_binary_gone() {
     return 1
 }
 
+# Remove the file this section's own install left behind, and say so.
+#
+# **The sweep owns what it installs, so it cleans what it installs.** `removal_leaves_binary`
+# names the managers whose uninstall keeps its shim, and for *this* section that is the right
+# answer: the product said what it left, so the section passes and the file stays.
+#
+# It is the wrong answer for the next section in the same run, which installs the same canary,
+# finds the name resolving exactly where it resolved before, and has nothing left to prove
+# delivery with - because Shall's warning about a bin directory is printed only when that
+# directory is off PATH, and a leftover shim that resolves is by definition in one that is on
+# it. Measured on one Windows host, twice in two runs: `pipx: pycowsay resolves to
+# ~/.local/bin/pycowsay, which was already there before this install`, then, after that shim was
+# removed by hand, the same line for `nimble: nimjson` (#197).
+#
+# The evidence is this section's own bookkeeping rather than PATH: `$2` is the resolution read
+# BEFORE this section installed anything. Empty means nothing answered to the name then, so a
+# file answering to it now was put there by this section and by nothing else. Non-empty is
+# somebody else's file, including another manager's, and is left alone.
+clear_own_leftover() { # binary prior-resolution
+    _col_was="${2:-}"
+    [ -n "$_col_was" ] && return 0
+    _col_now="$(path_of "$1")"
+    [ -n "$_col_now" ] || return 0
+    [ -f "$_col_now" ] || return 0
+    rm -f "$_col_now" 2>/dev/null || true
+    if [ -e "$_col_now" ]; then
+        soft "$1: this run left $_col_now behind and it could not be removed — a second run of this sweep will find the name already resolving there"
+    else
+        soft "$1: this run's own install left $_col_now behind after the removal; removed, so a second run starts where this one did"
+    fi
+    return 0
+}
+
 # A manager whose `list` answers a different question than its `install`. Named, because
 # "the install worked and `list` does not show it" is otherwise indistinguishable from a
 # parser that is broken — which is the one thing this section exists to catch.
@@ -1887,6 +1920,7 @@ lifecycle() {
             "not support\|unsupport\|cannot remove\|no remove" \
             lx -y apply "$be:$cpkg" --delete
         # That refusal is correct AND it leaves the line, so take it out by hand.
+        clear_own_leftover "$cbin" "$_prepath"
         undeclare_canary "$be:$cpkg"
         return 0
     fi
@@ -1897,6 +1931,7 @@ lifecycle() {
     [ -n "$_nolist" ] || nok "$be: $ctok is gone from list" sh -c \
         "$SHALL list --backend '$be' 2>/dev/null | grep -q '$ctok'"
     [ -n "$cbin" ] && assert_binary_gone "$be" "$cbin" "$_prepath" "$LIFELOG"
+    [ -n "$cbin" ] && clear_own_leftover "$cbin" "$_prepath"
     undeclare_canary "$be:$cpkg"
     return 0
 }

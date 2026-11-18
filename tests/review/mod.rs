@@ -147,3 +147,4 @@ pub fn bash() -> PathBuf {
     }
     PathBuf::from("bash")
 }
+mod the_sweep_cleans_what_its_own_section_installed_tests;
