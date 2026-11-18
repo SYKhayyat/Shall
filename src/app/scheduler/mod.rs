@@ -235,6 +235,134 @@ impl Roots {
     }
 }
 
+/// One schedule the machine holds **that Shall itself put there**, with the command line a
+/// firing would run. The declaring run's identity is written into that line — the binary and,
+/// since `c7dd0b67`, the `--config-dir`/`--data-dir` roots it was declared from (#192) — and a
+/// sweep that must not delete another config's schedules reads that line to tell "mine,
+/// retracted" from "somebody else's" (#182).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeldTask {
+    pub name: String,
+    /// The argv as a firing would exec it, first element the binary, split with the same
+    /// `schedule::words` the renderers write with. Empty when the scheduler answered with a
+    /// name but no command line.
+    pub argv: Vec<String>,
+    /// Whether the scheduler's own store certifies *Shall* wrote this task, independently of
+    /// the command line. systemd and launchd can (the file honours Shall's prefix); Task
+    /// Scheduler cannot, because a listing by prefix is all it ever has (#182).
+    pub certified: bool,
+}
+
+/// Whose a held schedule is, read from the command line it carries.
+///
+/// **`Ours` is the only answer the sweep may remove on** (#182). A task that names roots this
+/// run did not use was declared by another config; a task with no roots recorded was written
+/// before `c7dd0b67`, and the only thing about it that still identifies its author is the
+/// binary it fires — if that is not this binary, it is not this run's task.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScheduleOrigin {
+    /// This run's config declared it (every recorded root equals this run's), or it carries no
+    /// roots and would fire this very binary — the legacy task written before `c7dd0b67` — or
+    /// the store certifies authorship and there was no command line to read (the C34 ruling's
+    /// own words, and the `#173` pin's shape).
+    Ours,
+    /// The line names a root this run did not use, so another config declared it.
+    AnotherConfig {
+        config: Option<String>,
+        data: Option<String>,
+    },
+    /// No roots recorded, and the binary the task would fire is not this one.
+    ForeignBinary { binary: String },
+    /// The line could not be read back (including a flag left dangling, which a renderer of
+    /// ours can never write).
+    Unreadable,
+}
+
+/// Decide whose a held schedule is, from its argv, the store's word on authorship, and this
+/// run's roots.
+///
+/// A task registered since `c7dd0b67` carries the roots it was declared from as the flags
+/// immediately after the binary. Compare them to this run's roots; a root with no flag means
+/// the declaring run used that root's OS default (`Roots::flag` omits a flag exactly then), so
+/// it belongs here only if this run used that root's default too. A task with **no** flags at
+/// all — every task written before that commit, and Windows tasks written by the gap #182
+/// closes — has one surviving token of its author, the binary in its argv: the C34 ruling
+/// keeps sweeping it (so `#158` keeps working for upgraders) only when that binary is this
+/// one. A line that could not be read at all is taken on the store's own word (`certified`) or
+/// left alone — see `HeldTask::certified` for who can give that word.
+///
+/// `pub` for the tests' sake, like `units_in`.
+pub fn schedule_origin(
+    argv: &[String],
+    certified: bool,
+    roots: &Roots,
+    shall_bin: &Path,
+) -> ScheduleOrigin {
+    let mut config: Option<&String> = None;
+    let mut data: Option<&String> = None;
+    let mut malformed = false;
+    {
+        // The renderer writes the flags in argv positions 1..; the first non-flag token is the
+        // command, and everything after it is the command's own business.
+        let mut it = argv.iter().skip(1);
+        while let Some(arg) = it.next() {
+            match arg.as_str() {
+                "--config-dir" => match it.next() {
+                    Some(v) => config = Some(v),
+                    None => malformed = true,
+                },
+                "--data-dir" => match it.next() {
+                    Some(v) => data = Some(v),
+                    None => malformed = true,
+                },
+                _ => break,
+            }
+        }
+    }
+    if malformed {
+        return ScheduleOrigin::Unreadable;
+    }
+    if config.is_some() || data.is_some() {
+        // A recorded root must equal this run's; a root with no flag is the default, and so
+        // matches only a run that used the default.
+        let cfg_ok = match config {
+            Some(v) => Path::new(v.as_str()) == roots.config.as_path(),
+            None => roots.config == crate::utils::safe_config_dir(),
+        };
+        let data_ok = match data {
+            Some(v) => Path::new(v.as_str()) == roots.data.as_path(),
+            None => roots.data == crate::utils::safe_data_dir(),
+        };
+        if cfg_ok && data_ok {
+            ScheduleOrigin::Ours
+        } else {
+            ScheduleOrigin::AnotherConfig {
+                config: config.cloned(),
+                data: data.cloned(),
+            }
+        }
+    } else if argv.is_empty() {
+        // Nothing to read, so the flag and binary gates are both unanswered. A store that can
+        // certify authorship decides here — systemd's unit file and launchd's plist with
+        // Shall's prefix in them say yes, and that is the gate `#158` (and the #173 pin) stood
+        // on. A store with nothing left to ask (Task Scheduler's `/XML` query failed) does not
+        // get to call an unresid task ours.
+        if certified {
+            ScheduleOrigin::Ours
+        } else {
+            ScheduleOrigin::Unreadable
+        }
+    } else {
+        match argv.first() {
+            Some(bin) if Path::new(bin) == shall_bin => ScheduleOrigin::Ours,
+            Some(bin) => ScheduleOrigin::ForeignBinary {
+                binary: bin.clone(),
+            },
+            None => ScheduleOrigin::Unreadable,
+        }
+    }
+}
+
 impl TaskTarget {
     pub fn resolve(user: Option<&str>) -> Result<Self> {
         Ok(Self {
@@ -369,6 +497,31 @@ pub trait TaskProvisioner: Send + Sync {
         executor: &CommandExecutor,
         target: &TaskTarget,
     ) -> Option<Vec<String>>;
+
+    /// [`installed`](Self::installed) with each name's command line, for the sweep that must
+    /// not remove another config's tasks (#182). A schedule's declaring run is read back from
+    /// the line it would fire (`schedule_origin`), because nothing else survives the process
+    /// that wrote it — and names alone cannot tell "mine, retracted" from "somebody else's".
+    ///
+    /// The default answers a scheduler that records no command line: names with an empty argv,
+    /// which the sweep must then treat as unreadable and leave alone. The real provisioners
+    /// read their stores back and override.
+    async fn installed_with_command(
+        &self,
+        executor: &CommandExecutor,
+        target: &TaskTarget,
+    ) -> Option<Vec<HeldTask>> {
+        self.installed(executor, target).await.map(|names| {
+            names
+                .into_iter()
+                .map(|name| HeldTask {
+                    name,
+                    argv: Vec::new(),
+                    certified: false,
+                })
+                .collect()
+        })
+    }
 }
 
 pub struct SchedulerManager {
@@ -465,6 +618,32 @@ impl SchedulerManager {
     ) -> Option<Vec<String>> {
         let target = TaskTarget::resolve(user).ok()?;
         self.provisioner.installed(executor, &target).await
+    }
+
+    /// Every schedule this machine holds that Shall put there, with the command line each
+    /// would fire, for the sweep that must not remove another config's tasks (#182).
+    ///
+    /// `None` when the scheduler could not be asked — see [`TaskProvisioner::installed`].
+    pub async fn installed_tasks(
+        &self,
+        executor: &CommandExecutor,
+        user: Option<&str>,
+    ) -> Option<Vec<HeldTask>> {
+        let target = TaskTarget::resolve(user).ok()?;
+        self.provisioner
+            .installed_with_command(executor, &target)
+            .await
+    }
+
+    /// Whose the held schedule is, asked against this run's roots and this binary (#182):
+    /// `Ours` is the only answer the sweep may remove on.
+    pub fn origin_of(&self, task: &HeldTask) -> ScheduleOrigin {
+        schedule_origin(
+            &task.argv,
+            task.certified,
+            &self.roots,
+            &self.shall_bin_path,
+        )
     }
 
     /// How this machine stands against one declaration — the read-back half of `schedule:`.
@@ -875,6 +1054,18 @@ impl TaskProvisioner for LinuxSystemdProvisioner {
             .flatten()
     }
 
+    async fn installed_with_command(
+        &self,
+        _executor: &CommandExecutor,
+        target: &TaskTarget,
+    ) -> Option<Vec<HeldTask>> {
+        let dir = Self::unit_dir(target)?;
+        crate::core::blocking::off_the_runtime(move || units_held(&dir))
+            .await
+            .ok()
+            .flatten()
+    }
+
     async fn add_task(
         &self,
         executor: &CommandExecutor,
@@ -1071,6 +1262,82 @@ pub fn units_in(dir: &Path) -> Option<Vec<String>> {
     Some(names)
 }
 
+/// [`units_in`] with each name's command line, for the sweep that must not remove another
+/// config's tasks (#182).
+///
+/// The argv is the `ExecStart=` line of the `.service` half, split with the same
+/// `schedule::words` the writer rendered it with. The `.timer` half carries no command (it is
+/// the schedule, not the run); a name whose service file has no `ExecStart=` answers with an
+/// empty argv — the file itself is the store's certification that *Shall* wrote the unit, and
+/// `schedule_origin` decides the rest.
+///
+/// Same shape as [`units_in`]: `None` for a directory that cannot be read, `Some` otherwise;
+/// names sorted, each name once however many files carry its stem.
+pub fn units_held(dir: &Path) -> Option<Vec<HeldTask>> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Some(Vec::new()),
+        Err(_) => return None,
+    };
+    let mut tasks: Vec<HeldTask> = Vec::new();
+    for entry in entries.flatten() {
+        let file = entry.file_name();
+        let Some(file) = file.to_str() else { continue };
+        let Some(stem) = file
+            .strip_suffix(".service")
+            .or_else(|| file.strip_suffix(".timer"))
+        else {
+            continue;
+        };
+        let Some(name) = stem.strip_prefix("shall-") else {
+            continue;
+        };
+        if let Some(existing) = tasks.iter_mut().find(|t| t.name == name) {
+            // Both halves of one job are one name; only the service half carries a command,
+            // and whichever half the directory answers first, readdir order must not decide
+            // whether the roots are read (a task's argv *is* the #182 judgement).
+            if file.ends_with(".service") && existing.argv.is_empty() {
+                existing.argv = exec_start_of(&dir.join(file));
+            }
+            continue;
+        }
+        let argv = if file.ends_with(".service") {
+            exec_start_of(&dir.join(file))
+        } else {
+            Vec::new()
+        };
+        tasks.push(HeldTask {
+            name: name.to_string(),
+            argv,
+            // The unit file honours Shall's prefix in the directory Shall's own renderer
+            // writes into — that is the `#158` gate, and it is answerable even when the
+            // `ExecStart=` line is not.
+            certified: true,
+        });
+    }
+    tasks.sort_by(|a, b| a.name.cmp(&b.name));
+    Some(tasks)
+}
+
+/// The argument vector of a `.service` unit's `ExecStart=` line, if the file has one.
+///
+/// Only the plain `ExecStart=` spelling Shall writes is read; a hand-edited unit's `-`/`@`
+/// prefixes are treated as no command at all, and the store's certification then says what it
+/// is. A read failure answers empty rather than poisoning the listing — `units_in`'s rule for
+/// a single name.
+fn exec_start_of(service: &Path) -> Vec<String> {
+    let contents = match std::fs::read_to_string(service) {
+        Ok(contents) => contents,
+        Err(_) => return Vec::new(),
+    };
+    for line in contents.lines() {
+        if let Some(rest) = line.trim().strip_prefix("ExecStart=") {
+            return crate::model::schedule::words(rest);
+        }
+    }
+    Vec::new()
+}
+
 /// The same question for `LaunchAgents`, where the label is `com.shall.<name>.plist`.
 /// **`pub` for the tests' sake**, and `None` means the same thing it means one function up.
 pub fn agents_in(dir: &Path) -> Option<Vec<String>> {
@@ -1095,6 +1362,65 @@ pub fn agents_in(dir: &Path) -> Option<Vec<String>> {
     }
     names.sort();
     Some(names)
+}
+
+/// [`agents_in`] with each agent's command line, for the sweep that must not remove another
+/// config's tasks (#182).
+///
+/// The argv is the plist's `ProgramArguments` array as written — one element per word of the
+/// command, because launchd hands the array to `execve` whole (#195) — so the read-back is the
+/// array itself, unescaped, not a re-split of a line. A plist whose array cannot be read
+/// answers with an empty argv; the file's `com.shall.` label is the store's certification
+/// that *Shall* wrote the agent.
+pub fn agents_held(dir: &Path) -> Option<Vec<HeldTask>> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Some(Vec::new()),
+        Err(_) => return None,
+    };
+    let mut tasks: Vec<HeldTask> = Vec::new();
+    for entry in entries.flatten() {
+        let file = entry.file_name();
+        let Some(file) = file.to_str() else { continue };
+        let Some(stem) = file.strip_suffix(".plist") else {
+            continue;
+        };
+        // Only a label that honours our prefix is one of ours at all — the `#158` gate, and
+        // the certification that survives an unreadable `ProgramArguments` array.
+        let Some(name) = stem.strip_prefix("com.shall.") else {
+            continue;
+        };
+        tasks.push(HeldTask {
+            name: name.to_string(),
+            argv: std::fs::read_to_string(dir.join(file))
+                .ok()
+                .and_then(|doc| plist_program_arguments(&doc))
+                .unwrap_or_default(),
+            certified: true,
+        });
+    }
+    tasks.sort_by(|a, b| a.name.cmp(&b.name));
+    Some(tasks)
+}
+
+/// The `ProgramArguments` array of a plist *as written by Shall's own renderer*, as argv.
+///
+/// Scoped to the `ProgramArguments` key because the plist carries other arrays (`StartCalendar`
+/// is built as an array too); the array's `<string>` children are unescaped with the same
+/// `unescape_xml` the Windows read-back uses. An empty array is a plist with nothing to run —
+/// a hand-edited agent — and answers `Some(vec![])`, the vocabulary the renderer itself uses.
+pub fn plist_program_arguments(doc: &str) -> Option<Vec<String>> {
+    let key = doc.find("<key>ProgramArguments</key>")?;
+    let array = xml_element(&doc[key..], "array")?;
+    let mut out = Vec::new();
+    let mut rest = array;
+    while let Some(at) = rest.find("<string>") {
+        let value = &rest[at + "<string>".len()..];
+        let end = value.find("</string>")?;
+        out.push(unescape_xml(&value[..end]));
+        rest = &value[end + "</string>".len()..];
+    }
+    Some(out)
 }
 
 fn map_vixie_dow_to_names(field: &str) -> String {
@@ -1386,6 +1712,19 @@ impl TaskProvisioner for MacLaunchdProvisioner {
         let probe = Self::plist_path("probe", target)?;
         let dir = probe.parent()?.to_path_buf();
         crate::core::blocking::off_the_runtime(move || agents_in(&dir))
+            .await
+            .ok()
+            .flatten()
+    }
+
+    async fn installed_with_command(
+        &self,
+        _executor: &CommandExecutor,
+        target: &TaskTarget,
+    ) -> Option<Vec<HeldTask>> {
+        let probe = Self::plist_path("probe", target)?;
+        let dir = probe.parent()?.to_path_buf();
+        crate::core::blocking::off_the_runtime(move || agents_held(&dir))
             .await
             .ok()
             .flatten()
@@ -1866,6 +2205,26 @@ pub fn when_from_xml(doc: &str) -> Option<String> {
     None
 }
 
+/// The command a task's `/XML` document registers, in the unquoted form Task Scheduler stores
+/// it — `program` with its quotes trimmed, then the arguments verbatim.
+///
+/// One derivation, because three callers need it: `provisioned_from_xml` compares it against
+/// the rendered spec, the sweep's read-back of who declared a task asks it for the declaring
+/// run's identity (#182), and a windows-only test pins it.
+/// **`pub` for the tests' sake**, like its sibling above.
+pub fn command_from_xml(doc: &str) -> Option<String> {
+    let exec = xml_element(doc, "Exec")?;
+    let program = unescape_xml(xml_text(exec, "Command")?);
+    let arguments = xml_text(exec, "Arguments")
+        .map(unescape_xml)
+        .unwrap_or_default();
+    Some(format!(
+        "{} {}",
+        program.trim().trim_matches('"'),
+        arguments.trim()
+    ))
+}
+
 /// A whole `schtasks /Query /XML` document as the canonical record it describes, or `None` for a
 /// document this reader cannot honestly claim to have read.
 ///
@@ -1874,12 +2233,7 @@ pub fn when_from_xml(doc: &str) -> Option<String> {
 /// **`pub` for the tests' sake.** Its own tests moved to the folder that owns them, and a test
 /// crate links the library without `cfg(test)`, so a private item is invisible there.
 pub fn provisioned_from_xml(doc: &str, expected: Option<&str>) -> Option<Provisioned> {
-    let exec = xml_element(doc, "Exec")?;
-    let program = unescape_xml(xml_text(exec, "Command")?);
-    let arguments = xml_text(exec, "Arguments")
-        .map(unescape_xml)
-        .unwrap_or_default();
-    let command = format!("{} {}", program.trim().trim_matches('"'), arguments.trim());
+    let command = command_from_xml(doc)?;
 
     let when = when_from_xml(doc)?;
     let elevated = xml_element(doc, "Principals")
@@ -1967,6 +2321,26 @@ impl WindowsTaskProvisioner {
     pub fn command_line(config: &ScheduleConfig, shall_bin: &Path, target: &TaskTarget) -> String {
         format!(
             "{}{} {}",
+            shall_bin.display(),
+            target.roots.flag_spellings(),
+            config.command
+        )
+    }
+
+    /// The `/TR` a `schtasks /Create` hands over: the binary quoted (the line is one string
+    /// Task Scheduler splits itself, and an unquoted path with a space is two programs), then
+    /// the declaring run's roots flags, then the command.
+    ///
+    /// **The roots flags are written into the fire line, not only into the spec comparison.**
+    /// `c7dd0b67` (#192) gave `command_line` the flags and missed this line, so a
+    /// non-default-root Windows task re-registered on every sync and never recorded which
+    /// config declared it — which the `#158` sweep needs to not delete another config's
+    /// schedules (#182). The read-back (`command_from_xml`) trims the binary's quotes, so
+    /// both sides of the standing comparison disagree only in the quotes that never reach it.
+    /// **`pub` for the tests' sake**, like `command_line`.
+    pub fn tr_command(config: &ScheduleConfig, shall_bin: &Path, target: &TaskTarget) -> String {
+        format!(
+            "\"{}\"{} {}",
             shall_bin.display(),
             target.roots.flag_spellings(),
             config.command
@@ -2116,6 +2490,41 @@ impl TaskProvisioner for WindowsTaskProvisioner {
         Some(names)
     }
 
+    async fn installed_with_command(
+        &self,
+        executor: &CommandExecutor,
+        _target: &TaskTarget,
+    ) -> Option<Vec<HeldTask>> {
+        let names = self.installed(executor, _target).await?;
+        let mut tasks = Vec::with_capacity(names.len());
+        for name in names {
+            let tn = Self::task_name(&name);
+            // One `/XML` query per task: the whole-store listing can be widened (`/V`), but its
+            // CSV has no escaping story for a command with a comma, and `/XML` is the document
+            // every other read-back already parses. A query that fails answers with an empty
+            // argv and `certified: false` — a store with nothing left to say does not get to
+            // call an unreadable task ours.
+            let argv = match executor
+                .run("schtasks", &["/Query", "/TN", &tn, "/XML"], false)
+                .await
+            {
+                Ok(out) => {
+                    let doc = decode_xml(&out.stdout);
+                    command_from_xml(&doc)
+                        .map(|command| crate::model::schedule::words(&command))
+                        .unwrap_or_default()
+                }
+                Err(_) => Vec::new(),
+            };
+            tasks.push(HeldTask {
+                name,
+                argv,
+                certified: false,
+            });
+        }
+        Some(tasks)
+    }
+
     async fn add_task(
         &self,
         executor: &CommandExecutor,
@@ -2126,7 +2535,13 @@ impl TaskProvisioner for WindowsTaskProvisioner {
         let name = Self::task_name(&config.name);
         // Quoted for `/TR`, which takes one string and splits it itself; the read-back compares
         // the unquoted form Task Scheduler stores.
-        let cmd = format!("\"{}\" {}", shall_bin.display(), config.command);
+        //
+        // **The roots flags ride in the same line** — systemd's `ExecStart` has carried them
+        // since `c7dd0b67` (#192), and this line was the one renderer they never reached: the
+        // *spec* comparison gained them, so a non-default-root Windows task re-registered on
+        // every sync, and a Windows schedule never recorded which config declared it, which the
+        // `#158` sweep needs to not delete another config's tasks (#182).
+        let cmd = Self::tr_command(config, shall_bin, target);
 
         // Refused here, before anything is created: a schedule Task Scheduler cannot express
         // must not become the nearest one it can. `Refused` and not `Io` — Shall looked and

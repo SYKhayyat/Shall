@@ -4993,3 +4993,24 @@ silence.**
   and the exporter run through it, so the artifact and the tool cannot split a batch at different
   points. This is `planned_installs`'s rule on the other side, and it is why the export needed a
   trait seam rather than a second description of "how apt removes a package".
+
+## II.98 The schedule sweep removes what this run wrote, and names what it leaves (owner ruling, 2026-11-18, `#182`, V.252)
+
+**One config's sync may not retire another config's schedules.** The command line each held task
+would fire is read back and classified (`schedule_origin`):
+
+- **A recorded root that is not this run's root is `AnotherConfig`** — never removed, and named
+  with its reason on every sync, because a sweep that silently skips is a sweep nobody can trust
+  to have looked. A root with no flag means the declaring run used that root's OS default, so a
+  task that forgot a flag is only ours if this run used that default too.
+- **A task with no roots at all is judged by its binary.** Every task registered before
+  `c7dd0b67` has exactly one surviving token of its author: the binary in its argv. `Ours` only
+  when that binary is this binary — `#158` must keep working for upgraders — and `ForeignBinary`
+  (never removed) when it is not.
+- **A task whose line cannot be read falls back to the store's own word.** systemd's unit file
+  and launchd's plist with Shall's prefix in them certify authorship; Task Scheduler, which has
+  no file and answered nothing, does not.
+- **The Windows `/TR` carries the roots flags too.** `#192` wrote them into the systemd and
+  launchd renderers and into the Windows *spec comparison* but not into the `/Create` line
+  itself, so a non-default-root Windows task re-registered on every sync and never recorded
+  which config declared it. The declaring run must be readable wherever a firing task is stored.

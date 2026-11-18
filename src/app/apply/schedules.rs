@@ -77,10 +77,16 @@ impl Schedules<'_> {
     /// `shall-nightly.timer` kept firing at 03:00 for a week after its `schedules` file had been
     /// deleted — the machine still ran a job the files did not describe, and nothing said so.
     ///
-    /// **Only what Shall wrote.** The provisioner lists by its own prefix (`shall-`,
-    /// `com.shall.`, `Shall_`), so a task a person registered by hand is not a candidate; a
-    /// scheduler that could not be asked contributes nothing rather than emptying the machine
-    /// (`TaskProvisioner::installed`).
+    /// **Only what Shall wrote, and only what this run wrote (`#182`).** The provisioner lists
+    /// by its own prefix (`shall-`, `com.shall.`, `Shall_`), so a task a person registered by
+    /// hand is not a candidate; a scheduler that could not be asked contributes nothing rather
+    /// than emptying the machine (`TaskProvisioner::installed`); and the command line each task
+    /// fires decides whose it is (`SchedulerManager::origin_of`). A task that names roots this
+    /// run did not use was declared by another config, and a task that records no roots and
+    /// would fire another binary was written before `c7dd0b67` by someone else — `sync` in one
+    /// config used to delete both on a machine with two configs, which is the defect `had` to
+    /// stop being this phase's job. They stay registered, and this run says so every time,
+    /// because a sweep that silently skips is a sweep nobody can trust to have looked.
     ///
     /// **Through the guard, like every other removal.** The token is asked for with the keys
     /// being taken and the removal happens only if it authorises the whole set — a schedule that
@@ -94,13 +100,57 @@ impl Schedules<'_> {
             .schedules()
             .map(|(name, _, _)| name.to_string())
             .collect();
-        let Some(held) = self.scheduler.installed(self.executor, None).await else {
+        let Some(held) = self.scheduler.installed_tasks(self.executor, None).await else {
             // Unreadable is not empty: claiming this machine holds no schedules because the
             // scheduler could not be asked is the false convergence this whole module refuses.
             return Ok(());
         };
-        let orphans: Vec<String> = held.into_iter().filter(|n| !declared.contains(n)).collect();
-        if orphans.is_empty() {
+        let mut ours: Vec<String> = Vec::new();
+        for task in held {
+            if declared.contains(task.name.as_str()) {
+                continue;
+            }
+            let name = &task.name;
+            match self.scheduler.origin_of(&task) {
+                // The line's roots are this run's, the binary is this binary, or the store
+                // certifies Shall wrote a unit with no readable line. The `#158` sweep's
+                // business, exactly as before.
+                crate::app::scheduler::ScheduleOrigin::Ours => ours.push(task.name),
+                crate::app::scheduler::ScheduleOrigin::AnotherConfig { config, data } => {
+                    let found = [
+                        config.map(|v| format!("--config-dir {}", v)),
+                        data.map(|v| format!("--data-dir {}", v)),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                    tracing::warn!(
+                        "Schedule: `{}` is no longer declared and another config registered it \
+                         (it fires with {}), so this sync left it in place (#182).",
+                        name,
+                        found
+                    );
+                }
+                crate::app::scheduler::ScheduleOrigin::ForeignBinary { binary } => {
+                    tracing::warn!(
+                        "Schedule: `{}` is no longer declared and would fire `{}`, a different \
+                         Shall binary, so this sync left it in place (#182).",
+                        name,
+                        binary
+                    );
+                }
+                crate::app::scheduler::ScheduleOrigin::Unreadable => {
+                    tracing::warn!(
+                        "Schedule: `{}` is no longer declared but its command line could not be \
+                         read back and nothing else certifies who registered it, so this sync \
+                         left it in place (#182).",
+                        name
+                    );
+                }
+            }
+        }
+        if ours.is_empty() {
             return Ok(());
         }
         // `warn!` and `would_warn!`, the pair `extras.rs` uses for the same kind of change: what
@@ -110,13 +160,13 @@ impl Schedules<'_> {
             crate::would_warn!(
                 "would remove {} schedule(s) this machine still runs and the files no longer \
                  declare: {}",
-                orphans.len(),
-                orphans.join(", ")
+                ours.len(),
+                ours.join(", ")
             );
             return Ok(());
         }
 
-        let keys: Vec<(String, String)> = orphans
+        let keys: Vec<(String, String)> = ours
             .iter()
             .map(|name| ("schedule".to_string(), name.clone()))
             .collect();
@@ -128,16 +178,16 @@ impl Schedules<'_> {
             crate::app::sync::guard::GuardScope::Sync,
         )
         .await?;
-        if !reaped.authorises(orphans.len()) {
+        if !reaped.authorises(ours.len()) {
             return Err(crate::core::Error::Refused(format!(
                 "{} schedule(s) are no longer declared and the guard did not clear their \
                  removal: {}",
-                orphans.len(),
-                orphans.join(", ")
+                ours.len(),
+                ours.join(", ")
             )));
         }
         let mut left_behind: Vec<String> = Vec::new();
-        for name in &orphans {
+        for name in &ours {
             // **One orphan that will not come off is not a failed sync.** This was `?`, and the
             // consequence was measured: a task this shell may not delete (Task Scheduler answers
             // `Access is denied.` to a filtered token) failed *every* `sync` on the machine, over
@@ -167,7 +217,7 @@ impl Schedules<'_> {
                 left_behind.push(name.clone());
             }
         }
-        let removed: Vec<&str> = orphans
+        let removed: Vec<&str> = ours
             .iter()
             .filter(|n| !left_behind.contains(n))
             .map(String::as_str)

@@ -9050,3 +9050,33 @@ an empty list, because the empty list is the silence this whole finding is about
 The order is part of the same rule. Removals run after installs so a failed install leaves the
 package present; a removal that ran first would take away the manager's package and then fail to
 put back what it was replacing.
+
+**V.252 — Why the sweep reads the line each task would fire, and trusts its binary when there
+is no line (`#182`, `II.98`).** A machine with two configs deleted schedules across that
+boundary for the same reason `V.251`'s export lost the removal: one value carrying two meanings
+was filtered as though it had one. `installed()` answered with every `shall-*` task, and "the
+files do not declare it" was read as "this run may remove it", which is true only of the run
+that wrote it. The declaring run was already on the machine (#192 wrote the roots into every
+renderer) but nothing read them back, so the fix is a read, not a write: the sweep now takes
+each task's command line out of the store it lives in and classifies it.
+
+The three stores hand the line back in three shapes, and the read is the writer's own: systemd's
+`ExecStart=` is a line split with the same `schedule::words` the renderer wrote it with, launchd
+hands an already-split `ProgramArguments` array (the renderer's own argv, #195), and Task
+Scheduler's `/XML` per task is the one document every other Windows read-back already parses.
+None of the three needed a new field — which is why option 3 of C34 won over the `<Description>`
+marker: the identity was already in the one place the OS hands back.
+
+The part that is a ruling rather than a read is the no-flag task: everything registered before
+`c7dd0b67` records no roots, and "leave it registered" retires `#158` on exactly the machines
+that upgraded. The binary is the one surviving token of authorship — the unit file's `ExecStart`
+and the task's `/TR` both begin with it — so the ruling keeps the sweep for a legacy task only
+when that binary is this binary. A foreign checkout that shares a path with this one is swept,
+which is the accepted cost, and a red sync is the worst the mistake can do; a removal that
+provably overstepped (another root by name) is the defect, and it is now refused structurally.
+
+A final asymmetry is worth writing down because it is the last place the old bug could hide:
+Task Scheduler cannot certify authorship the way a unit file can. systemd's file and launchd's
+plist carry Shall's prefix in the store itself, so a task whose `ExecStart` or array cannot be
+read is still provably a unit Shall wrote; an `/XML` query that fails has nothing left to ask,
+and `certified: false` means the sweep may not call an unresid task ours.

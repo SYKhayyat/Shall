@@ -84,6 +84,48 @@ fn a_default_root_writes_no_flag_at_all() {
 
     let line = WindowsTaskProvisioner::command_line(&cfg("0 2 * * *"), bin, &target);
     assert_eq!(line, "/usr/local/bin/shall sync");
+
+    // The line `schtasks /Create` actually hands over is the *fire* line — the declared run's
+    // roots must sit in the same place a firing reads them, or the sweep cannot tell whose a
+    // Windows task is (#182). `command_line` is the spec comparison; `tr_command` is the
+    // registration, and the two used to disagree (#192 wrote only the first).
+    let tr = WindowsTaskProvisioner::tr_command(&cfg("0 2 * * *"), bin, &target);
+    assert_eq!(
+        tr, "\"/usr/local/bin/shall\" sync",
+        "a default-root task changed its /TR spelling:"
+    );
+}
+
+/// The `#192` gap, pinned: a non-default root's flags reach the Windows `/TR`, not only the
+/// spec comparison — exactly the two spellings the old code had and the read-back can only
+/// compare one of.
+#[test]
+fn the_windows_fire_line_carries_the_roots_the_spec_comparison_carries() {
+    let target = here().with_roots(Roots {
+        config: PathBuf::from("/srv/other-checkout/shall-config"),
+        data: PathBuf::from("/srv/other-checkout/shall-state"),
+    });
+    let bin = Path::new("C:\\Program Files\\shall\\shall.exe");
+
+    let tr = WindowsTaskProvisioner::tr_command(&cfg("0 2 * * *"), bin, &target);
+    assert!(
+        tr.contains("--config-dir /srv/other-checkout/shall-config")
+            && tr.contains("--data-dir /srv/other-checkout/shall-state"),
+        "the /TR does not name the config it was declared from: {tr}"
+    );
+    assert!(
+        tr.starts_with("\"C:\\Program Files\\shall\\shall.exe\""),
+        "the binary has to stay quoted, or a path with a space is two programs: {tr}"
+    );
+    // The read-back strips the binary's quotes as it splits and compares against
+    // `command_line`, so a task written with this /TR stands *equal* to its declaration
+    // rather than re-registering every sync.
+    let read_back = shall::model::schedule::words(&tr).join(" ");
+    assert_eq!(
+        read_back,
+        WindowsTaskProvisioner::command_line(&cfg("0 2 * * *"), bin, &target),
+        "the fire line and the spec comparison must round-trip to the same command"
+    );
 }
 
 /// A root with a space in it is quoted on the two renderers that write a command *line*, and is

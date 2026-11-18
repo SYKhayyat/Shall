@@ -1,5 +1,5 @@
-﻿# The decision register — 275 entries, four open
-**One file, six features, five questions waiting on the owner.** Every decision this design forces
+﻿# The decision register — 275 entries, three open
+**One file, six features, three questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
 whether they had been answered**, so the same question could be argued twice and a question
@@ -22,9 +22,9 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | status | means | what it needs | count |
 |---|---|---|---|
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
-| **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **4** |
+| **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **3** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
-| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **266** |
+| **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **267** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
 | **DEFERRED** | Asked, and the owner chose to answer it later. | A ruling, when the owner returns to it. | **1** |
 | **HALF RULED** | Part of the question was answered and part was not. | A ruling on the remaining half. | **2** |
@@ -112,7 +112,7 @@ other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.m
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
 is waiting now. All 275 are accounted
-for: **266 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 4 OPEN** — and this line
+for: **267 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 3 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -552,7 +552,7 @@ deliberately no longer has.*
 | **C31** | `#59` asked what in `$HOME` `adopt` may offer as a declaration. Owner ruling 2026-11-13: **a symlink whose target is inside a git working tree, and nothing else.** Everything else fails the evidence test a machine cannot fake: a plain file is what software wrote, age and size select the caches written most often, and "any symlink" selects every package manager's own bookkeeping. Therefore `~/.config`, `~/.local/share`, `~/.ssh` and the top of `$HOME` are scanned two levels deep, a link into `$HOME` is a rearrangement, a broken link declares nothing, and a path already spoken for (`link:`, a `dotfiles:` tree, or what `adopt` wrote last run) is not re-offered. The manifest is the selection — a deleted line is a link Shall stops placing. (II.95, V.249) | 2026-11-13 |
 | **C32** | `newest-rust` — the advisory drift detector — had been red long enough that a pin move would have arrived with an unknown number of releases' worth of breakage at once, and the lint debt it was reporting was visible on a run page nobody opens until something is already wrong (`#160`). The code half is done (43 lints cleared, `a78c044a`). What was left was the owner's two questions: is the job triaged per Rust release or paid down when the pin moves, and should a gating leg report the advisory count. **When is a new Rust release's lint debt paid, and where is it seen?** — RULED 2026-11-15: **paid when the pin moves, and seen as a count written next to the version that produced it.** There is no per-release triage calendar, because a dated backlog item the owner never reads is maintenance that protects nothing; `continue-on-error: true` already keeps the job from blocking a merge, so its obligation between pin bumps is to *say the number*, not to schedule work. The count is recorded into `$GITHUB_STEP_SUMMARY` by the same command the gate runs, one `--message-format` apart, and **there is deliberately no ratchet**: a ceiling on a report nobody reads is the same debt with a second file to maintain. The report is anchored on `path:line:col:` rather than on a bare severity, because the only line starting with a bare `error:` is the `could not compile ... due to N previous errors` summary — a pattern matching that counted the tail and missed the head. (II.96, V.250) | 2026-11-15 |
 | **C33** | `service:` and the schedule/task backends asserted the Linux argv (`systemctl`) in tests that ran on every host, so macOS reported dead `systemctl` stubs and two of its tests failed — and that fixture question turned out to be a product one. What is the platform policy for a capability that could live on more than one OS? — RULED 2026-11-16: **if it would genuinely be useful on Windows, it must exist on Windows, and the test that exercises it must pass there.** `#177`, `#170` and `#175` were one shape: a fixture naming another platform's command string, which passes on the author's host and fails on the next one with a sentence that blames the wrong thing. The tables already comply — `scheduler/mod.rs`'s provisioners, `init_providers.toml` (systemd/openrc/sysvinit, launchd, `windows-sc`), the snapshot rows, the firewall rows — so the work this rule implies is in the fixtures that bypassed them, done by querying `applies_to(os)` rather than by copying argv. | 2026-11-16 |
-| **C34** | `#182` asked what the `#158` schedule sweep may remove on a machine with two configs: `installed()` answers with every `shall-*` task the machine holds, and the sweep removes all the running config does not declare, so `sync` in one config deletes another's schedules. **May one config's `sync` retire a schedule another config registered, and what may it do with a task it cannot identify?** — OPEN 2026-11-17: three resolutions, and `#192` has since built a third of one (every task now carries `--config-dir`), but nothing reads it back — `TaskProvisioner::installed` returns names only. The ruling has to say what happens to a task with no marker, which is every task registered before `c7dd0b67`: sweeping it keeps `#158` working for upgraders, and not sweeping it retires the feature exactly where it is needed. (II.97, V.251) | 2026-11-17 |
+| **C34** | `#182` asked what the `#158` schedule sweep may remove on a machine with two configs: `installed()` answers with every `shall-*` task the machine holds, and the sweep removes all the running config does not declare, so `sync` in one config deletes another's schedules. **May one config's `sync` retire a schedule another config registered, and what may it do with a task it cannot identify?** — RULED 2026-11-18: **build option 3 — read the markers `#192` already writes — and a task with none keeps `#158` only when its binary is this one.** `TaskProvisioner::installed_with_command` reads every held task's fire line back (`ExecStart=`, the `ProgramArguments` array, each Windows task's `/XML` command); `schedule_origin` answers `Ours` / `AnotherConfig` / `ForeignBinary` / `Unreadable`; the sweep removes **only** `Ours` and names, every run, each task it leaves and why. The Windows `/TR` also gains the roots flags `#192` meant to write — the one renderer the original commit missed. (II.97, V.251) | 2026-11-18 |
 | **C35** | `#188` / `#166`'s audit (F1): `heal` is the one command whose primary job is to change the machine in ways no declaration asked for — a manager's wedged lock file, a WAL-resumed transaction, the three repairs that were `doctor --fix` — and nothing in `P1`, `ARCHITECTURE.md`'s pipeline or the model says so. **Does the model carry `heal` as a written exception, does `history` record the repair, or does `heal` get split from a read-only diagnosis?** — OPEN 2026-11-17: three options with different costs; (1) and (2) are not alternatives, because one makes the model true and the other is what a person needs at 03:00, and (3) is `U9`'s move made once already. (VI.12) | 2026-11-17 |
 | **C36** | `#189` / `#166`'s audit (F2): `purge-undeclared` reads the file and the machine, writes the machine, writes no file — output by the mechanical test, but convergence by *subtraction*, and the model has no word for it. Its cost was visible: the most destructive command in the binary was not on the list of commands needing a close look. **Is "make the machine equal the file" one output class with `purge-undeclared` as its strong form, or is subtraction a second output kind with its own statement of what the guard owes it?** — OPEN 2026-11-17: the classification is now complete and checked (`1b95e419`), so the remaining question is naming and the guard's obligation, which is a ruling rather than a reading. (VI.13) | 2026-11-17 |
 | **C37** | `#167` (split out of `#67`): `export --format ansible` and `--format nix` do not exist, and cannot be two more arms of `Script::render` because `Step` has one variant, `Command { program, args }` — every step the exporter can produce resolves through an argv builder. An Ansible task and a NixOS attribute are not projections of a command line: `ansible.builtin.command: apt install -y ripgrep` wears a playbook's syntax and gives up the one thing a Nix expression is for, being *declared* rather than executed. **Does the exporter wait for `#166`'s ruling and render every format from a richer `Step` (package/service/link/setting), or does it ship now as honest command sequences — an Ansible `command` task list and a Nix activation script rather than a module?** — OPEN 2026-11-18: route 1 is no work and no output, route 2 is small and non-idiomatic, and the two are not stages of one answer: (2) decides by shipping what (1) would replace. (VIII.?) | 2026-11-18 |
@@ -11314,9 +11314,10 @@ rows, and the firewall rows all key on `applies_to(os)`. The work is in the fixt
 them, not in the product.
 ## C34
 
-**Status: OPEN — waits on a ruling from the owner.** Whether one config's `sync` may remove a
-scheduled task another config registered. Carried out of #182, and its option space changed
-after #192 shipped.
+**Status: ANSWERED 2026-11-18 — option 3, built.** May one config's `sync` remove a scheduled
+task another config registered? No: the sweep reads the declaring run out of the command line
+each task would fire and removes **only** what this run wrote — and a task with no marker keeps
+`#158` (the sweep must keep working for upgraders) exactly when its binary is this one.
 
 **Asked.** `remove_what_is_no_longer_declared` — the `#158` sweep in
 `src/app/apply/schedules.rs` — asks the machine what schedules it holds and removes every one the
@@ -11355,21 +11356,33 @@ of them is now half-built:
    is already in the one place the OS hands back, and reading it needs no `/XML` move and no plist
    key.
 
-**What option 3 does not settle, and what the ruling is therefore about.** The root is written and
-never read: `TaskProvisioner::installed` returns names only. Reading it means the sweep classifies
-each task as *provably mine* (root equals this run's), *provably not mine* (another root), or
-*unidentified* (no flag — everything registered before `c7dd0b67`). The open question is what the
-third class may do: sweeping it keeps `#158` working on every machine that upgraded, and deleting
-it is exactly the damage #182 is about. Reporting it and leaving it registered retires the sweep
-for legacy tasks — safe, and it makes the feature silently not work on the machines that need it
-most.
+**The ruling, and what got built.** The owner's instruction was to fix `#182` by implementing
+option 3 and to decide the third class the way the recommendation above reads it. The root is
+now read back: `TaskProvisioner::installed_with_command` replaces `installed` for the sweep and
+carries each task's argv — systemd reads `ExecStart=`, launchd reads the `ProgramArguments`
+array, Windows queries each task's `/XML` (`command_from_xml`). `schedule_origin` answers
+`Ours` / `AnotherConfig` / `ForeignBinary` / `Unreadable`:
 
-**Recommendation, and it is not a ruling.** Read the root where it exists, refuse to remove a task
-that names another root, and for an unidentified task: remove it only when its binary path is this
-binary's, because that is the one thing about a legacy task that identifies its author — and
-`shall_bin_path` is already in the handed information. If that is wrong the cost is the `#158`
-class of bug on a pre-`0.9.0` task, which is a red sync at worst; if it is right, nothing is
-deleted that this config did not write.
+- **a recorded root must equal this run's root** — a root with no flag means the declaring run
+  used the OS default, so a task that forgot a flag is only ours if this run used that default
+  too. Anything else is `AnotherConfig` and is **never removed**, and the sweep names it and why,
+  every run;
+- **a task with no roots at all** (every task registered before `c7dd0b67`) is judged by the
+  binary it would fire: `Ours` when that is this very binary, `ForeignBinary` when it is not;
+- **a task whose line cannot be read** falls back to the store's own word: systemd's unit file
+  and launchd's plist with Shall's prefix in them certify authorship (the `#173` pin's shape),
+  and Task Scheduler — which has no file and answered nothing — does not.
+
+The sweep (`remove_what_is_no_longer_declared`) removes only `Ours`, through the same guard as
+before, and leaves everything else registered with a `warn!` naming the task and the reason —
+a sweep that silently skips is a sweep nobody can trust to have looked. The Windows `/TR` also
+gains the roots flags `#192` meant to write: the spec comparison carried them but the
+`/Create` line did not, the one renderer the original commit missed, so a non-default-root
+Windows task re-registered on every sync and never recorded which config declared it.
+
+**The cost the ruling knowingly accepts.** The binary gate errs toward the `#158` class of bug on
+a pre-`0.9.0` task (a foreign checkout at the *same path* is swept), which is a red sync at
+worst — nothing is deleted that provably lands inside this config's surface.
 
 ## C35
 
