@@ -1409,12 +1409,21 @@ jobs:
       # so violently that the suite stopped finishing) and it is visible in the artifact; a lost
       # runner is not a finding at all.
       #
+      # **`-j1`, because the runner says so in its own words.** Every lost-runner annotation in
+      # this leg reads *"The hosted runner lost communication with the server. Anything in your
+      # workflow that terminates the runner process, **starves it for CPU/Memory**, or blocks its
+      # net..."* — and that is what `-j2` was doing: two mutation workers, each building the crate
+      # and then running the whole 3,300-test nextest suite at nextest's default parallelism, on a
+      # four-core runner. The shard that failed at 54 and 61 minutes had two mutants in it and no
+      # log left behind; the shards that finished in 7 to 29 minutes had two as well. The
+      # difference was never the count.
+      #
       # `--no-fail-fast` was removed here on the theory that a mutant breaking two hundred tests
       # paid for two hundred. **The night refuted it**: the shard that died took 56 minutes
       # against 61 the night before. It stays removed — a caught mutant stopping at its first
       # failing test is what the leg wants — but it was never the fix, and this comment used to
       # say it was.
-      run: cargo mutants --no-shuffle -j2 --minimum-test-timeout 600 --timeout-multiplier 2 --test-tool nextest --file ${{ matrix.file }} --shard ${{ matrix.shard }} -- --retries 2
+      run: cargo mutants --no-shuffle -j1 --minimum-test-timeout 600 --timeout-multiplier 2 --test-tool nextest --file ${{ matrix.file }} --shard ${{ matrix.shard }} -- --retries 2
     # **What this condition does, and does not, buy — all three measured.**
     #
     # `!cancelled()` is what it was, and it *already* ran on a failing shard: `mutants-out-datalock`

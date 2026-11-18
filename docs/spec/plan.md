@@ -174,10 +174,18 @@ what blocks the next one.
     minutes against 61** the night before — no change. Per mutant it is a rebuild of `shall` and
     `suite` plus the whole suite under `-j2`, about **14 minutes**, and that is what sizes a shard.
 
-    **A lost or cancelled job is not a measurement, and it can happen at 11 minutes**, so no shard
-    size makes a night immune. What a smaller shard buys is a cheap re-run. Hence **`0/22` … `21/22`,
-    two mutants each** (43 = 21×2 + 1, no empty shard), with `gh run rerun <id> --failed` as the
-    operational answer when a shard is still lost: it costs the shard, not the night. Two corrections to what this paragraph first
+    **A lost or cancelled job is not a measurement**, and it can happen at 11 minutes. Hence
+    **`0/22` … `21/22`, two mutants each** (43 = 21×2 + 1, no empty shard), with
+    `gh run rerun <id> --failed` as the answer when a shard is still lost: it costs the shard, not
+    the night.
+
+    **Then the runner's own annotation gave the cause, and it was not the shard.** Every lost-runner
+    message in this leg reads *"…terminates the runner process, **starves it for CPU/Memory**, or
+    blocks its net…"*. `-j2` started two mutation workers, each building the crate and then running
+    the whole 3,300-test nextest suite at nextest's default parallelism — on a four-core runner. A
+    two-mutant shard failed at 54 and 61 minutes with no log; two-mutant shards also finished in 7
+    to 29. **`-j1`** is the fix: the leg is nightly, and a shard that reports is worth more than a
+    shard that runs twice as fast and leaves nothing behind. Two corrections to what this paragraph first
     said: the split is eight and not two, and
     **the artifact condition was never the gap.** `!cancelled()` already uploaded on a *failing*
     shard — `mutants-out-datalock` is in run `44006078594`, whose data-lock shard failed with five
