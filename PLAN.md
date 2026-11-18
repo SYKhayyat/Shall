@@ -249,7 +249,14 @@ installed without building from source.*
   the `link:` content modes, session protection on every platform — then the fixes under *what it no
   longer touches*, *what it says*, *the suite*, and the platform work. Not ticked as "shipped":
   the entry is written, the number is not released until the two boxes below are.
-- [ ] `scripts/release-check.sh` and `scripts/release-check.ps1` both green.
+- [x] `scripts/release-check.sh` and `scripts/release-check.ps1` both green. Both ran on `a27c8bbe`:
+  the `.sh` gave `=====> GO` with `5 mutants tested in 40m: 5 caught`, and the `.ps1` under pwsh gave
+  `=====> GO` with the same twelve `[PASS]`es (its native Windows sweep is CI- and owner's-laptop-only;
+  this host runs the hermetic half). The first `.ps1` run was red on a **flaky control**, not the tree:
+  `startup_budget_tests`'s control sized its injected delay from the best of three earlier processes
+  (9 ms) and judged it against a later process's own baseline (27.7 ms) — 12.5x against an 18x
+  threshold, with the delay genuinely spent, whenever a nightly collided with the check. Sizing from
+  the control's own pace fixes it (#198).
   - **Linux, `SKIP_DOCKER=1`, 2026-11-17: `=====> GO: every hard gate passed.`** — `cargo fmt`,
     `clippy`, **`cargo test --release`** (the release profile, 3283 tests, doc-tests included),
     `release build`, the decision register, `harness predicates: 113/113`, the harness mutation
@@ -262,7 +269,10 @@ installed without building from source.*
     owns it — and reported five survivors on a correct tree. Ran locally as the script now has it,
     `cargo mutants --no-shuffle --file src/core/exit.rs -- --test suite core::exit`:
     **`5 mutants tested in 18m: 5 caught`**.
-  - **Re-run on `3956b1d1`, the commit with every fix from this session in it: `=====> GO: every
+  - **Re-run on `a27c8bbe` (the session's last code change): `=====> GO: every hard gate passed.`**,
+    with `5 mutants tested in 40m: 5 caught` — the mutation step running long because it shared the
+    box with a second release check, and answering anyway.
+  - **Re-run on `3956b1d1`: `=====> GO: every
     hard gate passed.`** Twelve `[PASS]`, four `[INFO]` and no surprises — `cargo fmt`, `clippy`,
     `cargo test --release`, the release build, `cargo deny` (with #193's recorded decision),
     **the decision register** (274 entries, 3 open), `harness predicates`, both harness mutation
