@@ -280,8 +280,17 @@ fn specs_for(specs: &[PackageSpec], lo: usize, hi: usize) -> &[PackageSpec] {
 /// does not terminate. Returning `Option` rather than a number makes "there is no way to split
 /// this" a case the caller has to answer, instead of arithmetic nobody re-checks.
 pub fn midpoint(lo: usize, hi: usize) -> Option<usize> {
-    let mid = lo + (hi - lo) / 2;
-    (mid > lo && mid < hi).then_some(mid)
+    // Written as "a length, then a refusal, then the offset" rather than as a midpoint with two
+    // bounds checked on it. The bounds form had a comparison against `hi` that nothing could make
+    // false for a correct `(hi - lo) / 2`, so the shard reported it as a survivor and it was
+    // neither a gap in the tests nor a real one in the code - equivalent, and an equivalent
+    // survivor teaches people to read past the list. One comparison here, and it is the one the
+    // tests can hold.
+    let len = hi - lo;
+    if len < 2 {
+        return None;
+    }
+    Some(lo + len / 2)
 }
 
 /// Ask the manager again in pieces, and work out which members were actually the problem.

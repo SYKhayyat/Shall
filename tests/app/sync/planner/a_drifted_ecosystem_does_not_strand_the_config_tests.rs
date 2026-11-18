@@ -324,6 +324,78 @@ async fn each_member_inherits_the_error_of_the_half_it_was_in() {
     }
 }
 
+/// **A failed half that holds one member is that member's error, recorded rather than asked
+/// again — and the verdict is the only place that shows.**
+///
+/// The guard is `b - a == 1`: pushing a single-member half would send the identical command again
+/// to learn what this attempt just said. The mutation shard replaced the guard with `false` and
+/// replaced its `-` with `+`, and **both survived**, because neither mutant adds a command: with
+/// the split point refusing to split one member, a pushed single-member range ends at *"narrowing
+/// could not separate"* instead of being asked. Every test above reads the command log, so the log
+/// stayed the same and the run reported two survivors that were one real gap apiece.
+///
+/// So this reads the verdict, in both directions — the failing member in the left half and in the
+/// right half, because the `b + a` mutant only breaks the second one.
+#[tokio::test]
+async fn a_single_failing_member_keeps_its_own_error() {
+    for (bad, where_it_was) in [("a", "the left half"), ("b", "the right half")] {
+        let kernel = TestKernel::new().await;
+        let backend = RecordingBackend::named(DRIFTED, &shared_log())
+            .always_flaky(bad)
+            .build();
+
+        let mut registry = BackendRegistry::new();
+        registry.register(capabilities(&backend));
+        let mut graph = StableDiGraph::new();
+        for name in ["a", "b"] {
+            graph.add_node(install(name, DRIFTED));
+        }
+        let mut tx = Transaction::with_config(
+            graph,
+            Arc::new(registry),
+            kernel.app.journal.clone(),
+            kernel.app.diagnostics.clone(),
+            kernel.app.config.clone(),
+            quartet(BatchRecovery::Bisect),
+        );
+        let results = tx.execute_with_telemetry().await.unwrap_or_default();
+
+        let by_member: std::collections::HashMap<String, Option<String>> = results
+            .iter()
+            .map(|r| {
+                (
+                    r.package_name.clone(),
+                    r.result.as_ref().err().map(|e| e.to_string()),
+                )
+            })
+            .collect();
+
+        let got = by_member
+            .get(bad)
+            .and_then(|v| v.clone())
+            .unwrap_or_else(|| {
+                panic!(
+                    "`{bad}` was in {where_it_was} and failed; the batch had \
+                nothing else wrong with it, so it must have a verdict: {by_member:?}"
+                )
+            });
+        assert!(
+            got.contains(&format!("index for {bad}")),
+            "`{bad}` came back with something other than the manager's own error. A half of one \
+             member has no smaller list to ask about, so a verdict that talks about separating \
+             ranges means the member's error was thrown away and the reader is pointed at the \
+             narrowing instead of the package: {got}"
+        );
+
+        let other = if bad == "a" { "b" } else { "a" };
+        assert_eq!(
+            by_member.get(other).and_then(|v| v.clone()),
+            None,
+            "`{other}` was never named by the manager's failure, so it must come back installed"
+        );
+    }
+}
+
 /// `off` is the behaviour every run had before `M3`, kept as a setting for anyone who measures
 /// the narrowing costing them more than it returns.
 #[tokio::test]
