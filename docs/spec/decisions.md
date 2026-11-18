@@ -1,5 +1,5 @@
-﻿# The decision register — 274 entries, three open
-**One file, six features, four questions waiting on the owner.** Every decision this design forces
+﻿# The decision register — 275 entries, four open
+**One file, six features, five questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
 whether they had been answered**, so the same question could be argued twice and a question
@@ -22,7 +22,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | status | means | what it needs | count |
 |---|---|---|---|
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
-| **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **3** |
+| **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **4** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
 | **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **266** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 274 are accounted
-for: **266 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 3 OPEN** — and this line
+is waiting now. All 275 are accounted
+for: **266 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 4 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay, and whether a policy decline is a failure, and which half of a setting waits for a person, and what an invariant is and how it is measured, and what an export owes a line it cannot express, and what a config file must be to be evidence of a decision, and whether an advisory lint count is a gate or a report, and what a platform policy owes a capability that could live on more than one OS, whether one config may retire another's schedule, what `heal` owes the model, and whether subtraction is an output class) — 36
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay, and whether a policy decline is a failure, and which half of a setting waits for a person, and what an invariant is and how it is measured, and what an export owes a line it cannot express, and what a config file must be to be evidence of a decision, and whether an advisory lint count is a gate or a report, and what a platform policy owes a capability that could live on more than one OS, whether one config may retire another's schedule, what `heal` owes the model, whether subtraction is an output class, and what a `Step` is to a renderer) — 37
 
 | | question | answered |
 |---|---|---|
@@ -555,6 +555,7 @@ deliberately no longer has.*
 | **C34** | `#182` asked what the `#158` schedule sweep may remove on a machine with two configs: `installed()` answers with every `shall-*` task the machine holds, and the sweep removes all the running config does not declare, so `sync` in one config deletes another's schedules. **May one config's `sync` retire a schedule another config registered, and what may it do with a task it cannot identify?** — OPEN 2026-11-17: three resolutions, and `#192` has since built a third of one (every task now carries `--config-dir`), but nothing reads it back — `TaskProvisioner::installed` returns names only. The ruling has to say what happens to a task with no marker, which is every task registered before `c7dd0b67`: sweeping it keeps `#158` working for upgraders, and not sweeping it retires the feature exactly where it is needed. (II.97, V.251) | 2026-11-17 |
 | **C35** | `#188` / `#166`'s audit (F1): `heal` is the one command whose primary job is to change the machine in ways no declaration asked for — a manager's wedged lock file, a WAL-resumed transaction, the three repairs that were `doctor --fix` — and nothing in `P1`, `ARCHITECTURE.md`'s pipeline or the model says so. **Does the model carry `heal` as a written exception, does `history` record the repair, or does `heal` get split from a read-only diagnosis?** — OPEN 2026-11-17: three options with different costs; (1) and (2) are not alternatives, because one makes the model true and the other is what a person needs at 03:00, and (3) is `U9`'s move made once already. (VI.12) | 2026-11-17 |
 | **C36** | `#189` / `#166`'s audit (F2): `purge-undeclared` reads the file and the machine, writes the machine, writes no file — output by the mechanical test, but convergence by *subtraction*, and the model has no word for it. Its cost was visible: the most destructive command in the binary was not on the list of commands needing a close look. **Is "make the machine equal the file" one output class with `purge-undeclared` as its strong form, or is subtraction a second output kind with its own statement of what the guard owes it?** — OPEN 2026-11-17: the classification is now complete and checked (`1b95e419`), so the remaining question is naming and the guard's obligation, which is a ruling rather than a reading. (VI.13) | 2026-11-17 |
+| **C37** | `#167` (split out of `#67`): `export --format ansible` and `--format nix` do not exist, and cannot be two more arms of `Script::render` because `Step` has one variant, `Command { program, args }` — every step the exporter can produce resolves through an argv builder. An Ansible task and a NixOS attribute are not projections of a command line: `ansible.builtin.command: apt install -y ripgrep` wears a playbook's syntax and gives up the one thing a Nix expression is for, being *declared* rather than executed. **Does the exporter wait for `#166`'s ruling and render every format from a richer `Step` (package/service/link/setting), or does it ship now as honest command sequences — an Ansible `command` task list and a Nix activation script rather than a module?** — OPEN 2026-11-18: route 1 is no work and no output, route 2 is small and non-idiomatic, and the two are not stages of one answer: (2) decides by shipping what (1) would replace. (VIII.?) | 2026-11-18 |
 # The blocking round — thirteen questions, all ruled
 
 *These could not be built around: two reasonable implementations differed. Ruled 2026-07-23/24.*
@@ -11446,3 +11447,35 @@ the audit missing seven commands, holding three rows in two classes and naming t
 binary does not have, all fixed in `1b95e419`. What that test cannot say is *which* class
 `purge-undeclared` belongs in — that is the question above, and it is a ruling, not a reading.
 
+## C37
+
+**Status: OPEN — waits on a ruling from the owner.** Whether the exporter waits for `#166`'s
+input → file → output ruling and renders ansible/nix from a richer step shape, or ships now as
+honest command sequences. Carried out of `#167`, which was split out of `#67`.
+
+**Asked.** `shall export --from-declaration --format ansible` and `--format nix` do not exist.
+`#67` shipped the bash half, and the two formats left over are not a renderer each. `Step` has
+one variant — `Command { program, args }` — and `Script::render` matches `Format::Bash` alone,
+because every declaration the exporter can express resolves through an argv builder
+(`planned_installs`, and `planned_removals` which `#67` added).
+
+**Why it is not two more `format!` calls.** A bash renderer is a faithful projection of a command
+line onto a line of shell. An Ansible task and a NixOS attribute are not projections: `apt: ripgrep`
+is `ansible.builtin.apt: name=ripgrep state=present`, and in Nix it is `environment.systemPackages`,
+a *set* of packages rather than a command. Rendered from `Command`, both become a command sequence
+wearing a declarative format's syntax — `ansible.builtin.command: apt install -y ripgrep` — which is
+the "looks authoritative and disagrees with the tool" failure `src/app/bootstrap.rs`'s own header
+names. It also gives up the one thing a Nix expression is for: being declared rather than executed.
+
+**The two routes, and they are not stages of one answer.** (1) Wait for `#166`: let the ruling say
+what the intermediate representation is, then render every format from it. No work now, no output
+now. (2) Keep `Step::Command` and add the two formats as command sequences — `ansible.builtin.command`
+tasks, and a Nix *activation script* rather than a module. Small and honest, non-idiomatic, and
+decided by shipping what route 1 would then have to replace. `CLAUDE.md` is explicit that the second
+direction is a restructure of the input → file → output surface and is not to be done without a
+ruling, which is why this is here rather than in the code.
+
+**The resolving test either route needs** (from the issue, for route 2): a declaration of `apt:jq`
+exports an Ansible playbook that `ansible-playbook --syntax-check` accepts, and a Nix expression that
+`nix-instantiate --parse` accepts — the parser harness already exists, since `scripts/nix-validate.sh`
+is pointed at generated Nix today.
