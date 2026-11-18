@@ -213,8 +213,9 @@ what blocks the next one.
     is a superset — it covers a *run* cancelled while the runner is alive, which is unproven here
     — but the real fix for both dead cases is that the leg has to finish inside what a runner
     survives, which is what the sharding does.
-    is now on the trigger; the tag itself is still the owner's to push, and `readme.md` says so
-    at the install command until it happens.
+    And the trigger story is the release job's other half: **`tags: [ 'v*' ]` is now on the
+    trigger**, so a tag push actually starts the workflow, and the tag itself is still the owner's
+    to push — `readme.md` says so at the install command until it happens.
 0f. **macOS is exercised nightly, and four things on it are still unproven.** *(Corrected
     2026-11-08: this line said the platform had never been exercised at all, which was true when
     it was written and had been false for months — the job has run every night since 2026-07-26 and is
