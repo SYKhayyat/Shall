@@ -765,6 +765,14 @@ for _src in $SOURCES; do
         # bookkeeping this test does not measure — so it is a no-op here rather than a call
         # into a section file this test has no reason to keep.
         _credit_section() { :; }
+        # **`excerpt` is asked by the body when it reports a failure, and nothing stubbed it.**
+        # `install_delivered` prints the listing it saw so a FAIL carries its evidence; the
+        # section that owns `excerpt` is not sourced here, so the call became `command not found`
+        # — three times, once per failing case, printed between the FAIL line and the evidence it
+        # was reporting. The cases still scored correctly (the defect is a missing excerpt, not a
+        # missing verdict), which is exactly why it went unnoticed: the run stayed green and the
+        # output read as a failure the harness had produced.
+        excerpt() { :; }
         # Both stubs are lifted too: the point is that `install_delivered` asks them, and a stub
         # here that the real body does not call would make this test pass for the wrong reason.
         _ok="$(lift grep_ok "$_src")"
