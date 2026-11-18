@@ -244,6 +244,13 @@ installed without building from source.*
     owns it — and reported five survivors on a correct tree. Ran locally as the script now has it,
     `cargo mutants --no-shuffle --file src/core/exit.rs -- --test suite core::exit`:
     **`5 mutants tested in 18m: 5 caught`**.
+  - **Re-run on `3956b1d1`, the commit with every fix from this session in it: `=====> GO: every
+    hard gate passed.`** Twelve `[PASS]`, four `[INFO]` and no surprises — `cargo fmt`, `clippy`,
+    `cargo test --release`, the release build, `cargo deny` (with #193's recorded decision),
+    **the decision register** (274 entries, 3 open), `harness predicates`, both harness mutation
+    budgets, and **the mutation step catching 5 of 5**, which is the step that was reporting
+    survivors on a correct tree before `956e4fba`. The four `[INFO]`s are the docker daemon
+    (unavailable on this host), shellcheck and rustup 1.89 (not installed here), all said-so.
   - **The doc-test failure in the first run was this machine, not the tree.** `cargo test
     --release` reported `E0514: found crate 'tracing' compiled by an incompatible version of
     rustc`: the rustup toolchain's `rustdoc` was unpatched for this NixOS host and fell back to
