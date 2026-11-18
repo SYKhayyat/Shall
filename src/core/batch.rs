@@ -272,6 +272,18 @@ fn specs_for(specs: &[PackageSpec], lo: usize, hi: usize) -> &[PackageSpec] {
     &specs[lo.min(end)..end]
 }
 
+/// The split point of `lo..hi`, or `None` when the range holds fewer than two members.
+///
+/// **The halves have to be smaller than the range they came from.** A mid that equals either end
+/// splits a range into itself, so the worklist in [`narrow_batch`] would never empty and the
+/// narrowing would issue manager commands without end — the one failure in that function that
+/// does not terminate. Returning `Option` rather than a number makes "there is no way to split
+/// this" a case the caller has to answer, instead of arithmetic nobody re-checks.
+pub fn midpoint(lo: usize, hi: usize) -> Option<usize> {
+    let mid = lo + (hi - lo) / 2;
+    (mid > lo && mid < hi).then_some(mid)
+}
+
 /// Ask the manager again in pieces, and work out which members were actually the problem.
 ///
 /// Returns one verdict per position, in the order the caller handed them over.
@@ -357,8 +369,29 @@ pub async fn narrow_batch(
     // survivor for exactly that reason - an equivalent mutant is what unreachable code looks
     // like from the outside.
     let mut work: Vec<(usize, usize)> = vec![(0, n)];
+    // **A range that cannot be split must end the narrowing, not repeat it.** `midpoint` returns
+    // `None` rather than a number at either end, so the halves below are always smaller than the
+    // range they came from and the worklist empties - which is what `tests/core/batch/
+    // the_split_point_is_always_inside_the_range.rs` pins. Getting here means the split point
+    // could not separate anything, and repeating the same command forever is the one failure in
+    // this function that does not end: the night of 2026-11-17 lost the shard holding the `+` and
+    // `/` mutants at the split three runs in a row, each at eleven minutes, because the narrowing
+    // issued manager commands without end until the runner was killed for starvation (#190). The
+    // members it cannot classify are reported as what they are - not classified - and the caller
+    // keeps every answer it already has.
     while let Some((lo, hi)) = work.pop() {
-        let mid = lo + (hi - lo) / 2;
+        let Some(mid) = midpoint(lo, hi) else {
+            let why = Error::Other(format!(
+                "narrowing could not separate {lo}..{hi} of {n}; the batch was left as the \
+                 manager answered it rather than asked again without end"
+            ));
+            for item in verdict.iter_mut().take(hi.min(n)).skip(lo) {
+                if item.is_none() {
+                    *item = Some(Err(why.clone()));
+                }
+            }
+            continue;
+        };
         let left = err_of(ask(lo, mid).await);
         let right = err_of(ask(mid, hi).await);
 
