@@ -77,8 +77,15 @@ fn the_mutation_gate_retries_a_failed_test_before_crediting_a_catch() {
     );
 
     // And the whole command must still be the one the job is about: the file, the shard, and
-    // the two jobs at a time.
-    assert!(job.contains("cargo mutants --no-shuffle -j2"));
+    // **one** job at a time. It was `-j2`, and two mutation workers on a four-core runner is
+    // what the runner's own annotation named on its way out: *"Anything in your workflow that
+    // terminates the runner process, starves it for CPU/Memory, or blocks its net…"*. A shard
+    // with two mutants failed at 54 and 61 minutes with no log; shards with two mutants also
+    // finished in 7. The parallelism, not the count, was the difference (#190).
+    assert!(
+        job.contains("cargo mutants --no-shuffle -j1"),
+        "the mutation job runs one mutant at a time, so that a build and a full suite are the          only load on the runner:\n{job}"
+    );
     assert!(job.contains("--file ${{ matrix.file }} --shard ${{ matrix.shard }}"));
 
     // **The ceiling must clear one contended suite, not exactly scale with a solo one.** The
