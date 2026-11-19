@@ -12,7 +12,7 @@
 //! deleted in the same commit, and the gate reds if it was not.
 //!
 //! **The one exemption is a row naming an issue.** `Transaction::execute_batch_with_retry` is
-//! #199's job, so its allow names `#199`; the other four name `#205`.
+//! #199's job, so its allow names `#199`; the other three name `#205`.
 
 use std::path::Path;
 
@@ -25,7 +25,6 @@ const ALLOWED_FOR_NOW: &[(&str, &str, &str)] = &[
     ),
     ("src/app/sync/mod.rs", "heal", "#205"),
     ("src/backends/github.rs", "install", "#205"),
-    ("src/verbs/check.rs", "check_summary", "#205"),
     ("src/main.rs", "dispatch", "#205"),
 ];
 

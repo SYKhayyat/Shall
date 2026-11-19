@@ -436,7 +436,6 @@ async fn probe_all_health(app: &App) -> Vec<(String, crate::core::HealthReport)>
     reports
 }
 
-#[allow(clippy::too_many_lines)]
 pub async fn check_summary(app: &App, out: Output) -> Result<()> {
     use crate::app::check::{Finding, Section};
 
@@ -484,129 +483,7 @@ pub async fn check_summary(app: &App, out: Output) -> Result<()> {
     };
 
     if let Some(state) = state.as_ref() {
-        // drift — what a sync would change.
-        let hosts = app.resolver().await.host_backends().await;
-        let changes = {
-            let guard = app.state.lock().await;
-            crate::app::sync::planner::ChangePlanner::new(app.registry.clone(), &guard, &app.config)
-                .plan(&state.packages, PlanScope::Whole(hosts))
-                .await
-        };
-        // N-2: the model is packages *and* resources. Asking only the package planner is how
-        // `check` came to report that the machine matched while a declared `link:` was not on
-        // disk — and again after one Shall had placed was deleted behind its back.
-        let resources = app.extras().changes(state).await;
-        match (changes, resources) {
-            // **One row, built by appending what is true.**
-            //
-            // These used to be three alternative arms elected by a `match`, and the skip arm
-            // came first — so a machine with one skipped declaration and any amount of real
-            // pending work reported the skip and nothing else. A declared `link:` missing from
-            // disk vanished from the human line *and* from the JSON, because `place`/`undo` had
-            // no key in `counts` and lived only inside the summary sentence that arm replaced.
-            //
-            // A summary assembled by appending cannot lose a fact by gaining one. That is the
-            // rule this arm now enforces, and the reason every quantity the prose can mention
-            // has a key beside it.
-            (Ok(c), Ok(r)) => {
-                // Zeroes, spelled out, on every arm. A consumer that has to treat "the key is
-                // absent" and "the count is nought" as the same thing will one day be handed a
-                // real absence and call the machine converged. `place` and `undo` are here
-                // because a number that exists only inside an English sentence is not
-                // machine-readable however the document is encoded.
-                use crate::app::sync::planner::SkipKind;
-                let of_kind = |k: SkipKind| c.skipped.iter().filter(|s| s.kind == k).count();
-                let counts = [
-                    ("install", c.total_install()),
-                    ("remove", c.total_remove()),
-                    ("place", r.place.len()),
-                    ("undo", r.undo.len()),
-                    ("skipped", c.skipped.len()),
-                    // The two kinds separately, because they are opposite facts and a consumer
-                    // summing them is reading one number over two questions.
-                    ("skipped_removals", of_kind(SkipKind::RemovalDeclined)),
-                    ("skipped_installs", of_kind(SkipKind::InstallSkipped)),
-                    // Counted apart from the one above because a consumer summing them is
-                    // reading one number over two questions: the manager is missing, or the
-                    // manager could not be asked. The first is fixed by installing it; the
-                    // second by the manager answering.
-                    ("skipped_unanswered", of_kind(SkipKind::CouldNotAsk)),
-                    ("unverifiable", r.unverifiable.len()),
-                ];
-
-                let mut clauses: Vec<String> = Vec::new();
-                if !c.is_empty() || !r.is_empty() {
-                    clauses.push(format!(
-                        "{} to install, {} to remove, {}",
-                        c.total_install(),
-                        c.total_remove(),
-                        r.summary()
-                    ));
-                }
-                // A skip is drift the planner declined to act on, so it belongs here and not in
-                // a clean bill of health: `check` reported `the machine matches your files`
-                // about a machine holding a managed, undeclared, protected package (AU1).
-                //
-                // One clause per *kind*, for the same reason: a declined removal and a
-                // declaration this machine cannot act on are opposites, and this row used to
-                // call both of them "installed and declared nowhere".
-                for (kind, rows) in crate::app::sync::planner::Skipped::by_kind(&c.skipped) {
-                    clauses.push(format!(
-                        "{}: {}",
-                        kind.heading(rows.len()),
-                        rows.iter()
-                            .map(|s| format!("{} ({})", s.key, s.reason))
-                            .collect::<Vec<_>>()
-                            .join("; ")
-                    ));
-                }
-                // **`ok` is the word that made this invisible.** This clause has always been
-                // scrupulously honest — Shall says it cannot read these back, and names them —
-                // and it was filed under the one marker that means "nothing to see", which is
-                // also the marker that decides the exit code. A dotfile that no program could
-                // open printed as a green row and exited 0, repeatedly (B0b).
-                //
-                // Absence and unavailability are different answers and only one of them is
-                // knowable: that rule is the reason this codebase distinguishes them at all,
-                // and reporting the unknowable one under the marker for the good answer throws
-                // the distinction away at the last step.
-                if !r.unverifiable.is_empty() {
-                    let lead = if clauses.is_empty() {
-                        "the packages and every resource Shall can read back match your files; "
-                    } else {
-                        ""
-                    };
-                    clauses.push(format!(
-                        "{}{} resource(s) it cannot read back ({})",
-                        lead,
-                        r.unverifiable.len(),
-                        r.unverifiable.join(", ")
-                    ));
-                }
-
-                let finding = if clauses.is_empty() {
-                    Finding::ok(Section::Drift, "the machine matches your files")
-                } else {
-                    // `sync` is the command for pending work; `shall protected` only when the
-                    // *only* thing to report is a decision `sync` will not act on, because
-                    // sending a user to the guard to explain an install they are waiting for
-                    // answers a question they did not ask.
-                    let advice = if c.is_empty() && r.is_empty() && !c.skipped.is_empty() {
-                        "shall protected"
-                    } else {
-                        "shall sync"
-                    };
-                    Finding::attention(Section::Drift, clauses.join("; "), advice)
-                };
-                findings.push(finding.counting(counts));
-            }
-            (Err(e), _) | (_, Err(e)) => findings.push(Finding::attention(
-                Section::Drift,
-                format!("could not be planned — {}", e),
-                "shall check drift",
-            )),
-        }
-
+        findings.push(drift_finding(app, state).await);
         // absent — declarations that are in force.
         let absent = state.absent().count();
         findings.push(
@@ -765,6 +642,139 @@ pub async fn check_summary(app: &App, out: Output) -> Result<()> {
         findings.push(crate::app::durability::finding(&answers));
     }
 
+    emit_findings(&findings, out)
+}
+
+async fn drift_finding(
+    app: &App,
+    state: &crate::model::resolve::DesiredState,
+) -> crate::app::check::Finding {
+    use crate::app::check::{Finding, Section};
+    // drift — what a sync would change.
+    let hosts = app.resolver().await.host_backends().await;
+    let changes = {
+        let guard = app.state.lock().await;
+        crate::app::sync::planner::ChangePlanner::new(app.registry.clone(), &guard, &app.config)
+            .plan(&state.packages, PlanScope::Whole(hosts))
+            .await
+    };
+    // N-2: the model is packages *and* resources. Asking only the package planner is how
+    // `check` came to report that the machine matched while a declared `link:` was not on
+    // disk — and again after one Shall had placed was deleted behind its back.
+    let resources = app.extras().changes(state).await;
+    match (changes, resources) {
+        // **One row, built by appending what is true.**
+        //
+        // These used to be three alternative arms elected by a `match`, and the skip arm
+        // came first — so a machine with one skipped declaration and any amount of real
+        // pending work reported the skip and nothing else. A declared `link:` missing from
+        // disk vanished from the human line *and* from the JSON, because `place`/`undo` had
+        // no key in `counts` and lived only inside the summary sentence that arm replaced.
+        //
+        // A summary assembled by appending cannot lose a fact by gaining one. That is the
+        // rule this arm now enforces, and the reason every quantity the prose can mention
+        // has a key beside it.
+        (Ok(c), Ok(r)) => {
+            // Zeroes, spelled out, on every arm. A consumer that has to treat "the key is
+            // absent" and "the count is nought" as the same thing will one day be handed a
+            // real absence and call the machine converged. `place` and `undo` are here
+            // because a number that exists only inside an English sentence is not
+            // machine-readable however the document is encoded.
+            use crate::app::sync::planner::SkipKind;
+            let of_kind = |k: SkipKind| c.skipped.iter().filter(|s| s.kind == k).count();
+            let counts = [
+                ("install", c.total_install()),
+                ("remove", c.total_remove()),
+                ("place", r.place.len()),
+                ("undo", r.undo.len()),
+                ("skipped", c.skipped.len()),
+                // The two kinds separately, because they are opposite facts and a consumer
+                // summing them is reading one number over two questions.
+                ("skipped_removals", of_kind(SkipKind::RemovalDeclined)),
+                ("skipped_installs", of_kind(SkipKind::InstallSkipped)),
+                // Counted apart from the one above because a consumer summing them is
+                // reading one number over two questions: the manager is missing, or the
+                // manager could not be asked. The first is fixed by installing it; the
+                // second by the manager answering.
+                ("skipped_unanswered", of_kind(SkipKind::CouldNotAsk)),
+                ("unverifiable", r.unverifiable.len()),
+            ];
+
+            let mut clauses: Vec<String> = Vec::new();
+            if !c.is_empty() || !r.is_empty() {
+                clauses.push(format!(
+                    "{} to install, {} to remove, {}",
+                    c.total_install(),
+                    c.total_remove(),
+                    r.summary()
+                ));
+            }
+            // A skip is drift the planner declined to act on, so it belongs here and not in
+            // a clean bill of health: `check` reported `the machine matches your files`
+            // about a machine holding a managed, undeclared, protected package (AU1).
+            //
+            // One clause per *kind*, for the same reason: a declined removal and a
+            // declaration this machine cannot act on are opposites, and this row used to
+            // call both of them "installed and declared nowhere".
+            for (kind, rows) in crate::app::sync::planner::Skipped::by_kind(&c.skipped) {
+                clauses.push(format!(
+                    "{}: {}",
+                    kind.heading(rows.len()),
+                    rows.iter()
+                        .map(|s| format!("{} ({})", s.key, s.reason))
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                ));
+            }
+            // **`ok` is the word that made this invisible.** This clause has always been
+            // scrupulously honest — Shall says it cannot read these back, and names them —
+            // and it was filed under the one marker that means "nothing to see", which is
+            // also the marker that decides the exit code. A dotfile that no program could
+            // open printed as a green row and exited 0, repeatedly (B0b).
+            //
+            // Absence and unavailability are different answers and only one of them is
+            // knowable: that rule is the reason this codebase distinguishes them at all,
+            // and reporting the unknowable one under the marker for the good answer throws
+            // the distinction away at the last step.
+            if !r.unverifiable.is_empty() {
+                let lead = if clauses.is_empty() {
+                    "the packages and every resource Shall can read back match your files; "
+                } else {
+                    ""
+                };
+                clauses.push(format!(
+                    "{}{} resource(s) it cannot read back ({})",
+                    lead,
+                    r.unverifiable.len(),
+                    r.unverifiable.join(", ")
+                ));
+            }
+
+            let finding = if clauses.is_empty() {
+                Finding::ok(Section::Drift, "the machine matches your files")
+            } else {
+                // `sync` is the command for pending work; `shall protected` only when the
+                // *only* thing to report is a decision `sync` will not act on, because
+                // sending a user to the guard to explain an install they are waiting for
+                // answers a question they did not ask.
+                let advice = if c.is_empty() && r.is_empty() && !c.skipped.is_empty() {
+                    "shall protected"
+                } else {
+                    "shall sync"
+                };
+                Finding::attention(Section::Drift, clauses.join("; "), advice)
+            };
+            finding.counting(counts)
+        }
+        (Err(e), _) | (_, Err(e)) => Finding::attention(
+            Section::Drift,
+            format!("could not be planned — {}", e),
+            "shall check drift",
+        ),
+    }
+}
+
+fn emit_findings(findings: &[crate::app::check::Finding], out: Output) -> Result<()> {
     if out.is_json() {
         let rows: Vec<_> = findings
             .iter()
@@ -786,8 +796,7 @@ pub async fn check_summary(app: &App, out: Output) -> Result<()> {
         );
         return Ok(());
     }
-
-    for f in &findings {
+    for f in findings {
         println!("{}", f.line());
     }
     if findings.iter().all(|f| f.ok) {
