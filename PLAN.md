@@ -61,6 +61,11 @@ question, so no responsibility moved across a module boundary.
   `validate_backend_options` split into one function per option family, called in the order the
   refusals have to be asked.
 
+- [ ] **#206** `scripts/panic-inventory.sh` enumerates with `git ls-files`, which answers *tracked*
+  files only — so a mid-refactor tree with untracked new files counts short and the gate reds on a
+  correct tree. Found while the six splits above were being committed; the fix is the
+  `--others --exclude-standard` half of the same command.
+
 **What the split cost the audits, and why that is the useful part.** Nine review gates name a
 file and look inside it, and six of them went red the moment the code moved — the WAL ledger, the
 removal-guard ledger, the spawn-ownership ledger, the semaphore owners, the panic inventory's
