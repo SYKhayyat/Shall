@@ -61,10 +61,13 @@ question, so no responsibility moved across a module boundary.
   `validate_backend_options` split into one function per option family, called in the order the
   refusals have to be asked.
 
-- [ ] **#206** `scripts/panic-inventory.sh` enumerates with `git ls-files`, which answers *tracked*
-  files only — so a mid-refactor tree with untracked new files counts short and the gate reds on a
-  correct tree. Found while the six splits above were being committed; the fix is the
-  `--others --exclude-standard` half of the same command.
+- [x] **#206** `scripts/panic-inventory.sh` enumerated with `git ls-files`, which answers *tracked*
+  files only — so a mid-refactor tree with untracked new files counted short and the gate red on a
+  correct tree. Found while the six splits above were being committed. The fix is `--cached
+  --others --exclude-standard`: the index is still asked for the one thing it is good for
+  (`.gitignore`), which is why the answer is not `find`. The script's two halves had disagreed
+  about the same list — `find`, taken in the mutation sandbox with no `.git`, always counted the
+  new file — and the test now pins both halves against a scratch repository.
 
 **What the split cost the audits, and why that is the useful part.** Nine review gates name a
 file and look inside it, and six of them went red the moment the code moved — the WAL ledger, the

@@ -25,12 +25,17 @@ cd "$REPO_ROOT" || { echo "cannot cd to repo root"; exit 2; }
 # copies the tree into a sandbox with no `.git` — so the script found zero files, printed
 # "no sites", and the *baseline* of every mutation shard failed. Thirteen shards answered
 # nothing for six hours a night, and the red said "mutation survivors" when there were none
-# (`#179`). `find` and `git ls-files` were verified to produce the identical 242 files and the
-# same count on a clean tree; git is used when it is there because it excludes untracked
-# scratch files, and `src/` has no ignored `.rs` file either way.
+# (`#179`).
+#
+# **And it must not require the index.** `git ls-files` without `--others` answers what is
+# staged, so a module written but not yet `git add`ed was invisible — which is the state the
+# tree is in for the whole of a refactor, the one time this count is worth reading (`#206`).
+# The two halves disagreed about the same list: `find`, taken when there is no `.git`, always
+# counted it. `--cached --others --exclude-standard` is the union of both, so the index is still
+# asked for its one real contribution — the `.gitignore` rule that keeps a scratch tree out.
 rs_files() {
     if git rev-parse --git-dir >/dev/null 2>&1; then
-        git ls-files 'src/*.rs' 'src/**/*.rs' 2>/dev/null | sort -u
+        git ls-files --cached --others --exclude-standard 'src/*.rs' 'src/**/*.rs' 2>/dev/null | sort -u
     else
         find src -name '*.rs' -type f 2>/dev/null | sort
     fi

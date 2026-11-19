@@ -170,6 +170,92 @@ fn the_test_sites_are_excluded_from_the_production_count() {
     );
 }
 
+/// **#206: an unstaged file is still part of the tree the inventory claims to describe.**
+///
+/// `git ls-files` alone answers the *index*, so a tree mid-refactor — the one time anybody cares
+/// what the panic surface looks like — counted short by however many modules were not staged yet.
+/// The `find` branch, taken when there is no `.git` at all, never had this bug, so the script's two
+/// halves disagreed about the same list: the classic shape of a fix applied in one of the two
+/// places that compute the same value.
+///
+/// The index is still worth asking, for exactly one thing: `.gitignore`. So this asserts both
+/// halves against a scratch repository — two sites counted, the ignored one not — because "stop
+/// using git" and "stop using the index" are different changes and only one of them is right.
+#[test]
+fn the_inventory_counts_untracked_files_and_still_ignores_ignored_ones() {
+    let scratch = std::env::temp_dir().join(format!(
+        "shall-panic-inventory-untracked-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&scratch);
+    std::fs::create_dir_all(scratch.join("scripts")).expect("a scratch scripts dir");
+    std::fs::create_dir_all(scratch.join("src")).expect("a scratch src dir");
+    std::fs::copy(
+        repo().join("scripts/panic-inventory.sh"),
+        scratch.join("scripts/panic-inventory.sh"),
+    )
+    .expect("the script copies");
+
+    // One site per file, no `cfg(test)` marker, so the expected count is the number of files the
+    // enumeration admits and nothing about the classifier.
+    let site = "pub fn f() -> u8 {\n    let x: Option<u8> = None;\n    x.unwrap()\n}\n";
+    for name in ["tracked.rs", "untracked.rs", "ignored.rs"] {
+        std::fs::write(scratch.join("src").join(name), site).expect("a source file");
+    }
+    std::fs::write(scratch.join(".gitignore"), "src/ignored.rs\n").expect("a gitignore");
+
+    let git = |args: &[&str]| {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(&scratch)
+            .output()
+            .expect("git runs");
+        assert!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(&["init", "-q"]);
+    // Staged, not committed: the index is all `git ls-files` reads, and leaving the other two
+    // files out of it is the state a refactor passes through on every new module.
+    git(&["add", "src/tracked.rs", ".gitignore"]);
+
+    let out = Command::new(super::bash())
+        .arg(scratch.join("scripts/panic-inventory.sh"))
+        .arg("--summary")
+        .current_dir(&scratch)
+        .output()
+        .expect("the inventory script runs");
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    let counted: usize = stdout
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("production panic sites: "))
+        .and_then(|n| n.parse().ok())
+        .unwrap_or_else(|| panic!("the inventory printed no count:\n{stdout}"));
+    let listing = Command::new(super::bash())
+        .arg(scratch.join("scripts/panic-inventory.sh"))
+        .current_dir(&scratch)
+        .output()
+        .expect("the inventory script runs");
+    let listed = String::from_utf8_lossy(&listing.stdout).to_string();
+    let _ = std::fs::remove_dir_all(&scratch);
+
+    assert_eq!(
+        counted, 2,
+        "a tracked file and an unstaged one each hold one site, and the ignored one holds a third \
+         that must stay out; the inventory counted {counted}.\n{listed}"
+    );
+    assert!(
+        listed.contains("src/untracked.rs") && listed.contains("src/tracked.rs"),
+        "the inventory must name both the staged and the unstaged file:\n{listed}"
+    );
+    assert!(
+        !listed.contains("src/ignored.rs"),
+        "`.gitignore`d scratch files are what the index buys, and dropping it counted one:\n{listed}"
+    );
+}
+
 /// **The inventory does not need git, because the mutation sandbox does not have one.**
 ///
 /// This is `#179`, and it cost thirteen mutation shards and six hours a night. `cargo mutants`
