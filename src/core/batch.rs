@@ -121,6 +121,27 @@ pub fn node_deadline(node_timeout: Duration, packages: usize, total_timeout: Dur
         .min(total_timeout)
 }
 
+/// One batch command's fixed context: the packages, the manager, the run's settings and the
+/// proof its removals were authorised.
+///
+/// **These eight travel together, so they are one value.** `run_one_command` and `narrow_batch`
+/// take the same eight in the same order, and a narrowing is the same call over half the names —
+/// which is exactly the shape [`crate::app::machinery::Machinery`] was introduced for: positional
+/// argument lists that only differ by which half of the list a caller remembered to reorder.
+#[derive(Clone, Copy)]
+pub struct BatchRun<'a> {
+    pub specs: &'a [PackageSpec],
+    pub names: &'a [String],
+    pub backend_cap: &'a Arc<crate::core::BackendCapabilities>,
+    pub backend: &'a str,
+    pub is_install: bool,
+    pub config: &'a TransactionConfig,
+    /// The token a removal needs. `None` for an install-only batch, which needs no removal
+    /// authorisation and must not be able to ask for one.
+    pub reaped: Option<crate::app::sync::guard::Reaped>,
+    pub cancel_token: &'a CancellationToken,
+}
+
 /// One manager command over these packages, with the retry loop and the manager-lock wait.
 ///
 /// **This does the command and nothing else.** The WAL entries, the hooks and the `TaskResult`s
@@ -128,17 +149,17 @@ pub fn node_deadline(node_timeout: Duration, packages: usize, total_timeout: Dur
 /// again over half a failed batch: re-opening a journal entry or firing `before_install` twice
 /// would make a narrowing observably different from the retries this loop already does, which it
 /// is not.
-#[allow(clippy::too_many_arguments)]
-pub async fn run_one_command(
-    specs: &[PackageSpec],
-    names: &[String],
-    backend_cap: &Arc<crate::core::BackendCapabilities>,
-    b_name: &str,
-    is_install: bool,
-    config: &TransactionConfig,
-    reaped: Option<crate::app::sync::guard::Reaped>,
-    cancel_token: &CancellationToken,
-) -> CommandOutcome {
+pub async fn run_one_command(run: BatchRun<'_>) -> CommandOutcome {
+    let BatchRun {
+        specs,
+        names,
+        backend_cap,
+        backend: b_name,
+        is_install,
+        config,
+        reaped,
+        cancel_token,
+    } = run;
     let mut attempt = 0;
     let mut last_error = None;
     let mut lock_budget = LockBudget::of(config.manager_lock_wait);
@@ -304,17 +325,9 @@ pub fn midpoint(lo: usize, hi: usize) -> Option<usize> {
 ///
 /// The ranges are contiguous because the halves of a contiguous range are, which is why this
 /// needs no index vectors and no recursion: a worklist of `(lo, hi)` says everything.
-#[allow(clippy::too_many_arguments)]
-pub async fn narrow_batch(
-    specs: &[PackageSpec],
-    names: &[String],
-    backend_cap: &Arc<crate::core::BackendCapabilities>,
-    b_name: &str,
-    is_install: bool,
-    config: &TransactionConfig,
-    reaped: Option<crate::app::sync::guard::Reaped>,
-    cancel_token: &CancellationToken,
-) -> Vec<std::result::Result<(), Error>> {
+pub async fn narrow_batch(run: BatchRun<'_>) -> Vec<std::result::Result<(), Error>> {
+    let names = run.names;
+    let config = run.config;
     let n = names.len();
     let mut verdict: Vec<Option<std::result::Result<(), Error>>> = vec![None; n];
 
@@ -323,16 +336,11 @@ pub async fn narrow_batch(
     // pays for every interior level as well - which is slower than the thing it is imitating.
     if config.batch_recovery == BatchRecovery::Every {
         for p in 0..n {
-            let out = run_one_command(
-                specs_for(specs, p, p + 1),
-                &names[p..p + 1],
-                backend_cap,
-                b_name,
-                is_install,
-                config,
-                reaped,
-                cancel_token,
-            )
+            let out = run_one_command(BatchRun {
+                specs: specs_for(run.specs, p, p + 1),
+                names: &names[p..p + 1],
+                ..run
+            })
             .await;
             verdict[p] = Some(match out {
                 CommandOutcome::Done { .. } => Ok(()),
@@ -347,16 +355,11 @@ pub async fn narrow_batch(
     }
 
     let ask = |lo: usize, hi: usize| async move {
-        run_one_command(
-            specs_for(specs, lo, hi),
-            &names[lo..hi],
-            backend_cap,
-            b_name,
-            is_install,
-            config,
-            reaped,
-            cancel_token,
-        )
+        run_one_command(BatchRun {
+            specs: specs_for(run.specs, lo, hi),
+            names: &run.names[lo..hi],
+            ..run
+        })
         .await
     };
 

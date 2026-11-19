@@ -287,37 +287,48 @@ fn winning_defs(defs: &[Definition]) -> Result<BTreeMap<String, &Definition>> {
 /// Resolve every value into a typed [`Value`], substituting `$other` references, in dependency
 /// order.
 fn interpolate_all(raw: &BTreeMap<String, &Definition>) -> Result<Vars> {
-    let mut done: Vars = BTreeMap::new();
-    let mut visiting: Vec<String> = Vec::new();
-    let mut seen: HashSet<String> = HashSet::new();
+    let mut pass = Resolution {
+        raw,
+        done: BTreeMap::new(),
+        visiting: Vec::new(),
+        seen: HashSet::new(),
+    };
 
     let names: Vec<String> = raw.keys().cloned().collect();
     for name in names {
-        resolve_one(&name, raw, &mut done, &mut visiting, &mut seen)?;
+        resolve_one(&name, &mut pass)?;
     }
-    Ok(done)
+    Ok(pass.done)
 }
 
-fn resolve_one(
-    name: &str,
-    raw: &BTreeMap<String, &Definition>,
-    done: &mut Vars,
-    visiting: &mut Vec<String>,
-    seen: &mut HashSet<String>,
-) -> Result<()> {
-    if done.contains_key(name) {
+/// One pass over a `vars` block: what is defined, what has been resolved, and the stack that
+/// catches a variable defined in terms of itself.
+///
+/// These four travel together through every step of the resolution — a reference resolves
+/// against the same raw table, records into the same answer, and pushes onto the same cycle
+/// stack — so they are one value rather than four parameters that four functions each spell in
+/// the same order and could each get differently.
+struct Resolution<'a> {
+    raw: &'a BTreeMap<String, &'a Definition>,
+    done: Vars,
+    visiting: Vec<String>,
+    seen: HashSet<String>,
+}
+
+fn resolve_one(name: &str, pass: &mut Resolution<'_>) -> Result<()> {
+    if pass.done.contains_key(name) {
         return Ok(());
     }
-    let def = match raw.get(name) {
+    let def = match pass.raw.get(name) {
         Some(d) => *d,
         None => return Ok(()),
     };
 
-    if seen.contains(name) {
+    if pass.seen.contains(name) {
         // Name the whole loop rather than the one edge that closed it: "a -> b -> a" is
         // actionable, "a cycle exists" is not (V.45).
-        let start = visiting.iter().position(|v| v == name).unwrap_or(0);
-        let mut loop_names: Vec<String> = visiting[start..].to_vec();
+        let start = pass.visiting.iter().position(|v| v == name).unwrap_or(0);
+        let mut loop_names: Vec<String> = pass.visiting[start..].to_vec();
         loop_names.push(name.to_string());
         return Err(GrammarError::new(
             def.origin.clone(),
@@ -329,13 +340,13 @@ fn resolve_one(
         )
         .with_hint("break the loop — a variable cannot be its own input."));
     }
-    seen.insert(name.to_string());
-    visiting.push(name.to_string());
+    pass.seen.insert(name.to_string());
+    pass.visiting.push(name.to_string());
 
-    let value = resolve_value(def, raw, done, visiting, seen)?;
+    let value = resolve_value(def, pass)?;
 
-    visiting.pop();
-    done.insert(name.to_string(), value);
+    pass.visiting.pop();
+    pass.done.insert(name.to_string(), value);
     Ok(())
 }
 
@@ -343,32 +354,19 @@ fn resolve_one(
 /// (`alias = $other`) inherits that variable's type, so a list can be aliased; any other value
 /// containing `$` is string interpolation and its result is a string; a value with no reference
 /// is a typed literal.
-fn resolve_value(
-    def: &Definition,
-    raw: &BTreeMap<String, &Definition>,
-    done: &mut Vars,
-    visiting: &mut Vec<String>,
-    seen: &mut HashSet<String>,
-) -> Result<Value> {
+fn resolve_value(def: &Definition, pass: &mut Resolution<'_>) -> Result<Value> {
     let text = def.value.trim();
     if let Some(referenced) = sole_reference(text) {
-        require_defined(referenced, raw, &def.origin, None)?;
-        resolve_one(referenced, raw, done, visiting, seen)?;
-        return Ok(done
+        require_defined(referenced, pass.raw, &def.origin, None)?;
+        resolve_one(referenced, pass)?;
+        return Ok(pass
+            .done
             .get(referenced)
             .cloned()
             .unwrap_or(Value::Str(String::new())));
     }
     if text.contains('$') {
-        let s = interpolate_string(
-            &def.value,
-            Some(&def.name),
-            &def.origin,
-            raw,
-            done,
-            visiting,
-            seen,
-        )?;
+        let s = interpolate_string(&def.value, Some(&def.name), &def.origin, pass)?;
         return Ok(Value::Str(s));
     }
     Ok(Value::parse_literal(&def.value))
@@ -408,15 +406,11 @@ fn require_defined(
 
 /// Substitute `$name` references into `text`, resolving each referenced variable first. The
 /// result is always a string — this is text composition, and a referenced list has no text form.
-#[allow(clippy::too_many_arguments)]
 fn interpolate_string(
     text: &str,
     referrer: Option<&str>,
     origin: &Origin,
-    raw: &BTreeMap<String, &Definition>,
-    done: &mut Vars,
-    visiting: &mut Vec<String>,
-    seen: &mut HashSet<String>,
+    pass: &mut Resolution<'_>,
 ) -> Result<String> {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
@@ -437,9 +431,10 @@ fn interpolate_string(
                 rest = after;
             }
             Some(referenced) => {
-                require_defined(referenced, raw, origin, referrer)?;
-                resolve_one(referenced, raw, done, visiting, seen)?;
-                let value = done
+                require_defined(referenced, pass.raw, origin, referrer)?;
+                resolve_one(referenced, pass)?;
+                let value = pass
+                    .done
                     .get(referenced)
                     .cloned()
                     .unwrap_or(Value::Str(String::new()));

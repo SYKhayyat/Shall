@@ -158,19 +158,34 @@ fn rate_limit_of(res: &reqwest::Response, cap: u64) -> RateLimit {
     rate_limit_action(res.status().as_u16(), header, now, cap)
 }
 
+/// Where a github backend keeps what it manages, and how strictly it behaves about it.
+///
+/// Nine arguments in one fixed order, five of them paths that look alike at a call site. Two of
+/// them swapped is an asset in the wrong directory and a test that still passes, so the layout
+/// is one value with named fields.
+pub struct GithubLayout {
+    pub install_dir: PathBuf,
+    pub bin_dir: PathBuf,
+    pub locks_file: PathBuf,
+    pub confine_bin: bool,
+    pub clean_cache_on_remove: bool,
+    pub cache_dirs: Vec<PathBuf>,
+    pub github_token: Option<String>,
+    pub rate_limit_max_wait: Duration,
+}
+
 impl GithubBackendCore {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        executor: CommandExecutor,
-        install_dir: PathBuf,
-        bin_dir: PathBuf,
-        locks_file: PathBuf,
-        confine_bin: bool,
-        clean_cache_on_remove: bool,
-        cache_dirs: Vec<PathBuf>,
-        github_token: Option<String>,
-        rate_limit_max_wait: Duration,
-    ) -> Self {
+    pub fn new(executor: CommandExecutor, layout: GithubLayout) -> Self {
+        let GithubLayout {
+            install_dir,
+            bin_dir,
+            locks_file,
+            confine_bin,
+            clean_cache_on_remove,
+            cache_dirs,
+            github_token,
+            rate_limit_max_wait,
+        } = layout;
         let rate_limiter = if github_token.is_some() {
             RateLimiter::github_authenticated()
         } else {
@@ -593,9 +608,6 @@ impl Installable for GithubInstallable {
         true
     }
 
-    // Over the 250-line ratchet (#204). Split by phase (resolve, download, place, record) and
-    // this allow comes off — `#205`.
-    #[allow(clippy::too_many_lines)]
     async fn install(&self, specs: &[PackageSpec], _: bool) -> Result<()> {
         let mut state = self.core.load_state_internal().await?;
         let mut ledger = ArtifactLedger::load(&self.core.locks_file)?;
@@ -608,545 +620,27 @@ impl Installable for GithubInstallable {
         // Which system installers this machine has, computed once: it gates whether a `.deb`/
         // `.rpm` is installable here at all (D5), and a missing one turns such a line into a
         // download-only keep rather than a failure.
-        let has_dpkg = self.core.executor.command_exists("dpkg").await;
-        let has_rpm = self.core.executor.command_exists("rpm").await;
+        let has = SystemInstallers::on_this_machine(&self.core.executor).await;
 
         for spec in specs {
-            let wanted = ArtifactOptions::read(&spec.options).map_err(Error::Validation)?;
-            let asked = wanted.resolved_formats(&default_formats());
-            let installable = asked.retaining(|f| installable_here(f, has_dpkg, has_rpm));
-            // D3b: `@download_only` fetches without installing, and github does the same by
-            // default when nothing it was asked for is installable (e.g. only a `.deb` on
-            // offer and no `.deb` handoff yet). Rather than failing, it keeps the file — still
-            // declared, still removed when the line goes, just never unpacked or put on PATH.
-            let download_only = wanted.download_only || installable.is_empty();
-            let formats = if download_only {
-                asked.clone()
+            // Resolve, select, fetch and verify: everything a preview is allowed to decide, and
+            // the one phase that touches the network. `None` is "nothing to do" — already at
+            // this version, answered by the lock, or reported by a dry run.
+            let Some(fetched) = self.fetch(spec, &has, &state, &ledger).await? else {
+                continue;
+            };
+
+            // Placing is the phase that changes the machine, and it is split where the
+            // declaration's own two outcomes split: a keep on disk, or a deployed program (and a
+            // system manager that owns one).
+            let (record, locks) = if fetched.download_only {
+                self.place_download_only(spec, &fetched, &state).await?
             } else {
-                installable
+                self.place_and_deploy(spec, &fetched, &state).await?
             };
-
-            let pin = spec
-                .options
-                .one("version")
-                .map(|v| v.trim())
-                .filter(|v| !v.is_empty());
-
-            let known = Known {
-                pin,
-                locked: ledger.locked(&spec.name),
-                installed: state.get(&spec.name),
-            };
-            if answered_locally(&known, &formats, wanted.asset.as_ref()) {
-                debug!(
-                    "GitHub: {} is locked at {} and installed — no API call",
-                    spec.name,
-                    pin.unwrap_or_default()
-                );
-                continue;
-            }
-
-            let release = self.core.resolve_release(&spec.name, pin).await?;
-
-            let offered: Vec<ArtifactAsset> = release
-                .assets
-                .iter()
-                .map(|a| ArtifactAsset::new(&a.name, &a.url))
-                .collect();
-
-            let platform = Platform::current();
-            let selection = artifact::select(
-                &SelectRequest {
-                    package: &spec.name,
-                    release: &release.version,
-                    platform: &platform,
-                    formats: &formats,
-                    pattern: wanted.asset.as_ref(),
-                },
-                &offered,
-            )
-            // The release exists and offers nothing for *this* platform, which is a fact about
-            // this machine and not about the name — a declaration that installs on Linux must
-            // not be withdrawn because the Windows runner found no asset.
-            .map_err(|e| Error::Validation(e.to_string()))?;
-
-            // A tie-break is a guess, and a guess nobody sees is the one that drifts.
-            if selection.was_ambiguous() {
-                let passed: Vec<&str> = selection
-                    .passed_over
-                    .iter()
-                    .map(|p| p.name.as_str())
-                    .collect();
-                info!(
-                    "{}: chose {} over {}",
-                    spec.name,
-                    selection.picks[0].asset.name,
-                    passed.join(", ")
-                );
-            }
-
-            // The version alone is not the identity of what is installed: changing `formats`
-            // on a pinned version must still reinstall, or the declaration and the disk part
-            // ways with nothing to show it.
-            let chosen_assets: Vec<&str> = selection
-                .picks
-                .iter()
-                .map(|p| p.asset.name.as_str())
-                .collect();
-            if let Some(existing) = state.get(&spec.name) {
-                if existing.version == release.version
-                    && same_set(&existing.assets(), &chosen_assets)
-                {
-                    debug!(
-                        "GitHub: {} is already at version {}",
-                        spec.name, release.version
-                    );
-                    continue;
-                }
-            }
-
-            // Q37: a release that resolves to one deployable artifact takes the repo's own name
-            // on PATH, and that is known *here* — before the transfer. `deploy_executable`'s
-            // refusal reads only the destination, so asking it after the download bought
-            // nothing and cost one `heal` 180 of its 201 seconds fetching two artifacts it was
-            // always going to reject: silent, zero CPU, no child process, indistinguishable
-            // from a hang. Several artifacts each take the name of the program *inside* them,
-            // which no metadata can answer, so that case still pays for the download.
-            if selection
-                .picks
-                .iter()
-                .filter(|p| !system_pkg::is_handoff_format(p.format))
-                .count()
-                == 1
-            {
-                let repo_name = spec.name.split('/').next_back().unwrap_or(&spec.name);
-                let bin_dest = crate::utils::bin_destination(
-                    &self.core.bin_dir,
-                    repo_name,
-                    self.core.confine_bin,
-                )?;
-                let previous: Vec<String> = state
-                    .get(&spec.name)
-                    .map(|s| {
-                        s.artifacts
-                            .iter()
-                            .filter_map(|a| a.bin_path.clone())
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                crate::utils::ensure_deployable(
-                    &bin_dest,
-                    &self.core.install_dir,
-                    previous
-                        .iter()
-                        .find(|p| *p == &bin_dest.to_string_lossy())
-                        .map(|s| s.as_str()),
-                )
-                .await?;
-            }
-
-            // Everything is downloaded and hashed before anything is unpacked or put on PATH:
-            // with several artifacts under one declaration, a supply-chain objection to the
-            // third must not arrive with the first two already deployed.
-            // The release was resolved, the assets were picked and the deploy destinations
-            // were refused or accepted above — all of which a preview should say. The transfer
-            // is the part it must not do.
-            if crate::core::dry_run::active() {
-                crate::would!(
-                    "download {} ({}), {} artifact(s), and install them",
-                    spec.name,
-                    release.version,
-                    selection.picks.len()
-                );
-                continue;
-            }
-
-            info!(
-                "Downloading GitHub release: {} ({}), {} artifact(s)",
-                spec.name,
-                release.version,
-                selection.picks.len()
-            );
-            let tmp_dir = tempfile::tempdir().map_err(Error::from)?;
-            let mut downloaded: Vec<(&artifact::Pick, PathBuf, String)> = Vec::new();
-            for pick in &selection.picks {
-                let response = self.core.github_get(&pick.asset.url).await?;
-                // Status before bytes, same as `web:`: a 404 body hashed under the asset's
-                // name poisons this ledger against the real release for ever.
-                if !response.status().is_success() {
-                    return Err(Error::http_status(
-                        format!("{} asset {}", spec.name, pick.asset.name),
-                        response.status(),
-                        &pick.asset.url,
-                    ));
-                }
-                // Defense-in-depth: GitHub constrains asset names to alphanumerics and
-                // punctuation today, but the constraint is theirs, not ours. A name
-                // carrying a path separator would write outside the staging directory.
-                if pick.asset.name.contains('/') || pick.asset.name.contains('\\') {
-                    return Err(Error::Refused(format!(
-                        "asset name `{}` contains a path separator; refusing to write it",
-                        pick.asset.name
-                    )));
-                }
-                let dl_path = tmp_dir.path().join(&pick.asset.name);
-                let staged =
-                    crate::core::download::stage_capped(response, &dl_path, &pick.asset.name)
-                        .await?;
-                if staged.is_staged() {
-                    // `@sha256` is legal only on a line that resolves to exactly one file
-                    // (VIII.2/D6), so it needs no per-artifact story here. Verified on the staged
-                    // bytes, not on the destination: a mismatch must be able to walk away without
-                    // having touched what is already there.
-                    if let Some(expected_sha) = spec.options.one("sha256") {
-                        verify_checksum(staged.path(), expected_sha).await?;
-                    }
-                    let sha = generate_checksum(staged.path()).await?;
-                    staged.commit().await?;
-                    downloaded.push((pick, dl_path, sha));
-                }
-            }
-
-            // The same asset of the same release, with different bytes than last time. No
-            // legitimate republish does that, so it is an alarm rather than an update — and
-            // it must not be answered by selecting a different asset, which would turn a
-            // supply-chain warning into a silent substitution (VIII.2).
-            let locked = ledger.locked(&spec.name);
-            if locked.first().and_then(|l| l.version.as_deref()) == Some(release.version.as_str()) {
-                let resolved: Vec<(String, Option<String>)> = downloaded
-                    .iter()
-                    .map(|(p, _, sha)| (p.asset.name.clone(), Some(sha.clone())))
-                    .collect();
-                if let Some(objection) = verify_set(locked, &resolved) {
-                    return Err(Error::Validation(format!("{}: {}", spec.name, objection)));
-                }
-            }
-
-            // D3b: download-only. Keep each fetched file under the declaration's directory;
-            // never unpack it, discover an executable, or put anything on PATH. Still recorded
-            // and locked, so a removal still deletes it and a re-download that differs is caught.
-            if download_only {
-                let pkg_dir = self.core.install_dir.join(spec.name.replace('/', "_"));
-                // Staged beside, then swapped: the old tree survives until the new one is in
-                // place, so a failed copy cannot strand the record over nothing on disk.
-                let stage = self.core.install_dir.join(format!(
-                    ".{}.stage-{}",
-                    spec.name.replace('/', "_"),
-                    std::process::id()
-                ));
-                let _ = tokio::fs::remove_dir_all(&stage).await;
-                crate::utils::file::ensure_dir_async(&stage).await?;
-                crate::utils::file::ensure_dir_async(&pkg_dir).await?;
-
-                let reason =
-                    artifact::selection_reason(wanted.asset.is_some(), formats.is_user_specified())
-                        .to_string();
-                let previous: Vec<String> = state
-                    .get(&spec.name)
-                    .map(|s| {
-                        s.artifacts
-                            .iter()
-                            .filter_map(|a| a.bin_path.clone())
-                            .collect()
-                    })
-                    .unwrap_or_default();
-
-                let mut installed_artifacts: Vec<InstalledArtifact> = Vec::new();
-                let mut locks: Vec<ArtifactLock> = Vec::new();
-                for (pick, dl_path, sha) in &downloaded {
-                    let dest = stage.join(&pick.asset.name);
-                    crate::utils::file::copy_over(dl_path, &dest).await?;
-                    installed_artifacts.push(InstalledArtifact {
-                        asset: pick.asset.name.clone(),
-                        format: pick.format.to_string(),
-                        bin_path: None,
-                        installed_by: None,
-                        system_package: None,
-                    });
-                    locks.push(ArtifactLock {
-                        version: Some(release.version.clone()),
-                        asset: pick.asset.name.clone(),
-                        url: pick.asset.url.clone(),
-                        format: pick.format.to_string(),
-                        selected_by: Some(reason.clone()),
-                        sha256: Some((*sha).clone()),
-                        ..Default::default()
-                    });
-                }
-                // A line that used to deploy a binary and is now download-only drops the old
-                // PATH entry, or it becomes drift nothing declares.
-                for stale in &previous {
-                    if let Err(e) = crate::utils::remove_deployed_path(stale).await {
-                        warn!("{}: could not remove the old `{}`: {}", spec.name, stale, e);
-                    }
-                }
-                info!(
-                    "{}: fetched {} artifact(s) for {} — download-only, not on PATH",
-                    spec.name,
-                    installed_artifacts.len(),
-                    release.version
-                );
-                recorded_locks.push((spec.name.clone(), locks.clone()));
-                ledger.record(spec.name.clone(), locks);
-                // Everything copied: the swap is the commit point.
-                crate::utils::file::swap_into_place(&stage, &pkg_dir).await?;
-                let record = GithubState {
-                    repo: spec.name.clone(),
-                    version: release.version,
-                    install_path: pkg_dir.to_string_lossy().to_string(),
-                    artifacts: installed_artifacts,
-                };
-                installed_records.push((spec.name.clone(), record.clone()));
-                state.insert(spec.name.clone(), record);
-                continue;
-            }
-
-            let pkg_dir_name = spec.name.replace('/', "_");
-            let pkg_dir = self.core.install_dir.join(&pkg_dir_name);
-            // Staged beside, then swapped in one rename once unpack+discovery is clean: the
-            // old tree survives until the new one answers at `pkg_dir`, so a torn archive
-            // cannot leave the record pointing at nothing.
-            let stage = self
-                .core
-                .install_dir
-                .join(format!(".{pkg_dir_name}.stage-{}", std::process::id()));
-            let _ = tokio::fs::remove_dir_all(&stage).await;
-            crate::utils::file::ensure_dir_async(&stage).await?;
-            crate::utils::file::ensure_dir_async(&pkg_dir).await?;
-
-            let repo_name = spec.name.split('/').next_back().unwrap_or(&spec.name);
-            let bin_dir = self.core.bin_dir.clone();
-            let previous: Vec<String> = state
-                .get(&spec.name)
-                .map(|s| {
-                    s.artifacts
-                        .iter()
-                        .filter_map(|a| a.bin_path.clone())
-                        .collect()
-                })
-                .unwrap_or_default();
-
-            // D5: a `.deb`/`.rpm` is handed to its system manager, never unpacked or put on
-            // PATH; the rest are Shall's to deploy. Split them so the deploy-naming rule counts
-            // only the artifacts that actually take a PATH name.
-            let handoff_idx: Vec<usize> = downloaded
-                .iter()
-                .enumerate()
-                .filter(|(_, (pick, _, _))| system_pkg::is_handoff_format(pick.format))
-                .map(|(i, _)| i)
-                .collect();
-            let regular_idx: Vec<usize> = downloaded
-                .iter()
-                .enumerate()
-                .filter(|(_, (pick, _, _))| !system_pkg::is_handoff_format(pick.format))
-                .map(|(i, _)| i)
-                .collect();
-            let one_artifact = regular_idx.len() == 1;
-
-            // Unpack and find each program first, deploy nothing yet: the name two artifacts
-            // fight over is only knowable once both archives are open, and a refusal that
-            // arrives after the first is already on PATH has half-installed the line it
-            // refused. Handoffs to a system manager (below) run only after this pass is clean,
-            // for the same reason: a `dpkg -i` that ran before a sibling clash was found would
-            // leave the line half-installed.
-            let mut resolved: Vec<(&artifact::Pick, &String, PathBuf, PathBuf)> = Vec::new();
-            for &i in &regular_idx {
-                let (pick, dl_path, sha) = &downloaded[i];
-                // One subdirectory per artifact: two archives under one declaration can both
-                // contain `bin/`, and unpacking them over each other loses one of them.
-                let unpack_dir = stage.join(artifact_dir_name(&pick.asset.name));
-                crate::utils::file::ensure_dir_async(&unpack_dir).await?;
-
-                let dl_path_archive = dl_path.clone();
-                let unpack_archive = unpack_dir.clone();
-                tokio::task::spawn_blocking(move || {
-                    extract_archive(&dl_path_archive, &unpack_archive)
-                })
-                .await
-                .map_err(|e| Error::Other(e.to_string()))??;
-
-                let walk_dir = unpack_dir.clone();
-                let listing: Vec<ArchiveEntry> = tokio::task::spawn_blocking(move || {
-                    walkdir::WalkDir::new(&walk_dir)
-                        .into_iter()
-                        .filter_map(|e| e.ok())
-                        .filter(|e| e.file_type().is_file())
-                        .map(|e| {
-                            let executable = is_executable(&e);
-                            ArchiveEntry::new(e.path().to_path_buf(), executable)
-                        })
-                        .collect()
-                })
-                .await
-                .map_err(|e| Error::Other(e.to_string()))?;
-
-                let discovered =
-                    artifact::find_executable(&listing, &spec.name, wanted.bin.as_deref())
-                        // An archive that carries no program Shall can find is a `@bin=` the
-                        // user can supply, not a name that does not exist.
-                        .map_err(|e| Error::Validation(e.to_string()))?;
-
-                // One artifact is deployed under the repo's name, as it always has been.
-                // Several cannot be — so each keeps the name of the program inside it, and
-                // two that would land on the same name is an error rather than one silently
-                // overwriting the other (owner ruling, 2026-07-21).
-                let deploy_name = if one_artifact {
-                    repo_name.to_string()
-                } else {
-                    discovered
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .ok_or_else(|| {
-                            Error::Other(format!(
-                                "{}: the executable inside `{}` has no usable filename",
-                                spec.name, pick.asset.name
-                            ))
-                        })?
-                        .to_string()
-                };
-                let bin_dest =
-                    crate::utils::bin_destination(&bin_dir, &deploy_name, self.core.confine_bin)?;
-                if let Some((clash, _, _, _)) =
-                    resolved.iter().find(|(_, _, _, dest)| dest == &bin_dest)
-                {
-                    return Err(Error::Validation(format!(
-                        "{}: both `{}` and `{}` install a program called `{}`. Narrow \
-                         `@asset=all` with a pattern, e.g. @asset=*musl*, so one file answers \
-                         the line.",
-                        spec.name, clash.asset.name, pick.asset.name, deploy_name
-                    )));
-                }
-                resolved.push((pick, sha, discovered, bin_dest));
-            }
-
-            // D14: the same rule chose every pick of this declaration (they share the line's
-            // formats and pattern), so the reason is computed once and recorded on each lock.
-            let reason =
-                artifact::selection_reason(wanted.asset.is_some(), formats.is_user_specified())
-                    .to_string();
-
-            let mut installed_artifacts: Vec<InstalledArtifact> = Vec::new();
-            let mut locks: Vec<ArtifactLock> = Vec::new();
-
-            // D5: hand each `.deb`/`.rpm` to its manager. The manager now owns the files — Shall
-            // records only *which* manager and the name it listed the package under, and removal,
-            // upgrade and dedup route through that record. The name is read from the file before
-            // the install, because after the install the file is gone and the name is the only
-            // handle removal has.
-            for &i in &handoff_idx {
-                let (pick, dl_path, sha) = &downloaded[i];
-                let installer = system_pkg::installer_for(pick.format).ok_or_else(|| {
-                    Error::Other(format!(
-                        "{}: no system installer for {}",
-                        spec.name, pick.format
-                    ))
-                })?;
-                let query = system_pkg::query_name_argv(pick.format, dl_path)?;
-                let (qprog, qargs) = query.split_first().expect("a query argv is never empty");
-                let qrefs: Vec<&str> = qargs.iter().map(String::as_str).collect();
-                let system_package = self
-                    .core
-                    .executor
-                    .run_output(qprog, &qrefs, false)
-                    .await?
-                    .trim()
-                    .to_string();
-
-                let install = system_pkg::install_argv(pick.format, dl_path)?;
-                let (iprog, iargs) = install
-                    .split_first()
-                    .expect("an install argv is never empty");
-                let irefs: Vec<&str> = iargs.iter().map(String::as_str).collect();
-                info!(
-                    "{}: handing {} to {} — installs as `{}`",
-                    spec.name, pick.asset.name, installer, system_package
-                );
-                self.core.executor.run(iprog, &irefs, true).await?;
-
-                installed_artifacts.push(InstalledArtifact {
-                    asset: pick.asset.name.clone(),
-                    format: pick.format.to_string(),
-                    bin_path: None,
-                    installed_by: Some(installer.to_string()),
-                    system_package: Some(system_package.clone()),
-                });
-                locks.push(ArtifactLock {
-                    version: Some(release.version.clone()),
-                    asset: pick.asset.name.clone(),
-                    url: pick.asset.url.clone(),
-                    format: pick.format.to_string(),
-                    selected_by: Some(reason.clone()),
-                    sha256: Some((*sha).clone()),
-                    installed_by: Some(installer.to_string()),
-                    system_package: Some(system_package),
-                });
-            }
-
-            // The commit point: unpack, discovery and every refusal above only ever touched
-            // the staging tree. From here the new tree answers at `pkg_dir`, and discovery
-            // results are re-pointed at their post-swap locations.
-            crate::utils::file::swap_into_place(&stage, &pkg_dir).await?;
-            let resolved: Vec<_> = resolved
-                .into_iter()
-                .map(|(pick, sha, discovered, bin_dest)| {
-                    let tail = discovered
-                        .strip_prefix(&stage)
-                        .unwrap_or(discovered.as_path());
-                    let relocated = pkg_dir.join(tail);
-                    (pick, sha, relocated, bin_dest)
-                })
-                .collect();
-
-            for (pick, sha, discovered, bin_dest) in &resolved {
-                crate::utils::deploy_executable(
-                    discovered,
-                    bin_dest,
-                    &self.core.install_dir,
-                    previous
-                        .iter()
-                        .find(|p| *p == &bin_dest.to_string_lossy())
-                        .map(|s| s.as_str()),
-                )
-                .await?;
-
-                installed_artifacts.push(InstalledArtifact {
-                    asset: pick.asset.name.clone(),
-                    format: pick.format.to_string(),
-                    bin_path: Some(bin_dest.to_string_lossy().to_string()),
-                    installed_by: None,
-                    system_package: None,
-                });
-                locks.push(ArtifactLock {
-                    version: Some(release.version.clone()),
-                    asset: pick.asset.name.clone(),
-                    url: pick.asset.url.clone(),
-                    format: pick.format.to_string(),
-                    selected_by: Some(reason.clone()),
-                    sha256: Some((*sha).clone()),
-                    ..Default::default()
-                });
-            }
-
-            // A declaration that used to deploy a name it no longer deploys leaves that file
-            // on PATH, where nothing declares it and no `sync` can see it.
-            for stale in previous.iter().filter(|p| {
-                !installed_artifacts
-                    .iter()
-                    .any(|a| a.bin_path.as_ref() == Some(*p))
-            }) {
-                if let Err(e) = crate::utils::remove_deployed_path(stale).await {
-                    warn!("{}: could not remove the old `{}`: {}", spec.name, stale, e);
-                }
-            }
 
             recorded_locks.push((spec.name.clone(), locks.clone()));
             ledger.record(spec.name.clone(), locks);
-            let record = GithubState {
-                repo: spec.name.clone(),
-                version: release.version,
-                install_path: pkg_dir.to_string_lossy().to_string(),
-                artifacts: installed_artifacts,
-            };
             installed_records.push((spec.name.clone(), record.clone()));
             state.insert(spec.name.clone(), record);
         }
@@ -1212,6 +706,604 @@ impl Installable for GithubInstallable {
     }
 }
 
+/// Which system installers this machine has, asked once per install call.
+struct SystemInstallers {
+    dpkg: bool,
+    rpm: bool,
+}
+
+impl SystemInstallers {
+    async fn on_this_machine(executor: &CommandExecutor) -> Self {
+        Self {
+            dpkg: executor.command_exists("dpkg").await,
+            rpm: executor.command_exists("rpm").await,
+        }
+    }
+}
+
+/// One artifact fetched and verified, with the pick it came from.
+struct FetchedFile {
+    pick: artifact::Pick,
+    path: PathBuf,
+    sha256: String,
+}
+
+/// One declaration resolved to bytes: the release, the picks taken from it, and the staged files
+/// those picks downloaded to.
+struct Fetched {
+    release: GithubRelease,
+    files: Vec<FetchedFile>,
+    /// D14's reason, computed once because every pick of one declaration shares it.
+    reason: String,
+    download_only: bool,
+    /// `@bin` — which program inside an archive to deploy, when the line says.
+    bin: Option<String>,
+    /// The staged files live only as long as this directory does.
+    _staging: tempfile::TempDir,
+}
+
+impl GithubInstallable {
+    /// Resolve, select, fetch and verify one declaration. `None` means there is nothing to do on
+    /// this machine — already answered by the lock, already at this version, or said by a preview.
+    ///
+    /// **This is the only phase that touches the network, and the last one before anything is
+    /// placed.** A supply-chain objection to the third artifact must not arrive with the first
+    /// two already deployed, so every byte is downloaded and hashed here and none of it is
+    /// unpacked or put on `PATH` until the whole set has passed.
+    async fn fetch(
+        &self,
+        spec: &PackageSpec,
+        has: &SystemInstallers,
+        state: &HashMap<String, GithubState>,
+        ledger: &ArtifactLedger,
+    ) -> Result<Option<Fetched>> {
+        let wanted = ArtifactOptions::read(&spec.options).map_err(Error::Validation)?;
+        let asked = wanted.resolved_formats(&default_formats());
+        let installable = asked.retaining(|f| installable_here(f, has.dpkg, has.rpm));
+        // D3b: `@download_only` fetches without installing, and github does the same by
+        // default when nothing it was asked for is installable (e.g. only a `.deb` on
+        // offer and no `.deb` handoff yet). Rather than failing, it keeps the file — still
+        // declared, still removed when the line goes, just never unpacked or put on PATH.
+        let download_only = wanted.download_only || installable.is_empty();
+        let formats = if download_only {
+            asked.clone()
+        } else {
+            installable
+        };
+
+        let pin = spec
+            .options
+            .one("version")
+            .map(|v| v.trim())
+            .filter(|v| !v.is_empty());
+
+        let known = Known {
+            pin,
+            locked: ledger.locked(&spec.name),
+            installed: state.get(&spec.name),
+        };
+        if answered_locally(&known, &formats, wanted.asset.as_ref()) {
+            debug!(
+                "GitHub: {} is locked at {} and installed — no API call",
+                spec.name,
+                pin.unwrap_or_default()
+            );
+            return Ok(None);
+        }
+
+        let release = self.core.resolve_release(&spec.name, pin).await?;
+
+        let offered: Vec<ArtifactAsset> = release
+            .assets
+            .iter()
+            .map(|a| ArtifactAsset::new(&a.name, &a.url))
+            .collect();
+
+        let platform = Platform::current();
+        let selection = artifact::select(
+            &SelectRequest {
+                package: &spec.name,
+                release: &release.version,
+                platform: &platform,
+                formats: &formats,
+                pattern: wanted.asset.as_ref(),
+            },
+            &offered,
+        )
+        // The release exists and offers nothing for *this* platform, which is a fact about
+        // this machine and not about the name — a declaration that installs on Linux must
+        // not be withdrawn because the Windows runner found no asset.
+        .map_err(|e| Error::Validation(e.to_string()))?;
+
+        // A tie-break is a guess, and a guess nobody sees is the one that drifts.
+        if selection.was_ambiguous() {
+            let passed: Vec<&str> = selection
+                .passed_over
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect();
+            info!(
+                "{}: chose {} over {}",
+                spec.name,
+                selection.picks[0].asset.name,
+                passed.join(", ")
+            );
+        }
+
+        // The version alone is not the identity of what is installed: changing `formats`
+        // on a pinned version must still reinstall, or the declaration and the disk part
+        // ways with nothing to show it.
+        let chosen_assets: Vec<&str> = selection
+            .picks
+            .iter()
+            .map(|p| p.asset.name.as_str())
+            .collect();
+        if let Some(existing) = state.get(&spec.name) {
+            if existing.version == release.version && same_set(&existing.assets(), &chosen_assets) {
+                debug!(
+                    "GitHub: {} is already at version {}",
+                    spec.name, release.version
+                );
+                return Ok(None);
+            }
+        }
+
+        // Q37: a release that resolves to one deployable artifact takes the repo's own name
+        // on PATH, and that is known *here* — before the transfer. `deploy_executable`'s
+        // refusal reads only the destination, so asking it after the download bought
+        // nothing and cost one `heal` 180 of its 201 seconds fetching two artifacts it was
+        // always going to reject: silent, zero CPU, no child process, indistinguishable
+        // from a hang. Several artifacts each take the name of the program *inside* them,
+        // which no metadata can answer, so that case still pays for the download.
+        if selection
+            .picks
+            .iter()
+            .filter(|p| !system_pkg::is_handoff_format(p.format))
+            .count()
+            == 1
+        {
+            let repo_name = spec.name.split('/').next_back().unwrap_or(&spec.name);
+            let bin_dest = crate::utils::bin_destination(
+                &self.core.bin_dir,
+                repo_name,
+                self.core.confine_bin,
+            )?;
+            let previous: Vec<String> = state
+                .get(&spec.name)
+                .map(|s| {
+                    s.artifacts
+                        .iter()
+                        .filter_map(|a| a.bin_path.clone())
+                        .collect()
+                })
+                .unwrap_or_default();
+            crate::utils::ensure_deployable(
+                &bin_dest,
+                &self.core.install_dir,
+                previous
+                    .iter()
+                    .find(|p| *p == &bin_dest.to_string_lossy())
+                    .map(|s| s.as_str()),
+            )
+            .await?;
+        }
+
+        // The release was resolved, the assets were picked and the deploy destinations
+        // were refused or accepted above — all of which a preview should say. The transfer
+        // is the part it must not do.
+        if crate::core::dry_run::active() {
+            crate::would!(
+                "download {} ({}), {} artifact(s), and install them",
+                spec.name,
+                release.version,
+                selection.picks.len()
+            );
+            return Ok(None);
+        }
+
+        info!(
+            "Downloading GitHub release: {} ({}), {} artifact(s)",
+            spec.name,
+            release.version,
+            selection.picks.len()
+        );
+        let tmp_dir = tempfile::tempdir().map_err(Error::from)?;
+        let mut files: Vec<FetchedFile> = Vec::new();
+        for pick in &selection.picks {
+            let response = self.core.github_get(&pick.asset.url).await?;
+            // Status before bytes, same as `web:`: a 404 body hashed under the asset's
+            // name poisons this ledger against the real release for ever.
+            if !response.status().is_success() {
+                return Err(Error::http_status(
+                    format!("{} asset {}", spec.name, pick.asset.name),
+                    response.status(),
+                    &pick.asset.url,
+                ));
+            }
+            // Defense-in-depth: GitHub constrains asset names to alphanumerics and
+            // punctuation today, but the constraint is theirs, not ours. A name
+            // carrying a path separator would write outside the staging directory.
+            if pick.asset.name.contains('/') || pick.asset.name.contains('\\') {
+                return Err(Error::Refused(format!(
+                    "asset name `{}` contains a path separator; refusing to write it",
+                    pick.asset.name
+                )));
+            }
+            let dl_path = tmp_dir.path().join(&pick.asset.name);
+            let staged =
+                crate::core::download::stage_capped(response, &dl_path, &pick.asset.name).await?;
+            if staged.is_staged() {
+                // `@sha256` is legal only on a line that resolves to exactly one file
+                // (VIII.2/D6), so it needs no per-artifact story here. Verified on the staged
+                // bytes, not on the destination: a mismatch must be able to walk away without
+                // having touched what is already there.
+                if let Some(expected_sha) = spec.options.one("sha256") {
+                    verify_checksum(staged.path(), expected_sha).await?;
+                }
+                let sha = generate_checksum(staged.path()).await?;
+                staged.commit().await?;
+                files.push(FetchedFile {
+                    pick: pick.clone(),
+                    path: dl_path,
+                    sha256: sha,
+                });
+            }
+        }
+
+        // The same asset of the same release, with different bytes than last time. No
+        // legitimate republish does that, so it is an alarm rather than an update — and
+        // it must not be answered by selecting a different asset, which would turn a
+        // supply-chain warning into a silent substitution (VIII.2).
+        let locked = ledger.locked(&spec.name);
+        if locked.first().and_then(|l| l.version.as_deref()) == Some(release.version.as_str()) {
+            let resolved: Vec<(String, Option<String>)> = files
+                .iter()
+                .map(|f| (f.pick.asset.name.clone(), Some(f.sha256.clone())))
+                .collect();
+            if let Some(objection) = verify_set(locked, &resolved) {
+                return Err(Error::Validation(format!("{}: {}", spec.name, objection)));
+            }
+        }
+
+        Ok(Some(Fetched {
+            release,
+            files,
+            reason: artifact::selection_reason(wanted.asset.is_some(), formats.is_user_specified())
+                .to_string(),
+            download_only,
+            bin: wanted.bin.clone(),
+            _staging: tmp_dir,
+        }))
+    }
+
+    /// D3b: keep each fetched file under the declaration's directory; never unpack it, discover
+    /// an executable, or put anything on PATH. Still recorded and locked, so a removal still
+    /// deletes it and a re-download that differs is caught.
+    async fn place_download_only(
+        &self,
+        spec: &PackageSpec,
+        fetched: &Fetched,
+        state: &HashMap<String, GithubState>,
+    ) -> Result<(GithubState, Vec<ArtifactLock>)> {
+        let pkg_dir = self.core.install_dir.join(spec.name.replace('/', "_"));
+        // Staged beside, then swapped: the old tree survives until the new one is in
+        // place, so a failed copy cannot strand the record over nothing on disk.
+        let stage = self.core.install_dir.join(format!(
+            ".{}.stage-{}",
+            spec.name.replace('/', "_"),
+            std::process::id()
+        ));
+        let _ = tokio::fs::remove_dir_all(&stage).await;
+        crate::utils::file::ensure_dir_async(&stage).await?;
+        crate::utils::file::ensure_dir_async(&pkg_dir).await?;
+
+        let previous: Vec<String> = state
+            .get(&spec.name)
+            .map(|s| {
+                s.artifacts
+                    .iter()
+                    .filter_map(|a| a.bin_path.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let mut installed_artifacts: Vec<InstalledArtifact> = Vec::new();
+        let mut locks: Vec<ArtifactLock> = Vec::new();
+        for file in &fetched.files {
+            let dest = stage.join(&file.pick.asset.name);
+            crate::utils::file::copy_over(&file.path, &dest).await?;
+            installed_artifacts.push(InstalledArtifact {
+                asset: file.pick.asset.name.clone(),
+                format: file.pick.format.to_string(),
+                bin_path: None,
+                installed_by: None,
+                system_package: None,
+            });
+            locks.push(ArtifactLock {
+                version: Some(fetched.release.version.clone()),
+                asset: file.pick.asset.name.clone(),
+                url: file.pick.asset.url.clone(),
+                format: file.pick.format.to_string(),
+                selected_by: Some(fetched.reason.clone()),
+                sha256: Some(file.sha256.clone()),
+                ..Default::default()
+            });
+        }
+        // A line that used to deploy a binary and is now download-only drops the old
+        // PATH entry, or it becomes drift nothing declares.
+        for stale in &previous {
+            if let Err(e) = crate::utils::remove_deployed_path(stale).await {
+                warn!("{}: could not remove the old `{}`: {}", spec.name, stale, e);
+            }
+        }
+        info!(
+            "{}: fetched {} artifact(s) for {} — download-only, not on PATH",
+            spec.name,
+            installed_artifacts.len(),
+            fetched.release.version
+        );
+        // Everything copied: the swap is the commit point.
+        crate::utils::file::swap_into_place(&stage, &pkg_dir).await?;
+        let record = GithubState {
+            repo: spec.name.clone(),
+            version: fetched.release.version.clone(),
+            install_path: pkg_dir.to_string_lossy().to_string(),
+            artifacts: installed_artifacts,
+        };
+        Ok((record, locks))
+    }
+
+    /// Unpack, discover, hand any system package to its manager, and deploy the rest.
+    ///
+    /// **Nothing is deployed until every archive has been opened and every refusal has been
+    /// made.** The name two artifacts fight over is only knowable once both are open, and a
+    /// refusal that arrives after the first is already on `PATH` has half-installed the line it
+    /// refused.
+    async fn place_and_deploy(
+        &self,
+        spec: &PackageSpec,
+        fetched: &Fetched,
+        state: &HashMap<String, GithubState>,
+    ) -> Result<(GithubState, Vec<ArtifactLock>)> {
+        let release = &fetched.release;
+        let downloaded = &fetched.files;
+        let pkg_dir_name = spec.name.replace('/', "_");
+        let pkg_dir = self.core.install_dir.join(&pkg_dir_name);
+        // Staged beside, then swapped in one rename once unpack+discovery is clean: the
+        // old tree survives until the new one answers at `pkg_dir`, so a torn archive
+        // cannot leave the record pointing at nothing.
+        let stage = self
+            .core
+            .install_dir
+            .join(format!(".{pkg_dir_name}.stage-{}", std::process::id()));
+        let _ = tokio::fs::remove_dir_all(&stage).await;
+        crate::utils::file::ensure_dir_async(&stage).await?;
+        crate::utils::file::ensure_dir_async(&pkg_dir).await?;
+
+        let repo_name = spec.name.split('/').next_back().unwrap_or(&spec.name);
+        let bin_dir = self.core.bin_dir.clone();
+        let previous: Vec<String> = state
+            .get(&spec.name)
+            .map(|s| {
+                s.artifacts
+                    .iter()
+                    .filter_map(|a| a.bin_path.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // D5: a `.deb`/`.rpm` is handed to its system manager, never unpacked or put on
+        // PATH; the rest are Shall's to deploy. Split them so the deploy-naming rule counts
+        // only the artifacts that actually take a PATH name.
+        let handoff_idx: Vec<usize> = downloaded
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| system_pkg::is_handoff_format(f.pick.format))
+            .map(|(i, _)| i)
+            .collect();
+        let regular_idx: Vec<usize> = downloaded
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| !system_pkg::is_handoff_format(f.pick.format))
+            .map(|(i, _)| i)
+            .collect();
+        let one_artifact = regular_idx.len() == 1;
+
+        // Unpack and find each program first, deploy nothing yet, and hand nothing to a system
+        // manager yet either: a `dpkg -i` that ran before a sibling clash was found would leave
+        // the line half-installed.
+        let mut resolved: Vec<(&artifact::Pick, &String, PathBuf, PathBuf)> = Vec::new();
+        for &i in &regular_idx {
+            let file = &downloaded[i];
+            // One subdirectory per artifact: two archives under one declaration can both
+            // contain `bin/`, and unpacking them over each other loses one of them.
+            let unpack_dir = stage.join(artifact_dir_name(&file.pick.asset.name));
+            crate::utils::file::ensure_dir_async(&unpack_dir).await?;
+
+            let dl_path_archive = file.path.clone();
+            let unpack_archive = unpack_dir.clone();
+            tokio::task::spawn_blocking(move || extract_archive(&dl_path_archive, &unpack_archive))
+                .await
+                .map_err(|e| Error::Other(e.to_string()))??;
+
+            let walk_dir = unpack_dir.clone();
+            let listing: Vec<ArchiveEntry> = tokio::task::spawn_blocking(move || {
+                walkdir::WalkDir::new(&walk_dir)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_type().is_file())
+                    .map(|e| {
+                        let executable = is_executable(&e);
+                        ArchiveEntry::new(e.path().to_path_buf(), executable)
+                    })
+                    .collect()
+            })
+            .await
+            .map_err(|e| Error::Other(e.to_string()))?;
+
+            let discovered =
+                artifact::find_executable(&listing, &spec.name, fetched.bin.as_deref())
+                    // An archive that carries no program Shall can find is a `@bin=` the
+                    // user can supply, not a name that does not exist.
+                    .map_err(|e| Error::Validation(e.to_string()))?;
+
+            // One artifact is deployed under the repo's name, as it always has been.
+            // Several cannot be — so each keeps the name of the program inside it, and
+            // two that would land on the same name is an error rather than one silently
+            // overwriting the other (owner ruling, 2026-07-21).
+            let deploy_name = if one_artifact {
+                repo_name.to_string()
+            } else {
+                discovered
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .ok_or_else(|| {
+                        Error::Other(format!(
+                            "{}: the executable inside `{}` has no usable filename",
+                            spec.name, file.pick.asset.name
+                        ))
+                    })?
+                    .to_string()
+            };
+            let bin_dest =
+                crate::utils::bin_destination(&bin_dir, &deploy_name, self.core.confine_bin)?;
+            if let Some((clash, _, _, _)) =
+                resolved.iter().find(|(_, _, _, dest)| dest == &bin_dest)
+            {
+                return Err(Error::Validation(format!(
+                    "{}: both `{}` and `{}` install a program called `{}`. Narrow \
+                     `@asset=all` with a pattern, e.g. @asset=*musl*, so one file answers \
+                     the line.",
+                    spec.name, clash.asset.name, file.pick.asset.name, deploy_name
+                )));
+            }
+            resolved.push((&file.pick, &file.sha256, discovered, bin_dest));
+        }
+
+        let mut installed_artifacts: Vec<InstalledArtifact> = Vec::new();
+        let mut locks: Vec<ArtifactLock> = Vec::new();
+
+        // D5: hand each `.deb`/`.rpm` to its manager. The manager now owns the files — Shall
+        // records only *which* manager and the name it listed the package under, and removal,
+        // upgrade and dedup route through that record. The name is read from the file before
+        // the install, because after the install the file is gone and the name is the only
+        // handle removal has.
+        for &i in &handoff_idx {
+            let file = &downloaded[i];
+            let installer = system_pkg::installer_for(file.pick.format).ok_or_else(|| {
+                Error::Other(format!(
+                    "{}: no system installer for {}",
+                    spec.name, file.pick.format
+                ))
+            })?;
+            let query = system_pkg::query_name_argv(file.pick.format, &file.path)?;
+            let (qprog, qargs) = query.split_first().expect("a query argv is never empty");
+            let qrefs: Vec<&str> = qargs.iter().map(String::as_str).collect();
+            let system_package = self
+                .core
+                .executor
+                .run_output(qprog, &qrefs, false)
+                .await?
+                .trim()
+                .to_string();
+
+            let install = system_pkg::install_argv(file.pick.format, &file.path)?;
+            let (iprog, iargs) = install
+                .split_first()
+                .expect("an install argv is never empty");
+            let irefs: Vec<&str> = iargs.iter().map(String::as_str).collect();
+            info!(
+                "{}: handing {} to {} — installs as `{}`",
+                spec.name, file.pick.asset.name, installer, system_package
+            );
+            self.core.executor.run(iprog, &irefs, true).await?;
+
+            installed_artifacts.push(InstalledArtifact {
+                asset: file.pick.asset.name.clone(),
+                format: file.pick.format.to_string(),
+                bin_path: None,
+                installed_by: Some(installer.to_string()),
+                system_package: Some(system_package.clone()),
+            });
+            locks.push(ArtifactLock {
+                version: Some(release.version.clone()),
+                asset: file.pick.asset.name.clone(),
+                url: file.pick.asset.url.clone(),
+                format: file.pick.format.to_string(),
+                selected_by: Some(fetched.reason.clone()),
+                sha256: Some(file.sha256.clone()),
+                installed_by: Some(installer.to_string()),
+                system_package: Some(system_package),
+            });
+        }
+
+        // The commit point: unpack, discovery and every refusal above only ever touched
+        // the staging tree. From here the new tree answers at `pkg_dir`, and discovery
+        // results are re-pointed at their post-swap locations.
+        crate::utils::file::swap_into_place(&stage, &pkg_dir).await?;
+        let resolved: Vec<_> = resolved
+            .into_iter()
+            .map(|(pick, sha, discovered, bin_dest)| {
+                let tail = discovered
+                    .strip_prefix(&stage)
+                    .unwrap_or(discovered.as_path());
+                let relocated = pkg_dir.join(tail);
+                (pick, sha, relocated, bin_dest)
+            })
+            .collect();
+
+        for (pick, sha, discovered, bin_dest) in &resolved {
+            crate::utils::deploy_executable(
+                discovered,
+                bin_dest,
+                &self.core.install_dir,
+                previous
+                    .iter()
+                    .find(|p| *p == &bin_dest.to_string_lossy())
+                    .map(|s| s.as_str()),
+            )
+            .await?;
+
+            installed_artifacts.push(InstalledArtifact {
+                asset: pick.asset.name.clone(),
+                format: pick.format.to_string(),
+                bin_path: Some(bin_dest.to_string_lossy().to_string()),
+                installed_by: None,
+                system_package: None,
+            });
+            locks.push(ArtifactLock {
+                version: Some(release.version.clone()),
+                asset: pick.asset.name.clone(),
+                url: pick.asset.url.clone(),
+                format: pick.format.to_string(),
+                selected_by: Some(fetched.reason.clone()),
+                sha256: Some((*sha).clone()),
+                ..Default::default()
+            });
+        }
+
+        // A declaration that used to deploy a name it no longer deploys leaves that file
+        // on PATH, where nothing declares it and no `sync` can see it.
+        for stale in previous.iter().filter(|p| {
+            !installed_artifacts
+                .iter()
+                .any(|a| a.bin_path.as_ref() == Some(*p))
+        }) {
+            if let Err(e) = crate::utils::remove_deployed_path(stale).await {
+                warn!("{}: could not remove the old `{}`: {}", spec.name, stale, e);
+            }
+        }
+
+        let record = GithubState {
+            repo: spec.name.clone(),
+            version: release.version.clone(),
+            install_path: pkg_dir.to_string_lossy().to_string(),
+            artifacts: installed_artifacts,
+        };
+        Ok((record, locks))
+    }
+}
+
 pub struct GithubQueryable {
     pub core: Arc<GithubBackendCore>,
 }
@@ -1253,16 +1345,18 @@ pub fn register(
 ) {
     let core = Arc::new(GithubBackendCore::new(
         exec.clone(),
-        cfg.github_dir.clone(),
-        cfg.bin_dir.clone(),
-        cfg.layout().lock_file("github"),
-        cfg.guard.confine_bin,
-        cfg.clean_cache_on_remove,
-        cfg.cache_dirs.clone(),
-        // A secret is the environment only, never a file (II.1) — `preferences.toml` is
-        // committed to the repo it lives in, so a token key there is a token in git.
-        std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty()),
-        Duration::from_secs(cfg.rate_limit_max_wait_secs),
+        GithubLayout {
+            install_dir: cfg.github_dir.clone(),
+            bin_dir: cfg.bin_dir.clone(),
+            locks_file: cfg.layout().lock_file("github"),
+            confine_bin: cfg.guard.confine_bin,
+            clean_cache_on_remove: cfg.clean_cache_on_remove,
+            cache_dirs: cfg.cache_dirs.clone(),
+            // A secret is the environment only, never a file (II.1) — `preferences.toml` is
+            // committed to the repo it lives in, so a token key there is a token in git.
+            github_token: std::env::var("GITHUB_TOKEN").ok().filter(|t| !t.is_empty()),
+            rate_limit_max_wait: Duration::from_secs(cfg.rate_limit_max_wait_secs),
+        },
     ));
     reg.register(Arc::new(
         crate::core::BackendCapabilities::builder(core.clone())

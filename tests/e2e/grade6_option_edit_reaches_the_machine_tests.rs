@@ -257,8 +257,8 @@ fn machine_effect_keys() -> Vec<(&'static str, &'static str)> {
 
 /// The keys the grammar accepts, read out of the grammar.
 fn package_option_keys() -> Vec<String> {
-    let src = std::fs::read_to_string(repo().join("src/config/grammar/statement.rs"))
-        .expect("statement.rs");
+    let src = std::fs::read_to_string(repo().join("src/config/grammar/statement/validate.rs"))
+        .expect("statement/validate.rs");
     let body = src
         .split_once("pub(crate) const PACKAGE_OPTION_KEYS: &[&str] = &[")
         .expect("PACKAGE_OPTION_KEYS is gone; re-derive this finding")

@@ -162,11 +162,11 @@ fn a_width_is_a_cap_unless_it_is_a_literal_or_the_input_s_own_length() {
 /// So the rule is pinned where it can be: **the positional read keeps `buffered`.** A source
 /// check, for the same reason as the scan above — the mis-index is invisible until the day a
 /// rollback fires on a real machine.
-const POSITIONAL_READ: &str = "src/core/transaction.rs";
+const POSITIONAL_READ: &str = "src/core/transaction/retry.rs";
 
 #[test]
 fn a_result_that_is_indexed_by_position_stays_ordered() {
-    let src = std::fs::read_to_string(Path::new(POSITIONAL_READ)).expect("transaction.rs");
+    let src = std::fs::read_to_string(Path::new(POSITIONAL_READ)).expect("transaction/retry.rs");
     // The read is positional only if something indexes its result by position; without this the
     // rule below would be asserting a constraint on a value nothing depends on.
     assert!(
@@ -246,7 +246,7 @@ const SEMAPHORE_OWNERS: &[(&str, &str)] = &[
          process rationed each other.",
     ),
     (
-        "src/core/transaction.rs",
+        "src/core/transaction/mod.rs",
         "the execution semaphore for one graph run, derived from `max_concurrent`. A \
          transaction is the unit the cap is about: two transactions in one process are two \
          separate sets of package work, and the `DataLock` already serialises writers so they \

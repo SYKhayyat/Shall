@@ -305,25 +305,39 @@ pub fn with_manager_policy(core: Arc<GenericBackendCore>) -> Arc<GenericBackendC
 /// to retrying a crate that will never exist. The argv table could not catch it, because an
 /// exit policy is not argv. An unknown manager yields the default policy, which classifies
 /// nothing, so applying this to all of them is safe in the direction that keeps a declaration.
-#[allow(clippy::fn_params_excessive_bools)]
-fn register_generic(
-    reg: &mut BackendRegistry,
-    core: Arc<GenericBackendCore>,
-    query: bool,
-    search: bool,
-    upgrade: bool,
-) {
+/// Which of the optional capabilities a generic registration turns on.
+///
+/// **Installable is deliberately absent**: install is the point of a backend, so it cannot be
+/// turned off, and a flag for it would be a flag that must always be true. The three here are the
+/// ones a manager can genuinely lack.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OptIns {
+    pub query: bool,
+    pub search: bool,
+    pub upgrade: bool,
+}
+
+impl OptIns {
+    /// A manager whose data file says it can answer questions, search and upgrade.
+    pub const ALL: Self = Self {
+        query: true,
+        search: true,
+        upgrade: true,
+    };
+}
+
+fn register_generic(reg: &mut BackendRegistry, core: Arc<GenericBackendCore>, opt: OptIns) {
     let core = with_manager_policy(core);
     let mut builder = BackendCapabilities::builder(core.clone())
         .with_installable(Arc::new(GenericInstallable { core: core.clone() }))
         .with_metadata_provider(core.clone());
-    if query {
+    if opt.query {
         builder = builder.with_queryable(Arc::new(GenericQueryable { core: core.clone() }));
     }
-    if search {
+    if opt.search {
         builder = builder.with_searchable(Arc::new(GenericSearchable { core: core.clone() }));
     }
-    if upgrade {
+    if opt.upgrade {
         builder = builder.with_upgradable(Arc::new(GenericUpgradable { core: core.clone() }));
     }
     reg.register(Arc::new(builder.build()));

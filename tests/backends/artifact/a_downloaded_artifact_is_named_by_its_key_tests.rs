@@ -144,14 +144,16 @@ async fn a_github_package_is_reported_under_the_repo_its_state_is_keyed_by() {
 
     let core = std::sync::Arc::new(github::GithubBackendCore::new(
         exec(),
-        dir.clone(),
-        dir.join("bin"),
-        dir.join("locks.toml"),
-        true,
-        false,
-        vec![],
-        None,
-        std::time::Duration::from_secs(0),
+        github::GithubLayout {
+            install_dir: dir.clone(),
+            bin_dir: dir.join("bin"),
+            locks_file: dir.join("locks.toml"),
+            confine_bin: true,
+            clean_cache_on_remove: false,
+            cache_dirs: vec![],
+            github_token: None,
+            rate_limit_max_wait: std::time::Duration::from_secs(0),
+        },
     ));
     let q = github::GithubQueryable { core: core.clone() };
     assert_eq!(

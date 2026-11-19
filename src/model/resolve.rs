@@ -2,7 +2,7 @@ use super::conflict::{reconcile, Declared};
 use super::cycle::{self, Hop};
 use super::dated::dating_of;
 use super::layout::Layout;
-use super::modules::{expand, expand_args, ModuleLoader};
+use super::modules::{expand, expand_args, ModuleLoader, Walk};
 use super::priority::Priority;
 use super::profiles::{read_active, ProfileLoader, SetOp};
 use crate::config::grammar::{
@@ -558,8 +558,10 @@ impl<'a> Resolver<'a> {
                 m,
                 &Origin::new(&active_file, 0),
                 &self.facts,
-                &mut Vec::new(),
-                reached_by,
+                &mut Walk {
+                    seen: &mut Vec::new(),
+                    inherited: reached_by,
+                },
                 args,
             )?;
             // Attributed by the file each line actually came from, so a module reached
@@ -620,8 +622,10 @@ impl<'a> Resolver<'a> {
                 &name,
                 &asked,
                 &self.facts,
-                &mut Vec::new(),
-                &Vec::new(),
+                &mut Walk {
+                    seen: &mut Vec::new(),
+                    inherited: &Vec::new(),
+                },
             ) {
                 errors.push(e);
             }
@@ -755,8 +759,10 @@ impl<'a> Resolver<'a> {
                 &m.name,
                 asked,
                 &self.facts,
-                &mut Vec::new(),
-                &m.gates,
+                &mut Walk {
+                    seen: &mut Vec::new(),
+                    inherited: &m.gates,
+                },
                 &m.args,
             )?);
         }
@@ -902,8 +908,10 @@ impl<'a> Resolver<'a> {
                 atom,
                 origin,
                 &self.facts,
-                &mut Vec::new(),
-                &Vec::new(),
+                &mut Walk {
+                    seen: &mut Vec::new(),
+                    inherited: &Vec::new(),
+                },
             );
         }
 

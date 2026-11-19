@@ -47,7 +47,7 @@ const LEDGER: &[Accounted] = &[
     // CreateProcess/ARG_MAX. Both sites are the same call the trait method always made; the
     // guard is the `Reaped` the caller was already required to hold, unchanged.
     Accounted {
-        file: "src/backends/generic.rs",
+        file: "src/backends/generic/install.rs",
         guarded_by: "`Reaped` required by every effector (the trait signature); remove/purge \
                      run under the plan the guard enforced in sync's preflight, per M3",
     },
@@ -79,12 +79,29 @@ const LEDGER: &[Accounted] = &[
     // moved into `transaction.rs` below and this file now reaches no removal itself. **The gate
     // did not move**: `heal` still enforces per entry, before an interrupted removal is put in
     // the graph at all, which is what the entry below records.
+    // Since the #199 split the engine is a folder, and the token crosses three of its files:
+    // held by the transaction, forwarded into the batch, and spent by the rollback. Each is a
+    // separate row because each is a separate question a reader asks — *who holds it*, *who
+    // hands it on*, *who acts on it* — and a row that covered all three would answer none.
     Accounted {
-        file: "src/core/transaction.rs",
-        guarded_by: "the purge/remove pair executes a plan enforced in `sync`'s preflight \
-                     — or, for a recovery, per entry in `refuse_a_protected_heal_removal` \
-                     (GuardScope::Heal) before that entry becomes a node; the rollback \
-                     removal is enforced where the rollback is built",
+        file: "src/core/transaction/mod.rs",
+        guarded_by: "the token the run carries: it comes from the plan `sync` enforced in its \
+                     preflight, or per entry from `refuse_a_protected_heal_removal` \
+                     (GuardScope::Heal). This file stores it and hands it to each node's batch; \
+                     no removal is issued here",
+    },
+    Accounted {
+        file: "src/core/transaction/retry.rs",
+        guarded_by: "the token is only forwarded, into `BatchRun`, which `run_one_command` \
+                     refuses to issue a removal without — the requirement and its refusal live \
+                     there, not here",
+    },
+    Accounted {
+        file: "src/core/transaction/rollback.rs",
+        guarded_by: "`guard::enforce_own_work` over every package this run installed, asked \
+                     once before any of them is removed; a token that refuses leaves them \
+                     installed and names them, because undoing Shall's own install must not be \
+                     able to strand the machine half-changed",
     },
     // **`M3` split the command runner out of `transaction.rs`, and the removal went with
     // it.** This entry exists because the gate refused the split until it did: the file

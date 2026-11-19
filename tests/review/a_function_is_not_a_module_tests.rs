@@ -11,21 +11,24 @@
 //! an allow. A row that has been earned back — the split landed and the allow came off — is
 //! deleted in the same commit, and the gate reds if it was not.
 //!
-//! **The one exemption is a row naming an issue.** `Transaction::execute_batch_with_retry` is
-//! #199's job, so its allow names `#199`; the other three name `#205`.
+//! **There are no exemptions left, and the table stays because the rule is about the next one.**
+//! The four allows it carried — `Transaction::execute_batch_with_retry` (#199) and `heal`,
+//! `GithubInstallable::install` and `dispatch` (#205) — were all earned back by splitting the
+//! functions. A new allow is red until somebody writes a row naming the issue that removes it.
+//!
+//! **Two lints are forbidden outright**, not tabled: `too_many_arguments` and
+//! `fn_params_excessive_bools`. The repo already has the fix — `app/machinery.rs` — and every
+//! remaining site (#203) now groups its arguments into one value instead.
 
 use std::path::Path;
 
 /// Every `#[allow(clippy::too_many_lines)]` in the tree, and the issue that will remove it.
-const ALLOWED_FOR_NOW: &[(&str, &str, &str)] = &[
-    (
-        "src/core/transaction.rs",
-        "execute_batch_with_retry",
-        "#199",
-    ),
-    ("src/app/sync/mod.rs", "heal", "#205"),
-    ("src/backends/github.rs", "install", "#205"),
-    ("src/main.rs", "dispatch", "#205"),
+const ALLOWED_FOR_NOW: &[(&str, &str, &str)] = &[];
+
+/// Lints no site may silence: the fix is a struct or an enum, never an allow.
+const FORBIDDEN: &[&str] = &[
+    "#[allow(clippy::too_many_arguments)]",
+    "#[allow(clippy::fn_params_excessive_bools)]",
 ];
 
 /// The name of the function an allow licenses: the next `fn` after the allow.
@@ -119,4 +122,33 @@ fn every_allow_for_a_long_function_names_the_issue_that_removes_it() {
              split landed; delete the row in the same commit."
         );
     }
+}
+
+#[test]
+fn no_site_silences_the_parameter_count_lints() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut offenders: Vec<String> = Vec::new();
+    for p in rust_files(&root.join("src")) {
+        let rel = p
+            .strip_prefix(root)
+            .expect("under the repo")
+            .to_string_lossy()
+            .to_string();
+        let Ok(text) = std::fs::read_to_string(&p) else {
+            continue;
+        };
+        for (i, line) in text.lines().enumerate() {
+            let t = line.trim();
+            if FORBIDDEN.contains(&t) {
+                offenders.push(format!("{rel}:{}: {t}", i + 1));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "a function silences clippy's parameter-count lint instead of grouping its arguments:\n  \
+         {}\n`app/machinery.rs` is the shape: the arguments that travel together become one \
+         value with named fields, and the allow is deleted.",
+        offenders.join("\n  ")
+    );
 }

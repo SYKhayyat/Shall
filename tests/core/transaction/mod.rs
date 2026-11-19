@@ -267,3 +267,4 @@ mod recovery_finishes_what_it_can_tests;
 mod the_engine_runs_the_graph_in_order_tests;
 mod the_engine_sends_what_the_manager_can_take_tests;
 mod the_scheduler_hands_out_a_generation_at_a_time_tests;
+mod the_undo_plan_is_decided_before_anything_is_undone;

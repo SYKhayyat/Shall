@@ -56,10 +56,12 @@ argv
          │
          ├─ 5. GUARD      src/app/sync/guard.rs       may this many removals proceed?
          │
-         └─ 6. APPLY      src/core/transaction.rs     JoinSet worker pool over the DAG
+         └─ 6. APPLY      src/core/transaction/      JoinSet worker pool over the DAG;
+                                                        retry.rs is one batch by phase,
+                                                        rollback.rs decides before it undoes
                            src/core/journal.rs        write-ahead log, so a kill is recoverable
                            src/backends/              the adapters that run the actual commands
-                           src/core/executor.rs       the only place a child process is spawned
+                           src/core/executor/         the only place a child process is spawned
 ```
 
 Three things to notice, because they are the ones people trip over:
@@ -137,7 +139,7 @@ Each of these is a rule with a scar behind it; `docs/spec/why.md` has the incide
 ## Concurrency
 
 Tokio multi-threaded runtime. The fan-out in `inventory.rs` and the worker pool in
-`transaction.rs` are the two places concurrency actually lives; everywhere else that looks
+`transaction/` are the two places concurrency actually lives; everywhere else that looks
 concurrent is one of those two underneath.
 
 Bounded by `max_parallel`, which defaults to the core count and is the one machine fact you are

@@ -283,12 +283,12 @@ fn without_test_modules(src: &str) -> String {
     out
 }
 
-/// The executor's source, which is three files: the executors themselves, [how a program is
-/// found and launched](../../src/core/launch.rs), and [how a child is watched and
-/// killed](../../src/core/supervise.rs).
+/// The executor's source, which is three things: the executors themselves (one file per
+/// executor since the #200 split), [how a program is found and launched](../../src/core/launch.rs),
+/// and [how a child is watched and killed](../../src/core/supervise.rs).
 pub fn executor_source() -> String {
     [
-        read_source("src/core/executor.rs"),
+        source_of("src/core/executor"),
         read_source("src/core/launch.rs"),
         read_source("src/core/supervise.rs"),
     ]

@@ -491,8 +491,10 @@ impl<'a> Editor<'a> {
                     &m.name,
                     &asked,
                     &self.facts,
-                    &mut Vec::new(),
-                    &Vec::new(),
+                    &mut super::modules::Walk {
+                        seen: &mut Vec::new(),
+                        inherited: &Vec::new(),
+                    },
                 ) {
                     let want = self.layout.module_file(module);
                     if stmts.iter().any(|(_, o, _)| o.file == want) {
@@ -751,8 +753,10 @@ pub fn active_module_files(
                 &m.name,
                 &asked,
                 facts,
-                &mut Vec::new(),
-                &Vec::new(),
+                &mut super::modules::Walk {
+                    seen: &mut Vec::new(),
+                    inherited: &Vec::new(),
+                },
             ) else {
                 continue;
             };

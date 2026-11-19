@@ -18,7 +18,7 @@ use crate::core::{BackendCapabilities, CommandExecutor};
 use crate::parsers::LambdaParser;
 use std::sync::Arc;
 
-use super::{base_config, register_generic, with_manager_policy, BackendRegistry};
+use super::{base_config, register_generic, with_manager_policy, BackendRegistry, OptIns};
 
 pub fn register_pip(reg: &mut BackendRegistry, executor: &CommandExecutor) {
     // Generic for install/list; Searchable is a bespoke PyPI JSON lookup
@@ -407,5 +407,5 @@ pub fn register_conda(reg: &mut BackendRegistry, executor: &CommandExecutor, cfg
             search_fn: crate::parsers::conda::parse_conda_search,
         }),
     });
-    register_generic(reg, core, true, true, true);
+    register_generic(reg, core, OptIns::ALL);
 }

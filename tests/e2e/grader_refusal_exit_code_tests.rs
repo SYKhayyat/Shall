@@ -22,7 +22,7 @@
 //!
 //!     src/core/download.rs    plain HTTP                      (SEC2)
 //!     src/core/download.rs    unverified, no @sha256          (SEC2)
-//!     src/core/executor.rs   a secret nothing protects       (T5)
+//!     src/core/executor/command.rs a secret nothing protects  (T5)
 //!     src/backends/link.rs    decrypt into the git repo       (T2)
 //!     src/app/hooks.rs        unapproved hooks                (II.12)
 //!     src/app/shim_manager.rs deploy over a foreign file      (SEC1)

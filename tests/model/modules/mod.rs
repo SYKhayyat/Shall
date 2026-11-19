@@ -43,8 +43,10 @@ fn expand_module(f: &Fixture, name: &str) -> Result<Vec<Statement>> {
         name,
         &Origin::argument(),
         &facts(),
-        &mut Vec::new(),
-        &Vec::new(),
+        &mut Walk {
+            seen: &mut Vec::new(),
+            inherited: &Vec::new(),
+        },
     )?;
     Ok(out.into_iter().map(|(s, _, _)| s).collect())
 }
@@ -59,8 +61,10 @@ fn expand_with_args(f: &Fixture, name: &str, args: &[(&str, &str)]) -> Result<Ve
         name,
         &Origin::argument(),
         &facts(),
-        &mut Vec::new(),
-        &Vec::new(),
+        &mut Walk {
+            seen: &mut Vec::new(),
+            inherited: &Vec::new(),
+        },
         &args,
     )?;
     Ok(out.into_iter().map(|(s, _, _)| s).collect())

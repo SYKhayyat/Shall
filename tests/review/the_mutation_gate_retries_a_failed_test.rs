@@ -102,6 +102,63 @@ fn the_mutation_gate_retries_a_failed_test_before_crediting_a_catch() {
     );
 }
 
+/// **A shard that names a file the tree no longer has mutates nothing and exits 0.**
+///
+/// `cargo mutants --file <path>` on a path that does not exist lists zero mutants, so the job
+/// finishes green having covered nothing — the `#179` failure one level up from the test suite,
+/// and it has already happened once: `#199` split `src/core/transaction.rs` into three files, and
+/// the four rows that named it would each have reported `ok` over an empty list until a reader
+/// compared the row with the tree.
+///
+/// The scan is textual for the same reason every other gate here is: no YAML parser is a
+/// dependency of this crate, and the shape the workflow uses is one row per line.
+#[test]
+fn every_mutation_row_names_a_file_that_exists_and_a_shard_inside_its_own_count() {
+    let job = mutation_job();
+    let mut rows = 0usize;
+    for line in job.lines() {
+        let Some(rest) = line.trim().strip_prefix("- { what: ") else {
+            continue;
+        };
+        rows += 1;
+        let file = rest
+            .split(", file: ")
+            .nth(1)
+            .unwrap_or_else(|| panic!("a mutation row names no file: {line}"))
+            .split(',')
+            .next()
+            .expect("a file value")
+            .trim();
+        assert!(
+            repo().join(file).is_file(),
+            "the matrix mutates `{file}`, which does not exist. `cargo mutants --file` reports \
+             zero mutants for a path like that and exits 0, so this shard would be green over \
+             nothing. A split moves the code; the row has to follow it."
+        );
+
+        let shard = rest
+            .split(", shard: ")
+            .nth(1)
+            .unwrap_or_else(|| panic!("a mutation row names no shard: {line}"))
+            .trim_end_matches(['}', ' '])
+            .trim();
+        let (k, n) = shard
+            .split_once('/')
+            .unwrap_or_else(|| panic!("`{shard}` is not `k/n`"));
+        let (k, n): (usize, usize) = (k.trim().parse().unwrap(), n.trim().parse().unwrap());
+        assert!(
+            n > 0 && k < n,
+            "`{shard}` in `{file}` is not a shard of its own file: `--shard k/n` is zero-based \
+             and needs k < n"
+        );
+    }
+    assert!(
+        rows > 20,
+        "only {rows} row(s) parsed out of the mutation matrix — the scan is looking at the wrong \
+         thing, and a gate over nothing passes the worst way"
+    );
+}
+
 #[test]
 fn the_mutation_job_is_the_only_one_that_runs_the_suite_under_nextest() {
     let ci = read(".github/workflows/ci.yml");

@@ -20,7 +20,7 @@ fn executor() -> String {
     // Normalised before the searches: they anchor on a newline-and-brace sequence, and a
     // `core.autocrlf=true` checkout writes `\r\n`, so the gate would report the `Drop` impl as
     // missing (#156).
-    super::read_source("src/core/executor.rs")
+    super::read_source("src/core/executor/mock.rs")
 }
 
 /// **The audit arm is ahead of the early return that would hide the tests it measures.**

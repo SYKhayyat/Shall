@@ -58,8 +58,8 @@ fn variants_of_enum(source: &str, enum_name: &str) -> Vec<String> {
 }
 
 fn statement_source() -> String {
-    std::fs::read_to_string(root().join("src/config/grammar/statement.rs"))
-        .expect("src/config/grammar/statement.rs must be readable")
+    std::fs::read_to_string(root().join("src/config/grammar/statement/mod.rs"))
+        .expect("src/config/grammar/statement/mod.rs must be readable")
 }
 
 /// `Phase::all()` walks the `next()` chain rather than a second list — this proves the walk

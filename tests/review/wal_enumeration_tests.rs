@@ -56,11 +56,13 @@ const LEDGER: &[Accounted] = &[
     // ---- The engine. Every package `sync`, `apply`, `rebuild`, `prune` and `heal` schedules
     // arrives here, and `record_start` runs before the manager is invoked.
     Accounted {
-        file: "src/core/transaction.rs",
+        file: "src/core/transaction/rollback.rs",
         calls: 2,
         recovery: Recovery::Transaction,
-        how: "record_start per node before the batch runs; a WAL write that fails makes the \
-              batch stillborn rather than letting it run unrecorded",
+        how: "the two compensations a rollback issues — `reinstate`'s install and the guarded \
+              removal of what this run installed. Both are reached only from a run that opened \
+              WAL entries for every node before it touched the machine, and both are logged as \
+              the undo of an operation the log already knows about",
     },
     // `M3` moved the manager call itself into `batch.rs`, so the engine's five mutation sites
     // are now two there and three here. `record_start` still runs in `transaction.rs`, BEFORE
@@ -380,7 +382,7 @@ fn the_enumeration_can_actually_see_a_mutation() {
         found.len()
     );
     assert!(
-        found.contains_key("src/core/transaction.rs"),
+        found.contains_key("src/core/transaction/rollback.rs"),
         "the scan cannot see the transaction engine's own install/remove"
     );
 }

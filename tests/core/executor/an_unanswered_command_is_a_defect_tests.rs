@@ -7,8 +7,9 @@
 //! nothing at all: the test double kept a complete record of every question the suite failed to
 //! prepare an answer for, and no test, gate or build had ever asked for it.
 //!
-//! These live in `tests/` rather than beside the double because `src/core/executor.rs` carries a
-//! recorded line ceiling and this is 150 lines of assertions about it rather than part of it. The
+//! These live in `tests/` rather than beside the double because `src/core/executor/mock.rs`
+//! carries a recorded line ceiling and this is 150 lines of assertions about it rather than part
+//! of it. The
 //! **reasoning** is `V.215`; the parts that stay in the source are the two doc comments that
 //! state a constraint a caller cannot see from the signature.
 use std::collections::HashMap;

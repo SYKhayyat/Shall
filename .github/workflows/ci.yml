@@ -1268,10 +1268,21 @@ jobs:
           - { what: the removal guard 4/4, file: src/app/sync/guard.rs, slug: guard-4, shard: 3/4 }
           - { what: the exit codes, file: src/core/exit.rs, slug: exit, shard: 0/1 }
           - { what: the data lock, file: src/core/datalock.rs, slug: datalock, shard: 0/1 }
-          - { what: the transaction 1/4, file: src/core/transaction.rs, slug: transaction-1, shard: 0/4 }
-          - { what: the transaction 2/4, file: src/core/transaction.rs, slug: transaction-2, shard: 1/4 }
-          - { what: the transaction 3/4, file: src/core/transaction.rs, slug: transaction-3, shard: 2/4 }
-          - { what: the transaction 4/4, file: src/core/transaction.rs, slug: transaction-4, shard: 3/4 }
+          # **`#199` split the engine into three files, and the shards follow the code or they
+          # mutate nothing.** `cargo mutants --file` on a path that no longer exists lists zero
+          # mutants and exits 0 — a green shard covering nothing, which is `#179`'s shape one
+          # level up. The rows below are sized from the counts that split produced, measured
+          # with `cargo mutants --list --file <path> | wc -l` on 2026-11-19: **115 / 43 / 14**.
+          # A shard is aimed at ~30 mutants, which is the size a four-way split of this engine
+          # last survived, so `mod.rs` keeps four, the batch's retry phase takes two and the plan
+          # takes one: ~29 mutants is the slowest of them.
+          - { what: the transaction 1/4, file: src/core/transaction/mod.rs, slug: transaction-1, shard: 0/4 }
+          - { what: the transaction 2/4, file: src/core/transaction/mod.rs, slug: transaction-2, shard: 1/4 }
+          - { what: the transaction 3/4, file: src/core/transaction/mod.rs, slug: transaction-3, shard: 2/4 }
+          - { what: the transaction 4/4, file: src/core/transaction/mod.rs, slug: transaction-4, shard: 3/4 }
+          - { what: the batch retry 1/2, file: src/core/transaction/retry.rs, slug: transaction-retry-1, shard: 0/2 }
+          - { what: the batch retry 2/2, file: src/core/transaction/retry.rs, slug: transaction-retry-2, shard: 1/2 }
+          - { what: the rollback plan, file: src/core/transaction/rollback.rs, slug: transaction-rollback, shard: 0/1 }
           # **`M3` split `src/core/batch.rs` out of the file above, and a shard follows the code.
           # Without this row the narrowing, the retry loop and the manager-lock wait would have
           # left mutation coverage on the day they moved.

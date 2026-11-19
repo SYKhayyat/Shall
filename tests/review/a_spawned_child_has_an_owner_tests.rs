@@ -128,8 +128,9 @@ fn every_spawned_child_goes_through_a_door_or_says_why_not() {
             .unwrap_or(path)
             .to_string_lossy()
             .replace('\\', "/");
-        // The executor is the mechanism. It is the one place allowed to hold a raw child.
-        if relative == "src/core/executor.rs" {
+        // The executor is the mechanism. It is the one place allowed to hold a raw child, and
+        // since the #200 split it is a folder rather than a file.
+        if relative.starts_with("src/core/executor/") {
             continue;
         }
         let body = body_of(&source);

@@ -1251,8 +1251,13 @@ impl SyncEngine {
         }
     }
 
-    // Over the 250-line ratchet (#204). Split by phase and this allow comes off — `#205`.
-    #[allow(clippy::too_many_lines)]
+    /// Finish what a run that died left behind.
+    ///
+    /// **Five phases, and each one is a question a reader asks separately:** what is
+    /// interrupted (`interrupted_operations`), what can be attempted at all
+    /// (`classify_interrupted`), what the manager said (`recover_interrupted`), what the ledger
+    /// and the log make of it (`finish_heal`), and what the user is told. Written as one method
+    /// this was 312 lines, which is where "what is on the machine now" stops being answerable.
     pub async fn heal(&self, declared: &[PackageSpec]) -> Result<()> {
         // Before the interrupted entries, and NOT gated on there being any. The packages this
         // repairs have nothing interrupted about them — they are installed and declared and
@@ -1260,21 +1265,7 @@ impl SyncEngine {
         // sync.
         self.reconcile_ownership(declared).await?;
 
-        // One package, one recovery. `record_start` mints a fresh id per attempt, so a
-        // declaration that fails on every sync appends a *new* operation every time and none of
-        // them is ever purged — one sweep's journal held **22 operations for a single
-        // `scoop:shall-no-such-pkg-zzz`**, and `heal` made 23 real `scoop install` round trips
-        // for that one name. The cost is unbounded in the number of past attempts, on the
-        // command that runs before every `sync` and inside every `watch` tick.
-        //
-        // They are not 22 operations. They are one operation attempted 22 times, so one attempt
-        // decides all of them: on success every entry that named the same thing is resolved,
-        // because the package it named is now installed.
-        let interrupted = {
-            let j = self.journal.lock().await;
-            Self::one_per_operation(j.interrupted_actions())
-        };
-
+        let interrupted = self.interrupted_operations().await;
         if interrupted.is_empty() {
             debug!("nothing to heal");
             return Ok(());
@@ -1284,24 +1275,7 @@ impl SyncEngine {
         // rather than at the call sites because every caller of this function mutates, and
         // the call site that was missed is how a `--dry-run` came to reinstall packages.
         if self.config.dry_run {
-            crate::would!(
-                "would recover {} interrupted operation(s) from a previous run:",
-                interrupted.len()
-            );
-            for (entry, _) in &interrupted {
-                match Self::replay_of(&entry.action) {
-                    Some(GraphAction::Install(spec)) => {
-                        crate::would!("  reinstall {}:{}", spec.backend, spec.name)
-                    }
-                    Some(GraphAction::Remove { name, backend }) => {
-                        crate::would!("  remove {}:{} (subject to the guard)", backend, name)
-                    }
-                    // Nothing to replay, so the preview says the only true thing there is:
-                    // what was interrupted. Reporting it is the whole of the real run's
-                    // action too, so preview and run describe the same machine.
-                    None => crate::would!("  report: {}", entry.action.describe_interruption()),
-                }
-            }
+            Self::preview_heal(&interrupted);
             return Ok(());
         }
 
@@ -1313,27 +1287,69 @@ impl SyncEngine {
             "recovering {} interrupted operation(s) from a previous run.",
             interrupted.len()
         );
-        let mut recovered: Vec<String> = Vec::new();
-        let mut failed: Vec<CarriedPast> = Vec::new();
-        // Packages whose interrupted removal the guard refused: kept, not removed (owner
-        // decision), and the entry resolved so heal completes rather than sticking.
-        let mut kept: Vec<String> = Vec::new();
-        // Interrupted work recovery can only account for, never finish — a half-run script.
-        // Counted separately from `recovered` because nothing on the machine changed.
-        let mut reported: Vec<String> = Vec::new();
-        // Entries recovery cannot act on at all — the manager is not registered on this machine,
-        // or it is registered and cannot install or remove. Until 2026-08-04 the loop below was
-        // two nested `if let`s with **no `else` on either**, so such an entry was neither
-        // recovered, nor failed, nor mentioned: `heal` did nothing about it and returned Ok.
-        // That is B36's finding one branch over — B36 was "says it could not recover and exits
-        // 0", this is "says nothing and exits 0", and the second is worse because there is
-        // nothing in the output to read.
-        let mut unreachable: Vec<String> = Vec::new();
-        // Two passes, because they answer different questions and only the second one costs a
-        // process. This one decides what recovery can even attempt: a manager that is not set up
-        // here, a manager that cannot install or remove, and a removal the guard refuses are all
-        // settled without touching the machine.
-        let mut runnable: Vec<(GraphAction, Vec<String>)> = Vec::new();
+
+        let plan = self.classify_interrupted(interrupted).await;
+        let (recovered, failed) = self.recover_interrupted(plan.runnable).await?;
+
+        self.finish_heal(HealOutcome {
+            recovered,
+            failed,
+            kept: plan.kept,
+            reported: plan.reported,
+            unreachable: plan.unreachable,
+        })
+        .await
+    }
+
+    /// The operations a dead run left open, one per operation rather than one per attempt.
+    ///
+    /// `record_start` mints a fresh id per attempt, so a declaration that fails on every sync
+    /// appends a *new* operation every time and none of them is ever purged — one sweep's
+    /// journal held **22 operations for a single `scoop:shall-no-such-pkg-zzz`**, and `heal`
+    /// made 23 real `scoop install` round trips for that one name. The cost is unbounded in the
+    /// number of past attempts, on the command that runs before every `sync` and inside every
+    /// `watch` tick. They are not 22 operations; they are one operation attempted 22 times, so
+    /// one attempt decides all of them.
+    async fn interrupted_operations(
+        &self,
+    ) -> Vec<(crate::core::journal::JournalEntry, Vec<String>)> {
+        let j = self.journal.lock().await;
+        Self::one_per_operation(j.interrupted_actions())
+    }
+
+    /// What a `--dry-run` says about recovery, and nothing else: preview and run have to
+    /// describe the same machine.
+    fn preview_heal(interrupted: &[(crate::core::journal::JournalEntry, Vec<String>)]) {
+        crate::would!(
+            "would recover {} interrupted operation(s) from a previous run:",
+            interrupted.len()
+        );
+        for (entry, _) in interrupted {
+            match Self::replay_of(&entry.action) {
+                Some(GraphAction::Install(spec)) => {
+                    crate::would!("  reinstall {}:{}", spec.backend, spec.name)
+                }
+                Some(GraphAction::Remove { name, backend }) => {
+                    crate::would!("  remove {}:{} (subject to the guard)", backend, name)
+                }
+                // Nothing to replay, so the preview says the only true thing there is: what
+                // was interrupted. Reporting it is the whole of the real run's action too, so
+                // preview and run describe the same machine.
+                None => crate::would!("  report: {}", entry.action.describe_interruption()),
+            }
+        }
+    }
+
+    /// What recovery can even attempt, decided without touching the machine.
+    ///
+    /// **Two passes in the caller's terms, one here**, because they answer different questions
+    /// and only the second one costs a process: a manager that is not set up here, a manager
+    /// that cannot install or remove, and a removal the guard refuses are all settled first.
+    async fn classify_interrupted(
+        &self,
+        interrupted: Vec<(crate::core::journal::JournalEntry, Vec<String>)>,
+    ) -> HealPlan {
+        let mut plan = HealPlan::default();
         for (entry, ids) in interrupted {
             // The one place the log's vocabulary is turned into the engine's. Everything below
             // reads a `GraphAction`, so a variant that is not package work cannot silently take
@@ -1342,16 +1358,16 @@ impl SyncEngine {
                 // Recovery cannot finish a script, and must not pretend to. What it owes the
                 // user is the account nobody was given while these entries did not exist: a
                 // machine killed mid-`exec:` came back, said nothing, and ran the script again
-                // from the top on the next sync. The entry is then resolved — it has been
-                // acted on as fully as it can be, and leaving it open would keep
-                // `needs_recovery` true for ever and re-report it in front of every sync.
+                // from the top on the next sync. The entry is then resolved — it has been acted
+                // on as fully as it can be, and leaving it open would keep `needs_recovery` true
+                // for ever and re-report it in front of every sync.
                 warn!("{}", entry.action.describe_interruption());
-                reported.push(entry.action.key());
+                plan.reported.push(entry.action.key());
                 // Resolved as a FAILURE, not a success. The entry has been acted on as fully as
                 // it can be, and leaving it open would keep `needs_recovery` true for ever and
-                // re-report it in front of every sync — but the script did not finish, and a
-                // log that records `Completed` for a mutation that was interrupted is exactly
-                // the dishonest record this change exists to remove. `Failed` is terminal, so
+                // re-report it in front of every sync — but the script did not finish, and a log
+                // that records `Completed` for a mutation that was interrupted is exactly the
+                // dishonest record this change exists to remove. `Failed` is terminal, so
                 // recovery still stops asking, and it ages out on the same rule as any other
                 // terminal entry while carrying the reason.
                 let mut j = self.journal.lock().await;
@@ -1371,7 +1387,7 @@ impl SyncEngine {
             let key = format!("{}:{}", backend, package);
 
             let Some(backend_cap) = self.registry.get(&backend) else {
-                unreachable.push(format!(
+                plan.unreachable.push(format!(
                     "{} (no manager named `{}` is set up on this machine, so there is nothing to \
                      complete the operation with)",
                     key, backend
@@ -1379,7 +1395,7 @@ impl SyncEngine {
                 continue;
             };
             if backend_cap.as_installable().is_none() {
-                unreachable.push(format!(
+                plan.unreachable.push(format!(
                     "{} (`{}` cannot install or remove, so an interrupted install of it is not \
                      something recovery can finish)",
                     key, backend
@@ -1394,273 +1410,315 @@ impl SyncEngine {
                     .refuse_a_protected_heal_removal(&backend, &package, &key, &ids)
                     .await
             {
-                kept.push(key.clone());
+                plan.kept.push(key.clone());
                 continue;
             }
 
-            runnable.push((action, ids));
+            plan.runnable.push((action, ids));
+        }
+        plan
+    }
+
+    /// Run the interrupted work on the transaction engine, and record what each result means for
+    /// the ledger.
+    ///
+    /// Returns what was recovered (sentences ready for the summary) and what was not, each with
+    /// the class its error carried.
+    async fn recover_interrupted(
+        &self,
+        runnable: Vec<(GraphAction, Vec<String>)>,
+    ) -> Result<(Vec<String>, Vec<CarriedPast>)> {
+        let mut recovered: Vec<String> = Vec::new();
+        let mut failed: Vec<CarriedPast> = Vec::new();
+        if runnable.is_empty() {
+            return Ok((recovered, failed));
         }
 
-        if !runnable.is_empty() {
-            // **Recovery answers the ceilings a sync answers.** Its installs pass
-            // `enforce_installs`, which also asks `max_total_changes`; its removals were each
-            // enforced individually above. Both ceilings are unset by default, so this costs
-            // nothing unless the user set one — and then it must mean what it says on the
-            // command that runs unattended inside every `watch` tick, not only on syncs.
-            let installs = runnable
+        // **Recovery answers the ceilings a sync answers.** Its installs pass
+        // `enforce_installs`, which also asks `max_total_changes`; its removals were each
+        // enforced individually before they reached here. Both ceilings are unset by default,
+        // so this costs nothing unless the user set one — and then it must mean what it says on
+        // the command that runs unattended inside every `watch` tick, not only on syncs.
+        let installs = runnable
+            .iter()
+            .filter(|(action, _)| matches!(action, GraphAction::Install(_)))
+            .count();
+        guard::enforce_installs(
+            &self.config,
+            installs,
+            &self.reaping,
+            guard::GuardScope::Heal,
+        )
+        .await?;
+
+        // **The recovery runs on the transaction engine, and not on a second copy of it.**
+        // This loop used to be `for entry in ... { handler.install(from_ref(spec)).await }` —
+        // serial, one package per command, beside a batched parallel DAG. Measured on one host
+        // in one minute: `sync --dry-run` 3.9x overlap over 2 waves, `heal` **0.2x over 27 waves
+        // for 27 commands**, which is the definition of serial. 23 of those 30 attempts were the
+        // same package.
+        //
+        // Two settings differ from a sync's, and both follow from what recovery *is*. It does
+        // not roll back: each entry is a separate piece of work a dead run left behind, and
+        // undoing a recovery that succeeded to punish one that failed would put the machine
+        // further from what was wanted, not closer. And it continues past a failure for the same
+        // reason — one operation nobody can finish must not leave every other one unfinished.
+        //
+        // V.64: recovery reinstates what was wanted and does not delete to get there. Re-running
+        // the install over a half-installed package is what every manager Shall drives can do;
+        // uninstalling first was a removal the plan could not show and the guard never saw (S24).
+        // An interrupted install whose dependency is also interrupted must wait for it, or
+        // recovery reproduces the ordering failure that a dependency edge exists to prevent.
+        // `add_installs` is where that rule lives — this was the fourth hand-built copy of it,
+        // and of the four, two had no edges at all.
+        use petgraph::graph::NodeIndex;
+        let mut changes = SyncChanges::default();
+        changes.add_installs(
+            &runnable
                 .iter()
-                .filter(|(action, _)| matches!(action, GraphAction::Install(_)))
-                .count();
-            guard::enforce_installs(
-                &self.config,
-                installs,
-                &self.reaping,
-                guard::GuardScope::Heal,
-            )
-            .await?;
-            // **The recovery runs on the transaction engine, and not on a second copy of it.**
-            // This loop used to be `for entry in ... { handler.install(from_ref(spec)).await }`
-            // — serial, one package per command, beside a batched parallel DAG. Measured on one
-            // host in one minute: `sync --dry-run` 3.9x overlap over 2 waves, `heal` **0.2x over
-            // 27 waves for 27 commands**, which is the definition of serial. 23 of those 30
-            // attempts were the same package.
-            //
-            // Two settings differ from a sync's, and both follow from what recovery *is*. It
-            // does not roll back: each entry is a separate piece of work a dead run left behind,
-            // and undoing a recovery that succeeded to punish one that failed would put the
-            // machine further from what was wanted, not closer. And it continues past a failure
-            // for the same reason — one operation nobody can finish must not leave every other
-            // one unfinished.
-            //
-            // V.64: recovery reinstates what was wanted and does not delete to get there.
-            // Re-running the install over a half-installed package is what every manager Shall
-            // drives can do; uninstalling first was a removal the plan could not show and the
-            // guard never saw (S24).
-            // An interrupted install whose dependency is also interrupted must wait for it, or
-            // recovery reproduces the ordering failure that a dependency edge exists to prevent.
-            // `add_installs` is where that rule lives — this was the fourth hand-built copy of
-            // it, and of the four, two had no edges at all.
-            use petgraph::graph::NodeIndex;
-            let mut changes = SyncChanges::default();
-            changes.add_installs(
-                &runnable
-                    .iter()
-                    .filter_map(|(action, _)| match action {
-                        GraphAction::Install(spec) => Some(spec.clone()),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>(),
-            );
-            for (action, _) in &runnable {
-                if let GraphAction::Remove { name, backend } = action {
-                    changes.add_removal(backend, name);
-                }
+                .filter_map(|(action, _)| match action {
+                    GraphAction::Install(spec) => Some(spec.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>(),
+        );
+        for (action, _) in &runnable {
+            if let GraphAction::Remove { name, backend } = action {
+                changes.add_removal(backend, name);
             }
-            // The ids that named each operation, keyed the way the graph's weights identify it
-            // — an interrupted install and an interrupted removal of one package are two
-            // operations (`one_per_operation`), so the flag is part of the key.
-            let mut ids_by_key: std::collections::HashMap<(String, bool), Vec<String>> =
-                std::collections::HashMap::new();
-            for (action, ids) in runnable {
+        }
+        // The ids that named each operation, keyed the way the graph's weights identify it — an
+        // interrupted install and an interrupted removal of one package are two operations
+        // (`one_per_operation`), so the flag is part of the key.
+        let mut ids_by_key: std::collections::HashMap<(String, bool), Vec<String>> =
+            std::collections::HashMap::new();
+        for (action, ids) in runnable {
+            let is_install = matches!(action, GraphAction::Install(_));
+            ids_by_key
+                .entry((planner::node_key(&action), is_install))
+                .or_default()
+                .extend(ids);
+        }
+        let nodes: Vec<(NodeIndex, GraphAction, Vec<String>)> = changes
+            .graph
+            .node_indices()
+            .map(|idx| {
+                let action = changes.graph[idx].clone();
                 let is_install = matches!(action, GraphAction::Install(_));
-                ids_by_key
-                    .entry((planner::node_key(&action), is_install))
-                    .or_default()
-                    .extend(ids);
-            }
-            let nodes: Vec<(NodeIndex, GraphAction, Vec<String>)> = changes
-                .graph
-                .node_indices()
-                .map(|idx| {
-                    let action = changes.graph[idx].clone();
-                    let is_install = matches!(action, GraphAction::Install(_));
-                    let ids = ids_by_key
-                        .remove(&(planner::node_key(&action), is_install))
-                        .unwrap_or_default();
-                    (idx, action, ids)
-                })
-                .collect();
+                let ids = ids_by_key
+                    .remove(&(planner::node_key(&action), is_install))
+                    .unwrap_or_default();
+                (idx, action, ids)
+            })
+            .collect();
 
-            // **The guard, asked again over exactly what is left.** Each interrupted removal was
-            // already checked on its own by `refuse_a_protected_heal_removal` above, which drops
-            // the ones it refuses before they reach this graph — but "already checked" was carried
-            // by a token this file minted for itself, which is the hole `#35` is about. Asking over
-            // the survivors costs one pass and buys a token whose `allowed()` is a number the guard
-            // produced. Undo is `enforce_own_work`'s question, not `enforce`'s: these removals
-            // finish an interrupted run rather than remove the user's software, so the ceilings
-            // are not what is being asked, while protection and the OS-essential list are.
-            let heal_pairs: Vec<(String, String)> = changes
-                .graph
-                .node_indices()
-                .filter_map(|idx| match &changes.graph[idx] {
-                    GraphAction::Remove { backend, name } => Some((backend.clone(), name.clone())),
-                    GraphAction::Install(_) => None,
-                })
-                .collect();
-            let heal_reaped =
-                guard::enforce_own_work(&self.config, &self.registry, &heal_pairs).await?;
-            let mut tx = Transaction::with_config(
-                changes.graph.clone(),
-                self.registry.clone(),
-                self.journal.clone(),
-                self.diagnostics.clone(),
-                self.config.clone(),
-                self.heal_transaction_config(),
-            )
-            .guarded_by(heal_reaped);
-            let results = tx.execute_with_telemetry().await?;
+        // **The guard, asked again over exactly what is left.** Each interrupted removal was
+        // already checked on its own by `refuse_a_protected_heal_removal` above, which drops the
+        // ones it refuses before they reach this graph — but "already checked" was carried by a
+        // token this file minted for itself, which is the hole `#35` is about. Asking over the
+        // survivors costs one pass and buys a token whose `allowed()` is a number the guard
+        // produced. Undo is `enforce_own_work`'s question, not `enforce`'s: these removals
+        // finish an interrupted run rather than remove the user's software, so the ceilings are
+        // not what is being asked, while protection and the OS-essential list are.
+        let heal_pairs: Vec<(String, String)> = changes
+            .graph
+            .node_indices()
+            .filter_map(|idx| match &changes.graph[idx] {
+                GraphAction::Remove { backend, name } => Some((backend.clone(), name.clone())),
+                GraphAction::Install(_) => None,
+            })
+            .collect();
+        let heal_reaped =
+            guard::enforce_own_work(&self.config, &self.registry, &heal_pairs).await?;
+        let mut tx = Transaction::with_config(
+            changes.graph.clone(),
+            self.registry.clone(),
+            self.journal.clone(),
+            self.diagnostics.clone(),
+            self.config.clone(),
+            self.heal_transaction_config(),
+        )
+        .guarded_by(heal_reaped);
+        let results = tx.execute_with_telemetry().await?;
 
-            let mut outcome: std::collections::HashMap<NodeIndex, Result<()>> =
-                std::collections::HashMap::new();
-            for res in results {
-                self.metrics
-                    .record_operation(crate::app::metrics::Recorded {
-                        name: &res.package_name,
-                        backend: &res.backend_name,
-                        started: res.start_time,
-                        success: res.result.is_ok(),
-                        error: res.result.as_ref().err().map(|e| e.to_string()),
-                        retries: res.retries,
-                        bytes_downloaded: res.bytes_downloaded,
-                        batch_size: res.batch_size,
-                    });
-                outcome.insert(res.node_index, res.result);
-            }
+        let mut outcome: std::collections::HashMap<NodeIndex, Result<()>> =
+            std::collections::HashMap::new();
+        for res in results {
+            self.metrics
+                .record_operation(crate::app::metrics::Recorded {
+                    name: &res.package_name,
+                    backend: &res.backend_name,
+                    started: res.start_time,
+                    success: res.result.is_ok(),
+                    error: res.result.as_ref().err().map(|e| e.to_string()),
+                    retries: res.retries,
+                    bytes_downloaded: res.bytes_downloaded,
+                    batch_size: res.batch_size,
+                });
+            outcome.insert(res.node_index, res.result);
+        }
 
-            for (idx, action, ids) in nodes {
-                let (key, verb, is_install) = match &action {
-                    GraphAction::Install(spec) => (
-                        format!("{}:{}", spec.backend, spec.name),
-                        "reinstalled",
-                        true,
-                    ),
-                    GraphAction::Remove { name, backend } => {
-                        (format!("{}:{}", backend, name), "removed", false)
-                    }
-                };
-                match outcome.remove(&idx) {
-                    Some(Ok(())) => {
-                        // The ledger, not only the log. `execute_transaction` records ownership
-                        // through `state.add` for every install it performs; recovery performs
-                        // the same install by a different route and recorded nothing, so a
-                        // package `heal` put back was on the machine and under nobody's
-                        // management. Measured, with a control:
-                        //
-                        //   no crash:  shall -y apply --delete apt:pv   -> remove 1, gone
-                        //   SIGKILL + heal, then the same command  -> "already up to date", still there
-                        //   shall why apt:dos2unix -> 'apt:dos2unix' is not under Shall management.
-                        //
-                        // Nothing looked wrong: the sync after `heal` converges, because the
-                        // package IS installed. The damage only appears when you try to take it
-                        // away — the machine keeps it for ever and the one command for removing
-                        // it reports success. That is Q28's class exactly, on the path that runs
-                        // when nobody is watching.
-                        match &action {
-                            GraphAction::Install(spec) => {
-                                let source = spec.options.one("__source").unwrap_or("sync");
-                                let mut state = self.state.lock().await;
-                                state.add(
-                                    &spec.backend,
-                                    &spec.name,
-                                    None,
-                                    spec.options.clone(),
-                                    source,
-                                    false,
-                                );
-                            }
-                            GraphAction::Remove { name, backend } => {
-                                let mut state = self.state.lock().await;
-                                state.remove(backend, name);
-                            }
-                        }
-                        let mut j = self.journal.lock().await;
-                        for id in &ids {
-                            let _ = j.record_success(id);
-                        }
-                        info!(
-                            "{} {} (completing an interrupted {}).",
-                            verb,
-                            key,
-                            if is_install { "install" } else { "removal" }
-                        );
-                        recovered.push(format!("{} {}", verb, key));
-                    }
-                    outcome => {
-                        let e = match outcome {
-                            Some(Err(e)) => Some(e),
-                            // A node the engine returned nothing for is one it never reached.
-                            // Silence here is what let an unhandled branch report success in
-                            // 2026-08-04; it is an error with a reason, not an absence.
-                            _ => None,
-                        };
-                        // **An install Shall started is Shall's to own, whether or not recovery
-                        // could finish it** (`S87`).
-                        //
-                        // This branch used to end with *"the entry stays recorded as
-                        // interrupted, so nothing claims this package is installed"* — and that
-                        // sentence is the defect. A group-kill mid-`apt` wedges dpkg, so the
-                        // replay above fails; but the kill can also leave a package **unpacked**
-                        // — on disk, on `PATH`, runnable — which `dpkg-query`'s status field
-                        // correctly reports as *not installed*. So the package is on the machine
-                        // and the registry claims nothing, which means `uninstall` reports
-                        // success and takes nothing away, for ever. Measured in the container:
-                        // *"the crash left ncdu installed and under nobody's management"*.
-                        //
-                        // Ownership is not a claim that the package is installed — it is a claim
-                        // that **Shall is answerable for whatever this operation left behind**,
-                        // and the durable log saying "I began installing this" is exactly that
-                        // evidence. Taking it costs nothing when the install truly did nothing:
-                        // the line is still declared, so the next sync installs it rather than
-                        // removing it. Not taking it costs software nobody can remove.
-                        //
-                        // **This is the opposite of what `execute_transaction` does with a
-                        // failed node, and the two are one policy rather than a contradiction.**
-                        // There, the engine ran the manager and the manager said no: nothing was
-                        // installed, so recording it would claim a package the machine does not
-                        // have and issue a removal for it the day the declaration goes. Here,
-                        // nobody knows what the manager did — the process was killed mid-write,
-                        // which is the whole reason there is a log entry at all. *"The manager
-                        // refused"* and *"nobody knows how far the manager got"* are different
-                        // facts, and only the second can leave a binary on `PATH`.
-                        //
-                        // The entry still stays `InProgress`, so recovery keeps trying.
-                        if let GraphAction::Install(spec) = &action {
-                            let source = spec.options.one("__source").unwrap_or("sync");
-                            let mut state = self.state.lock().await;
-                            state.add(
-                                &spec.backend,
-                                &spec.name,
-                                None,
-                                spec.options.clone(),
-                                source,
-                                false,
-                            );
-                        }
-                        error!(
-                            "could not recover {} — {}. {} Shall has taken ownership of it \
-                             regardless: the run that was interrupted may have left part of it \
-                             on this machine, and a package nothing claims is one nothing can \
-                             remove.",
-                            key,
-                            e.as_ref()
-                                .map_or("the recovery did not reach it".to_string(), |e| e
-                                    .to_string()),
-                            what_to_do_about(e.as_ref(), &key),
-                        );
-                        failed.push(CarriedPast {
-                            retry: e
-                                .as_ref()
-                                .map_or(Retryability::Unknown, Error::retryability),
-                            refused: matches!(e, Some(Error::Refused(_))),
-                            name: key,
-                        });
-                    }
+        for (idx, action, ids) in nodes {
+            match outcome.remove(&idx) {
+                Some(Ok(())) => {
+                    recovered.push(self.record_recovered(&action, &ids).await);
+                }
+                outcome => {
+                    failed.push(self.record_unrecoverable(&action, outcome).await);
                 }
             }
         }
 
-        // The summary a reader sees whether or not they had `--verbose` on: what actually
-        // changed, in one line.
+        if !failed.is_empty() {
+            debug!("{} interrupted operation(s) did not recover", failed.len());
+        }
+        Ok((recovered, failed))
+    }
+
+    /// One operation that was recovered: record ownership, close its entries, say what happened.
+    async fn record_recovered(&self, action: &GraphAction, ids: &[String]) -> String {
+        let (key, verb, is_install) = match action {
+            GraphAction::Install(spec) => (
+                format!("{}:{}", spec.backend, spec.name),
+                "reinstalled",
+                true,
+            ),
+            GraphAction::Remove { name, backend } => {
+                (format!("{}:{}", backend, name), "removed", false)
+            }
+        };
+        // The ledger, not only the log. `execute_transaction` records ownership through
+        // `state.add` for every install it performs; recovery performs the same install by a
+        // different route and recorded nothing, so a package `heal` put back was on the machine
+        // and under nobody's management. Measured, with a control:
+        //
+        //   no crash:  shall -y apply --delete apt:pv   -> remove 1, gone
+        //   SIGKILL + heal, then the same command  -> "already up to date", still there
+        //   shall why apt:dos2unix -> 'apt:dos2unix' is not under Shall management.
+        //
+        // Nothing looked wrong: the sync after `heal` converges, because the package IS
+        // installed. The damage only appears when you try to take it away — the machine keeps
+        // it for ever and the one command for removing it reports success. That is Q28's class
+        // exactly, on the path that runs when nobody is watching.
+        match action {
+            GraphAction::Install(spec) => {
+                let source = spec.options.one("__source").unwrap_or("sync");
+                let mut state = self.state.lock().await;
+                state.add(
+                    &spec.backend,
+                    &spec.name,
+                    None,
+                    spec.options.clone(),
+                    source,
+                    false,
+                );
+            }
+            GraphAction::Remove { name, backend } => {
+                let mut state = self.state.lock().await;
+                state.remove(backend, name);
+            }
+        }
+        let mut j = self.journal.lock().await;
+        for id in ids {
+            let _ = j.record_success(id);
+        }
+        info!(
+            "{} {} (completing an interrupted {}).",
+            verb,
+            key,
+            if is_install { "install" } else { "removal" }
+        );
+        format!("{} {}", verb, key)
+    }
+
+    /// One operation recovery could not finish, and the sentence the user gets for it.
+    async fn record_unrecoverable(
+        &self,
+        action: &GraphAction,
+        outcome: Option<Result<()>>,
+    ) -> CarriedPast {
+        let (key, _verb) = match action {
+            GraphAction::Install(spec) => (format!("{}:{}", spec.backend, spec.name), "reinstall"),
+            GraphAction::Remove { name, backend } => (format!("{}:{}", backend, name), "remove"),
+        };
+        let e = match outcome {
+            Some(Err(e)) => Some(e),
+            // A node the engine returned nothing for is one it never reached. Silence here is
+            // what let an unhandled branch report success in 2026-08-04; it is an error with a
+            // reason, not an absence.
+            _ => None,
+        };
+        // **An install Shall started is Shall's to own, whether or not recovery could finish it**
+        // (`S87`).
+        //
+        // This branch used to end with *"the entry stays recorded as interrupted, so nothing
+        // claims this package is installed"* — and that sentence is the defect. A group-kill
+        // mid-`apt` wedges dpkg, so the replay above fails; but the kill can also leave a
+        // package **unpacked** — on disk, on `PATH`, runnable — which `dpkg-query`'s status
+        // field correctly reports as *not installed*. So the package is on the machine and the
+        // registry claims nothing, which means `uninstall` reports success and takes nothing
+        // away, for ever. Measured in the container: *"the crash left ncdu installed and under
+        // nobody's management"*.
+        //
+        // Ownership is not a claim that the package is installed — it is a claim that **Shall is
+        // answerable for whatever this operation left behind**, and the durable log saying "I
+        // began installing this" is exactly that evidence. Taking it costs nothing when the
+        // install truly did nothing: the line is still declared, so the next sync installs it
+        // rather than removing it. Not taking it costs software nobody can remove.
+        //
+        // **This is the opposite of what `execute_transaction` does with a failed node, and the
+        // two are one policy rather than a contradiction.** There, the engine ran the manager and
+        // the manager said no: nothing was installed, so recording it would claim a package the
+        // machine does not have and issue a removal for it the day the declaration goes. Here,
+        // nobody knows what the manager did — the process was killed mid-write, which is the
+        // whole reason there is a log entry at all. *"The manager refused"* and *"nobody knows
+        // how far the manager got"* are different facts, and only the second can leave a binary
+        // on `PATH`.
+        //
+        // The entry still stays `InProgress`, so recovery keeps trying.
+        if let GraphAction::Install(spec) = action {
+            let source = spec.options.one("__source").unwrap_or("sync");
+            let mut state = self.state.lock().await;
+            state.add(
+                &spec.backend,
+                &spec.name,
+                None,
+                spec.options.clone(),
+                source,
+                false,
+            );
+        }
+        error!(
+            "could not recover {} — {}. {} Shall has taken ownership of it regardless: the run \
+             that was interrupted may have left part of it on this machine, and a package \
+             nothing claims is one nothing can remove.",
+            key,
+            e.as_ref()
+                .map_or("the recovery did not reach it".to_string(), |e| e
+                    .to_string()),
+            what_to_do_about(e.as_ref(), &key),
+        );
+        CarriedPast {
+            retry: e
+                .as_ref()
+                .map_or(Retryability::Unknown, Error::retryability),
+            refused: matches!(e, Some(Error::Refused(_))),
+            name: key,
+        }
+    }
+
+    /// The summary a reader sees whether or not they had `--verbose` on, what reaches disk, and
+    /// the exit vocabulary a script reads.
+    async fn finish_heal(&self, outcome: HealOutcome) -> Result<()> {
+        let HealOutcome {
+            recovered,
+            failed,
+            kept,
+            reported,
+            unreachable,
+        } = outcome;
+
+        // What actually changed, in one line.
         if !recovered.is_empty() {
             info!(
                 "recovered {} operation(s): {}.",
@@ -1717,55 +1775,75 @@ impl SyncEngine {
             let _ = j.cleanup();
         }
 
-        // A command that says "1 operation(s) could NOT be recovered" and then exits 0 has
-        // told a script the opposite of what it told the person reading it — `shall heal &&
-        // echo ok` printed ok. U21 gave this program an exit vocabulary; the recovery path
-        // was the last one not using it.
+        // A command that says "1 operation(s) could NOT be recovered" and then exits 0 has told
+        // a script the opposite of what it told the person reading it — `shall heal && echo ok`
+        // printed ok. U21 gave this program an exit vocabulary; the recovery path was the last
+        // one not using it.
         //
         // `unreachable` is here for the same reason and it is the harder half: those entries
         // produced no error to print, so before they were collected the only evidence that
         // anything had been skipped was a number in the journal nobody was reading.
-        if !failed.is_empty() || !unreachable.is_empty() {
-            // **`unreachable` joins the list rather than being counted beside it.** It
-            // produced no error to classify, but it is not unexamined: its manager is not set
-            // up on this machine, so the next `heal` fails identically until that changes,
-            // which is what `Permanent` means and what the advice below already says in words.
-            // Folded in here so one summary reads one list — counting it separately is how the
-            // class and the exit code came to be computed over different sets.
-            let carried: Vec<CarriedPast> = failed
-                .into_iter()
-                .chain(unreachable.iter().map(|name| CarriedPast {
-                    name: name.clone(),
-                    retry: Retryability::Permanent,
-                    refused: false,
-                }))
-                .collect();
-            let named: Vec<String> = carried.iter().map(|c| c.name.clone()).collect();
-            let advice = if unreachable.is_empty() {
-                "Each is still recorded as interrupted, so `heal` will try again — read the \
-                 error above for the one that says what to change."
-            } else {
-                "Each is still recorded as interrupted. `heal` will try again, but an operation \
-                 whose manager is not set up here cannot complete until that manager is — \
-                 `shall check health` says which are."
-            };
-            // **`heal`'s summary is the same aggregate as `sync`'s, so it is the same
-            // function.** Built as `Error::Other` it reported `unknown` over a set of failures
-            // each classified when it happened — a `heal` blocked by a wedged manager and one
-            // blocked by a name that no longer exists printed the identical class, and both
-            // told the reader nobody had looked.
-            return Err(summarise(
-                &carried,
-                format!(
-                    "{} interrupted operation(s) could not be recovered: {}. {}",
-                    named.len(),
-                    named.join(", "),
-                    advice
-                ),
-            ));
+        if failed.is_empty() && unreachable.is_empty() {
+            return Ok(());
         }
-        Ok(())
+        // **`unreachable` joins the list rather than being counted beside it.** It produced no
+        // error to classify, but it is not unexamined: its manager is not set up on this machine,
+        // so the next `heal` fails identically until that changes, which is what `Permanent`
+        // means and what the advice below already says in words. Folded in here so one summary
+        // reads one list — counting it separately is how the class and the exit code came to be
+        // computed over different sets.
+        let carried: Vec<CarriedPast> = failed
+            .into_iter()
+            .chain(unreachable.iter().map(|name| CarriedPast {
+                name: name.clone(),
+                retry: Retryability::Permanent,
+                refused: false,
+            }))
+            .collect();
+        let named: Vec<String> = carried.iter().map(|c| c.name.clone()).collect();
+        let advice = if unreachable.is_empty() {
+            "Each is still recorded as interrupted, so `heal` will try again — read the error \
+             above for the one that says what to change."
+        } else {
+            "Each is still recorded as interrupted. `heal` will try again, but an operation \
+             whose manager is not set up here cannot complete until that manager is — `shall \
+             check health` says which are."
+        };
+        // **`heal`'s summary is the same aggregate as `sync`'s, so it is the same function.**
+        // Built as `Error::Other` it reported `unknown` over a set of failures each classified
+        // when it happened — a `heal` blocked by a wedged manager and one blocked by a name that
+        // no longer exists printed the identical class, and both told the reader nobody had
+        // looked.
+        Err(summarise(
+            &carried,
+            format!(
+                "{} interrupted operation(s) could not be recovered: {}. {}",
+                named.len(),
+                named.join(", "),
+                advice
+            ),
+        ))
     }
+}
+
+/// What recovery is going to do about each interrupted operation, decided without touching the
+/// machine.
+#[derive(Default)]
+struct HealPlan {
+    runnable: Vec<(GraphAction, Vec<String>)>,
+    kept: Vec<String>,
+    reported: Vec<String>,
+    unreachable: Vec<String>,
+}
+
+/// What recovery did, in the shape the summary and the exit vocabulary read.
+#[derive(Default)]
+struct HealOutcome {
+    recovered: Vec<String>,
+    failed: Vec<CarriedPast>,
+    kept: Vec<String>,
+    reported: Vec<String>,
+    unreachable: Vec<String>,
 }
 
 /// **Does this run owe the user a sentence about what its removals left behind?**

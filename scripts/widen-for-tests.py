@@ -12,7 +12,7 @@ constructor that must not ship (C3) is not an item this script touches — it is
 not named by the compiler, because a test crate cannot see it to *want* it, and
 the exception table is where such a file is recorded instead.
 
-Usage: python3 scripts/widen-for-tests.py src/core/executor.rs
+Usage: python3 scripts/widen-for-tests.py src/core/transaction/mod.rs
 """
 import re
 import subprocess
@@ -191,7 +191,7 @@ def find_defining_file(name: str, kind: str, start: Path) -> Path | None:
 
 
 def main():
-    path = Path(sys.argv[1] if len(sys.argv) > 1 else "src/core/executor.rs")
+    path = Path(sys.argv[1] if len(sys.argv) > 1 else "src/core/transaction/mod.rs")
     for _round in range(12):
         found, rc = build_errors()
         if rc == 0:

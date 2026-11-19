@@ -125,7 +125,7 @@ fi
 # An automated sweep has nobody at the keyboard, so it must not hand anything a keyboard.
 #
 # Shall gives a mutation's child `Stdio::inherit()` when its own stdin is a terminal
-# (`core/executor.rs`), so a manager that asks a question inherits *this* terminal and waits
+# (`core/executor/command.rs`), so a manager that asks a question inherits *this* terminal and waits
 # for an answer that is never coming. Measured on this host: the same install is 48ms with no
 # terminal on stdin and 21.9s with one, where 21.9s is the whole `command_idle_timeout_secs`
 # bound elapsing. At the shipped default of 900 that is a fifteen-minute silence.

@@ -175,10 +175,22 @@ pub fn expand<'a>(
     name: &str,
     asked_by: &Origin,
     facts: &HostFacts,
-    seen: &mut Vec<Visit>,
-    inherited: &Gates,
+    walk: &mut Walk<'_>,
 ) -> Result<Vec<(Statement, Origin, Gates)>> {
-    expand_args(loader, name, asked_by, facts, seen, inherited, &[])
+    expand_args(loader, name, asked_by, facts, walk, &[])
+}
+
+/// How an expansion got here: the modules on the path, and the gates that admitted the reader.
+///
+/// **One value because they are answered together.** `seen` is what stops `a` using `b` using
+/// `a`, and the path it holds is also what names the loop in the error; `inherited` is the chain
+/// of `when`s a statement carries (W11). A nested `use` extends both, and keeping them apart is
+/// how a recursion would carry one and forget the other.
+pub struct Walk<'a> {
+    /// Modules currently being expanded, outermost first.
+    pub seen: &'a mut Vec<Visit>,
+    /// The gates already around the reader — a module's own blocks append to it.
+    pub inherited: &'a Gates,
 }
 
 /// [`expand`], with call-site arguments binding this module's `param`s (U32).
@@ -189,21 +201,19 @@ pub fn expand<'a>(
 /// **leaving unknown `$refs` intact** so the later global `vars` pass still resolves them (and
 /// still errors on a real typo). A required `param` the call omits is a loud error naming the
 /// module and the parameter (V.78) — never a silent empty string.
-#[allow(clippy::too_many_arguments)]
 pub fn expand_args<'a>(
     loader: &mut ModuleLoader<'a>,
     name: &str,
     asked_by: &Origin,
     facts: &HostFacts,
-    seen: &mut Vec<Visit>,
-    inherited: &Gates,
+    walk: &mut Walk<'_>,
     args: &[(String, String)],
 ) -> Result<Vec<(Statement, Origin, Gates)>> {
     let key = name.to_lowercase();
     let entered = Hop::new(asked_by.clone(), format!("use {}", name));
-    if let Some(start) = seen.iter().position(|v| v.key == key) {
+    if let Some(start) = walk.seen.iter().position(|v| v.key == key) {
         // The loop only — what led *into* it is not part of it.
-        let mut hops: Vec<Hop> = seen[start + 1..]
+        let mut hops: Vec<Hop> = walk.seen[start + 1..]
             .iter()
             .map(|v| v.entered.clone())
             .collect();
@@ -214,7 +224,7 @@ pub fn expand_args<'a>(
         )
         .with_hint("a module cannot use itself, directly or through another."));
     }
-    seen.push(Visit {
+    walk.seen.push(Visit {
         key: key.clone(),
         entered,
     });
@@ -238,7 +248,7 @@ pub fn expand_args<'a>(
 
     let mut out = Vec::new();
     for (stmt, origin, own) in stmts {
-        let mut gates = inherited.clone();
+        let mut gates = walk.inherited.clone();
         gates.extend(own);
         match stmt {
             // A `param` is consumed here: it declared what this module takes, and binding it is
@@ -253,8 +263,10 @@ pub fn expand_args<'a>(
                     &m,
                     &origin,
                     facts,
-                    seen,
-                    &gates,
+                    &mut Walk {
+                        seen: &mut *walk.seen,
+                        inherited: &gates,
+                    },
                     &child_args,
                 )?);
             }
@@ -268,7 +280,7 @@ pub fn expand_args<'a>(
             }
         }
     }
-    seen.pop();
+    walk.seen.pop();
     Ok(out)
 }
 

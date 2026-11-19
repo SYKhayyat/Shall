@@ -30,22 +30,45 @@ M5  🚀 1.0.0 — ready for other people
 *Owner ruling: clearing technical debt comes before every milestone, with no "pay when X" deferral.
 New debt is filed here, at the bottom of this list, labelled `tech-debt`.*
 
-**Modularity (graded C+, 2026-11-18).** There are four production modules over 100 KB, the longest
-methods run 290–409 lines, and seven clippy parameter-count allows remain. All of these are splits
-and regroupings that change no behaviour. None of them is the #166 architecture question, so none
-of them moves a responsibility across a module boundary. Work top to bottom: the ratchet comes
-first, so a split cannot regrow while the next one is in progress.
+**Modularity (graded C+, 2026-11-18 — cleared 2026-11-19).** The four modules over 100 KB were
+four subjects wearing one name each, the longest methods ran 290–409 lines, and seven clippy
+parameter-count allows stood in for the struct each one needed. All of it was splits and
+regroupings that changed no behaviour, and all of it is done: the tree has **no `#[allow]` for a
+lint** in it at all, and the only file still over the 2,000-line cap is the scheduler, which is on
+the exemption list with the shape its split will take. None of this was the #166 architecture
+question, so no responsibility moved across a module boundary.
 
-- [x] **#204** ratchet: `too_many_lines` plus a per-file line cap with a baseline that only shrinks — landed, and the allow table is audited by `tests/review/a_function_is_not_a_module_tests.rs`.
-- [ ] **#205** the four functions outside #199 that the ratchet puts over 250: `heal`, `install`, `check_summary`, `dispatch` — split by phase and take each allow off.
-- [ ] **#203** the seven `too_many_arguments` / `fn_params_excessive_bools` allows → parameter
-  structs, as `app/machinery.rs` already does. Goes before #199, which needs its struct.
-- [ ] **#199** `core/transaction.rs`: `execute_batch_with_retry` (409), `execute_internal` (341)
-  and `rollback` (290) split by phase
-- [ ] **#200** `core/executor.rs` → `core/executor/{layer,raw,dry_run,mock,command}.rs`
-- [ ] **#201** `backends/generic.rs` → `backends/generic/`, one file per capability trait
-- [ ] **#202** `config/grammar/statement.rs` → types / `parse.rs` / `validate.rs`, and
-  `validate_backend_options` (249) split per option family
+- [x] **#204** ratchet: `too_many_lines` plus a per-file line cap with a baseline that only shrinks — landed, and the allow table is audited by `tests/review/a_function_is_not_a_module_tests.rs`. **Both tables are now empty** and the gates assert in both directions, which is what retired them.
+- [x] **#205** the four functions outside #199 that the ratchet put over 250: `check_summary`
+  (`7d54c574`), then `heal` (five phases: `interrupted_operations`, `classify_interrupted`,
+  `recover_interrupted`, `finish_heal`, and the preview), `GithubInstallable::install` (fetch →
+  place, split where the declaration's own two outcomes split) and `dispatch` (sixty-three
+  commands into four tables — converge, query, declare, export — with the outer match exhaustive
+  so a new command is a compile error until it is placed).
+- [x] **#203** the seven `too_many_arguments` / `fn_params_excessive_bools` allows → parameter
+  structs: `BatchRun` (batch.rs), `BatchArgs` (transaction/retry.rs), `Resolution` (model/vars.rs),
+  `Walk` (model/modules.rs), `OptIns` (backends/registry), `GithubLayout` (github.rs), and the
+  rollback's `UndoFacts`. Two review gates forbid the lints outright now.
+- [x] **#199** `core/transaction.rs` → `transaction/{mod,retry,rollback}.rs`. `rollback` is now
+  **two questions in two functions**: `plan_undo` decides *what* to put back as a pure function
+  over the graph, the history and the protection rules, and `apply_undo` asks the guard and talks
+  to managers. The decision is unit-tested with no registry, journal or manager behind it — the
+  four refusal branches (`U41`, `U41`'s other arm, an unknown prior state, an essential check that
+  could not be made) each have their own test.
+- [x] **#200** `core/executor.rs` → `core/executor/{mod,layer,raw,dry_run,mock,command}.rs`
+- [x] **#201** `backends/generic.rs` → `backends/generic/{mod,types,config,core,install,query,search}.rs`
+- [x] **#202** `config/grammar/statement.rs` → `statement/{mod,parse,validate}.rs`, and
+  `validate_backend_options` split into one function per option family, called in the order the
+  refusals have to be asked.
+
+**What the split cost the audits, and why that is the useful part.** Nine review gates name a
+file and look inside it, and six of them went red the moment the code moved — the WAL ledger, the
+removal-guard ledger, the spawn-ownership ledger, the semaphore owners, the panic inventory's
+file list and the `Phase`/`PACKAGE_OPTION_KEYS` extractions. Each red was the gate doing its job:
+a ledger that names a file which no longer exists is a sentence about a tree that no longer
+compiles. They are re-pointed, and the removal-guard ledger gained three rows for the engine,
+because a `Reaped` now crosses three of its files and *who holds it*, *who forwards it* and *who
+spends it* are three questions.
 
 ---
 

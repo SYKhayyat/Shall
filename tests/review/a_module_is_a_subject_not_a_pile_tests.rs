@@ -30,36 +30,17 @@ const LINES: usize = 2_000;
 
 /// The files still over the line, with what each is waiting for.
 ///
-/// **A row here is a promise, not a permission.** Both were measured at 2026-08-12, both are a
-/// single genuine subject that is merely large, and both have a shape for the split already —
-/// which is exactly why neither was done in a hurry alongside a security fix.
-const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[
-    (
-        "src/backends/generic.rs",
-        2469,
-        "one file holding every manager's registry entry; #201 splits it by backend family.",
-    ),
-    (
-        "src/config/grammar/statement.rs",
-        2513,
-        "one file holding every statement's grammar; #202 splits it by statement kind.",
-    ),
-    (
-        "src/core/transaction.rs",
-        2046,
-        "one file holding execution, retry, journal and rollback; #199 splits it by phase.",
-    ),
-    (
-        "src/core/executor.rs",
-        2084,
-        "one file holding the executor and its fan-out; #200 splits it by layer.",
-    ),
-    (
-        "src/app/scheduler/mod.rs",
-        2640,
-        "one file holding the scheduler and its queue; the split is not filed yet.",
-    ),
-];
+/// **A row here is a promise, not a permission.** The scheduler is a single genuine subject that
+/// is merely large, measured at 2026-08-12, and its split is not filed — which is exactly why it
+/// was not done in a hurry alongside a security fix. The four rows this table used to carry
+/// (`backends/generic.rs`, `config/grammar/statement.rs`, `core/transaction.rs`,
+/// `core/executor.rs`) were earned back by #199–#202 and are gone, which is the other direction
+/// of the gate working.
+const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[(
+    "src/app/scheduler/mod.rs",
+    2640,
+    "one file holding the scheduler and its queue; the split is not filed yet.",
+)];
 
 fn rust_files(root: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(root) else {

@@ -410,10 +410,86 @@ fn check_script_source(
     })
 }
 
-// Over the 250-line ratchet (#204). Split by phase and this allow comes off — `#205`.
-#[allow(clippy::too_many_lines)]
 pub(crate) async fn dispatch(app: &App, cli: &Cli) -> Result<()> {
     refuse_json_without_dry_run(cli)?;
+    // **One dispatch, four tables.** Sixty-three commands in one match was 358 lines, and the
+    // only thing holding them together was that they were all commands. Grouped by what they do
+    // to this machine — converge, read, declare, ship — a new command must be sorted into a
+    // table, and each table is short enough to read.
+    //
+    // Every variant appears here exactly once, so a new one is a compile error until it is
+    // placed. The tables below are private and reached only from here, which is what makes their
+    // catch-all arms unreachable rather than a silent hole.
+    match &cli.command {
+        Commands::Apply { .. }
+        | Commands::Bisect { .. }
+        | Commands::CleanCache { .. }
+        | Commands::Execute { .. }
+        | Commands::Heal
+        | Commands::Plan { .. }
+        | Commands::PurgeUndeclared { .. }
+        | Commands::Rebuild { .. }
+        | Commands::RemoveOrphans
+        | Commands::Reset { .. }
+        | Commands::Restore { .. }
+        | Commands::Rollback { .. }
+        | Commands::Run { .. }
+        | Commands::Shell { .. }
+        | Commands::Snapshot(..)
+        | Commands::Sync { .. }
+        | Commands::Teleport { .. }
+        | Commands::Try { .. }
+        | Commands::Update
+        | Commands::Upgrade { .. }
+        | Commands::Watch { .. } => dispatch_converge(app, cli).await,
+        Commands::Adapters { .. }
+        | Commands::Check { .. }
+        | Commands::Diff { .. }
+        | Commands::Eval
+        | Commands::Fleet(..)
+        | Commands::History
+        | Commands::Info { .. }
+        | Commands::List { .. }
+        | Commands::Policy
+        | Commands::Protected { .. }
+        | Commands::Repl
+        | Commands::Sbom
+        | Commands::Search { .. }
+        | Commands::Vars
+        | Commands::Why { .. } => dispatch_query(app, cli).await,
+        Commands::Activate { .. }
+        | Commands::Add { .. }
+        | Commands::Adopt { .. }
+        | Commands::Config(..)
+        | Commands::Deactivate { .. }
+        | Commands::Edit { .. }
+        | Commands::Git(..)
+        | Commands::Hold { .. }
+        | Commands::HookObserve { .. }
+        | Commands::HookReconcile { .. }
+        | Commands::HookRecord { .. }
+        | Commands::Hooks(..)
+        | Commands::Init { .. }
+        | Commands::Lock { .. }
+        | Commands::Module(..)
+        | Commands::Path { .. }
+        | Commands::Profile(..)
+        | Commands::Repo(..)
+        | Commands::Schedule(..)
+        | Commands::Service(..)
+        | Commands::Unhold { .. }
+        | Commands::Unlock { .. }
+        | Commands::Unmanage { .. } => dispatch_declare(app, cli).await,
+        Commands::Bundle { .. }
+        | Commands::Completions { .. }
+        | Commands::Export { .. }
+        | Commands::SelfUpgrade { .. } => dispatch_export(app, cli).await,
+    }
+}
+
+/// **Converging the machine:** the commands that change it, and the plans that
+/// execute that change.
+async fn dispatch_converge(app: &App, cli: &Cli) -> Result<()> {
     match &cli.command {
         Commands::Sync {
             locked,
@@ -430,12 +506,60 @@ pub(crate) async fn dispatch(app: &App, cli: &Cli) -> Result<()> {
             )
             .await
         }
+
         Commands::Watch {
             interval,
             on_change,
             pull,
             once,
         } => handle_watch(app, *interval, *on_change, *pull, *once).await,
+
+        Commands::Apply {
+            declarations,
+            delete,
+            absent,
+            purge: _,
+            temp,
+            into,
+            json,
+        } => {
+            // `Option<Option<String>>` collapses to one string here and stays distinguishable:
+            // `Some("")` is the bare `--temp` whose restore is a `shall shell` session's.
+            let temp = temp.clone().map(|t| t.unwrap_or_default());
+            handle_apply(
+                app,
+                ApplyArgs {
+                    declarations,
+                    delete: *delete,
+                    absent: *absent,
+                    into: into.as_deref(),
+                    temp: temp.as_deref(),
+                    out: Output::from_json_flag(*json),
+                },
+            )
+            .await
+        }
+
+        Commands::Rebuild {
+            packages,
+            backend,
+            all,
+        } => handle_rebuild(app, packages, backend.as_deref(), *all).await,
+
+        Commands::Heal => handle_heal(app).await,
+
+        Commands::RemoveOrphans => handle_remove_orphans(app).await,
+
+        Commands::CleanCache { all } => handle_clean_cache(app, *all).await,
+
+        Commands::Reset { force } => handle_reset(&app.config, &app.state, *force).await,
+
+        Commands::PurgeUndeclared { allow_mass_purge } => {
+            handle_purge_undeclared(app, *allow_mass_purge).await
+        }
+
+        Commands::Update => handle_update(&app.managers().await).await,
+
         Commands::Upgrade {
             packages,
             backend,
@@ -478,36 +602,33 @@ pub(crate) async fn dispatch(app: &App, cli: &Cli) -> Result<()> {
             )
             .await
         }
-        Commands::Apply {
-            declarations,
-            delete,
-            absent,
-            purge: _,
-            temp,
-            into,
-            json,
-        } => {
-            // `Option<Option<String>>` collapses to one string here and stays distinguishable:
-            // `Some("")` is the bare `--temp` whose restore is a `shall shell` session's.
-            let temp = temp.clone().map(|t| t.unwrap_or_default());
-            handle_apply(
-                app,
-                ApplyArgs {
-                    declarations,
-                    delete: *delete,
-                    absent: *absent,
-                    into: into.as_deref(),
-                    temp: temp.as_deref(),
-                    out: Output::from_json_flag(*json),
-                },
-            )
-            .await
+
+        Commands::Plan { out } => handle_plan(app, out).await,
+
+        Commands::Execute { plan, yes } => handle_execute(app, plan, *yes).await,
+
+        Commands::Rollback { reference } => handle_rollback(app, reference).await,
+
+        Commands::Restore { dir, force } => {
+            handle_restore(&app.config, &app.state, dir, *force).await
         }
+
+        Commands::Try { image } => handle_try(&app.config, &app.executor, image.as_deref()).await,
+
+        Commands::Run {
+            packages,
+            command,
+            args,
+        } => handle_run(app.runner(), packages, command, args).await,
+
         Commands::Shell { packages } => handle_shell(app.shell(), packages).await,
-        Commands::Module(args) => {
-            handle_module(&app.config, &app.resolver().await, &args.command).await
+
+        Commands::Bisect { test, yes } => {
+            shall::app::bisect::bisect(&app.config, &app.snapshot_manager, test, *yes)
+                .await
+                .map_err(|e| e.into())
         }
-        Commands::Schedule(args) => handle_schedule(app, &args.command).await,
+
         Commands::Snapshot(args) => {
             handle_snapshot(
                 &app.config,
@@ -517,20 +638,39 @@ pub(crate) async fn dispatch(app: &App, cli: &Cli) -> Result<()> {
             )
             .await
         }
-        Commands::Rollback { reference } => handle_rollback(app, reference).await,
-        Commands::Diff { from, to } => handle_diff(&app.vcs().manager(), from, to.as_deref()).await,
-        Commands::Eval => handle_eval(&app.config, &app.registry).await,
-        Commands::Repl => shall::app::repl::run(&app.config, &app.registry)
+
+        Commands::Teleport { package, backend } => handle_teleport(app, package, backend).await,
+        // Unreachable by construction: `dispatch` lists every variant exactly once, so a command
+        // that is not one of these is never sent to this table. It exists so that a reorganised
+        // table reports itself instead of quietly doing nothing.
+        _ => Err(anyhow::anyhow!(
+            "this command reached the converge table, which does not handle it — `dispatch`'s outer \
+             match and this table disagree. That is a bug in dispatch."
+        )),
+    }
+}
+
+/// **Reading:** the machine, the state and the declaration.
+async fn dispatch_query(app: &App, cli: &Cli) -> Result<()> {
+    match &cli.command {
+        Commands::List {
+            backend,
+            json,
+            outdated,
+        } => {
+            handle_list(
+                app,
+                backend.as_deref(),
+                Output::from_json_flag(*json),
+                *outdated,
+            )
             .await
-            .map_err(Into::into),
-        Commands::Try { image } => handle_try(&app.config, &app.executor, image.as_deref()).await,
-        Commands::Add {
-            source,
-            trust,
-            force,
-        } => handle_add(app, source, *trust, *force).await,
-        Commands::Git(args) => handle_git(&app.vcs().manager(), &args.command).await,
-        Commands::Repo(args) => handle_repo(app, &args.command).await,
+        }
+
+        Commands::Info { package } => {
+            handle_info(&app.inventory().await, &app.registry, package).await
+        }
+
         Commands::Search {
             query,
             json,
@@ -545,43 +685,73 @@ pub(crate) async fn dispatch(app: &App, cli: &Cli) -> Result<()> {
             )
             .await
         }
-        Commands::Teleport { package, backend } => handle_teleport(app, package, backend).await,
-        Commands::List {
-            backend,
-            json,
-            outdated,
-        } => {
-            handle_list(
-                app,
-                backend.as_deref(),
+
+        Commands::Why { package, json } => {
+            handle_why(app, package, Output::from_json_flag(*json)).await
+        }
+
+        Commands::Check { section, json } => {
+            handle_check(app, section.as_deref(), Output::from_json_flag(*json)).await
+        }
+
+        Commands::Vars => handle_vars(&app.config, &app.registry).await,
+
+        Commands::Adapters { surface, json } => {
+            handle_adapters(
+                &app.config,
+                surface.as_deref(),
                 Output::from_json_flag(*json),
-                *outdated,
             )
             .await
         }
-        Commands::Info { package } => {
-            handle_info(&app.inventory().await, &app.registry, package).await
+
+        Commands::Protected { packages, json } => {
+            handle_protected(
+                &app.config,
+                &app.registry,
+                &app.resolver().await,
+                packages,
+                Output::from_json_flag(*json),
+            )
+            .await
         }
-        Commands::RemoveOrphans => handle_remove_orphans(app).await,
-        Commands::CleanCache { all } => handle_clean_cache(app, *all).await,
-        Commands::Heal => handle_heal(app).await,
-        Commands::Adopt {
-            backends,
-            enabled_only,
-        } => handle_adopt(app, backends.clone(), *enabled_only).await,
+
         Commands::History => handle_history(app).await,
-        Commands::Activate { profiles, add } => {
-            handle_activate(app.profile_manager(), profiles, *add).await
+
+        Commands::Sbom => handle_sbom(&app.config, &app.registry, &app.state).await,
+
+        Commands::Policy => handle_policy(app).await,
+
+        Commands::Diff { from, to } => handle_diff(&app.vcs().manager(), from, to.as_deref()).await,
+
+        Commands::Eval => handle_eval(&app.config, &app.registry).await,
+
+        Commands::Repl => shall::app::repl::run(&app.config, &app.registry)
+            .await
+            .map_err(Into::into),
+
+        Commands::Fleet(args) => {
+            shall::app::fleet::fleet(&app.config, &args.hosts, args.sync, args.apply)
+                .await
+                .map_err(|e| e.into())
         }
-        Commands::Deactivate { profiles } => {
-            handle_deactivate(app.profile_manager(), profiles).await
+        // Unreachable by construction: `dispatch` lists every variant exactly once, so a command
+        // that is not one of these is never sent to this table. It exists so that a reorganised
+        // table reports itself instead of quietly doing nothing.
+        _ => Err(anyhow::anyhow!(
+            "this command reached the query table, which does not handle it — `dispatch`'s outer \
+             match and this table disagree. That is a bug in dispatch."
+        )),
+    }
+}
+
+/// **Declaring:** editing the file, and the repository and profile machinery around it.
+async fn dispatch_declare(app: &App, cli: &Cli) -> Result<()> {
+    match &cli.command {
+        Commands::Unmanage { packages, json } => {
+            handle_unmanage(app, packages, Output::from_json_flag(*json)).await
         }
-        Commands::Profile(args) => handle_profile(app.profile_manager(), &args.command).await,
-        Commands::Run {
-            packages,
-            command,
-            args,
-        } => handle_run(app.runner(), packages, command, args).await,
+
         Commands::Lock {
             what,
             names,
@@ -592,6 +762,7 @@ pub(crate) async fn dispatch(app: &App, cli: &Cli) -> Result<()> {
                 .narrowed_by_config(&app.config.lock.freezes());
             handle_lock(app, &selection, names, *list).await
         }
+
         Commands::Unlock {
             what,
             names,
@@ -612,48 +783,102 @@ pub(crate) async fn dispatch(app: &App, cli: &Cli) -> Result<()> {
             )
             .await
         }
-        Commands::Plan { out } => handle_plan(app, out).await,
-        Commands::Execute { plan, yes } => handle_execute(app, plan, *yes).await,
-        Commands::Update => handle_update(&app.managers().await).await,
-        Commands::Reset { force } => handle_reset(&app.config, &app.state, *force).await,
-        Commands::Check { section, json } => {
-            handle_check(app, section.as_deref(), Output::from_json_flag(*json)).await
+
+        Commands::Adopt {
+            backends,
+            enabled_only,
+        } => handle_adopt(app, backends.clone(), *enabled_only).await,
+
+        Commands::Add {
+            source,
+            trust,
+            force,
+        } => handle_add(app, source, *trust, *force).await,
+
+        Commands::Activate { profiles, add } => {
+            handle_activate(app.profile_manager(), profiles, *add).await
         }
-        Commands::Vars => handle_vars(&app.config, &app.registry).await,
-        Commands::PurgeUndeclared { allow_mass_purge } => {
-            handle_purge_undeclared(app, *allow_mass_purge).await
+
+        Commands::Deactivate { profiles } => {
+            handle_deactivate(app.profile_manager(), profiles).await
         }
-        Commands::Adapters { surface, json } => {
-            handle_adapters(
-                &app.config,
-                surface.as_deref(),
-                Output::from_json_flag(*json),
-            )
-            .await
+
+        Commands::Profile(args) => handle_profile(app.profile_manager(), &args.command).await,
+
+        Commands::Module(args) => {
+            handle_module(&app.config, &app.resolver().await, &args.command).await
         }
-        Commands::Protected { packages, json } => {
-            handle_protected(
-                &app.config,
-                &app.registry,
-                &app.resolver().await,
-                packages,
-                Output::from_json_flag(*json),
-            )
-            .await
-        }
-        Commands::Unmanage { packages, json } => {
-            handle_unmanage(app, packages, Output::from_json_flag(*json)).await
-        }
-        Commands::Rebuild {
-            packages,
-            backend,
-            all,
-        } => handle_rebuild(app, packages, backend.as_deref(), *all).await,
+
+        Commands::Schedule(args) => handle_schedule(app, &args.command).await,
+
         Commands::Config(args) => handle_config(&app.config, &args.command).await,
+
         Commands::Path { explain, set } => handle_path(cli, *explain, set.as_deref()).await,
+
         Commands::Edit { file } => handle_edit(cli, file.as_deref()).await,
+
         Commands::Init { force, interactive } => handle_init(app, *force, *interactive).await,
-        Commands::Sbom => handle_sbom(&app.config, &app.registry, &app.state).await,
+
+        Commands::Service(args) => handle_service(app, &args.command).await,
+
+        Commands::Repo(args) => handle_repo(app, &args.command).await,
+
+        Commands::Git(args) => handle_git(&app.vcs().manager(), &args.command).await,
+
+        Commands::Hooks(args) => handle_hooks(&app.registry, &args.command).await,
+
+        Commands::HookRecord {
+            manager,
+            op,
+            targets,
+        } => {
+            handle_hook_record(
+                &app.declarations(),
+                &app.state,
+                &app.vcs(),
+                manager,
+                op,
+                targets,
+            )
+            .await
+        }
+
+        Commands::HookReconcile { manager } => {
+            handle_hook_reconcile(&app.registry, &app.state, &app.vcs(), manager).await
+        }
+
+        Commands::HookObserve {
+            manager,
+            learn,
+            argv,
+        } => handle_hook_observe(app, manager.as_deref(), *learn, argv).await,
+
+        Commands::Hold { packages } => {
+            handle_hold(
+                app.holds().await,
+                &app.resolver().await,
+                &app.state,
+                packages,
+            )
+            .await
+        }
+
+        Commands::Unhold { packages } => {
+            handle_unhold(&app.resolver().await, &app.state, packages).await
+        }
+        // Unreachable by construction: `dispatch` lists every variant exactly once, so a command
+        // that is not one of these is never sent to this table. It exists so that a reorganised
+        // table reports itself instead of quietly doing nothing.
+        _ => Err(anyhow::anyhow!(
+            "this command reached the declare table, which does not handle it — `dispatch`'s outer \
+             match and this table disagree. That is a bug in dispatch."
+        )),
+    }
+}
+
+/// **Shipping and meta:** what leaves the program.
+async fn dispatch_export(app: &App, cli: &Cli) -> Result<()> {
+    match &cli.command {
         Commands::Export {
             format,
             from_declaration,
@@ -704,71 +929,27 @@ pub(crate) async fn dispatch(app: &App, cli: &Cli) -> Result<()> {
                 }
             }
         }
+
         Commands::Bundle {
             out,
             artifacts,
             archive,
         } => handle_bundle(app, out, *artifacts, *archive).await,
-        Commands::Restore { dir, force } => {
-            handle_restore(&app.config, &app.state, dir, *force).await
-        }
-        Commands::Why { package, json } => {
-            handle_why(app, package, Output::from_json_flag(*json)).await
-        }
-        Commands::Service(args) => handle_service(app, &args.command).await,
-        Commands::Bisect { test, yes } => {
-            shall::app::bisect::bisect(&app.config, &app.snapshot_manager, test, *yes)
-                .await
-                .map_err(|e| e.into())
-        }
-        Commands::Fleet(args) => {
-            shall::app::fleet::fleet(&app.config, &args.hosts, args.sync, args.apply)
-                .await
-                .map_err(|e| e.into())
-        }
-        Commands::Hooks(args) => handle_hooks(&app.registry, &args.command).await,
-        Commands::HookRecord {
-            manager,
-            op,
-            targets,
-        } => {
-            handle_hook_record(
-                &app.declarations(),
-                &app.state,
-                &app.vcs(),
-                manager,
-                op,
-                targets,
-            )
-            .await
-        }
-        Commands::HookReconcile { manager } => {
-            handle_hook_reconcile(&app.registry, &app.state, &app.vcs(), manager).await
-        }
-        Commands::HookObserve {
-            manager,
-            learn,
-            argv,
-        } => handle_hook_observe(app, manager.as_deref(), *learn, argv).await,
-        Commands::Hold { packages } => {
-            handle_hold(
-                app.holds().await,
-                &app.resolver().await,
-                &app.state,
-                packages,
-            )
-            .await
-        }
-        Commands::Unhold { packages } => {
-            handle_unhold(&app.resolver().await, &app.state, packages).await
-        }
-        Commands::Policy => handle_policy(app).await,
+
         Commands::Completions { shell } => {
             let mut cmd = <Cli as clap::CommandFactory>::command();
             shall::cli::generate_completions(*shell, &mut cmd);
             Ok(())
         }
+
         Commands::SelfUpgrade { git, check } => handle_self_upgrade(git.as_deref(), *check).await,
+        // Unreachable by construction: `dispatch` lists every variant exactly once, so a command
+        // that is not one of these is never sent to this table. It exists so that a reorganised
+        // table reports itself instead of quietly doing nothing.
+        _ => Err(anyhow::anyhow!(
+            "this command reached the export table, which does not handle it — `dispatch`'s outer \
+             match and this table disagree. That is a bug in dispatch."
+        )),
     }
 }
 
