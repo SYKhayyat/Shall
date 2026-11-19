@@ -433,7 +433,12 @@ fn language_manager_cases() -> Vec<ArgvCase> {
             Runs("gem install jq"),
             Runs("gem uninstall jq"),
         ),
-        ArgvCase::pkg("bun", &register_bun, Runs("bun add -g -- jq"), Runs("bun remove -g -- jq")),
+        ArgvCase::pkg(
+            "bun",
+            &register_bun,
+            Runs("bun add -g -- jq"),
+            Runs("bun remove -g -- jq"),
+        ),
         ArgvCase::pkg(
             "dotnet",
             &register_dotnet,
@@ -568,8 +573,18 @@ fn language_manager_cases() -> Vec<ArgvCase> {
             Runs("helm plugin uninstall -- shall-probe"),
         ),
         // The two Haskell managers, which have no uninstall verb at all.
-        ArgvCase::pkg("cabal", &register_cabal, Runs("cabal install -- jq"), Unsupported),
-        ArgvCase::pkg("stack", &register_stack, Runs("stack install jq"), Unsupported),
+        ArgvCase::pkg(
+            "cabal",
+            &register_cabal,
+            Runs("cabal install -- jq"),
+            Unsupported,
+        ),
+        ArgvCase::pkg(
+            "stack",
+            &register_stack,
+            Runs("stack install jq"),
+            Unsupported,
+        ),
     ]
 }
 fn editor_host_cases() -> Vec<ArgvCase> {

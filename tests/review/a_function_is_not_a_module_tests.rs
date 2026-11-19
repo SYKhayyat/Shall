@@ -18,7 +18,11 @@ use std::path::Path;
 
 /// Every `#[allow(clippy::too_many_lines)]` in the tree, and the issue that will remove it.
 const ALLOWED_FOR_NOW: &[(&str, &str, &str)] = &[
-    ("src/core/transaction.rs", "execute_batch_with_retry", "#199"),
+    (
+        "src/core/transaction.rs",
+        "execute_batch_with_retry",
+        "#199",
+    ),
     ("src/app/sync/mod.rs", "heal", "#205"),
     ("src/backends/github.rs", "install", "#205"),
     ("src/verbs/check.rs", "check_summary", "#205"),
@@ -54,7 +58,9 @@ fn licensed_function(lines: &[String], at: usize) -> Option<String> {
 fn rust_files(root: &Path) -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
     fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
-        let Ok(entries) = std::fs::read_dir(dir) else { return; };
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
         for entry in entries.flatten() {
             let p = entry.path();
             if p.is_dir() {
@@ -76,7 +82,11 @@ fn every_allow_for_a_long_function_names_the_issue_that_removes_it() {
         .into_iter()
         .chain(rust_files(&root.join("tests")))
     {
-        let rel = p.strip_prefix(Path::new(env!("CARGO_MANIFEST_DIR"))).expect("under the repo").to_string_lossy().to_string();
+        let rel = p
+            .strip_prefix(Path::new(env!("CARGO_MANIFEST_DIR")))
+            .expect("under the repo")
+            .to_string_lossy()
+            .to_string();
         let text = std::fs::read_to_string(&p).expect("source is readable");
         let lines: Vec<String> = text.lines().map(str::to_string).collect();
         for (i, line) in lines.iter().enumerate() {

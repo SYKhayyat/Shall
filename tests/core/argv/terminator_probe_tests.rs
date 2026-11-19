@@ -376,7 +376,10 @@ fn both_forms(tokens: &[String]) -> Option<(Vec<String>, Vec<String>)> {
     Some((with, without))
 }
 
-async fn terminator_registry() -> Option<(tempfile::TempDir, std::sync::Arc<shall::core::executor::MockExecutor>)> {
+async fn terminator_registry() -> Option<(
+    tempfile::TempDir,
+    std::sync::Arc<shall::core::executor::MockExecutor>,
+)> {
     use dashmap::DashMap;
     use shall::core::executor::MockExecutor;
     use shall::core::{CommandExecutor, PackageSpec};
