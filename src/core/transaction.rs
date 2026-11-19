@@ -1025,6 +1025,7 @@ impl Transaction {
     /// promising the opposite (B1). `batches` caps at one package per command in that mode, so
     /// nothing reaching here shares a fate it did not have to.
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_lines)]
     async fn execute_batch_with_retry(
         batch: Batch,
         registry: Arc<BackendRegistry>,

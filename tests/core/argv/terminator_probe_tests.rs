@@ -376,8 +376,7 @@ fn both_forms(tokens: &[String]) -> Option<(Vec<String>, Vec<String>)> {
     Some((with, without))
 }
 
-#[tokio::test]
-async fn every_terminator_claim_still_holds_where_the_tool_is_installed() {
+async fn terminator_registry() -> Option<(tempfile::TempDir, std::sync::Arc<shall::core::executor::MockExecutor>)> {
     use dashmap::DashMap;
     use shall::core::executor::MockExecutor;
     use shall::core::{CommandExecutor, PackageSpec};
@@ -389,7 +388,7 @@ async fn every_terminator_claim_still_holds_where_the_tool_is_installed() {
             "terminator probe: SKIPPED — set TERMINATOR_PROBE=1 to run it. It invokes the real \
              managers (with an unresolvable package name, so nothing installs)."
         );
-        return;
+        return None;
     }
 
     // Where the managers are run from — see `run`. Dropped at the end of the test with whatever
@@ -433,6 +432,14 @@ async fn every_terminator_claim_still_holds_where_the_tool_is_installed() {
         }
     }
 
+    Some((scratch, mock))
+}
+
+#[tokio::test]
+async fn every_terminator_claim_still_holds_where_the_tool_is_installed() {
+    let Some((scratch, mock)) = terminator_registry().await else {
+        return;
+    };
     let claims: BTreeMap<&str, bool> = shall::core::argv::known_terminator_claims()
         .into_iter()
         .collect();

@@ -1251,6 +1251,8 @@ impl SyncEngine {
         }
     }
 
+    // Over the 250-line ratchet (#204). Split by phase and this allow comes off — `#205`.
+    #[allow(clippy::too_many_lines)]
     pub async fn heal(&self, declared: &[PackageSpec]) -> Result<()> {
         // Before the interrupted entries, and NOT gated on there being any. The packages this
         // repairs have nothing interrupted about them — they are installed and declared and

@@ -593,6 +593,9 @@ impl Installable for GithubInstallable {
         true
     }
 
+    // Over the 250-line ratchet (#204). Split by phase (resolve, download, place, record) and
+    // this allow comes off — `#205`.
+    #[allow(clippy::too_many_lines)]
     async fn install(&self, specs: &[PackageSpec], _: bool) -> Result<()> {
         let mut state = self.core.load_state_internal().await?;
         let mut ledger = ArtifactLedger::load(&self.core.locks_file)?;

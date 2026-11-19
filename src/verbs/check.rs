@@ -436,6 +436,7 @@ async fn probe_all_health(app: &App) -> Vec<(String, crate::core::HealthReport)>
     reports
 }
 
+#[allow(clippy::too_many_lines)]
 pub async fn check_summary(app: &App, out: Output) -> Result<()> {
     use crate::app::check::{Finding, Section};
 

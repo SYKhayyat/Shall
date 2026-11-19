@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 ///
 /// Not a law of nature — it is roughly where a file stops being readable in one sitting, and
 /// every file over it that has been split turned out to hold two subjects.
-const LINES: usize = 3_000;
+const LINES: usize = 2_000;
 
 /// The files still over the line, with what each is waiting for.
 ///
@@ -34,28 +34,31 @@ const LINES: usize = 3_000;
 /// single genuine subject that is merely large, and both have a shape for the split already —
 /// which is exactly why neither was done in a hurry alongside a security fix.
 const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[
-    // **Three of the five rows on this list are not on it any more**, and the table is audited
-    // in both directions, so a row that stops being needed has to go. `src/core/transaction.rs`
-    // (3,299), `src/backends/generic.rs` (3,940) and `src/config/grammar/statement.rs` (3,881)
-    // were all over the line *because of their own test modules*, and `#120`'s layout gave
-    // those tests a home elsewhere: `tests/core/transaction/`, `tests/backends/generic/` and
-    // `tests/config/grammar/statement/`. The files are 1,999, 2,354 and 2,419 lines — under
-    // the gate — so the rows are **retired rather than raised**, which is the other direction
-    // of this gate and the reason the table is not a graveyard.
-    //
-    // **`src/app/sync/guard.rs` was on this list and is not any more.** It was 3,473 lines,
-    // 1,944 of them its own test module, and the exemption said so in as many words: *"plus
-    // its own test module."* The tests moved to `tests/app/sync/guard/`, one file per
-    // assertion, and the file is 1,550 lines — under the 3,000 gate, so the row is retired
-    // rather than raised. **A row that stops being needed has to go**, which is the other
-    // direction of this gate and the reason the table is not a graveyard.
-    //
-    // **And `src/core/executor.rs` was on it too, and is the last row left.** It was 3,052
-    // lines, and its 42 tests in four modules moved to `tests/core/executor/`. The file is
-    // 1,962 lines, so the table is empty — which is the target state, not a regression:
-    // `target-state.md` II.50 says a file this large is a subject that has not been split
-    // yet, and an exemption that nobody can ever retire is an exemption nobody re-reads.
-    // The next file to cross the line without a row is a subject the split has not reached.
+    (
+        "src/backends/generic.rs",
+        2469,
+        "one file holding every manager's registry entry; #201 splits it by backend family.",
+    ),
+    (
+        "src/config/grammar/statement.rs",
+        2513,
+        "one file holding every statement's grammar; #202 splits it by statement kind.",
+    ),
+    (
+        "src/core/transaction.rs",
+        2046,
+        "one file holding execution, retry, journal and rollback; #199 splits it by phase.",
+    ),
+    (
+        "src/core/executor.rs",
+        2084,
+        "one file holding the executor and its fan-out; #200 splits it by layer.",
+    ),
+    (
+        "src/app/scheduler/mod.rs",
+        2640,
+        "one file holding the scheduler and its queue; the split is not filed yet.",
+    ),
 ];
 
 fn rust_files(root: &Path, out: &mut Vec<PathBuf>) {

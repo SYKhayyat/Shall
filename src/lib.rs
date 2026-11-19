@@ -5,6 +5,12 @@
 //! one: repositories, services, schedules, symlinks, OS and desktop settings, scripts,
 //! generated declarations, dotfile trees and firewall rules are all declared the same way.
 
+// The function-length ratchet (#204): `clippy.toml` sets the threshold, and this makes the
+// lint fire in the product crate where `cargo clippy -D warnings` (every CI leg, both release
+// scripts) turns it into a build error. Every function over the threshold carries an allow
+// naming the issue that will split it; a new one without one fails the build.
+#![warn(clippy::too_many_lines)]
+
 pub mod app;
 pub mod backends;
 pub mod cli;

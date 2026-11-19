@@ -230,24 +230,21 @@ pub fn registry_source() -> String {
         .replace("pub fn register_", "fn register_")
 }
 
-/// The body of the argv table — the fixture that names every backend's real command line.
+/// The argv table — the fixture that names every backend's real command line.
 ///
 /// A separate reader because it lives *inside* `#[cfg(test)]`, which [`registry_source`] strips:
 /// three gates count the build's backends from these rows, and stripping the test module took
 /// the table with it. Two questions, two functions, rather than one function that answers
 /// whichever the caller happened to want.
+///
+/// `mod.rs` alone, not its directory: a test in the directory constructs its own
+/// `ArgvCase`, so counting the directory reports one row that is not in the table.
 pub fn registry_argv_table() -> String {
-    let src = source_of("tests/backends/registry");
-    src.split_once("fn argv_cases() -> Vec<ArgvCase> {")
-        .expect("the argv table moved or was renamed")
-        .1
-        .split_once(
-            "
-    }",
-        )
-        .expect("the argv table has no end")
-        .0
-        .to_string()
+    std::fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/backends/registry/mod.rs"),
+    )
+    .unwrap_or_else(|e| panic!("cannot read the argv table: {e}"))
+    .replace("\r\n", "\n")
 }
 
 /// Drop every `#[cfg(test)]` module, by matching braces rather than by looking for the next

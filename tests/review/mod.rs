@@ -24,6 +24,7 @@ mod a_gate_name_cited_anywhere_resolves_tests;
 mod a_ledger_is_read_and_written_as_one_step_tests;
 mod a_missing_kernel_module_is_not_a_coverage_regression_tests;
 mod a_module_is_a_subject_not_a_pile_tests;
+mod a_function_is_not_a_module_tests;
 mod a_pinned_toolchain_would_replace_the_version_matrix_tests;
 mod a_plan_installs_only_declarations_tests;
 mod a_pub_fn_nobody_calls_is_dead_tests;

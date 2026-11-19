@@ -36,7 +36,8 @@ and regroupings that change no behaviour. None of them is the #166 architecture 
 of them moves a responsibility across a module boundary. Work top to bottom: the ratchet comes
 first, so a split cannot regrow while the next one is in progress.
 
-- [ ] **#204** ratchet: `too_many_lines` plus a per-file line cap with a baseline that only shrinks
+- [x] **#204** ratchet: `too_many_lines` plus a per-file line cap with a baseline that only shrinks — landed, and the allow table is audited by `tests/review/a_function_is_not_a_module_tests.rs`.
+- [ ] **#205** the four functions outside #199 that the ratchet puts over 250: `heal`, `install`, `check_summary`, `dispatch` — split by phase and take each allow off.
 - [ ] **#203** the seven `too_many_arguments` / `fn_params_excessive_bools` allows → parameter
   structs, as `app/machinery.rs` already does. Goes before #199, which needs its struct.
 - [ ] **#199** `core/transaction.rs`: `execute_batch_with_retry` (409), `execute_internal` (341)

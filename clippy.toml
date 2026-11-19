@@ -1,0 +1,8 @@
+# A function longer than this is a module wearing a function's name (#204).
+#
+# The ratchet: `cargo clippy -D warnings` (every CI leg and both release
+# scripts) treats `too_many_lines` as an error, so any new function over the
+# threshold fails the build until it is split or allowed. Every `#[allow]`
+# in the tree must name the issue that will remove it — an allow without a
+# removal is a permission slip handed out to the next person who wants one.
+too-many-lines-threshold = 250

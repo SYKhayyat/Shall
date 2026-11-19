@@ -1,3 +1,7 @@
+// The function-length ratchet (#204), scoped like lib.rs so the binary's own long functions
+// cannot hide behind a thin main. `clippy.toml` holds the threshold.
+#![warn(clippy::too_many_lines)]
+
 use anyhow::{Context, Result};
 use clap::Parser;
 use shall::app::entrypoint::{expand_command_aliases, log_level_from_argv, plan_user_verb};
@@ -406,6 +410,8 @@ fn check_script_source(
     })
 }
 
+// Over the 250-line ratchet (#204). Split by phase and this allow comes off — `#205`.
+#[allow(clippy::too_many_lines)]
 pub(crate) async fn dispatch(app: &App, cli: &Cli) -> Result<()> {
     refuse_json_without_dry_run(cli)?;
     match &cli.command {

@@ -253,10 +253,8 @@ fn setting_probe_stub() -> &'static [(&'static str, &'static str)] {
     SETTING_PROBE_STUBS
 }
 
-fn argv_cases() -> Vec<ArgvCase> {
-    // `mut` is used by the BSD-target pushes at the end; other targets never touch it.
-    #[allow(unused_mut)]
-    let mut cases = vec![
+fn system_manager_cases() -> Vec<ArgvCase> {
+    vec![
         // ---- OS-native system managers, each invisible to every platform's CI but its own.
         ArgvCase::pkg(
             "apt",
@@ -374,6 +372,10 @@ fn argv_cases() -> Vec<ArgvCase> {
         // reached through a five-argument helper no row could name.
         ArgvCase::pkg("yay", &register_yay, Runs("yay -S --noconfirm --needed -- jq"), Runs("yay -Rs --noconfirm -- jq")),
         ArgvCase::pkg("paru", &register_paru, Runs("paru -S --noconfirm --needed -- jq"), Runs("paru -Rs --noconfirm -- jq")),
+    ]
+}
+fn store_manager_cases() -> Vec<ArgvCase> {
+    vec![
         // ---- Cross-platform store-shaped managers.
         ArgvCase::pkg(
             "brew",
@@ -414,6 +416,10 @@ fn argv_cases() -> Vec<ArgvCase> {
             Runs("conda install -n base -y -- jq"),
             Runs("conda remove -n base -y -- jq"),
         ),
+    ]
+}
+fn language_manager_cases() -> Vec<ArgvCase> {
+    vec![
         // ---- Language managers.
         ArgvCase::pkg(
             "pip",
@@ -564,6 +570,10 @@ fn argv_cases() -> Vec<ArgvCase> {
         // The two Haskell managers, which have no uninstall verb at all.
         ArgvCase::pkg("cabal", &register_cabal, Runs("cabal install -- jq"), Unsupported),
         ArgvCase::pkg("stack", &register_stack, Runs("stack install jq"), Unsupported),
+    ]
+}
+fn editor_host_cases() -> Vec<ArgvCase> {
+    vec![
         // ---- Editor extension hosts.
         ArgvCase::pkg(
             "vscode",
@@ -585,6 +595,10 @@ fn argv_cases() -> Vec<ArgvCase> {
             Runs("emacs --batch --eval (progn (require 'package) (package-initialize) (unless package-archive-contents (package-refresh-contents)) (dolist (p '(jq)) (package-install p)))"),
             Runs("emacs --batch --eval (progn (require 'package) (package-initialize) (dolist (n '(jq)) (let ((p (cadr (assoc n package-alist)))) (if p (package-delete p)))))"),
         ),
+    ]
+}
+fn resource_and_no_argv_cases() -> Vec<ArgvCase> {
+    vec![
         // ---- Resource backends: the declaration is not a package name, and each addresses
         // its own kind of thing. These are the rows the old table's shape could not hold.
         ArgvCase::shaped(
@@ -753,10 +767,12 @@ fn argv_cases() -> Vec<ArgvCase> {
             ),
             NoCommand("deletes the image it downloaded; no process is involved."),
         ),
-    ];
-    // The BSD tools, where removal is a different program — pushed rather than listed,
-    // because their registrars are compiled only where each packaging universe lives
-    // (same gating as the registration site).
+    ]
+}
+
+fn bsd_cases() -> Vec<ArgvCase> {
+    #[allow(unused_mut)]
+    let mut cases = Vec::new();
     #[cfg(target_os = "netbsd")]
     cases.push(ArgvCase::pkg(
         "pkgin",
@@ -778,6 +794,16 @@ fn argv_cases() -> Vec<ArgvCase> {
         Runs("pkg_add"),
         Runs("pkg_delete"),
     ));
+    cases
+}
+
+fn argv_cases() -> Vec<ArgvCase> {
+    let mut cases = system_manager_cases();
+    cases.extend(store_manager_cases());
+    cases.extend(language_manager_cases());
+    cases.extend(editor_host_cases());
+    cases.extend(resource_and_no_argv_cases());
+    cases.extend(bsd_cases());
     cases
 }
 const NO_TERMINATOR: &[(&str, &str)] = &[
