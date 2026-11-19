@@ -1732,7 +1732,13 @@ clear_own_leftover() { # binary prior-resolution
     [ -n "$_col_now" ] || return 0
     [ -f "$_col_now" ] || return 0
     rm -f "$_col_now" 2>/dev/null || true
-    if [ -e "$_col_now" ]; then
+    # The twin spelling: nimble writes `nimjson` and `nimjson.cmd`, `path_of` resolves to the
+    # `.cmd`, and a bare-name sibling would survive the rm above — leaving the exact shim the
+    # next run cannot prove delivery against (#197, measured as the extensionless `nimjson` in
+    # ~/.nimble/bin after a green sweep that had removed only its `.cmd` twin).
+    _col_stem="${_col_now%.cmd}"; _col_stem="${_col_stem%.exe}"; _col_stem="${_col_stem%.ps1}"
+    [ "$_col_stem" = "$_col_now" ] || rm -f "$_col_stem" 2>/dev/null || true
+    if [ -e "$_col_now" ] || [ -e "$_col_stem" ]; then
         soft "$1: this run left $_col_now behind and it could not be removed — a second run of this sweep will find the name already resolving there"
     else
         soft "$1: this run's own install left $_col_now behind after the removal; removed, so a second run starts where this one did"
