@@ -342,6 +342,7 @@ impl App {
             self.backends().await.clone(),
             self.state.clone(),
             &self.config,
+            self.executor.clone(),
         )
     }
 

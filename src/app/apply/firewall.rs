@@ -251,27 +251,9 @@ impl Firewall<'_> {
     /// The `[[firewall]]` rows the repo carries, through the same approval every adapter file
     /// goes through (7a/II.12).
     fn firewall_adapter_rows(&self) -> Vec<crate::backends::firewall::FirewallAdapter> {
-        let layout = self.config.layout();
-        let path = layout.adapter_firewall_file();
-        let Some(body) =
-            crate::backends::onboarder::read_approved_definitions(&path, &layout.locks_dir())
-        else {
-            return Vec::new();
-        };
-        match toml::from_str::<crate::backends::firewall::FirewallAdapterFile>(&body) {
-            Ok(f) => f.firewall,
-            Err(e) => {
-                warn!(
-                    "{}",
-                    crate::app::adapters::cannot_use(
-                        crate::app::adapters::surface("firewall").expect("a declared surface"),
-                        e,
-                    )
-                );
-                Vec::new()
-            }
-        }
+        crate::backends::firewall::user_rows(self.config)
     }
+
     /// N6: warn when a `link:` also owns a firewall ruleset file. Both are applied and the
     /// declaration wins, but two owners of one perimeter is never silent.
     fn warn_on_linked_ruleset(&self, state: &crate::model::DesiredState) {

@@ -20,7 +20,12 @@ async fn a_name_the_owner_already_manages_is_not_adopted_under_a_client() {
     };
     let mut state = StateRegistry::default();
     state.add("pacman", "jq", None, Default::default(), "test", false);
-    let m = Adopter::new(over(reg), Arc::new(Mutex::new(state)), &config);
+    let m = Adopter::new(
+        over(reg),
+        Arc::new(Mutex::new(state)),
+        &config,
+        quiet_executor(),
+    );
     let keys: Vec<String> = m
         .discover()
         .await

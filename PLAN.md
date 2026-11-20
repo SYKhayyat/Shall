@@ -393,7 +393,7 @@ laptop each one covers:
 - [ ] #64 adopt surfaces services by default
 - [ ] #60 adopt discovers schedules
 - [ ] #63 adopt enumerates desktop and OS settings
-- [ ] #65 adopt surfaces firewall rules by default
+- [x] #65 adopt surfaces firewall rules by default (C39)
 
 ### Make sure no input touches the machine (safety, from #166)
 

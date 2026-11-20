@@ -38,6 +38,7 @@ async fn an_os_essential_package_is_a_live_line() {
         over(reg),
         Arc::new(Mutex::new(StateRegistry::default())),
         &Config::default(),
+        quiet_executor(),
     );
     let text = m.render_manifest(&m.discover().await.unwrap(), &m.adoption_options());
 

@@ -21,6 +21,7 @@ fn a_service_is_declared_as_the_state_it_was_found_in() {
         over(Arc::new(BackendRegistry::default())),
         Arc::new(Mutex::new(StateRegistry::default())),
         &Config::default(),
+        quiet_executor(),
     );
     let text = m.render_manifest(&found, &options);
 

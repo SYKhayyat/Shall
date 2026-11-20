@@ -653,6 +653,17 @@ pub enum Commands {
         /// quietly widened back to everything.
         #[arg(long)]
         enabled_only: bool,
+
+        /// Only the firewall rules somebody added, rather than the default policies the
+        /// firewall ships with.
+        #[arg(long)]
+        added_only: bool,
+
+        /// Only the incoming side of the firewall's default policies. It narrows those and
+        /// nothing else: a `firewall:` port carries no direction, so `firewall:22/tcp` means
+        /// the same line whether the port is open in, out or both.
+        #[arg(long)]
+        inbound: bool,
     },
 
     /// Vendor someone else's modules into your repo (XIII.14).

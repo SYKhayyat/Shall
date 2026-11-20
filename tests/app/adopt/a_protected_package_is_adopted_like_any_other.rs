@@ -39,6 +39,7 @@ async fn a_protected_package_is_adopted_like_any_other() {
         over(reg),
         Arc::new(Mutex::new(StateRegistry::default())),
         &config,
+        quiet_executor(),
     );
     let names: Vec<String> = m
         .audit()

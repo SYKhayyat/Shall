@@ -40,6 +40,7 @@ async fn an_os_essential_package_is_adopted_like_any_other() {
         over(reg),
         Arc::new(Mutex::new(StateRegistry::default())),
         &Config::default(),
+        quiet_executor(),
     );
     let found = m.discover().await.unwrap();
 

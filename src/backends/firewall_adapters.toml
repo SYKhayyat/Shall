@@ -6,7 +6,8 @@
 #
 # `{port}` and `{proto}` are substituted. `allow`/`deny` open and close a port; `default_in`
 # and `default_out` set the policy for traffic no rule mentions; `list` reports what is in
-# force, parsed by `list_pattern` (a regex whose first two groups are port and protocol).
+# force, parsed by `list_pattern` (a regex whose first two groups are port and protocol) and,
+# where the same command prints it, by `default_pattern` (first two groups: policy, direction).
 
 [[firewall]]
 name = "ufw"
@@ -16,9 +17,20 @@ allow = ["ufw", "allow", "{port}/{proto}"]
 deny = ["ufw", "delete", "allow", "{port}/{proto}"]
 default_in = ["ufw", "default", "{policy}", "incoming"]
 default_out = ["ufw", "default", "{policy}", "outgoing"]
-list = ["ufw", "status", "numbered"]
-# `22/tcp   ALLOW IN  Anywhere` — the leading port/proto is what identifies the rule.
-list_pattern = '^\[?\s*\d*\]?\s*(\d+)/(tcp|udp)\s+ALLOW'
+# `verbose` rather than `numbered`: it prints the `Default:` line as well as the rules, so the
+# one command answers both questions `adopt` asks. The rule lines are the same either way —
+# `list_pattern` tolerates the `[ 1]` numbering `numbered` adds — so `sync` reads the same
+# perimeter it read before.
+list = ["ufw", "status", "verbose"]
+# `22/tcp   ALLOW IN  Anywhere`, numbered (`[ 1] 22/tcp`) or annotated (`22/tcp (OpenSSH)`).
+# The port/proto is what identifies the rule. The bracketed part is the rule number or the rule's
+# own name — never a port, which is why it is matched as a whole rather than as a loose run of
+# digits that could swallow the port behind it.
+list_pattern = '^\s*(?:\[\s*\d+\]\s*)?(\d+)/(tcp|udp)(?:\s*\([^)]*\))?\s+ALLOW'
+# `Default: deny (incoming), allow (outgoing), disabled (routed)` — group 1 is the body of the
+# line, read pair by pair. The third pair names a direction this model has none of, and is
+# skipped rather than widened.
+default_pattern = '(?m)^Default:(.*)$'
 
 [[firewall]]
 name = "firewalld"
@@ -30,6 +42,9 @@ default_in = ["firewall-cmd", "--permanent", "--set-target={policy}"]
 default_out = []
 list = ["firewall-cmd", "--permanent", "--list-ports"]
 list_pattern = '(\d+)/(tcp|udp)'
+# No `default_pattern`: `--list-ports` names ports and nothing else, and firewalld's default
+# lives in a zone target that is a second command this row does not carry. Absent is reported
+# by `adopt` as "this firewall cannot say", not as "the default is open".
 
 # Windows Defender Firewall. P7: Windows is not a later phase — a config that opens a port
 # means the same thing on the Debian laptop and the Windows workstation, and that is the whole
@@ -50,4 +65,10 @@ deny = [
 default_in = ["netsh", "advfirewall", "set", "allprofiles", "firewallpolicy", "{policy}"]
 default_out = []
 list = ["netsh", "advfirewall", "firewall", "show", "rule", "name=all"]
+# Only the rules Shall itself named: `show rule` lists every rule with its name, action and
+# port on separate lines, so a port on a line of its own is not attributable to a rule without
+# a state machine. The bound is a row limitation, and it is why only Shall's own rules are
+# adopted on Windows — the rest are reported as unreadable, never as absent.
 list_pattern = 'Shall (\d+)/(tcp|udp)'
+# No `default_pattern`: netsh states the policy as one line carrying both directions
+# (`BlockInbound,AllowOutbound`), which a two-group pattern cannot split honestly.

@@ -898,19 +898,36 @@ pub async fn handle_profile(
 ///
 /// Here rather than in `history`, where it sat: this writes declarations, which is what
 /// every other verb in this file does.
-pub async fn handle_adopt(app: &App, backends: Vec<String>, enabled_only: bool) -> Result<()> {
+pub async fn handle_adopt(
+    app: &App,
+    backends: Vec<String>,
+    enabled_only: bool,
+    added_only: bool,
+    inbound: bool,
+) -> Result<()> {
     // A name that reaches no backend is refused rather than silently adopting nothing: `shall
     // adopt srvice` answering "Adopted 0 declaration(s)" is byte-identical to a correct name
     // with nothing to take, so a typo cannot be told from a no-op (Q9).
     //
     // Through `require_known_backend` and not a message of its own: `apply`'s wording is the
     // one refusal, and a second spelling of it is how E18's family started.
+    //
+    // `firewall` is the exception, and it is named here rather than a second refusal written
+    // beside the first: rules are applied by the firewall phase from their own adapter table
+    // (Part XI), so there is no `BackendCapabilities` for a user to name. Every other unknown
+    // name is still refused, because a source that answered nothing must not look like a typo.
+    const SOURCES_THAT_ARE_NOT_BACKENDS: [&str; 1] = ["firewall"];
     for name in &backends {
+        if SOURCES_THAT_ARE_NOT_BACKENDS.contains(&name.as_str()) {
+            continue;
+        }
         app.resolver().await.require_known_backend(Some(name))?;
     }
     let scope = crate::app::adopt::AdoptScope {
         backends,
         enabled_only,
+        added_only,
+        inbound,
     };
     app.adopter()
         .await

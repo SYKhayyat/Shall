@@ -814,6 +814,9 @@ impl Statement {
             Statement::Service(name, o) => Some((("service", name), o)),
             Statement::Link(name, o) => Some((("link", name), o)),
             Statement::Setting(name, o) => Some((("setting", name), o)),
+            // A `firewall:` rule carries an option only when it sets a default policy
+            // (`@value=deny`), and the round trip refuses the spelling that does not.
+            Statement::Firewall(name, o) => Some((("firewall", name), o)),
             // Every other statement's prefix is not a backend name: `shim:`, `schedule:` and
             // `repo:` name things Shall does rather than things a manager lists, and no
             // registry entry answers to them. Checked, not assumed — `shall list -b shim`

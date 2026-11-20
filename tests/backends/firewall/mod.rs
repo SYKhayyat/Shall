@@ -10,6 +10,7 @@ fn shipped(name: &str) -> FirewallAdapter {
         .unwrap_or_else(|| panic!("{} must ship", name))
 }
 mod a_default_policy_becomes_the_firewalls_own_verb;
+mod a_default_policy_is_read_from_the_listing_that_states_it;
 mod a_direction_a_firewall_cannot_express_is_not_pretended;
 mod a_row_that_cannot_list_is_refused;
 mod an_empty_or_noisy_listing_yields_no_rules;

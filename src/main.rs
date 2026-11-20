@@ -787,7 +787,9 @@ async fn dispatch_declare(app: &App, cli: &Cli) -> Result<()> {
         Commands::Adopt {
             backends,
             enabled_only,
-        } => handle_adopt(app, backends.clone(), *enabled_only).await,
+            added_only,
+            inbound,
+        } => handle_adopt(app, backends.clone(), *enabled_only, *added_only, *inbound).await,
 
         Commands::Add {
             source,

@@ -32,7 +32,21 @@ pub struct FirewallAdapter {
     pub list: Vec<String>,
     /// A regex whose first two capture groups are the port and the protocol.
     pub list_pattern: String,
+    /// A regex matching the line on which a firewall states its default policy; its first
+    /// capture group is the body of that line. Absent is a firewall that cannot say — which
+    /// `adopt` reports rather than guesses, because a default policy written from a guess is
+    /// the one line that can make a machine unreachable.
+    ///
+    /// Where the policy is stated is per-firewall; how a pair is written is not, so the body is
+    /// read with one shared pair grammar ([`DEFAULT_PAIR`]) rather than a regex per vendor.
+    #[serde(default)]
+    pub default_pattern: Option<String>,
 }
+
+/// `deny (incoming)` — the policy, then the direction it applies to in parentheses. The one
+/// spelling every firewall in the shipped table that states a default uses, which is what makes
+/// it a convention rather than a vendor quirk.
+const DEFAULT_PAIR: &str = r"(\w+)\s*\((\w+)\)";
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct FirewallAdapterFile {
@@ -105,6 +119,46 @@ impl FirewallAdapter {
         }
         out
     }
+
+    /// The default policies this firewall reports as in force, for `adopt` to offer.
+    ///
+    /// A direction word this model has no `Direction` for is skipped rather than widened: ufw
+    /// prints `disabled (routed)`, and reading that as an incoming or outgoing policy would
+    /// write a line nobody measured. `None` from [`Self::default_command`] is the mirror
+    /// refusal — a policy the firewall cannot set is not one to adopt either.
+    pub fn parse_defaults(&self, output: &str) -> Vec<(Direction, String)> {
+        let Some(pattern) = self.default_pattern.as_deref() else {
+            return Vec::new();
+        };
+        let (Ok(line_of), Ok(pair)) = (
+            crate::utils::regex_cache::compiled(pattern),
+            crate::utils::regex_cache::compiled(DEFAULT_PAIR),
+        ) else {
+            return Vec::new();
+        };
+        let mut out: Vec<(Direction, String)> = Vec::new();
+        for line in line_of.captures_iter(output) {
+            let Some(body) = line.get(1) else { continue };
+            for caps in pair.captures_iter(body.as_str()) {
+                let (Some(policy), Some(direction)) = (caps.get(1), caps.get(2)) else {
+                    continue;
+                };
+                let direction = match direction.as_str().to_ascii_lowercase().as_str() {
+                    "incoming" | "inbound" | "in" => Direction::Incoming,
+                    "outgoing" | "outbound" | "out" => Direction::Outgoing,
+                    _ => continue,
+                };
+                let policy = policy.as_str().to_ascii_lowercase();
+                if self.default_command(direction, &policy).is_none() {
+                    continue;
+                }
+                if !out.iter().any(|(d, _)| *d == direction) {
+                    out.push((direction, policy));
+                }
+            }
+        }
+        out
+    }
 }
 
 impl AdapterRow for FirewallAdapter {
@@ -138,6 +192,35 @@ impl AdapterRow for FirewallAdapter {
 impl Detected for FirewallAdapter {
     fn detect_command(&self) -> &str {
         &self.detect
+    }
+}
+
+/// The `[[firewall]]` rows the repo carries, through the same approval every adapter file goes
+/// through (7a/II.12).
+///
+/// Here rather than in either caller because there are two — the phase that applies a perimeter
+/// and the `adopt` that offers one — and a second reader would be a second answer to "which
+/// rows does this repo have".
+pub fn user_rows(config: &crate::config::Config) -> Vec<FirewallAdapter> {
+    let layout = config.layout();
+    let path = layout.adapter_firewall_file();
+    let Some(body) =
+        crate::backends::onboarder::read_approved_definitions(&path, &layout.locks_dir())
+    else {
+        return Vec::new();
+    };
+    match toml::from_str::<FirewallAdapterFile>(&body) {
+        Ok(f) => f.firewall,
+        Err(e) => {
+            tracing::warn!(
+                "{}",
+                crate::app::adapters::cannot_use(
+                    crate::app::adapters::surface("firewall").expect("a declared surface"),
+                    e,
+                )
+            );
+            Vec::new()
+        }
     }
 }
 

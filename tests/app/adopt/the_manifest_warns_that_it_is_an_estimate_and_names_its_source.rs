@@ -28,6 +28,7 @@ async fn the_manifest_warns_that_it_is_an_estimate_and_names_its_source() {
         over(reg),
         Arc::new(Mutex::new(StateRegistry::default())),
         &Config::default(),
+        quiet_executor(),
     );
     let text = m.render_manifest(&m.discover().await.unwrap(), &m.adoption_options());
 

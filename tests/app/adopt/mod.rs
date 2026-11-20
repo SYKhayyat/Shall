@@ -87,6 +87,14 @@ fn registry_with(manual: ManualListing, mock: Arc<MockExecutor>) -> Arc<BackendR
     ));
     Arc::new(reg)
 }
+/// An executor that answers nothing, for the tests whose subject is how the manifest spells a
+/// name rather than what this machine runs.
+fn quiet_executor() -> CommandExecutor {
+    let vfs: Arc<DashMap<PathBuf, String>> = Arc::new(DashMap::new());
+    let mock = Arc::new(MockExecutor::new(vfs.clone()));
+    CommandExecutor::with_layer(true, false, mock, vfs, Arc::new(DashMap::new()))
+}
+
 fn adopter(reg: Arc<BackendRegistry>) -> Adopter {
     let config = Config {
         // Keep the default protected list out of these assertions.
@@ -97,7 +105,7 @@ fn adopter(reg: Arc<BackendRegistry>) -> Adopter {
         ..Config::default()
     };
     let state = Arc::new(Mutex::new(StateRegistry::default()));
-    Adopter::new(over(reg), state, &config)
+    Adopter::new(over(reg), state, &config, quiet_executor())
 }
 fn alpm_client(
     reg: &mut BackendRegistry,
@@ -171,6 +179,7 @@ fn alpm_registry(mock: Arc<MockExecutor>, order: [&'static str; 3]) -> Arc<Backe
     }
     Arc::new(reg)
 }
+mod a_firewall_rule_is_declared_as_the_perimeter_it_enforces;
 mod a_name_no_line_can_hold_is_reported_rather_than_written;
 mod a_name_the_owner_already_manages_is_not_adopted_under_a_client;
 mod a_protected_package_is_adopted_like_any_other;

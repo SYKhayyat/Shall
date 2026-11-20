@@ -25,6 +25,11 @@ pub struct Adopter {
     backends: crate::app::Backends,
     state: Arc<Mutex<StateRegistry>>,
     config: Arc<Config>,
+    /// Reading that is not a package listing. The firewall is driven through its own adapter
+    /// table (Part XI) by the phase that applies it, so there is no registered backend whose
+    /// `Queryable` could answer — the executor is how `adopt` asks the same table the same
+    /// question `sync` asks.
+    executor: crate::core::CommandExecutor,
 }
 
 /// A package that was discovered but deliberately not adopted.
@@ -108,6 +113,25 @@ pub struct Discovery {
     /// Whether the scan stopped at `MAX_LINKS` — said out loud, because a manifest that is
     /// short for a reason the reader cannot see is the estimate pretending to be a census.
     pub links_truncated: bool,
+    /// The perimeter this machine enforces, as rules and default policies.
+    ///
+    /// Beside `adopt` rather than inside it because a rule's options are **per rule**: one
+    /// default policy is `deny` and the other is `allow`, and `adopt`'s option map carries one
+    /// set per backend. Flattening the two into one map would write `@value=deny` onto the
+    /// outgoing policy as well.
+    pub firewall: Vec<FirewallRule>,
+    /// Where the firewall half of this run read from — the adapter that answered, and what it
+    /// was asked. `None` when there is no firewall or it refused to answer, and then the reason
+    /// is in `skipped_backends`.
+    pub firewall_source: Option<String>,
+}
+
+/// One `firewall:` line this run found in force, with the options its line must carry.
+#[derive(Debug, Clone)]
+pub struct FirewallRule {
+    pub package: Package,
+    /// `value=deny` for a default policy, empty for a port.
+    pub options: Vec<(String, String)>,
 }
 
 /// What this `adopt` was asked for.
@@ -122,6 +146,13 @@ pub struct AdoptScope {
     /// Take only what this machine starts on its own — services set to run at boot rather
     /// than services that happen to be running this minute.
     pub enabled_only: bool,
+    /// `--added-only`: the rules somebody added, not the policies the firewall ships with. A
+    /// default policy is the perimeter's own baseline, so this is the flag that leaves it out.
+    pub added_only: bool,
+    /// `--inbound`: the incoming side of the perimeter. It narrows the default policies, and
+    /// **only** them: a `firewall:` port carries no direction, because `firewall:22/tcp` is the
+    /// same line whether the port is open in, out or both.
+    pub inbound: bool,
 }
 
 impl AdoptScope {
@@ -145,6 +176,9 @@ pub struct DeclaredOutside {
     link_targets: Vec<std::path::PathBuf>,
     /// Roots a `dotfiles:` tree already owns — every path under one is that tree's.
     trees: Vec<std::path::PathBuf>,
+    /// Firewall rules the config already declares, and the file declaring each. A rule is its
+    /// own statement kind, not a package, so it cannot be looked up in `packages`.
+    firewall: Vec<(crate::model::firewall::Rule, String)>,
 }
 
 impl DeclaredOutside {
@@ -156,6 +190,7 @@ impl DeclaredOutside {
         use crate::config::grammar::Statement;
         let mut link_targets = Vec::new();
         let mut trees = Vec::new();
+        let mut firewall = Vec::new();
         // `modules/adopted.txt` is this command's own output and it is overwritten every run
         // (II.9). Counting its lines as "already declared" would make the second `adopt` drop
         // every link the first one found — the manifest would shrink each time it ran.
@@ -177,6 +212,11 @@ impl DeclaredOutside {
                         trees.push(path);
                     }
                 }
+                Statement::Firewall(name, _) => {
+                    if let Ok(rule) = crate::model::firewall::Rule::parse(name) {
+                        firewall.push((rule, origin.file.display().to_string()));
+                    }
+                }
                 _ => {}
             }
         }
@@ -184,6 +224,7 @@ impl DeclaredOutside {
             packages,
             link_targets,
             trees,
+            firewall,
         }
     }
 
@@ -228,11 +269,13 @@ impl Adopter {
         backends: crate::app::Backends,
         state: Arc<Mutex<StateRegistry>>,
         config: &Config,
+        executor: crate::core::CommandExecutor,
     ) -> Self {
         Self {
             backends,
             state,
             config: Arc::new(config.clone()),
+            executor,
         }
     }
 
@@ -528,6 +571,15 @@ impl Adopter {
         // packages and this is not its business.
         if scope.backends.is_empty() {
             self.discover_links(&mut found, &declared).await;
+        }
+
+        // The perimeter (C39). Read from the same adapter table the phase that applies it uses,
+        // and offered on the same terms as a package: a bare `adopt` takes it, and naming
+        // backends on the command line means the run is about those and this is not its
+        // business — except when `firewall` is the name, which is the one source here that is
+        // not a registered backend.
+        if scope.backends.is_empty() || scope.asked_for("firewall") {
+            self.discover_firewall(&mut found, &declared, scope).await;
         }
 
         Ok(found)
@@ -984,6 +1036,43 @@ impl Adopter {
             }
         }
 
+        if !found.firewall.is_empty() {
+            out.push_str(&format!(
+                "\n\
+# === The perimeter this machine enforces ===\n\
+#   Read from {}. A `firewall:` line is a port the firewall has\n\
+#   open, or the policy it applies to traffic no rule mentions; a default policy carries the\n\
+#   value it was found with, because a policy without one declares nothing. Deleting a line\n\
+#   CLOSES the port, or RESETS the policy to the firewall's own default, on the next sync.\n\
+",
+                found
+                    .firewall_source
+                    .as_deref()
+                    .unwrap_or("the firewall's own listing")
+            ));
+            for rule in &found.firewall {
+                let opts: Vec<(&str, &str)> = rule
+                    .options
+                    .iter()
+                    .map(|(k, v)| (k.as_str(), v.as_str()))
+                    .collect();
+                match crate::config::grammar::declared_as(
+                    Some("firewall"),
+                    &rule.package.name,
+                    &opts,
+                )
+                .line()
+                {
+                    Some(line) => out.push_str(line),
+                    // Unreachable: `discover_firewall` dropped anything this cannot spell. An
+                    // unspellable line is left out rather than guessed at, because a guessed
+                    // `firewall:` line is a port closed or opened on nobody's instruction.
+                    None => continue,
+                }
+                out.push('\n');
+            }
+        }
+
         if !found.skipped.is_empty() {
             out.push_str(
                 "\n\
@@ -1010,6 +1099,116 @@ impl Adopter {
         }
 
         out
+    }
+
+    /// The perimeter this machine enforces, offered as `firewall:` lines (C39, II.99).
+    ///
+    /// **The lockout check is not this half's job.** `adopt` writes the file; `would_close_session`
+    /// and the guard stand between a declaration and the machine. So a rule is offered for every
+    /// rule the firewall reports — and the one thing this will not do is invent a default policy
+    /// the firewall cannot state, because a default written from a guess is the single line that
+    /// makes a machine unreachable from the far end of the connection typing it.
+    async fn discover_firewall(
+        &self,
+        found: &mut Discovery,
+        declared: &DeclaredOutside,
+        scope: &AdoptScope,
+    ) {
+        use crate::backends::firewall as table;
+        use crate::model::firewall::{Direction, Rule};
+
+        let all = table::adapters(table::user_rows(&self.config));
+        let present = |cmd: &str| self.executor.command_exists_sync(cmd);
+        let Some(adapter) = table::detect(&all, &present) else {
+            let known: Vec<&str> = all.iter().map(|a| a.name.as_str()).collect();
+            found.skipped_backends.push((
+                "firewall".to_string(),
+                format!(
+                    "no firewall Shall knows is running on this machine (it looked for {}), so the \
+                     perimeter is not reported — a firewall nobody found is not an open one",
+                    known.join(", ")
+                ),
+            ));
+            return;
+        };
+
+        let list = adapter.list_command();
+        let refs: Vec<&str> = list.iter().skip(1).map(String::as_str).collect();
+        let output = match self.executor.run_output(&list[0], &refs, true).await {
+            Ok(out) => out,
+            // An unreadable perimeter is not an empty one, and reporting it as empty would let
+            // a manifest claim the machine has no open ports the run simply could not see.
+            Err(e) => {
+                found.skipped_backends.push((
+                    "firewall".to_string(),
+                    format!(
+                        "`{}` could not be read ({}), so no rule is offered — an unreadable \
+                         perimeter is not an empty one",
+                        list.join(" "),
+                        e
+                    ),
+                ));
+                return;
+            }
+        };
+
+        let mut rules: Vec<FirewallRule> = adapter
+            .parse_rules(&output)
+            .into_iter()
+            .map(|rule| FirewallRule {
+                package: Package::new(rule.to_string(), "firewall"),
+                options: Vec::new(),
+            })
+            .collect();
+
+        // The firewall's own baseline, unless the run asked only for what was added to it.
+        if !scope.added_only {
+            for (direction, policy) in adapter.parse_defaults(&output) {
+                if scope.inbound && direction == Direction::Outgoing {
+                    continue;
+                }
+                rules.push(FirewallRule {
+                    package: Package::new(Rule::Default { direction }.to_string(), "firewall"),
+                    options: vec![("value".to_string(), policy)],
+                });
+            }
+        }
+
+        found.firewall_source = Some(format!("{} — `{}`", adapter.name, list.join(" ")));
+
+        for rule in rules {
+            let already = crate::model::firewall::Rule::parse(&rule.package.name)
+                .ok()
+                .and_then(|r| declared.firewall.iter().find(|(d, _)| *d == r));
+            if let Some((_, file)) = already {
+                found.skipped.push(Skipped {
+                    reason: format!("you already declare it, in {}", file),
+                    package: rule.package,
+                });
+                continue;
+            }
+            let opts: Vec<(&str, &str)> = rule
+                .options
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect();
+            // The same round trip every other name goes through: a rule no line can spell is
+            // reported rather than written as something else.
+            if crate::config::grammar::declared_as(Some("firewall"), &rule.package.name, &opts)
+                .line()
+                .is_none()
+            {
+                found.skipped.push(Skipped {
+                    reason: "no `firewall:` line can carry this rule".to_string(),
+                    package: rule.package,
+                });
+                continue;
+            }
+            found.firewall.push(rule);
+        }
+        found.firewall.sort_by(|a, b| {
+            (&a.package.backend, &a.package.name).cmp(&(&b.package.backend, &b.package.name))
+        });
     }
 
     /// A read-only preview of what `adopt` would adopt. Runs the same crawl.

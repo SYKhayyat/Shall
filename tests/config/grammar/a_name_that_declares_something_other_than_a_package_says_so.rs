@@ -43,6 +43,21 @@ fn a_name_that_declares_something_other_than_a_package_says_so() {
     // A `setting:` is a resource whose line is illegal until it carries its value, so the
     // name alone is genuinely unwritable — which is why the guard asks about the backend
     // and not about the name.
+    // A `firewall:` rule is the fourth kind, and the one `adopt` gained last: a port carries no
+    // option, a default policy is illegal without its value. Both spellings come back exactly.
+    assert_eq!(
+        declared(Some("firewall"), "22/tcp"),
+        Declared::Resource("firewall:22/tcp".to_string())
+    );
+    assert_eq!(
+        declared(Some("firewall"), "default/incoming"),
+        Declared::Nothing,
+        "a default policy with no value declares nothing"
+    );
+    assert_eq!(
+        super::declared_as(Some("firewall"), "default/incoming", &[("value", "deny")]),
+        Declared::Resource("firewall:default/incoming@value=deny".to_string())
+    );
     let key = "org.gnome.desktop.interface/clock-format";
     assert_eq!(declared(Some("setting"), key), Declared::Nothing);
     assert_eq!(

@@ -11539,16 +11539,26 @@ decides which reading they want.
 **Status: ANSWERED 2026-11-20 — owner ruling: every rule the firewall can enumerate, with `--inbound`
 and `--added-only` as the limits.** Carried out of #65.
 
-**What the ruling settles.** The firewall backend already detects the active manager (`ufw`,
-`firewalld`, Windows Defender) and parses its rules; it gains a `Queryable` so `adopt` offers them
-like any other resource (`II.99`). Both directions are offered — a default-allow-outbound policy is
-a fact about the machine and is read back as `firewall:default/outgoing @value=allow` exactly as it
-is found. `--inbound` narrows to inbound rules and `--added-only` to rules somebody added, and
-neither is the default.
+**What the ruling settles.** `adopt` offers every rule the active firewall reports, read through
+the same adapter table (`firewall_adapters.toml`) the phase that applies them uses, so the answer
+and the action cannot disagree about what a rule is (`II.99`). Both directions are offered — a
+default-allow-outbound policy is a fact about the machine and is read back as
+`firewall:default/outgoing@value=allow` exactly as it is found. `--added-only` leaves out the
+default policies and `--inbound` narrows them to the incoming one, and neither is the default.
+
+**One thing the model cannot carry, found while building it.** `firewall:22/tcp` has **no
+direction**: the grammar's `Rule` is `Port { port, proto }` or `Default { direction }`, so a port is
+the same declaration whether it is open in, out or both — the per-port direction of `ufw`'s
+`ALLOW IN` / `ALLOW OUT` has nowhere to go. So "both directions" is true of the **policies**, and
+`--inbound` narrows them and only them. Writing a per-port direction would be a Part XI model
+change, not an `adopt` one, and this ruling does not make it.
 
 **What stays refused by name.** A manager whose rule set cannot be read (`nftables` and `pf` have no
-adapter yet) is reported as **unreadable, not empty** — an empty rule list and a rule set nobody can
-read are different answers and the second must never be written as the first.
+adapter yet, and Windows Defender's row can only attribute the rules Shall itself named) is reported
+as **unreadable, not empty** — an empty rule list and a rule set nobody can read are different
+answers and the second must never be written as the first. A firewall that cannot state its default
+policy states none (`firewalld` lists ports only), because a policy line written from a guess is the
+one line that can close a machine's own port.
 
 **What the ruling costs, said out loud.** A `ufw` machine now adopts its default policy lines as
 well as its rules. That is three lines on the machines that have no rules at all, and the person
