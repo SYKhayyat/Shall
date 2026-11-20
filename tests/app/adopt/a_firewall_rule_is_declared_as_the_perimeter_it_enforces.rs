@@ -1,3 +1,9 @@
+// The `ufw` row is Linux-only and `detect` asks the running OS which rows apply (the table's
+// `os` column), so this drives on Linux only. The parsing half it rests on is not gated:
+// `backends::firewall::a_default_policy_is_read_from_the_listing_that_states_it` runs everywhere,
+// and on a machine with no row at all `adopt` reports "no firewall Shall knows is running".
+#![cfg(target_os = "linux")]
+
 use super::*;
 
 /// Real `ufw status verbose` output — the row's own `list` command.

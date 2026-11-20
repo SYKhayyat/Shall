@@ -341,13 +341,17 @@ impl Adopter {
                         Ok(None) => {
                             warn!(
                                 "`{}` cannot say which of its entries this machine starts on \
-                                 its own, so `--enabled-only` has nothing to filter on here —                                  skipping it rather than taking all of them.",
+                                 its own, so `--enabled-only` has nothing to filter on here — \
+                                 skipping it rather than taking all of them.",
                                 backend.name()
                             );
                             None
                         }
                         Err(e) => {
-                            warn!("`{}` could not be asked what starts at boot: {e}", backend.name());
+                            warn!(
+                                "`{}` could not be asked what starts at boot: {e}",
+                                backend.name()
+                            );
                             None
                         }
                     };
