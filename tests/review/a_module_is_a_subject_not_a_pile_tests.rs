@@ -28,19 +28,15 @@ use std::path::{Path, PathBuf};
 /// every file over it that has been split turned out to hold two subjects.
 const LINES: usize = 2_000;
 
-/// The files still over the line, with what each is waiting for.
+/// The files still over the line, with what each is waiting for. **Empty, and that is the point.**
 ///
-/// **A row here is a promise, not a permission.** The scheduler is a single genuine subject that
-/// is merely large, measured at 2026-08-12, and its split is not filed — which is exactly why it
-/// was not done in a hurry alongside a security fix. The four rows this table used to carry
-/// (`backends/generic.rs`, `config/grammar/statement.rs`, `core/transaction.rs`,
-/// `core/executor.rs`) were earned back by #199–#202 and are gone, which is the other direction
-/// of the gate working.
-const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[(
-    "src/app/scheduler/mod.rs",
-    2640,
-    "one file holding the scheduler and its queue; the split is not filed yet.",
-)];
+/// **A row here is a promise, not a permission**, and every promise in it has been kept: the four
+/// modules #199–#202 split out (`backends/generic.rs`, `config/grammar/statement.rs`,
+/// `core/transaction.rs`, `core/executor.rs`), and finally the scheduler, which was 2,640 lines of
+/// one subject and is now the shared vocabulary plus one file per scheduler Shall can drive. A
+/// table with no rows still gates in both directions: a file that grows past the line has to argue
+/// for itself here, and there is no longer a row to inherit a reason from.
+const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[];
 
 fn rust_files(root: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(root) else {

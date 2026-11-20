@@ -34,9 +34,11 @@ New debt is filed here, at the bottom of this list, labelled `tech-debt`.*
 four subjects wearing one name each, the longest methods ran 290–409 lines, and seven clippy
 parameter-count allows stood in for the struct each one needed. All of it was splits and
 regroupings that changed no behaviour, and all of it is done: the tree has **no `#[allow]` for a
-lint** in it at all, and the only file still over the 2,000-line cap is the scheduler, which is on
-the exemption list with the shape its split will take. None of this was the #166 architecture
-question, so no responsibility moved across a module boundary.
+lint** in it at all, and `tests/review/a_module_is_a_subject_not_a_pile_tests.rs`'s exemption
+table is **empty** — the scheduler, the last row, is split into its shared vocabulary and one file
+per scheduler Shall can drive (`systemd.rs`, `launchd.rs`, `schtasks.rs`), and each of those is
+under half the cap. None of this was the #166 architecture question, so no responsibility moved
+across a module boundary.
 
 - [x] **#204** ratchet: `too_many_lines` plus a per-file line cap with a baseline that only shrinks — landed, and the allow table is audited by `tests/review/a_function_is_not_a_module_tests.rs`. **Both tables are now empty** and the gates assert in both directions, which is what retired them.
 - [x] **#205** the four functions outside #199 that the ratchet put over 250: `check_summary`
