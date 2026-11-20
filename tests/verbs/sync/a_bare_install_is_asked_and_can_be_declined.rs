@@ -7,7 +7,7 @@ fn a_bare_install_is_asked_and_can_be_declined() {
     let mut prompt = None;
     let decision = confirm_bare_installs_with(
         &changes,
-        shall::config::config::BareInstall::Ask,
+        shall::config::declaration::BareInstall::Ask,
         false,
         |text| {
             prompt = Some(text.to_string());

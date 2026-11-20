@@ -32,7 +32,7 @@ mod the_setting_is_read_by_the_unattended_run_too;
 /// the mock's silence).
 async fn declaring(
     lines: &[&str],
-    policy: shall::config::config::BareInstall,
+    policy: shall::config::declaration::BareInstall,
 ) -> crate::mock_providers::TestKernel {
     use shall::model::Landing;
 

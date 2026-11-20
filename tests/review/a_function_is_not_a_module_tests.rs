@@ -16,19 +16,38 @@
 //! `GithubInstallable::install` and `dispatch` (#205) — were all earned back by splitting the
 //! functions. A new allow is red until somebody writes a row naming the issue that removes it.
 //!
-//! **Two lints are forbidden outright**, not tabled: `too_many_arguments` and
-//! `fn_params_excessive_bools`. The repo already has the fix — `app/machinery.rs` — and every
-//! remaining site (#203) now groups its arguments into one value instead.
+//! **Four lints are forbidden outright**, not tabled: `too_many_arguments`,
+//! `fn_params_excessive_bools`, `type_complexity` and `module_inception`. Each asks for a name —
+//! a struct, a type alias, or one rename — so a site has somewhere to go that is not an allow.
+//! The last two were earned back by #208: the two `VARS_MEMO`/`why`-snapshot types became structs
+//! and `config::config` became `config::declaration`.
 
 use std::path::Path;
 
 /// Every `#[allow(clippy::too_many_lines)]` in the tree, and the issue that will remove it.
 const ALLOWED_FOR_NOW: &[(&str, &str, &str)] = &[];
 
-/// Lints no site may silence: the fix is a struct or an enum, never an allow.
-const FORBIDDEN: &[&str] = &[
-    "#[allow(clippy::too_many_arguments)]",
-    "#[allow(clippy::fn_params_excessive_bools)]",
+/// Lints no site may silence, and the fix each one is asking for — which is a name, never an
+/// allow. The second field is the message a new site gets.
+const FORBIDDEN: &[(&str, &str)] = &[
+    (
+        "#[allow(clippy::too_many_arguments)]",
+        "the arguments that travel together become one value with named fields, as \
+         `app/machinery.rs` does",
+    ),
+    (
+        "#[allow(clippy::fn_params_excessive_bools)]",
+        "the booleans are one enum, as `OptIns` is — not a flag per argument",
+    ),
+    (
+        "#[allow(clippy::type_complexity)]",
+        "name the type: a struct with field names for a tuple, or a `type` alias for the part \
+         that repeats",
+    ),
+    (
+        "#[allow(clippy::module_inception)]",
+        "rename one of the two modules — the lint is the file tree saying the same word twice",
+    ),
 ];
 
 /// The name of the function an allow licenses: the next `fn` after the allow.
@@ -125,7 +144,7 @@ fn every_allow_for_a_long_function_names_the_issue_that_removes_it() {
 }
 
 #[test]
-fn no_site_silences_the_parameter_count_lints() {
+fn no_site_silences_a_lint_whose_fix_is_a_name() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut offenders: Vec<String> = Vec::new();
     for p in rust_files(&root.join("src")) {
@@ -139,16 +158,14 @@ fn no_site_silences_the_parameter_count_lints() {
         };
         for (i, line) in text.lines().enumerate() {
             let t = line.trim();
-            if FORBIDDEN.contains(&t) {
-                offenders.push(format!("{rel}:{}: {t}", i + 1));
+            if let Some((allow, fix)) = FORBIDDEN.iter().find(|(allow, _)| *allow == t) {
+                offenders.push(format!("{rel}:{}: {}\n             → {fix}", i + 1, allow));
             }
         }
     }
     assert!(
         offenders.is_empty(),
-        "a function silences clippy's parameter-count lint instead of grouping its arguments:\n  \
-         {}\n`app/machinery.rs` is the shape: the arguments that travel together become one \
-         value with named fields, and the allow is deleted.",
+        "a site silences a lint whose fix is a name:\n  {}",
         offenders.join("\n  ")
     );
 }

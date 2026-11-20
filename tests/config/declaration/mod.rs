@@ -1,5 +1,5 @@
 pub use serde::{Deserialize, Serialize};
-pub use shall::config::config::*;
+pub use shall::config::declaration::*;
 pub use shall::core::{Error, Result};
 pub use shall::model::Layout;
 pub use shall::utils::{safe_config_dir, safe_data_dir};

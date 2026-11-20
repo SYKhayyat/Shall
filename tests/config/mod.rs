@@ -1,7 +1,6 @@
 //! The tests that mirror `src/config/`, module for module.
 
-#[allow(clippy::module_inception)]
-mod config;
+mod declaration;
 mod grammar;
 mod parser;
 mod settings;

@@ -674,6 +674,21 @@ pub fn provenance(source: &str) -> String {
     }
 }
 
+/// One managed package, as `why` needs it: which manager holds it, under what name, at what
+/// version, from where, and until when.
+///
+/// A snapshot taken under the registry's lock, so the per-package queries below run without
+/// holding it — and with field names, because the positional version of this read
+/// `(String, String, Option<String>, String, Option<u64>)` at every use and the fifth field was
+/// a lease nobody could identify from the call site.
+struct ManagedHere {
+    backend: String,
+    name: String,
+    version: Option<String>,
+    source: String,
+    expires_at: Option<u64>,
+}
+
 pub async fn why(
     config: &Config,
     registry: &Arc<BackendRegistry>,
@@ -683,23 +698,17 @@ pub async fn why(
     out: Output,
 ) -> Result<()> {
     // Snapshot the state we need, then release the lock before doing async backend queries.
-    #[allow(clippy::type_complexity)]
-    let (matches, all_managed): (
-        Vec<(String, String, Option<String>, String, Option<u64>)>,
-        Vec<(String, String)>,
-    ) = {
+    let (matches, all_managed): (Vec<ManagedHere>, Vec<(String, String)>) = {
         let state = state.lock().await;
         let matches = state
             .managed()
             .filter(|p| p.name == query || format!("{}:{}", p.backend, p.name) == query)
-            .map(|p| {
-                (
-                    p.backend.clone(),
-                    p.name.clone(),
-                    p.version.clone(),
-                    p.source.clone(),
-                    p.expires_at,
-                )
+            .map(|p| ManagedHere {
+                backend: p.backend.clone(),
+                name: p.name.clone(),
+                version: p.version.clone(),
+                source: p.source.clone(),
+                expires_at: p.expires_at,
             })
             .collect();
         let all = state
@@ -723,7 +732,14 @@ pub async fn why(
     // cost two full resolutions of every file you own.
     let resolved = ResolvedConfig::read(config, registry).await?;
 
-    for (backend, name, version, source, expires) in matches {
+    for ManagedHere {
+        backend,
+        name,
+        version,
+        source,
+        expires_at,
+    } in matches
+    {
         // Where your files declare it, from the resolver — the same answer `sync` acts on.
         let found = declarations_of(&resolved, &backend, &name);
         let formats = found.formats.clone();
@@ -741,7 +757,7 @@ pub async fn why(
             declarations
         };
 
-        let lease = expires.map(|exp| {
+        let lease = expires_at.map(|exp| {
             match chrono::DateTime::<chrono::Utc>::from_timestamp(exp as i64, 0) {
                 Some(dt) => dt.to_rfc2822(),
                 None => format!("{}", exp),

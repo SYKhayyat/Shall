@@ -8,7 +8,11 @@ use super::*;
 /// reported `applied 1 change(s)` with nothing saying a policy had been crossed.
 #[tokio::test]
 async fn the_setting_is_read_by_the_unattended_run_too() {
-    let kernel = declaring(&["dos2unix"], shall::config::config::BareInstall::Never).await;
+    let kernel = declaring(
+        &["dos2unix"],
+        shall::config::declaration::BareInstall::Never,
+    )
+    .await;
 
     let done = watch_reconcile(&kernel.app)
         .await
@@ -35,7 +39,11 @@ async fn the_setting_is_read_by_the_unattended_run_too() {
 /// setting apart, the same fixture is installed by the same call.
 #[tokio::test]
 async fn the_unattended_run_still_installs_when_nothing_forbids_it() {
-    let kernel = declaring(&["dos2unix"], shall::config::config::BareInstall::Always).await;
+    let kernel = declaring(
+        &["dos2unix"],
+        shall::config::declaration::BareInstall::Always,
+    )
+    .await;
 
     let done = watch_reconcile(&kernel.app)
         .await

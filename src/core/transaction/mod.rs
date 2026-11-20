@@ -125,7 +125,7 @@ impl TransactionConfig {
             batch_recovery: BatchRecovery::Off,
             purge: false,
             manager_lock_wait: Duration::from_secs(
-                crate::config::config::default_manager_lock_wait_secs(),
+                crate::config::declaration::default_manager_lock_wait_secs(),
             ),
         }
     }

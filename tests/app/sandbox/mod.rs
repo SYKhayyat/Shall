@@ -1,5 +1,5 @@
 pub use shall::app::sandbox::*;
-pub use shall::config::config::SandboxSettings;
+pub use shall::config::declaration::SandboxSettings;
 pub use shall::core::{Error, Result};
 use std::io::Write;
 use std::path::Path;

@@ -92,7 +92,7 @@ pub struct InstalledListings {
     /// How wide a mutation's invalidation reaches. A `OnceLock` because it is config, set once
     /// before the run and read from every clone of every backend's executor: unset means the
     /// ruling's scope, so a test that builds this type directly is never accidentally narrow.
-    scope: std::sync::OnceLock<crate::config::config::InvalidationScope>,
+    scope: std::sync::OnceLock<crate::config::declaration::InvalidationScope>,
     /// Questions that are not listings and are not essentials, and are asked once per run anyway.
     ///
     /// **Here rather than beside it, for the reason `essentials` gives above: a second map with a
@@ -118,7 +118,7 @@ impl InstalledListings {
 
     /// [`crate::config::Config::listing_invalidation`], set once from config before any backend
     /// holds a clone of the executor.
-    pub fn set_scope(&self, scope: crate::config::config::InvalidationScope) {
+    pub fn set_scope(&self, scope: crate::config::declaration::InvalidationScope) {
         let _ = self.scope.set(scope);
     }
 
@@ -128,9 +128,10 @@ impl InstalledListings {
     /// forgets everything rather than guessing (`PLAN.md` #79).
     pub fn forget_after_mutation(&self, manager: Option<&str>) {
         match (self.scope.get().copied(), manager) {
-            (Some(crate::config::config::InvalidationScope::MutatedManager), Some(manager)) => {
-                self.forget_manager(manager)
-            }
+            (
+                Some(crate::config::declaration::InvalidationScope::MutatedManager),
+                Some(manager),
+            ) => self.forget_manager(manager),
             _ => self.forget_all(),
         }
     }

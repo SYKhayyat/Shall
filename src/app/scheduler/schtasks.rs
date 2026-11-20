@@ -3,7 +3,7 @@
 use super::{
     armed, unescape_xml, xml_element, HeldTask, Provisioned, Reading, TaskProvisioner, TaskTarget,
 };
-use crate::config::config::ScheduleConfig;
+use crate::config::declaration::ScheduleConfig;
 use crate::core::{CommandExecutor, Error, Result};
 use async_trait::async_trait;
 use std::path::Path;

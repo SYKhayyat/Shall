@@ -1,4 +1,4 @@
-pub use shall::config::config::ScheduleConfig;
+pub use shall::config::declaration::ScheduleConfig;
 pub use shall::config::grammar::statement::SCHEDULE_OPTION_KEYS as KNOWN_KEYS;
 pub use shall::config::grammar::{GrammarError, Options, Origin, Result};
 pub use shall::model::schedule::*;

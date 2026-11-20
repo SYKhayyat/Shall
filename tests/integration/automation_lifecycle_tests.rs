@@ -126,7 +126,7 @@ async fn test_systemd_oncalendar_translation_logic() {
         .scheduler
         .provision(
             &kernel.app.executor,
-            &shall::config::config::ScheduleConfig {
+            &shall::config::declaration::ScheduleConfig {
                 name: "weekly-sync-task".into(),
                 cron: cron.into(),
                 command: "sync".into(),
@@ -185,7 +185,7 @@ async fn test_launchd_plist_translation_logic() {
         .scheduler
         .provision(
             &kernel.app.executor,
-            &shall::config::config::ScheduleConfig {
+            &shall::config::declaration::ScheduleConfig {
                 name: "monthly-maintenance-job".into(),
                 cron: cron.into(),
                 command: "upgrade".into(),
@@ -260,7 +260,7 @@ async fn test_scheduler_reboot_mapping_fidelity() {
         .scheduler
         .provision(
             &kernel.app.executor,
-            &shall::config::config::ScheduleConfig {
+            &shall::config::declaration::ScheduleConfig {
                 name: "reboot-cleanup".into(),
                 cron: "@reboot".into(),
                 command: "clean".into(),

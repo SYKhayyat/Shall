@@ -1,10 +1,9 @@
-#[allow(clippy::module_inception)]
-pub mod config;
+pub mod declaration;
 pub mod grammar;
 pub mod parser;
 pub mod settings;
 
-pub use config::{
+pub use declaration::{
     CliOverrides, Config, ExecSettings, ExecTrust, GuardSettings, JournalSettings,
     ProtectionAnswer, QuerySettings, ReceiptSettings, VarsSettings, PREFERENCES_FILE_NAME,
 };

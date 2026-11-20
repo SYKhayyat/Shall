@@ -7,7 +7,7 @@ fn explicit_confirmation_skips_the_bare_prompt() {
     let mut asked = false;
     let decision = confirm_bare_installs_with(
         &changes,
-        shall::config::config::BareInstall::Ask,
+        shall::config::declaration::BareInstall::Ask,
         true,
         |_| {
             asked = true;

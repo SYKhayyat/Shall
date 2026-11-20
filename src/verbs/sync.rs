@@ -109,7 +109,7 @@ pub enum BareDecline {
 
 pub fn confirm_bare_installs(
     changes: &crate::app::sync::planner::SyncChanges,
-    policy: crate::config::config::BareInstall,
+    policy: crate::config::declaration::BareInstall,
     yes: bool,
 ) -> Result<BareDecision> {
     confirm_bare_installs_with(changes, policy, yes, |prompt| {
@@ -126,14 +126,14 @@ pub fn confirm_bare_installs(
 /// The three-way rule, with the question itself injected so `ask` is testable.
 pub fn confirm_bare_installs_with<F>(
     changes: &crate::app::sync::planner::SyncChanges,
-    policy: crate::config::config::BareInstall,
+    policy: crate::config::declaration::BareInstall,
     yes: bool,
     ask: F,
 ) -> Result<BareDecision>
 where
     F: FnOnce(&str) -> Result<bool>,
 {
-    use crate::config::config::BareInstall;
+    use crate::config::declaration::BareInstall;
     let names = bare_install_names(changes);
     if names.is_empty() {
         return Ok(BareDecision::Proceed);

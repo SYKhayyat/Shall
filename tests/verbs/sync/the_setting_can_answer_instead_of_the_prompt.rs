@@ -9,7 +9,7 @@ fn always_installs_a_bare_declaration_without_asking() {
     let mut asked = false;
     let decision = confirm_bare_installs_with(
         &changes,
-        shall::config::config::BareInstall::Always,
+        shall::config::declaration::BareInstall::Always,
         false,
         |_| {
             asked = true;
@@ -34,7 +34,7 @@ fn never_installs_nothing_even_when_the_run_says_yes() {
     let mut asked = false;
     let decision = confirm_bare_installs_with(
         &changes,
-        shall::config::config::BareInstall::Never,
+        shall::config::declaration::BareInstall::Never,
         true,
         |_| {
             asked = true;

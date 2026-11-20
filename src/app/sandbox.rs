@@ -1,4 +1,4 @@
-use crate::config::config::SandboxSettings;
+use crate::config::declaration::SandboxSettings;
 use crate::core::{Error, Result};
 #[allow(unused_imports)] // `Path` is unused on macOS but used on linux/windows
 use std::path::Path;
@@ -152,6 +152,8 @@ impl Sandbox {
         {
             return crate::core::launch::program_exists("sandbox-exec");
         }
+        // Unreachable on macOS, where the block above returns; live on every other platform,
+        // which is the build the allow is for.
         #[allow(unreachable_code)]
         false
     }
@@ -387,6 +389,8 @@ impl Sandbox {
                     cmd, args, config,
                 )));
             }
+            // The fallback for a platform whose arm above did not return. Unreachable only on
+            // the platforms that did, which is the build this allow is for.
             #[allow(unreachable_code)]
             {
                 let mut bare = Command::new(cmd);
@@ -412,6 +416,8 @@ impl Sandbox {
             return Self::wrap_windows(cmd, args, config);
         }
 
+        // The same fallback one level out: every platform this file knows about has returned,
+        // and an unknown one gets here.
         #[allow(unreachable_code)]
         Err(Error::UnsupportedPlatform(format!(
             "Sandboxing not supported on {}",

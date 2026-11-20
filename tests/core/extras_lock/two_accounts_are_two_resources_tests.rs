@@ -224,8 +224,8 @@ async fn deprovisioning_a_schedule_takes_the_account_from_the_row() {
     );
 }
 
-fn schedule_config(name: &str) -> shall::config::config::ScheduleConfig {
-    shall::config::config::ScheduleConfig {
+fn schedule_config(name: &str) -> shall::config::declaration::ScheduleConfig {
+    shall::config::declaration::ScheduleConfig {
         name: name.to_string(),
         cron: "0 2 * * *".to_string(),
         command: "sync".to_string(),

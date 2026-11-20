@@ -18,7 +18,7 @@
 //! whole purpose is to close the hole is the one that does not exist.
 //!
 //! **Scope: the family, not the field.** The scan below reads every `pub` field of every struct
-//! in `src/config/config.rs` and asks whether the name appears anywhere outside `src/config/`.
+//! in `src/config/declaration.rs` and asks whether the name appears anywhere outside `src/config/`.
 //! On this tree that is 78 fields and exactly one answer, so the instrument is not
 //! over-reporting — it is naming the single case. Any future setting that is offered and not
 //! wired fails here on the day it is added.
@@ -39,8 +39,8 @@ fn repo_root() -> PathBuf {
 
 /// Every `pub` field name declared in the configuration schema.
 fn declared_settings() -> Vec<String> {
-    let src = std::fs::read_to_string(repo_root().join("src/config/config.rs"))
-        .expect("src/config/config.rs should be readable");
+    let src = std::fs::read_to_string(repo_root().join("src/config/declaration.rs"))
+        .expect("src/config/declaration.rs should be readable");
     let mut out = Vec::new();
     // **`#[serde(skip)]` is not a setting.** A field serde never reads cannot be written in
     // `preferences.toml`, is not documented as a knob, and has no user to disappoint — it is a

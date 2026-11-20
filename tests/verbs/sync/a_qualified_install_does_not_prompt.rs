@@ -7,7 +7,7 @@ fn a_qualified_install_does_not_prompt() {
     let mut asked = false;
     let decision = confirm_bare_installs_with(
         &changes,
-        shall::config::config::BareInstall::Ask,
+        shall::config::declaration::BareInstall::Ask,
         false,
         |_| {
             asked = true;

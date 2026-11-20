@@ -33,11 +33,13 @@ New debt is filed here, at the bottom of this list, labelled `tech-debt`.*
 **Modularity (graded C+, 2026-11-18 — cleared 2026-11-19).** The four modules over 100 KB were
 four subjects wearing one name each, the longest methods ran 290–409 lines, and seven clippy
 parameter-count allows stood in for the struct each one needed. All of it was splits and
-regroupings that changed no behaviour, and all of it is done: the tree has **no `#[allow]` for a
-lint** in it at all, and `tests/review/a_module_is_a_subject_not_a_pile_tests.rs`'s exemption
+regroupings that changed no behaviour, and all of it is done: `src/` has **no `#[allow(clippy::…)]`**
+in it at all (#208), and `tests/review/a_module_is_a_subject_not_a_pile_tests.rs`'s exemption
 table is **empty** — the scheduler, the last row, is split into its shared vocabulary and one file
 per scheduler Shall can drive (`systemd.rs`, `launchd.rs`, `schtasks.rs`), and each of those is
-under half the cap. None of this was the #166 architecture question, so no responsibility moved
+under half the cap. The nine `#[allow]`s that remain are rustc's `unused_imports`, `unused_mut`
+and `unreachable_code` under a `cfg`: each states a platform fact the compiler cannot see, which
+is the opposite of a silenced smell. None of this was the #166 architecture question, so no responsibility moved
 across a module boundary.
 
 - [x] **#204** ratchet: `too_many_lines` plus a per-file line cap with a baseline that only shrinks — landed, and the allow table is audited by `tests/review/a_function_is_not_a_module_tests.rs`. **Both tables are now empty** and the gates assert in both directions, which is what retired them.
@@ -70,6 +72,19 @@ across a module boundary.
   (`.gitignore`), which is why the answer is not `find`. The script's two halves had disagreed
   about the same list — `find`, taken in the mutation sandbox with no `.git`, always counted the
   new file — and the test now pins both halves against a scratch repository.
+- [x] **#207** `app/scheduler/mod.rs` → the shared vocabulary plus `systemd.rs`, `launchd.rs`,
+  `schtasks.rs`, one dialect each. The last row of the line-cap exemption table, and the largest
+  surviving instance of #199's defect; a move, checked line by line against the old file, with the
+  `pub use` re-exports keeping `app::scheduler::*` the whole surface so nothing was renamed.
+- [x] **#208** three clippy allows outlived the sweep, and this list said there were none.
+  `VARS_MEMO`'s type and `why`'s registry snapshot became named types (two `type_complexity`), and
+  `config::config` became `config::declaration` (`module_inception`). The gate that forbids the two
+  parameter-count lints forbids all four now and says what each one's fix is, so the next site gets
+  a sentence rather than a bare ban.
+- [ ] **#209** `deny.toml`'s `RUSTSEC-2026-0249` row (unmaintained `smartstring`, carried
+  non-optionally by `rhai`) is documented in the file and filed nowhere, so the ignore list half
+  exists in the tracker. Not ours to fix: it ends when a `rhai` release drops the crate, and
+  `cargo tree -i smartstring` coming back empty is the check.
 
 **What the split cost the audits, and why that is the useful part.** Nine review gates name a
 file and look inside it, and six of them went red the moment the code moved — the WAL ledger, the

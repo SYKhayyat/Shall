@@ -32,7 +32,7 @@ fn wired() -> (CommandExecutor, Arc<MockExecutor>) {
 /// Prime one backend's listing, install through `manager`, then ask `backend` again — and report
 /// whether it had to be asked again.
 async fn survives_a_mutation_through(
-    scope: Option<shall::config::config::InvalidationScope>,
+    scope: Option<shall::config::declaration::InvalidationScope>,
     manager: &str,
     program: &str,
     args: &[&str],
@@ -87,7 +87,7 @@ async fn without_the_setting_a_mutation_re_lists_every_manager() {
 async fn the_narrow_scope_keeps_a_manager_the_mutation_cannot_have_changed() {
     assert!(
         !survives_a_mutation_through(
-            Some(shall::config::config::InvalidationScope::MutatedManager),
+            Some(shall::config::declaration::InvalidationScope::MutatedManager),
             "apt",
             "apt",
             &["install", "-y", "jq"],
@@ -106,7 +106,7 @@ async fn the_narrow_scope_keeps_a_manager_the_mutation_cannot_have_changed() {
 async fn the_narrow_scope_still_drops_a_sibling_backend_on_the_same_lock() {
     assert!(
         survives_a_mutation_through(
-            Some(shall::config::config::InvalidationScope::MutatedManager),
+            Some(shall::config::declaration::InvalidationScope::MutatedManager),
             "pacman",
             "pacman",
             &["-S", "jq"],
@@ -126,7 +126,7 @@ async fn the_narrow_scope_still_drops_a_sibling_backend_on_the_same_lock() {
 fn the_default_scope_is_the_ruling() {
     assert_eq!(
         shall::config::Config::default().listing_invalidation,
-        shall::config::config::InvalidationScope::All,
+        shall::config::declaration::InvalidationScope::All,
         "the default scope is not `all`, so Y6's ruling is not what an unconfigured Shall does"
     );
 }

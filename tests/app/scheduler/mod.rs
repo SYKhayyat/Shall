@@ -1,7 +1,7 @@
 //! The tests that mirror `src/app/scheduler/`, module for module.
 
 pub use shall::app::scheduler::*;
-pub use shall::config::config::ScheduleConfig;
+pub use shall::config::declaration::ScheduleConfig;
 pub use shall::core::{CommandExecutor, Error};
 use std::path::{Path, PathBuf};
 

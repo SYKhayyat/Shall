@@ -22,7 +22,11 @@ async fn sync(kernel: &TestKernel) -> Result<()> {
 /// as configured, forever. Here it succeeds and says what it did not do.
 #[tokio::test]
 async fn a_never_decline_is_a_warning_and_not_a_failure() {
-    let kernel = declaring(&["dos2unix"], shall::config::config::BareInstall::Never).await;
+    let kernel = declaring(
+        &["dos2unix"],
+        shall::config::declaration::BareInstall::Never,
+    )
+    .await;
 
     sync(&kernel)
         .await
@@ -40,7 +44,11 @@ async fn a_never_decline_is_a_warning_and_not_a_failure() {
 /// machine that never planned anything.
 #[tokio::test]
 async fn the_same_declaration_installs_when_the_setting_does_not_forbid_it() {
-    let kernel = declaring(&["dos2unix"], shall::config::config::BareInstall::Always).await;
+    let kernel = declaring(
+        &["dos2unix"],
+        shall::config::declaration::BareInstall::Always,
+    )
+    .await;
 
     sync(&kernel)
         .await
@@ -58,7 +66,11 @@ async fn the_same_declaration_installs_when_the_setting_does_not_forbid_it() {
 /// asked for and did not happen, and `Q-C` keeps it a failure.
 #[tokio::test]
 async fn a_declaration_no_manager_can_take_still_fails() {
-    let kernel = declaring(&["brew:htop"], shall::config::config::BareInstall::Always).await;
+    let kernel = declaring(
+        &["brew:htop"],
+        shall::config::declaration::BareInstall::Always,
+    )
+    .await;
     // A manager that is here and cannot be asked: the third answer, not a policy decline.
     kernel.mock_executor.set_response(
         "brew info --json=v1 -- htop",

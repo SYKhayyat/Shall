@@ -4,7 +4,7 @@ use super::{
     armed, remove_generated, HeldTask, Provisioned, Reading, TaskProvisioner, TaskTarget,
     UNIT_SEPARATOR,
 };
-use crate::config::config::ScheduleConfig;
+use crate::config::declaration::ScheduleConfig;
 use crate::core::executor::StdOutput;
 use crate::core::{CommandExecutor, Error, Result};
 use async_trait::async_trait;

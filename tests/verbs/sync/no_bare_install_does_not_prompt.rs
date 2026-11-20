@@ -7,8 +7,8 @@ fn no_bare_install_does_not_prompt() {
     // `never` too: a setting about bare declarations has nothing to say about a plan that has
     // none, and reporting `Declined` there would make an ordinary sync look like a refusal.
     for policy in [
-        shall::config::config::BareInstall::Ask,
-        shall::config::config::BareInstall::Never,
+        shall::config::declaration::BareInstall::Ask,
+        shall::config::declaration::BareInstall::Never,
     ] {
         let decision = confirm_bare_installs_with(&changes, policy, false, |_| {
             asked = true;

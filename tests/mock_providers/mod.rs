@@ -19,7 +19,7 @@ use chrono::{Duration as ChronoDuration, Utc};
 use dashmap::DashMap;
 use shall::app::scheduler::{Provisioned, Reading, TaskProvisioner, TaskTarget};
 use shall::app::App;
-use shall::config::config::ScheduleConfig;
+use shall::config::declaration::ScheduleConfig;
 use shall::config::Config;
 use shall::core::executor::MockExecutor;
 use shall::core::{

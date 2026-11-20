@@ -27,7 +27,7 @@
 //! launchd / Task Scheduler. It is pure: no I/O, no provisioning — just the line-to-config
 //! translation and the validation that a job a machine will run on a timer is fully specified.
 
-use crate::config::config::ScheduleConfig;
+use crate::config::declaration::ScheduleConfig;
 use crate::config::grammar::{GrammarError, Options, Origin, Result};
 
 /// The keys a `schedule:` line understands live with the rest of II.2's option tables, in the

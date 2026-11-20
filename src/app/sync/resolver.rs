@@ -15,15 +15,20 @@ use tokio::fs;
 use tracing::{debug, instrument, warn};
 use version_compare::{compare as loose_compare, Cmp};
 
+/// One memoised variable resolution: which resolution it belongs to, the repo, and the
+/// provider setting.
+///
+/// The generation is in the key because [`new_resolution`] is not the only way a resolution
+/// ends — a second one inside the same process must not read the first one's answers.
+type VarsKey = (u64, std::path::PathBuf, String);
+/// What the memo holds once somebody has resolved it — `None` while the resolution is in flight.
+type VarsAnswer = (crate::model::vars::Vars, crate::model::vars::VarOrigins);
+
 /// This invocation's resolved variables, per repo and provider setting (IX.6).
 ///
 /// See [`StateResolver::resolve_vars_against`] for why this exists at all.
-#[allow(clippy::type_complexity)]
 static VARS_MEMO: once_cell::sync::Lazy<
-    dashmap::DashMap<
-        (u64, std::path::PathBuf, String),
-        Arc<tokio::sync::Mutex<Option<(crate::model::vars::Vars, crate::model::vars::VarOrigins)>>>,
-    >,
+    dashmap::DashMap<VarsKey, Arc<tokio::sync::Mutex<Option<VarsAnswer>>>>,
 > = once_cell::sync::Lazy::new(dashmap::DashMap::new);
 
 /// Which resolution we are on. IX.6 says variables resolve once **per invocation**, and one
