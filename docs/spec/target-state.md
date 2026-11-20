@@ -5014,3 +5014,30 @@ would fire is read back and classified (`schedule_origin`):
   launchd renderers and into the Windows *spec comparison* but not into the `/Create` line
   itself, so a non-default-root Windows task re-registered on every sync and never recorded
   which config declared it. The declaring run must be readable wherever a firing task is stored.
+
+## II.99 `adopt` offers everything the machine can name, and every narrowing is a flag the person passes (owner ruling, 2026-11-20, `#60`–`#65`, V.253)
+
+**`adopt` is an input, and its job is a complete declaration.** It reads the machine and writes the
+file, so its default is the widest honest answer for each resource it can see — packages, services,
+firewall rules, repositories, schedules, shell managers, settings — and **the manifest is the
+selection**: a line you delete is a thing Shall stops managing, and a line you keep is a thing it
+will recreate on the next machine.
+
+**No narrowing by guesswork.** Services arrive whether this machine starts them at boot or merely
+has them running; repositories arrive whether the distro shipped them or a person added them;
+schedules arrive whether the user or root registered them. The reading behind the old conservative
+default — that a running service is not evidence of a choice — is true and is not a reason to omit
+it: the cost of a noisy manifest is paid once, by the person adopting, and the cost of a missing
+line is paid every time the machine is rebuilt and nobody can see what never came back.
+
+**Every limit is a named flag.** `--enabled-only` (services: the ones this machine starts on its
+own) exists today; each resource adds its own narrowing flag as it is built — `--user-added` for
+repositories, `--user` for schedules, `--inbound` for firewall rules, `--schema` for settings — and
+none of them is the default. A limit that cannot be spelled is a policy hidden in the default,
+which is what this rule exists to end.
+
+**Three things are still refused, and none of them is a limit.** A shape no line can hold is
+**refused by name** with the reason (`C41`: a one-shot timer, an `EventTrigger`); a store that
+cannot be read is reported **as unreadable, not as empty**; and a name the grammar admits but the
+validator refuses is held back with its validator's own sentence. Refusing what cannot be expressed
+is honesty about the format. Refusing what merely looks unchosen is the bug this rule removes.

@@ -9080,3 +9080,32 @@ Task Scheduler cannot certify authorship the way a unit file can. systemd's file
 plist carry Shall's prefix in the store itself, so a task whose `ExecStart` or array cannot be
 read is still provably a unit Shall wrote; an `/XML` query that fails has nothing left to ask,
 and `certified: false` means the sweep may not call an unresid task ours.
+
+**V.253 — Why `adopt`'s default is everything and the filter belongs to the person (`#60`–`#65`,
+`II.99`).** `Q39` ruled services out of a bare `adopt` from a measurement that has never been
+wrong: on a Windows host, `adopt` wrote 161 declarations and 150 of them were every running
+service, and two of those had stopped again twenty minutes later. Running is not choosing. That
+was a correct observation of a noise cost, and it was then generalised into a rule that every
+other resource inherited — repositories, firewall rules, schedules, settings were all left out of
+a bare run on the strength of it, each with its own paragraph explaining why its own evidence was
+weak.
+
+The two costs are not the same size, and that is what the ruling corrects. A noisy manifest is
+paid **once**, at `adopt` time, by the person holding the file: 150 lines to delete with an
+editor, in front of them, while they are thinking about what this machine is. A missing line is
+paid **every time the machine is rebuilt**, and it cannot be seen at all — a declaration that was
+never written produces no error, no drift, nothing to compare against, and the moment of discovery
+is weeks later on new hardware when the thing that mattered (the PPA, the firewall rule, the
+enabled unit) is simply absent. The first cost is visible and the second is silent, so a rule that
+trades the first for the second trades a nuisance for a hole.
+
+The conservative default also failed on its own terms once the machinery caught up. `Q39` was
+about *running* services; `list_manual_enabled` now answers "the ones this machine starts on its
+own", which is the closest thing an init keeps to a record of a decision. Keeping the opt-in after
+that shipped meant the safe subset existed and nobody got it.
+
+So the rule is the shape this codebase already prefers elsewhere: **give the power, name the
+switch, let the person choose.** The refusals that remain are not limits — a one-shot timer that
+`schedule:` cannot express, a store that answers unreadably, a name the validator rejects — and
+each of them arrives with a sentence saying which one it is. What the rule forbids is the fourth
+thing: a declaration quietly missing because a default decided for the reader.
