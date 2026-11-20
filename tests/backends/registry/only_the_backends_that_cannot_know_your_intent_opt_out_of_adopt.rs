@@ -1,15 +1,22 @@
 use super::*;
 
-/// Which backends a bare `shall adopt` declines to take, and why it is a short list.
+/// Which backends a bare `shall adopt` declines to take, and why the list is now empty.
 ///
 /// Opting out is a real cost to the user — a backend that keeps itself out of `adopt` is a
-/// backend they have to write by hand — so it is spelled out here rather than left to
-/// whoever adds the next one. The bar is not "this list is noisy": it is *being on the
-/// machine is not evidence anybody chose it*, which is true of an init's running services
-/// and of nothing else Shall drives.
+/// backend they have to write by hand — so it is spelled out here rather than left to whoever
+/// adds the next one.
 ///
-/// Measured before the ruling: `adopt` wrote 161 declarations on a Windows host and 150
-/// were services (owner ruling, 2026-08-05 — `Q39`).
+/// **It used to hold `service`, and it held it for a good reason that turned out to be the wrong
+/// rule** (owner ruling `Q39`, 2026-08-05 → `C38`, 2026-11-20). Measured on a Windows host,
+/// `adopt` wrote 161 declarations and 150 were services, two of them trigger-start services the
+/// OS had already stopped again — a genuine observation, generalised into "a bare adopt takes
+/// nothing an init merely reports". What it did not have was a narrowing to offer instead.
+///
+/// The narrowing now exists (`list_manual_enabled`, and the `plumbing` list of services the OS
+/// authored), so the choice moved to where `II.99` puts every other choice: `adopt` offers
+/// everything, and `--enabled-only` / `--all-services` are the flags that narrow it. A backend
+/// that wants back in here has to argue that presence is not evidence of authorship *and* that
+/// no narrowing is possible.
 #[tokio::test]
 async fn only_the_backends_that_cannot_know_your_intent_opt_out_of_adopt() {
     let reg = build_registry().await;
@@ -22,9 +29,8 @@ async fn only_the_backends_that_cannot_know_your_intent_opt_out_of_adopt() {
     opted_out.sort();
     assert_eq!(
         opted_out,
-        vec!["service"],
-        "a backend joined or left the set `adopt` does not take unasked. Joining it means \
-         users must write those lines by hand, so it needs the same argument `service` \
-         has: an init reports what is running and never who chose it."
+        Vec::<&str>::new(),
+        "a backend joined the set `adopt` does not take unasked. Joining it means users must \
+         write those lines by hand, so it needs an argument that no flag could ever narrow it."
     );
 }

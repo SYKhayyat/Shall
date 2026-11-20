@@ -18,6 +18,42 @@
 # output, and in how the operand is echoed (nightly run 31458415385, 2026-08-11). The row in
 # `core/argv.rs` says the same thing, and these two are the layers that have to agree.
 
+# **Services the OS runs for itself** (`C38`). Not a judgement about importance — a judgement
+# about authorship: every one of these is a service the installer or the kernel's own tooling put
+# on the machine, so its presence is not evidence that anybody chose it. `shall adopt` leaves them
+# out and `--all-services` takes them; the manifest reports how many it left out, so the offer is
+# complete minus a named set rather than complete minus a guess.
+#
+# Matched after normalising the name (lowercase, no `.service`), because the same service is
+# `ssh` under one init and `ssh.service` under another. Anything a person genuinely wants managed
+# is one flag away, which is the whole shape of `II.99`.
+plumbing = [
+  # The bus and the journal: every machine that boots a modern init has both.
+  "dbus", "dbus-broker", "dbus.socket", "systemd-journald", "systemd-journald.socket",
+  "systemd-journald-dev-log.socket", "systemd-journald-audit.socket", "systemd-udevd",
+  "systemd-logind", "systemd-user-sessions", "systemd-timesyncd", "systemd-resolved",
+  "systemd-networkd", "systemd-hostnamed", "systemd-tmpfiles-setup", "systemd-random-seed",
+  "systemd-update-utmp", "systemd-binfmt", "systemd-sysctl", "systemd-modules-load",
+  # Sessions, devices and the filesystems the kernel brings up.
+  "getty", "getty@tty1", "serial-getty@ttyS0", "polkit", "accounts-daemon", "rsyslog",
+  "cron", "anacron", "atd", "chronyd", "chrony", "ntp", "ntpd", "irqbalance",
+  "unattended-upgrades", "apt-daily", "apt-daily-upgrade", "man-db", "e2scrub_all",
+  "systemd-oomd", "thermald", "power-profiles-daemon", "upower",
+  # Networking the installer configured, which is a machine fact and not a choice.
+  "NetworkManager", "NetworkManager-wait-online", "networking", "wpa_supplicant",
+  "avahi-daemon", "bluetooth", "ModemManager", "dhcpcd", "systemd-networkd-wait-online",
+  # The supervisor and platform agents a distribution ships.
+  "ssh", "sshd", "ufw", "fail2ban", "apparmor", "auditd", "firewalld", "nftables",
+  "apparmor.service", "cups", "cups-browsed", "smbd", "winbind", "nmbd",
+  # Windows services every installation carries.
+  "wuauserv", "bits", "cryptsvc", "trustedinstaller", "rpcss", "dcomlaunch", "lsm",
+  "eventlog", "schedule", "dhcp", "dnscache", "lanmanserver", "lanmanworkstation",
+  "mpssvc", "windefend", "seclogon", "spooler", "themes", "audiosrv", "audioendpointbuilder",
+  # The macOS daemons launchd owns by construction.
+  "com.apple.periodic-daily", "com.apple.periodic-weekly", "com.apple.periodic-monthly",
+  "com.apple.metadata.mds", "com.apple.opendirectoryd", "com.apple.configd",
+]
+
 [[init]]
 name = "systemd"
 os = "linux"

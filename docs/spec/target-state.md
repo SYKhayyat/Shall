@@ -1704,10 +1704,17 @@ from a decision adopts nothing. The second half is a manager that lists perfectl
 running and never who started them. Those are skipped, with the count, the reason, and the
 command that takes them.
 
+**Amended 2026-11-20 (`C38`): a backend is no longer skipped whole for that reason.** The cost it
+was avoiding is a page of service lines; the cost it charges is a hand-written line for every
+service somebody *did* choose, and the missing line fails silently while the noisy one is paid
+once by the person with the editor open (`II.99`, `V.253`). So services are offered by a bare
+`adopt`, and what narrows them is a flag: `--enabled-only` for the ones this machine starts on
+its own, `--all-services` for the `plumbing` list — the names the OS authored, which is data
+beside the init rows rather than a judgement in the runner. A backend that cannot answer
+`--enabled-only` is still skipped and named rather than quietly widened back to everything.
+
 **`shall adopt <backend>` takes exactly that backend**, opt-out included — a skip is a default,
-never a refusal. **`--enabled-only`** narrows it to what this machine starts on its own, which
-is the closest thing an init keeps to a record of a decision; a backend that cannot answer that
-question is skipped and named rather than quietly widened back to everything. (V.134.)
+never a refusal. (V.134.)
 
 **Output:** one `modules/adopted.txt`, grouped by backend with comment headers, sorted.
 Header states: this is an estimate; deleting a line uninstalls, *except where the guard

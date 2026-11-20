@@ -49,6 +49,7 @@ fn scope(backends: &[&str], added_only: bool, inbound: bool) -> AdoptScope {
         enabled_only: false,
         added_only,
         inbound,
+        all_services: false,
     }
 }
 

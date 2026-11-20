@@ -136,9 +136,9 @@ pub struct FirewallRule {
 
 /// What this `adopt` was asked for.
 ///
-/// A bare `shall adopt` takes the backends that answer [`Queryable::adopted_unasked`], which is
-/// all of them except the ones where being on the machine is not evidence anybody chose it.
-/// Naming a backend takes that one and only that one, opt-out included.
+/// A bare `shall adopt` takes every backend that answers [`Queryable::adopted_unasked`] — which
+/// is all of them, since `C38` turned the one opt-out into flags (`--enabled-only`,
+/// `--all-services`). Naming a backend takes that one and only that one.
 #[derive(Debug, Clone, Default)]
 pub struct AdoptScope {
     /// Backends named on the command line. Empty means "whatever adopt takes unasked".
@@ -153,6 +153,11 @@ pub struct AdoptScope {
     /// **only** them: a `firewall:` port carries no direction, because `firewall:22/tcp` is the
     /// same line whether the port is open in, out or both.
     pub inbound: bool,
+    /// `--all-services`: take the services the OS runs for itself as well. The list is data
+    /// (`init_providers.toml`'s `plumbing`), and it is the one narrowing here that is on by
+    /// default: it names authorship rather than guessing at importance, and it costs one flag
+    /// to undo.
+    pub all_services: bool,
 }
 
 impl AdoptScope {
@@ -504,6 +509,15 @@ impl Adopter {
                 .collect()
         };
 
+        // Read once for the whole crawl: it is data, and asking the filesystem per package would
+        // make the manifests of two runs disagree only when the repo's adapter file changed
+        // mid-run.
+        let plumbing_left_out: Vec<String> = if scope.all_services {
+            Vec::new()
+        } else {
+            crate::backends::service::plumbing(&self.config)
+        };
+
         for (name, source, pkgs) in &manual {
             found.sources.insert(name.clone(), source.clone());
             for pkg in pkgs {
@@ -533,6 +547,22 @@ impl Adopter {
                 // `yay:jq` would adopt a second line for the same package — which is the
                 // duplicate this whole relation exists to stop.
                 let already = managed_by_database.contains(&(db.to_string(), pkg.name.clone()));
+                // **The OS's own services are reported, not offered** (`C38`). Authorship, not
+                // importance: every name on that list was put there by the installer or by the
+                // tooling that boots the machine, so its presence is not evidence anybody chose
+                // it — and unlike `Q39`'s blanket refusal this costs one flag to undo.
+                if pkg.backend == "service"
+                    && !scope.all_services
+                    && plumbing_left_out
+                        .contains(&crate::backends::service::normalized_service(&pkg.name))
+                {
+                    found.skipped.push(Skipped {
+                        reason: "a service the OS runs for itself — `--all-services` takes them"
+                            .to_string(),
+                        package: pkg.clone(),
+                    });
+                    continue;
+                }
                 if !already && !owned_system.contains(&pkg.name) {
                     trace!("candidate: {}", key);
                     candidates.push(pkg.clone());

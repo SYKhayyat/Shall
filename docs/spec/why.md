@@ -3321,8 +3321,18 @@ asked about has been applied, or it has not, and only one of those is work.
 
 ---
 
-**V.134 — Why a bare `adopt` does not take a machine's services.** *(Owner ruling, 2026-08-05 —
-`Q39`, second half. Rule in II.9.)*
+**V.134 — Why the service opt-out became a flag.** *(Owner ruling, 2026-08-05 — `Q39`, second
+half. Amended 2026-11-20 — `C38`. Rule in II.9.)*
+
+**What the amendment changed, and what it did not.** A bare `adopt` takes services again, and
+`--enabled-only` / `--all-services` are what narrow them. `Q39`'s measurement below is not
+disputed and the argument that follows it is still the argument — it is only the *instrument*
+that moved. The observation was "running is not evidence of intent"; the rule it produced was
+"then a bare `adopt` must not take this backend at all", and every resource the adopt family
+gained afterwards inherited that shape. What the observation did not have in 2026-08 was a
+narrowing: `list_manual_enabled` now asks the machine what it starts by itself, and the
+`plumbing` list names the services the OS authored. With both, refusing the whole backend is the
+most expensive possible answer to a question that has a cheap one (`II.99`, `V.253`).
 
 `adopt` is the command that hands a machine to Shall, and what it writes is a file the user is
 then told to read, because *deleting a line from it undoes the thing*. So the file is a claim

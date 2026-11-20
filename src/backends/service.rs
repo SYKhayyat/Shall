@@ -131,6 +131,63 @@ pub struct InitProvider {
 pub struct InitProviderFile {
     #[serde(default)]
     pub init: Vec<InitProvider>,
+    /// Services the OS runs for itself — `dbus`, the journal, the login manager. `adopt` leaves
+    /// them out by default and `--all-services` takes them (`C38`).
+    ///
+    /// Here, beside the init rows, because it is the same question about the same machine: these
+    /// are the names an init reports that no person chose. One list for every init, matched after
+    /// normalising the name, because the same service is `ssh` under one init and `ssh.service`
+    /// under another and a per-init copy would drift.
+    #[serde(default)]
+    pub plumbing: Vec<String>,
+}
+
+/// A service name in the one spelling the plumbing list is matched against: lowercase, and
+/// without the `.service` suffix some inits print and others do not.
+pub fn normalized_service(name: &str) -> String {
+    name.trim()
+        .trim_end_matches(".service")
+        .to_ascii_lowercase()
+}
+
+/// The shipped plumbing names plus the user's own, from `adapters/init.toml`.
+pub fn plumbing(config: &crate::config::Config) -> Vec<String> {
+    let shipped: InitProviderFile =
+        toml::from_str(BUILTIN).expect("the shipped init_providers.toml must parse");
+    shipped
+        .plumbing
+        .into_iter()
+        .chain(user_file(config).plumbing)
+        .map(|n| normalized_service(&n))
+        .collect()
+}
+
+/// The user's own `adapters/init.toml`, through the approval every adapter file goes through
+/// (U36/II.12).
+///
+/// One reader for the two things that want it — the registration that builds the init table and
+/// `adopt`'s plumbing list — because a second reader is a second answer to "which rows does this
+/// repo have".
+pub fn user_file(config: &crate::config::Config) -> InitProviderFile {
+    let layout = config.layout();
+    crate::backends::onboarder::read_approved_definitions(
+        &layout.adapter_init_file(),
+        &layout.locks_dir(),
+    )
+    .and_then(|body| match toml::from_str::<InitProviderFile>(&body) {
+        Ok(f) => Some(f),
+        Err(e) => {
+            warn!(
+                "{}",
+                crate::app::adapters::cannot_use(
+                    crate::app::adapters::surface("init").expect("a declared surface"),
+                    e,
+                )
+            );
+            None
+        }
+    })
+    .unwrap_or_default()
 }
 
 const BUILTIN: &str = include_str!("init_providers.toml");
@@ -676,15 +733,17 @@ impl Queryable for ServiceQueryable {
         self.list_installed().await
     }
 
-    /// **A bare `adopt` does not take services** (owner ruling, 2026-08-05 — `Q39`).
+    /// **A bare `adopt` takes services** (owner ruling, 2026-11-20 — `C38`, amending `Q39`).
     ///
-    /// `manual_source` below has always said why, in its own words: *"no init records which you
-    /// chose."* Running is a fact about the machine, not evidence of intent — on the host this
-    /// was measured on, `adopt` wrote 150 service lines out of 161 declarations, and two of
-    /// them were trigger-start services Windows had already stopped again twenty minutes later.
-    /// `shall adopt service` still takes them.
+    /// `Q39` was a correct observation generalised into a rule every other resource inherited:
+    /// running is not evidence of intent, and on the host it was measured on `adopt` wrote 150
+    /// service lines out of 161 declarations. What that measurement did not have was a
+    /// *narrowing* — `list_manual_enabled` now answers "the ones this machine starts by itself",
+    /// and `plumbing` in `init_providers.toml` names the ones the OS authored. So the cost of a
+    /// noisy manifest is a flag the person passes (`II.99`, `V.253`), and the cost of a missing
+    /// line is a service that quietly does not come back on the next machine.
     fn adopted_unasked(&self) -> bool {
-        false
+        true
     }
 
     /// The services this machine starts on its own — the closest thing an init keeps to a
@@ -757,25 +816,7 @@ pub fn register(
     cfg: &crate::config::Config,
 ) {
     // The user's own init rows, through the approval every adapter file goes through (U36/II.12).
-    let layout = cfg.layout();
-    let user_rows = crate::backends::onboarder::read_approved_definitions(
-        &layout.adapter_init_file(),
-        &layout.locks_dir(),
-    )
-    .and_then(|body| match toml::from_str::<InitProviderFile>(&body) {
-        Ok(f) => Some(f.init),
-        Err(e) => {
-            warn!(
-                "{}",
-                crate::app::adapters::cannot_use(
-                    crate::app::adapters::surface("init").expect("a declared surface"),
-                    e,
-                )
-            );
-            None
-        }
-    })
-    .unwrap_or_default();
+    let user_rows = user_file(cfg).init;
 
     let core = Arc::new(ServiceBackendCore::with_providers(
         exec.clone(),

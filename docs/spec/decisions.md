@@ -11532,6 +11532,19 @@ launchd's agents and daemons already carry that distinction. A trigger-started s
 like any other — "this machine starts it on its own" is what `--enabled-only` is for, and the person
 decides which reading they want.
 
+**What was built, and what this entry still owes.** Built: the flip of `adopted_unasked`, the
+`plumbing` list as data in `init_providers.toml` (matched after normalising the name, since one
+init prints `ssh` and another `ssh.service`), the OS's own services reported in the manifest's
+"left alone" section with the count and the flag that takes them, and `--all-services`. The
+registry test that pinned `vec!["service"]` as the one opt-out now pins the empty set, with the
+argument `Q39` made and the one this ruling makes instead.
+
+**Not built, and it is a stated gap rather than a decision:** the owning package named in the
+line's comment, and user units marked. Both need data `adopt` does not currently ask any manager
+for — a unit-to-package query per manager (`dpkg -S`, `rpm -qf`, `pacman -Qo`) and a second
+listing pass over `systemctl --user` — so they are tracked as their own work (#211) rather than
+declared done here. The behavior they describe is not in question; only its absence is.
+
 ---
 
 ## C39

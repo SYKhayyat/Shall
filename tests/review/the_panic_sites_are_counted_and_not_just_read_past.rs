@@ -56,7 +56,10 @@ fn walk_rs(dir: &PathBuf) -> Vec<PathBuf> {
 /// `expect` sits beside the two already counted (`init_providers.toml`, `setting_stores.toml`).
 /// Same shape, same justification: the table is compiled into the binary and a test pins that it
 /// parses, so the arm that panics cannot be reached by anything a user writes.
-const PRODUCTION_CEILING: usize = 82;
+/// 82 → 83 when `C38` gave `adopt` the `plumbing` list: `backends::service::plumbing` parses the
+/// same compiled-in `init_providers.toml` a second time, from the `adopt` side rather than the
+/// registration side. Two readers of one table looked worse than one `expect` in each.
+const PRODUCTION_CEILING: usize = 83;
 
 /// **The inventory runs and counts.** A script that silently matched nothing would report "0 sites,
 /// the tree is clean", which is the most reassuring possible failure.

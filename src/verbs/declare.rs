@@ -904,6 +904,7 @@ pub async fn handle_adopt(
     enabled_only: bool,
     added_only: bool,
     inbound: bool,
+    all_services: bool,
 ) -> Result<()> {
     // A name that reaches no backend is refused rather than silently adopting nothing: `shall
     // adopt srvice` answering "Adopted 0 declaration(s)" is byte-identical to a correct name
@@ -928,6 +929,7 @@ pub async fn handle_adopt(
         enabled_only,
         added_only,
         inbound,
+        all_services,
     };
     app.adopter()
         .await

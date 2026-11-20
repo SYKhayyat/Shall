@@ -642,9 +642,9 @@ pub enum Commands {
 
     /// Take over the machine: write the packages you installed by hand into a module
     Adopt {
-        /// Only these backends — and these are taken even when a bare `adopt` leaves them
-        /// alone. `shall adopt service` writes the machine's services; a bare `shall adopt`
-        /// does not, because an init records what is running and never who chose it.
+        /// Only these backends. A bare `adopt` takes every backend that can answer, so naming
+        /// one is how a run is kept to that one; `firewall` is the exception, because the
+        /// perimeter is read from its own adapter table rather than from a registered backend.
         #[arg(value_name = "BACKEND")]
         backends: Vec<String>,
 
@@ -664,6 +664,12 @@ pub enum Commands {
         /// the same line whether the port is open in, out or both.
         #[arg(long)]
         inbound: bool,
+
+        /// Take the services the OS runs for itself as well — the `plumbing` list beside the
+        /// init providers (`init_providers.toml`). A bare `adopt` leaves them out and says
+        /// how many it left out; this is the flag that takes them.
+        #[arg(long)]
+        all_services: bool,
     },
 
     /// Vendor someone else's modules into your repo (XIII.14).

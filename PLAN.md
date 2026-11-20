@@ -390,7 +390,7 @@ laptop each one covers:
 
 - [ ] #62 adopt discovers shell configuration
 - [ ] #61 adopt discovers repositories and PPAs
-- [ ] #64 adopt surfaces services by default
+- [x] #64 adopt surfaces services by default (C38)
 - [ ] #60 adopt discovers schedules
 - [ ] #63 adopt enumerates desktop and OS settings
 - [x] #65 adopt surfaces firewall rules by default (C39)
