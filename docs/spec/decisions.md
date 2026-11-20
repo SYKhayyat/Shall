@@ -1,4 +1,4 @@
-﻿# The decision register — 275 entries, three open
+﻿# The decision register — 281 entries, nine open
 **One file, six features, three questions waiting on the owner.** Every decision this design forces
 lives here, with its
 status. The registers used to sit at the tail of six proposal parts and **none of them recorded
@@ -22,7 +22,7 @@ HALF RULED had no rows, the five that remained summed to 206 against 210, and
 | status | means | what it needs | count |
 |---|---|---|---|
 | **OPEN — blocking** | Unanswered, and the feature cannot be built without it. | A ruling. | **0** |
-| **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **3** |
+| **OPEN** | Unanswered, and something can still be built around it. | A ruling, eventually. | **9** |
 | **BUILT, NEVER RULED** | Nobody ruled — but code shipped that implements the recommendation. | Confirm or reverse. Reversing costs a change now and more later. | **0** |
 | **ANSWERED** | The owner ruled, or another decision closed it. | Nothing. Kept because later work cites it. | **267** |
 | **PARKED** | Deliberately not asked yet, and its `Status:` line says **`waits on <what>`**. | Nothing *until that arrives*. | **2** |
@@ -111,8 +111,8 @@ whether a bare `shall lock` still freezes all three axes is not. `Q29`'s computa
 other one. The `G` round ran the opposite way round — `docs/GRADE-2026-08-12.md`'s work order was
 implemented in one pass and the nine changes in it that a user would notice shipped ahead of any
 ruling — and all twelve were confirmed by the owner on 2026-08-14, which is why nothing from it
-is waiting now. All 275 are accounted
-for: **267 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 3 OPEN** — and this line
+is waiting now. All 281 are accounted
+for: **267 ANSWERED, 2 PARKED, 1 DEFERRED, 2 HALF RULED, 0 BUILT NEVER RULED, 9 OPEN** — and this line
 is no longer typed by hand. `scripts/decision-count.sh --check` counts the entries and fails if
 any number written in this file or in `SPEC.md` disagrees with the count; it runs in CI on every
 push. Three figures inside this one file used to contradict each other and a fourth in `SPEC.md`
@@ -514,7 +514,7 @@ deliberately no longer has.*
 |---|---|---|
 | **O1** | A download streamed onto the live artifact path and deleted the destination on the way out, so a re-download that died at 60% left no binary and no record of why — while `appimage:` had already worked around it with a hand-rolled `.shall-part` sibling and a rename. Two questions: who owns the staging, and what does a failed download say about the artifact that is still there? — RULED 2026-09-27: **`core::download` owns it, as two phases** — `stage_capped` streams beside the destination and returns a `Staged`; the caller verifies, chmods, and `commit` renames. The staged name is a **fixed sibling** (`.shall-part`), cleaned on entry, because the commit must stay on one filesystem and two runs cannot share a destination. A failed transfer **leaves the previous artifact and names it in the error**, because "not installed" and "still on the last good version" are different machines and only one of them is silent. The streamed writer is the third entry in the rename scan's table, with "a body has no buffer to hand `durable_write`" as its reason, and the scan was widened to the streaming spelling it had never seen. (II.55, V.210) | 2026-09-27 |
 
-### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay, and whether a policy decline is a failure, and which half of a setting waits for a person, and what an invariant is and how it is measured, and what an export owes a line it cannot express, and what a config file must be to be evidence of a decision, and whether an advisory lint count is a gate or a report, and what a platform policy owes a capability that could live on more than one OS, whether one config may retire another's schedule, what `heal` owes the model, whether subtraction is an output class, and what a `Step` is to a renderer) — 37
+### C — the round of 2026-09-28/29, 2026-10-21, 2026-10-27, 2026-11-03, 2026-11-07 and 2026-11-08 (a watcher's inputs, a mute manager, the removal token, two dead oracles, what a gate may claim, where a test lives, what install converges, what a schedule converges, what bounds a fan-out over managers, whether a listing row is an installation, what an uninstall owes when the manager leaves a launcher, whether a lock is held on this directory or merely in this process, what a download's status means, what a ceiling bounds, and where an unclosed block is refused, and whether a stale session reaps or relaxes, and whether a timing budget is a count or a ratio, and what a document owes a script, and whether an escaper only one leg can reach is tested, what a fast tier owes a reader, how a panic count is kept true, and how a check stays honest across six backends, how a ledger is made measurable, and which records stay, and whether a policy decline is a failure, and which half of a setting waits for a person, and what an invariant is and how it is measured, and what an export owes a line it cannot express, and what a config file must be to be evidence of a decision, and whether an advisory lint count is a gate or a report, and what a platform policy owes a capability that could live on more than one OS, whether one config may retire another's schedule, what `heal` owes the model, whether subtraction is an output class, and what a `Step` is to a renderer, whether adopt takes services, firewall rules, repositories, schedules, shell managers and settings) — 43
 
 | | question | answered |
 |---|---|---|
@@ -556,6 +556,12 @@ deliberately no longer has.*
 | **C35** | `#188` / `#166`'s audit (F1): `heal` is the one command whose primary job is to change the machine in ways no declaration asked for — a manager's wedged lock file, a WAL-resumed transaction, the three repairs that were `doctor --fix` — and nothing in `P1`, `ARCHITECTURE.md`'s pipeline or the model says so. **Does the model carry `heal` as a written exception, does `history` record the repair, or does `heal` get split from a read-only diagnosis?** — OPEN 2026-11-17: three options with different costs; (1) and (2) are not alternatives, because one makes the model true and the other is what a person needs at 03:00, and (3) is `U9`'s move made once already. (VI.12) | 2026-11-17 |
 | **C36** | `#189` / `#166`'s audit (F2): `purge-undeclared` reads the file and the machine, writes the machine, writes no file — output by the mechanical test, but convergence by *subtraction*, and the model has no word for it. Its cost was visible: the most destructive command in the binary was not on the list of commands needing a close look. **Is "make the machine equal the file" one output class with `purge-undeclared` as its strong form, or is subtraction a second output kind with its own statement of what the guard owes it?** — OPEN 2026-11-17: the classification is now complete and checked (`1b95e419`), so the remaining question is naming and the guard's obligation, which is a ruling rather than a reading. (VI.13) | 2026-11-17 |
 | **C37** | `#167` (split out of `#67`): `export --format ansible` and `--format nix` do not exist, and cannot be two more arms of `Script::render` because `Step` has one variant, `Command { program, args }` — every step the exporter can produce resolves through an argv builder. An Ansible task and a NixOS attribute are not projections of a command line: `ansible.builtin.command: apt install -y ripgrep` wears a playbook's syntax and gives up the one thing a Nix expression is for, being *declared* rather than executed. **Does the exporter wait for `#166`'s ruling and render every format from a richer `Step` (package/service/link/setting), or does it ship now as honest command sequences — an Ansible `command` task list and a Nix activation script rather than a module?** — OPEN 2026-11-18: route 1 is no work and no output, route 2 is small and non-idiomatic, and the two are not stages of one answer: (2) decides by shipping what (1) would replace. (VIII.?) | 2026-11-18 |
+| **C38** | `#64`: services are detected and `check` reports their drift, but a bare `adopt` takes none of them — `Q39` ruled them out after 150 of 161 declarations on a Windows host were every *running* service. `list_manual_enabled` now exists, so the question is a different object from the one that measurement was about. **Does a bare `shall adopt` take the services this machine starts at boot, and what may be filtered out as the OS's own?** — OPEN 2026-11-20: two halves, (a) whether the default becomes the enabled-at-boot subset, (b) which filter stands in for an essentials list no init keeps. | 2026-11-20 |
+| **C39** | `#65`: the firewall backend detects the active manager and parses its rules, but has no `Queryable`, so `adopt` never offers one. The question is which rules are the user's: a `ufw` default-allow-outbound policy is the manager's own. **May a bare adopt take firewall rules, and only the ones somebody added?** — OPEN 2026-11-20: recommended "only what somebody added, inbound unless asked, a default policy only when it is non-default". | 2026-11-20 |
+| **C40** | `#61`: repos are declared and never detected, so `adopt` finds packages but not where they came from. Detection is mechanical; the question is that Debian/Ubuntu/Fedora base repos are on every machine and are nobody's decision. **Which repositories may a bare `shall adopt` offer — only the ones the distro did not ship, and how is a dead PPA and a conflicting pair handled?** — OPEN 2026-11-20: recommended user-added only, a 404 flagged and not adopted, conflicts reported rather than resolved. | 2026-11-20 |
+| **C41** | `#60`: `schedule:` is write-only — `installed_tasks` enumerates held tasks per dialect, but nothing reads a cron file, an `OnCalendar=` or a `StartCalendarInterval` back into a declaration, and some shapes have no `schedule:` equivalent at all. **How much of a machine's schedule may adopt declare back, and what must it refuse by name?** — OPEN 2026-11-20: recommended user level only (root/`/etc` refused by name), inexpressible shapes refused by name rather than widened, an app's own auto-updater skipped with the reason. | 2026-11-20 |
+| **C42** | `#62`: shell rc files are already admissible under `C31`'s link ruling; what is new is the plugin managers (oh-my-zsh, nvm/fnm/pyenv, zinit) that install into their own directory. **Does adopt scan inside a plugin manager's directory, or declare the rc files that reference it and the manager's presence?** — OPEN 2026-11-20: recommended presence is declared and contents are never — tens of thousands of files nobody wrote are not a decision. | 2026-11-20 |
+| **C43** | `#63`: the `setting:` backend reads a declared key and `fetch_installed` is empty by design, so nothing enumerates the store. "Non-default" needs a default to compare against, which gsettings can answer and `defaults`/the registry cannot without a fresh-profile baseline; and a macOS profile holds thousands of entries, some privacy-bearing. **Which settings may adopt offer, and can defaults filtering start on one platform?** — OPEN 2026-11-20: recommended Linux gsettings only, non-default only, keys holding a path skipped, macOS and Windows deferred with a named reason. | 2026-11-20 |
 # The blocking round — thirteen questions, all ruled
 
 *These could not be built around: two reasonable implementations differed. Ruled 2026-07-23/24.*
@@ -11492,3 +11498,143 @@ ruling, which is why this is here rather than in the code.
 exports an Ansible playbook that `ansible-playbook --syntax-check` accepts, and a Nix expression that
 `nix-instantiate --parse` accepts — the parser harness already exists, since `scripts/nix-validate.sh`
 is pointed at generated Nix today.
+
+## C38
+
+**Status: OPEN — waits on a ruling from the owner.** Whether a bare `shall adopt` takes the services
+this machine starts at boot, and what may be filtered out as the OS's own. Carried out of #64.
+
+**Asked.** `Q39` (owner, 2026-08-05) ruled services out of a bare adopt after measuring a Windows
+host where adopt wrote 161 declarations and 150 of them were every running service, and two of the
+fifty had already stopped again — running is not evidence of intent. Since then
+`Queryable::list_manual_enabled` exists: the services a `--enabled-only` run would take, which is a
+different object from the one that measurement was about. `adopt service --enabled-only` is the
+current opt-in. The open part has two halves: (a) whether the *default* becomes enabled-at-boot, and
+(b) what is filtered out, because the guard's essentials list is **package** names (`Essential: yes`
+from a manager) and no init keeps an equivalent for services — `systemctl` has no "essential" flag.
+
+**Recommendation.** Flip the default to the enabled-at-boot subset only — never the running set Q39
+measured — and add a filter for the machine's own plumbing. The filter is the real choice: a curated
+list of OS-critical units (dbus, systemd-logind, …), `systemctl list-dependencies` on the boot target
+(which admits everything that target pulls in, including the user's own enabled additions), or no
+filter and rely on the selection. I would start with the curated list, because it is checkable and it
+matches how the package essentials list is asked — one named answer per candidate.
+
+**What would end it.** A ruling on (a) and (b). (a) reverses `Q39`'s conclusion about *running*
+services without disturbing its measurement, which stays true; (b) names the filter.
+
+---
+
+## C39
+
+**Status: OPEN — waits on a ruling from the owner.** Whether a bare `shall adopt` takes firewall
+rules, and which ones. Carried out of #65.
+
+**Asked.** The firewall backend already detects the active manager (`ufw`, `firewalld`, Windows
+Defender) and can list and parse its rules; it is just not surfaced by adopt (no `Queryable`), so the
+rules are read and compared but never offered. The open question is which rules count as *the
+user's*: a `ufw` machine has default-allow outbound and a default inbound policy that are the
+manager's own, not decisions, and on a fresh profile they are what everyone has.
+
+**Recommendation.** Take only rules somebody actually added: `ufw` user rules (`ufw status numbered`
+entries beyond the default policy), firewalld's `rich`/runtime rules and non-default zones,
+`netsh advfirewall` `add` rules — never a default policy unless it differs from the manager's
+shipped default, never the OS's own `pf`/`nft` base set. Inbound only unless asked, because outbound
+is where the noise lives. The default policy line (`default/incoming @value=…`) is offered only when
+it is non-default.
+
+**What would end it.** A ruling on "only rules someone added, inbound by default". Everything else in
+#65 is a question of how the existing adapters' `parse_rules` is shaped into a candidate list.
+
+---
+
+## C40
+
+**Status: OPEN — waits on a ruling from the owner.** Which repositories a bare `shall adopt` may
+offer as declarations. Carried out of #61.
+
+**Asked.** Repos are declared, never detected, so `adopt` discovers packages but not where they come
+from. Detection is mechanical (apt sources, dnf/yum repos, pacman repos, `brew tap`, snap channels,
+flatpak remotes, winget/scoop sources). The question is which of them are *the user's*: Debian,
+Ubuntu and Fedora base repos are on every machine and are not decisions — declaring them would write
+lines that fight the distro's own files, and every machine would adopt the same noise.
+
+**Recommendation.** Offer only repositories the distro did not ship: anything beyond the base image's
+sources/mirrorlist, judged by comparing against the shipped defaults per distro, and anything the
+user added (`brew tap`, a custom flatpak remote, a winget source) is always offered. A dead or 404
+PPA is **flagged, not adopted**, and a pair of conflicting repos (two Node sources) is reported as a
+sibling to the one being offered rather than silently resolved.
+
+**What would end it.** A ruling that the distro's own repos are never adopted and only user-added ones
+are. The comparison "is this repo one the distro ships" is per-distro data this codebase already
+tables.
+
+---
+
+## C41
+
+**Status: OPEN — waits on a ruling from the owner.** How much of a machine's schedule a bare `shall
+adopt` may declare back, and which schedules it must refuse. Carried out of #60.
+
+**Asked.** Schedules are write-only today: `sync` manages `schedule:` lines but nothing reads a cron
+job, systemd timer or launchd plist back into a declaration. `SchedulerManager::installed_tasks`
+already enumerates held tasks per dialect, so the discovery surface exists; what is missing is a
+per-dialect "when" reader (cron files are literally the cron; systemd timers are `OnCalendar=`;
+launchd plists are `StartCalendarInterval`). The open questions are scope and refusal: root/`/etc`
+crontabs are dangerous to adopt, app auto-updaters (Chrome/Spotify agents) are noise, and some shapes
+have no `schedule:` equivalent (a one-shot `OnCalendar`, launchd's `StartInterval`, a Windows
+`EventTrigger`).
+
+**Recommendation.** User-level only — a root/`/etc` cron job is **refused by name**, not adopted, with
+the sentence this codebase uses for a shape it will not touch. Anything a `schedule:` line cannot
+express is refused by name rather than widened into the nearest thing it can say (the same rule the
+dialects already apply to jitter and one-shots). Launchd agents that live inside another app's bundle
+are skipped with the reason "an app's own auto-updater, not a schedule you chose".
+
+**What would end it.** A ruling that adoption is user-level and refusal-by-name for the inexpressible,
+which is the conservative default this issue's own scope questions already lean on.
+
+---
+
+## C42
+
+**Status: OPEN — waits on a ruling from the owner.** Whether `adopt` scans *inside* a shell plugin
+manager's directory, or only declares the rc files that reference it. Carried out of #62.
+
+**Asked.** Shell configs are already adoptable: the `C31` ruling admits a symlink whose target is a git
+working tree, and a `link:` line can carry `.bashrc`, `.zshrc` and the rest — so much of #62 is the
+existing dotfiles path presenting them. The genuinely new question is the plugin managers
+(oh-my-zsh, nvm/fnm/pyenv, zinit/zplug) that install into their own directory. Their contents are
+not decisions — `~/.oh-my-zsh` is tens of thousands of files nobody wrote — but their *presence* is.
+
+**Recommendation.** Declare the rc files by `link:`, and for each manager found, offer a single
+`run:`/`install:` line for it (or a `link:` to its own repo when it is a git checkout) — never a scan
+of its contents. A shell config that mentions a manager is a declaration of the manager, not of the
+hundreds of files under it.
+
+**What would end it.** A ruling that presence is declared and contents are never. The detection (which
+managers a config references) is then a small parser over the rc files that already have a home in
+this design.
+
+---
+
+## C43
+
+**Status: OPEN — waits on a ruling from the owner.** Which settings a bare `shall adopt` may offer,
+and whether defaults filtering can start on one platform. Carried out of #63.
+
+**Asked.** The `setting:` backend reads a declared key; `fetch_installed` returns empty by design, so
+nothing enumerates the store. Enumerating is the hard case: "non-default" needs a default to compare
+against. gsettings can answer its own default (`gsettings get` on a schema); macOS `defaults` and the
+Windows registry cannot without a fresh-profile baseline. And a macOS machine holds thousands of
+non-default plist entries, most of them app-internal noise, some of them paths and recent-files that
+are privacy-bearing.
+
+**Recommendation.** Start with Linux gsettings only: enumerate a small set of user-facing schemas
+(`com.gnome.desktop`, `org.gnome.*`), compare each key against the schema's own default, and offer
+only the non-defaults, skipping keys whose value contains a path or `$HOME`. macOS and Windows are
+deferred with a named reason rather than half-built, because neither can name a default.
+
+**What would end it.** A ruling that settings adoption starts Linux-gsettings-only and non-default-only
+with the privacy skip. The volume problem then becomes "how many schemas", which is a flag, not a
+design question.
