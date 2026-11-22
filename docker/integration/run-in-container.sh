@@ -1275,7 +1275,17 @@ fi
 section "[8] Adopt"
 ADOPTED_FILE="$SHALL_CONFIG_DIR/modules/adopted.txt"
 nok "nothing is adopted before adopt runs" test -s "$ADOPTED_FILE"
-ok "adopt takes manual packages" lx -y adopt
+# `--user`, and the reason is the container rather than the feature. Since C41 a bare `adopt`
+# also reads the schedules the machine runs — `/etc/crontab`, `/etc/cron.d`, system timers — and
+# writes them to the `schedules` file. In this image those jobs are real and readable, but there
+# is no systemd bus, so every later `sync` in this script refuses on the schedule it cannot
+# place (`systemctl: Failed to connect to bus`), and the twenty checks after it fail for a
+# reason that has nothing to do with what they test. `--user` is C41's own narrowing: it reads
+# the invoking account's crontab and user timers and never opens `/etc`.
+#
+# **What this image therefore does not verify:** that a config whose `schedules` file is
+# non-empty converges. That needs a machine with a reachable systemd, and it is filed as #220.
+ok "adopt takes manual packages" lx -y adopt --user
 # Part IV: adopt takes the MANUAL set, not the whole dependency closure, and
 # python3 (apt/dnf) survives. The count is COMPARED, not printed: `lx list` answers
 # "what is installed", which adopt does not change, so reading it proves nothing —
