@@ -11692,7 +11692,9 @@ the ruling is fresh:
   ubuntu integration image has readable `/etc/crontab` and `/etc/cron.d` and no systemd bus, so
   `adopt` wrote jobs that `sync` then could not place — `systemctl: Failed to connect to bus`. The
   product half is correct (a config may describe what the local box cannot run; the file is the
-  portable part), so the harness adopts with `--user` in that image and says why. What no CI leg
+  portable part), so the harness adopts with `--user` in that image and then drops the
+  `schedules` file — `--user` still rightly offers the account's own cron jobs (Alpine's root
+  crontab is busybox's periodic runner), and this image has no scheduler to place them with. What no CI leg
   covers now is a *non-empty* `schedules` file being converged (`#220`).
 - **A schedule read from cron is placed as a systemd timer.** That is a dialect change — the same
   job, run by a different scheduler — and on a machine with cron and no systemd it is

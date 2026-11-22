@@ -1286,6 +1286,14 @@ nok "nothing is adopted before adopt runs" test -s "$ADOPTED_FILE"
 # **What this image therefore does not verify:** that a config whose `schedules` file is
 # non-empty converges. That needs a machine with a reachable systemd, and it is filed as #220.
 ok "adopt takes manual packages" lx -y adopt --user
+# **The schedules go, and this is the image's limit rather than the product's.** `--user` rightly
+# offers the invoking account's own cron jobs, and Alpine's root crontab is busybox's periodic
+# runner; this image has no systemd, and `src/app/scheduler/systemd.rs` is the only provisioner,
+# so the next `sync` — which every check below runs — refuses on a schedule it cannot place and
+# twenty checks fail for a reason unrelated to what they test. Placeable schedules need a
+# reachable scheduler, which this image does not have; #220 is that gap, stated rather than
+# papered over.
+rm -f "$SHALL_CONFIG_DIR/schedules"
 # Part IV: adopt takes the MANUAL set, not the whole dependency closure, and
 # python3 (apt/dnf) survives. The count is COMPARED, not printed: `lx list` answers
 # "what is installed", which adopt does not change, so reading it proves nothing —
