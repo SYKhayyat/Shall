@@ -1,0 +1,57 @@
+# The shell frameworks and version managers `adopt` looks for (C42), and where each one keeps
+# itself. A row is a NAME and a HOME-RELATIVE PATH; `kind` says which of the two questions it is,
+# because a zsh framework and a version manager fail differently when they are missing.
+#
+# Nothing here walks into the directory. These are the tens of thousands of files a `git clone`
+# produced — not decisions, and a manifest naming them would arrive as a declaration to delete
+# every one. The presence of the CHECKOUT is the decision; its contents are not.
+
+[[manager]]
+name = "oh-my-zsh"
+kind = "framework"
+path = ".oh-my-zsh"
+
+[[manager]]
+name = "zinit"
+kind = "framework"
+path = ".local/share/zinit"
+
+[[manager]]
+name = "zplug"
+kind = "framework"
+path = ".zplug"
+
+[[manager]]
+name = "antigen"
+kind = "framework"
+path = ".antigen"
+
+[[manager]]
+name = "nvm"
+kind = "version-manager"
+path = ".nvm"
+
+[[manager]]
+name = "fnm"
+kind = "version-manager"
+path = ".local/share/fnm"
+
+[[manager]]
+name = "pyenv"
+kind = "version-manager"
+path = ".pyenv"
+
+[[manager]]
+name = "rbenv"
+kind = "version-manager"
+path = ".rbenv"
+
+[[manager]]
+name = "sdkman"
+kind = "version-manager"
+path = ".sdkman"
+
+[[manager]]
+name = "rustup"
+kind = "version-manager"
+path = ".rustup"

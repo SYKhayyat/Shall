@@ -15,6 +15,34 @@ detect = "gsettings"
 read = ["gsettings", "get", "{schema}", "{key}"]
 write = ["gsettings", "set", "{schema}", "{key}", "{value}"]
 reset = ["gsettings", "reset", "{schema}", "{key}"]
+# What `adopt` asks this store, and why it is dconf rather than `gsettings` (C43). dconf holds
+# only the keys that differ from the schema's own default — a write that matches the default
+# leaves no entry — so its dump IS the list of settings somebody changed, which is the only
+# question an adoption can ask. `gsettings list-recursively` would answer "every key and its
+# value", defaults included, with no way to tell the two apart from the output.
+changed = ["dconf", "dump", "/"]
+# A changed key whose name or value carries one of these is reported, not offered (C43). An
+# adopted path or account name is not a declaration that comes back on the next machine, it is
+# one that breaks there — so this is the resource where completeness loses to privacy, and the
+# manifest says which word stopped it rather than dropping the key silently.
+withhold = [
+    "recent",
+    "history",
+    "location",
+    "last-",
+    "favorite",
+    "password",
+    "secret",
+    "token",
+    "home",
+    "path",
+    "user",
+    "email",
+    "hostname",
+    "account",
+    "identity",
+    "ssh",
+]
 
 # Windows registry (7e/U19). The line is `setting:<subkey path>/<value name>@value=<data>` — the
 # path uses `\`, the single `/` separates the value name. Shall folds the HIVE into the argv, so

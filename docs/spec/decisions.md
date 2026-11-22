@@ -11601,6 +11601,28 @@ against the shipped base sources per distro, which is a table this design alread
 `repo:` grammar; an unrecognised distribution means `--user-added` refuses by name rather than
 answering "none of them", because a filter that cannot be computed must not answer.
 
+**What was built, and what this entry still owes — three gaps, each found while building it.**
+
+- **The base-sources table does not exist.** The paragraph above says it is "a table this design
+  already keeps"; it is not, and no shipped code names one. So `--user-added` refuses by name on
+  every machine today, which is the behaviour that paragraph prescribes for an unrecognised
+  distribution and is honest, but the narrowing itself is not built. #214.
+- **`repo:` carries one string, and most managers list two.** The applying half hands the line's
+  spec to the manager as both the name and the source (`repositories.rs`), so a repository whose
+  name and source differ — `homebrew/core` pointing at a GitHub URL, which is what `brew source
+  list` prints for nearly every tap — has no line that would re-add it at the right address. It is
+  **reported with both strings** rather than written with one. The ruling's own "the line's
+  comment names the source" presupposes the line can carry a source; it cannot yet. #214.
+- **`apt`, `dnf` and `pacman` cannot list their repositories at all** (`repo_list_args: None`), so
+  the flagship case — a PPA — is outside what any `adopt` can see, and the manifest says the
+  manager could not answer rather than that it has none. That is backend work, not adopt work.
+  #214.
+
+What did land: every manager that *can* list its repositories is asked (its answer recorded in
+the manifest's `Asked:` line), each answered repository is offered as `repo:<backend>:<spec>`
+when the spec is the source too, the ones already declared are reported rather than duplicated,
+and a manager whose list fails is named — an error is not "no repositories". 
+
 ---
 
 ## C41
@@ -11626,6 +11648,21 @@ Spotify's) arrives like anything else, marked with the bundle it lives in. Filte
 deciding which schedules a person "really" wanted, which is the guess `II.99` forbids; the line's
 own comment names the app, and deleting it is one keystroke.
 
+**What this entry owes, and has not got.** Nothing of it is built yet — `adopt` offers no
+`schedule:` at all. `#60` carries the work, and the shape it needs is worth writing down while
+the ruling is fresh:
+
+- four readers, one per dialect: cron (`/etc/crontab`, `/etc/cron.d`, the invoking account's
+  crontab), systemd timers (`systemctl list-timers --all` for the units, `show -p OnCalendar`
+  for the calendar), launchd (`StartCalendarInterval` in the plists) and Task Scheduler
+  (`schtasks /query /xml`);
+- each becomes `schedule:<name>@cron=<five fields>,run=<argv>,user=<account>`; `user=` is how a
+  root-owned job is expressible, and it is why the ruling says root-owned ones are included;
+- **a one-shot refuses by name** — `OnCalendar` with no repeat, launchd's `StartInterval`, a Task
+  Scheduler `EventTrigger` — carrying the two fields that make it unexpressible, because a
+  schedule that fires at the wrong times and reports success is worse than one that says it
+  cannot be written down (`#195`).
+
 ---
 
 ## C42
@@ -11649,6 +11686,26 @@ ruler here is not taste: the manifest is a list of things you would recognise, a
 **Privacy, which the issue raised and the ruling answers.** No shell file's *contents* are parsed
 into declarations at all — only the file's path and the managers its text mentions — so a `.zshrc`
 holding a token never has a line quoting it.
+
+**What was built, and what this entry still owes.**
+
+- **The rc-file half is `C31`'s scan, and it is already there.** `adopt` scans `$HOME`, `.config`,
+  `.local/share` and `.ssh` two levels deep and offers every symlink into a git working tree, so
+  `.bashrc`, `.zshrc`, `.gitconfig`, `.tmux.conf`, fish's `config.fish` and the rest arrive as
+  `link:` lines when they are the kind of thing C31 counts as evidence. Nothing was added for
+  them, and nothing needed to be.
+- **The manager half detects and reports, but declares nothing.** `shell_managers.toml` carries
+  the rows (oh-my-zsh, zinit, zplug, antigen, nvm, fnm, pyenv, rbenv, sdkman, rustup) keyed by a
+  home-relative **directory**; `--no-managers` leaves them out of the report. What is missing is
+  the line: the ruling says "a `link:` for a checkout, an `install:`/`run:` for one that installs
+  itself", and neither spelling exists — `link:` places a file from the config repo, and `run:`
+  runs a command Shall already carries; neither says *clone this repository here*, which is the
+  only thing a re-clone would honour. Rather than invent a line that reports success and does
+  nothing, the manifest lists each manager under a heading that says **no line describes these
+  yet**, so the gap is visible in the one place a person is already reading. #215.
+- **Nothing walks into a checkout**, which is the bound this entry argued for and the only part of
+  it that is a rule rather than a piece of missing plumbing: `a_manager_is_found_by_its_directory_
+  and_never_entered` pins that fifty files inside `~/.oh-my-zsh` are still one finding.
 
 ---
 
@@ -11674,5 +11731,28 @@ comes back on the next machine, it is a declaration that breaks on it.
 
 **What the limit is.** `--schema` narrows to named schemas, because the volume here is real (a
 desktop profile has hundreds of user-facing keys) and the person knows which ones they mean.
+
+**What was built, and what this entry still owes.** Built on Linux: `adopt` asks `dconf dump /`
+— the one command that answers *which keys somebody changed*, because dconf stores a value only
+when it differs from the schema's default — reads each key back through the store's own `read`
+command so the spelling offered is the spelling a sync compares against, and offers
+`setting:SCHEMA/KEY@value=VALUE`. `--schema` narrows by exact schema or dotted prefix. A key
+whose name carries a `withhold` word (path, account, recent list — the row's own list) is
+reported in `left alone` with the word that stopped it.
+
+Two things are owed and named rather than claimed:
+
+- **macOS and Windows have no store row at all**, so the ruling's `defaults` and registry halves
+  are not built — and on Windows the baseline problem it predicts is real (`changed` is empty on
+  that row, so `adopt` reports "cannot say which of its keys somebody changed" rather than
+  enumerating `.reg` values that were never a decision). #213.
+- **Whether a value has a spelling is answered by the grammar's own round trip, not by a rule
+  written here** — and the first draft of this half got it wrong, refusing every value with a
+  space and so refusing every GNOME font key (`'Cantarell 11'`, which the option parser carries
+  perfectly well; it refuses a space only when what follows reads as another option). A comma
+  is the real boundary (`@value=[('xkb', 'us'), ('xkb', 'de')]` begins the next option at the
+  first comma), and such a key is reported rather than written into a line setting something
+  else. Same lesson as the string gate (#210): a second implementation of a rule the first one
+  already encodes disagrees with it, and the disagreement is silent.
 
 ---

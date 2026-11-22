@@ -59,6 +59,16 @@ pub struct SettingAdapter {
     pub system_write: Vec<String>,
     #[serde(default)]
     pub system_reset: Vec<String>,
+    /// The command that prints the keys **somebody changed** — dconf's dump, which holds only
+    /// what differs from the schema's default (C43). Empty means this store cannot say which
+    /// of its keys are decisions, and `adopt` will not guess.
+    #[serde(default)]
+    pub changed: Vec<String>,
+    /// Words that make a changed key private: a path, an account name, a recent-file list.
+    /// Matched against `SCHEMA/KEY` case-insensitively, and the word that matched is the
+    /// reason the manifest prints.
+    #[serde(default)]
+    pub withhold: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -175,6 +185,23 @@ impl SettingAdapter {
 
     pub fn reset_command(&self, scope: Scope, schema: &str, key: &str) -> (String, Vec<String>) {
         self.reset_command_for(scope, schema, key, &StoreTarget { account: None })
+    }
+
+    /// The command that lists the changed keys, split into a program and its arguments.
+    pub fn changed_command(&self) -> Option<(&str, Vec<&str>)> {
+        let (program, rest) = self.changed.split_first()?;
+        Some((program.as_str(), rest.iter().map(String::as_str).collect()))
+    }
+
+    /// Why this key is private, if it is: the first `withhold` word that appears in it. The word
+    /// is returned rather than a `bool` so the manifest can say which one stopped it, instead of
+    /// leaving a reader to guess what was considered private.
+    pub fn withheld_by(&self, schema: &str, key: &str) -> Option<&str> {
+        let subject = format!("{}/{}", schema, key).to_lowercase();
+        self.withhold
+            .iter()
+            .find(|word| subject.contains(&word.to_lowercase()))
+            .map(String::as_str)
     }
 
     pub fn read_command_for(
@@ -655,6 +682,28 @@ impl Queryable for SettingQueryable {
     async fn info(&self, _name: &str) -> Result<Option<Package>> {
         Ok(None)
     }
+}
+
+/// The changed keys a store's `changed` command printed, as `(schema, key)` (C43).
+///
+/// dconf prints a path per entry — `/org/gnome/desktop/interface/clock-format` — and a path is a
+/// schema's own path with the key appended, so the last `/` is the split. A line that is not a
+/// path, or a path with nothing after its last `/`, is not a key: it is dropped here rather than
+/// turned into a line naming a schema that may not be one.
+pub fn changed_keys(text: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        let Some((schema_path, key)) = line.rsplit_once('/') else {
+            continue;
+        };
+        let schema = schema_path.trim_matches('/').replace('/', ".");
+        if schema.is_empty() || key.is_empty() {
+            continue;
+        }
+        out.push((schema, key.to_string()));
+    }
+    out
 }
 
 pub fn register(

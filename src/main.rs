@@ -790,14 +790,22 @@ async fn dispatch_declare(app: &App, cli: &Cli) -> Result<()> {
             added_only,
             inbound,
             all_services,
+            schema,
+            user_added,
+            no_managers,
         } => {
             handle_adopt(
                 app,
-                backends.clone(),
-                *enabled_only,
-                *added_only,
-                *inbound,
-                *all_services,
+                shall::app::adopt::AdoptScope {
+                    backends: backends.clone(),
+                    enabled_only: *enabled_only,
+                    added_only: *added_only,
+                    inbound: *inbound,
+                    all_services: *all_services,
+                    schemas: schema.clone(),
+                    user_added: *user_added,
+                    no_managers: *no_managers,
+                },
             )
             .await
         }

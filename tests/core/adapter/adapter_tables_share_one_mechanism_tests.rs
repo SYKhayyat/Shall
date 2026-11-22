@@ -89,6 +89,15 @@ const TABLES: &[Table] = &[
         // the same merge would silently delete the `override` feature.
         not_an_adapter: Some("the [[backend]] table — Q6 lets a row override a built-in name"),
     },
+    Table {
+        wrapper: "ShellManagerFile",
+        file: "src/app/dotfiles.rs",
+        // Checked and deliberately excluded. A row is a NAME and a home-relative PATH — there is
+        // no `detect` binary to probe and no argv to run, because the answer is a directory on
+        // disk rather than a command that reports something. `C42` also forbids asking the row
+        // anything further: nothing walks into the checkout.
+        not_an_adapter: Some("the [[manager]] table — a name and a path, no argv to run"),
+    },
 ];
 
 /// Every table in the tree is in the ledger above, and every ledger entry still describes a

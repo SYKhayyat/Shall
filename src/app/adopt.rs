@@ -124,7 +124,54 @@ pub struct Discovery {
     /// was asked. `None` when there is no firewall or it refused to answer, and then the reason
     /// is in `skipped_backends`.
     pub firewall_source: Option<String>,
+    /// Settings somebody changed, as `(schema, key, value)` — read from the store that can say
+    /// which of its keys are decisions (C43), never from one that can only list every key.
+    pub settings: Vec<SettingLine>,
+    /// The store that answered the settings question, and the command it was asked, for the
+    /// manifest header.
+    pub settings_source: Option<String>,
+    /// Whether the settings list stopped at [`MAX_SETTINGS`]. Said out loud for the same reason
+    /// `links_truncated` is: a manifest that is short for a reason the reader cannot see is an
+    /// estimate pretending to be a census.
+    pub settings_truncated: bool,
+    /// The repositories this machine's managers list (C40), each with the source it points at.
+    pub repositories: Vec<RepoFound>,
+    /// Which managers were asked for their lists, and the command behind each answer.
+    pub repositories_source: Vec<String>,
+    /// The shell frameworks and version managers this machine has (C42), with the directory each
+    /// keeps itself in. Reported, not offered: a checkout has no line that reproduces it yet.
+    pub shell_managers: Vec<(crate::app::dotfiles::ShellManager, std::path::PathBuf)>,
 }
+
+/// One repository a manager lists, as a `repo:` line could name it.
+#[derive(Debug, Clone)]
+pub struct RepoFound {
+    pub backend: String,
+    /// What `repo:<backend>:<spec>` says. Equal to the source when the manager lists a name that
+    /// is its own source; when the two differ this is the name, and the source is `source`.
+    pub spec: String,
+    pub source: String,
+}
+
+/// One `setting:` line this run found in force: the key, and the value the store holds.
+#[derive(Debug, Clone)]
+pub struct SettingLine {
+    pub schema: String,
+    pub key: String,
+    pub value: String,
+}
+
+impl SettingLine {
+    /// `SCHEMA/KEY`, which is how a `setting:` line names its subject.
+    pub fn name(&self) -> String {
+        format!("{}/{}", self.schema, self.key)
+    }
+}
+
+/// How many settings one run will offer before it stops and says so. A desktop profile holds
+/// hundreds, so this is a runaway stop rather than a policy: `--schema` is how a person asks a
+/// smaller question.
+pub const MAX_SETTINGS: usize = 500;
 
 /// One `firewall:` line this run found in force, with the options its line must carry.
 #[derive(Debug, Clone)]
@@ -158,6 +205,20 @@ pub struct AdoptScope {
     /// default: it names authorship rather than guessing at importance, and it costs one flag
     /// to undo.
     pub all_services: bool,
+    /// `--schema`: only settings under these schemas (a schema, or a dotted prefix of one).
+    /// Empty means every schema the store reports, because a bare run takes everything — and
+    /// because the volume here is real, this is the flag that asks a smaller question.
+    pub schemas: Vec<String>,
+    /// `--user-added`: only the repositories the distribution did not ship. It needs the base
+    /// sources for this distribution, and a distribution the table does not know **refuses by
+    /// name** rather than answering "none of them": a filter that cannot be computed must not
+    /// answer.
+    pub user_added: bool,
+    /// `--no-managers`: the rc files alone, leaving out the shell frameworks and version
+    /// managers a config references. They are reported rather than declared today (#215), so
+    /// this narrows the report — the flag exists so the question has the same shape here as
+    /// everywhere else in `adopt`.
+    pub no_managers: bool,
 }
 
 impl AdoptScope {
@@ -184,6 +245,10 @@ pub struct DeclaredOutside {
     /// Firewall rules the config already declares, and the file declaring each. A rule is its
     /// own statement kind, not a package, so it cannot be looked up in `packages`.
     firewall: Vec<(crate::model::firewall::Rule, String)>,
+    /// `SCHEMA/KEY` of every setting the config declares, and the file declaring it.
+    settings: Vec<(String, String)>,
+    /// `backend:spec` of every repository the config declares, and the file declaring it.
+    repositories: Vec<(String, String)>,
 }
 
 impl DeclaredOutside {
@@ -196,6 +261,8 @@ impl DeclaredOutside {
         let mut link_targets = Vec::new();
         let mut trees = Vec::new();
         let mut firewall = Vec::new();
+        let mut settings = Vec::new();
+        let mut repositories = Vec::new();
         // `modules/adopted.txt` is this command's own output and it is overwritten every run
         // (II.9). Counting its lines as "already declared" would make the second `adopt` drop
         // every link the first one found — the manifest would shrink each time it ran.
@@ -222,6 +289,15 @@ impl DeclaredOutside {
                         firewall.push((rule, origin.file.display().to_string()));
                     }
                 }
+                Statement::Setting(name, _) => {
+                    settings.push((name.clone(), origin.file.display().to_string()));
+                }
+                Statement::Repo { backend, spec } => {
+                    repositories.push((
+                        format!("{}:{}", backend, spec),
+                        origin.file.display().to_string(),
+                    ));
+                }
                 _ => {}
             }
         }
@@ -230,6 +306,8 @@ impl DeclaredOutside {
             link_targets,
             trees,
             firewall,
+            settings,
+            repositories,
         }
     }
 
@@ -249,6 +327,26 @@ impl DeclaredOutside {
             ));
         }
         None
+    }
+}
+
+/// What a value the line could not carry is holding, named for the manifest (C43).
+///
+/// **This describes; it does not decide.** Whether a value survives the line is answered by the
+/// grammar's own round trip (`declared_as`), because the option rules are subtle in exactly the
+/// way a second implementation gets wrong: a space is legal inside a value (`'Cantarell 11'` is
+/// a real GNOME font), a comma is not, and ` x@hold` is read as a spliced option while
+/// `'User@example.com'` is a value. A hand-written gate here rejected every font setting until
+/// the round trip was put in charge, which is the family this repo keeps meeting.
+fn what_the_value_holds(value: &str) -> String {
+    if value.contains(',') {
+        "a comma — the next option begins inside the value".to_string()
+    } else if value.contains(" #") || value.starts_with('#') {
+        "a `#` — the rest of the line is read as a comment".to_string()
+    } else if value.contains(" @") {
+        "a space before an `@` — the tail is read as another option".to_string()
+    } else {
+        "characters the option grammar cannot carry".to_string()
     }
 }
 
@@ -615,6 +713,27 @@ impl Adopter {
         if scope.backends.is_empty() || scope.asked_for("firewall") {
             self.discover_firewall(&mut found, &declared, scope).await;
         }
+
+        // Settings somebody changed (C43). Same terms again: a bare `adopt` takes them, naming
+        // backends means the run is about those — and `setting` is a registered backend whose
+        // name can be asked for by itself.
+        if scope.backends.is_empty() || scope.asked_for("setting") {
+            self.discover_settings(&mut found, &declared, scope).await;
+        }
+
+        // The shell frameworks and version managers (C42). Found by their directories, never
+        // entered — a checkout's contents are not decisions anybody wrote.
+        if !scope.no_managers {
+            if let Some(home) = dirs::home_dir() {
+                found.shell_managers = crate::app::dotfiles::shell_managers(&home);
+            }
+        }
+
+        // Where the packages came from (C40). A `repo:` line names its manager (V.47), so this
+        // asks each manager that can list its repositories, and names the ones that cannot
+        // instead of offering nothing for them in silence.
+        self.discover_repositories(&mut found, &declared, scope)
+            .await;
 
         Ok(found)
     }
@@ -1107,6 +1226,84 @@ impl Adopter {
             }
         }
 
+        if !found.settings.is_empty() {
+            out.push_str(&format!(
+                "\n\
+# === The settings somebody changed ===\n\
+#   Read from {}. A `setting:` line names\n\
+#   a schema and a key, and carries the value the store holds now. Only the keys that DIFFER\n\
+#   from the schema's own default are here: a store that only remembers what somebody wrote\n\
+#   cannot tell you which of its keys were a decision, so the ones left at their default are\n\
+#   absent on purpose and never arrive as a line resetting them.\n\
+",
+                found
+                    .settings_source
+                    .as_deref()
+                    .unwrap_or("the settings store's own changed-keys listing")
+            ));
+            if found.settings_truncated {
+                out.push_str(&format!(
+                    "#   Stopped at {} settings. Narrow with `shall adopt --schema <name>`.\n",
+                    MAX_SETTINGS
+                ));
+            }
+            out.push('\n');
+            for setting in &found.settings {
+                match crate::config::grammar::declared_as(
+                    Some("setting"),
+                    &setting.name(),
+                    &[("value", setting.value.as_str())],
+                )
+                .line()
+                {
+                    Some(line) => out.push_str(line),
+                    // Unreachable: `discover_settings` dropped every value this cannot spell.
+                    None => continue,
+                }
+                out.push('\n');
+            }
+        }
+
+        if !found.shell_managers.is_empty() {
+            out.push_str(
+                "\n\
+# === The shell frameworks and version managers this machine has ===\n\
+#   Found by their directories, never by reading the contents: a checkout is a thing you\n\
+#   would recognise, and the tens of thousands of files inside it are not decisions.\n\
+#   NO LINE DESCRIBES THESE YET (#215) — a `link:` places a file and `run:` runs a command,\n\
+#   and neither says \"clone this here\". They are listed so the gap is visible, and\n\
+#   `--no-managers` leaves them out of the report.\n\
+#\n",
+            );
+            for (manager, path) in &found.shell_managers {
+                out.push_str(&format!(
+                    "#   {} ({}) — {}\n",
+                    manager.name,
+                    manager.kind,
+                    path.display()
+                ));
+            }
+        }
+
+        if !found.repositories.is_empty() {
+            out.push_str(
+                "\n\
+# === The repositories these managers use ===\n\
+#   A `repo:` line names its manager and the repository, because adding a repository is\n\
+#   manager work and guessing which tool owns it is how the wrong one gets asked (V.47).\n\
+#   These are the repositories the managers list — the distribution's own included, since a\n\
+#   package from one only rebuilds if that repository is declared too.\n\
+#\n",
+            );
+            out.push_str(&format!(
+                "#   Asked: {}\n\n",
+                found.repositories_source.join(", ")
+            ));
+            for repo in &found.repositories {
+                out.push_str(&format!("repo:{}:{}\n", repo.backend, repo.spec));
+            }
+        }
+
         if !found.skipped.is_empty() {
             out.push_str(
                 "\n\
@@ -1243,6 +1440,288 @@ impl Adopter {
         found.firewall.sort_by(|a, b| {
             (&a.package.backend, &a.package.name).cmp(&(&b.package.backend, &b.package.name))
         });
+    }
+
+    /// The settings somebody changed, offered as `setting:` lines (C43).
+    ///
+    /// **The question is not "what does this store hold" but "which of its keys are
+    /// decisions"**, and only one of those has an honest answer. dconf stores a value only when
+    /// it differs from the schema's own default, so its dump is the list of changes; a store
+    /// that can only list every key (`windows-registry`) has no baseline to compare against and
+    /// is reported instead of enumerated — a default nobody changed is not a declaration.
+    ///
+    /// A value that cannot be written into `@value=` without changing what it means is not
+    /// offered: `@` starts an option, `,` separates two, and a space is refused by the grammar
+    /// outright, so `'Cantarell 11'` and a fresh-file list both arrive as their own reason
+    /// rather than as a line that would set something else.
+    async fn discover_settings(
+        &self,
+        found: &mut Discovery,
+        declared: &DeclaredOutside,
+        scope: &AdoptScope,
+    ) {
+        use crate::backends::setting as table;
+
+        let all = table::adapters(table::user_adapters(&self.config));
+        let present = |cmd: &str| self.executor.command_exists_sync(cmd);
+        let usable: Vec<&table::SettingAdapter> = all
+            .iter()
+            .filter(|a| {
+                a.os.as_deref().is_none_or(|os| os == std::env::consts::OS) && present(&a.detect)
+            })
+            .collect();
+
+        if usable.is_empty() {
+            let known: Vec<&str> = all.iter().map(|a| a.name.as_str()).collect();
+            found.skipped_backends.push((
+                "setting".to_string(),
+                format!(
+                    "no settings store Shall knows is on this machine (it looked for {}), so no \
+                     setting is reported — a store nobody found holds nothing to leave alone",
+                    known.join(", ")
+                ),
+            ));
+            return;
+        }
+
+        let mut offered = 0usize;
+        for adapter in usable {
+            let Some((program, args)) = adapter.changed_command() else {
+                // The store is here but cannot say which of its keys a person chose. That is an
+                // answer about the store, so it is reported once rather than per key.
+                found.skipped_backends.push((
+                    adapter.name.clone(),
+                    "cannot say which of its keys somebody changed, so none is offered — \
+                     every key a store holds is not a list of decisions"
+                        .to_string(),
+                ));
+                continue;
+            };
+
+            let output = match self.executor.run_output(program, &args, false).await {
+                Ok(out) => out,
+                Err(e) => {
+                    found.skipped_backends.push((
+                        adapter.name.clone(),
+                        format!(
+                            "`{}` could not be read ({}), so no setting is offered — a store \
+                             that could not be read is not an empty one",
+                            program, e
+                        ),
+                    ));
+                    continue;
+                }
+            };
+
+            if found.settings_source.is_none() {
+                found.settings_source = Some(format!(
+                    "{} — `{}`",
+                    adapter.name,
+                    adapter.changed.join(" ")
+                ));
+            }
+
+            for (schema, key) in table::changed_keys(&output) {
+                if !scope.schemas.is_empty()
+                    && !scope
+                        .schemas
+                        .iter()
+                        .any(|s| schema == *s || schema.starts_with(&format!("{}.", s)))
+                {
+                    continue;
+                }
+                let line = SettingLine {
+                    schema: schema.clone(),
+                    key: key.clone(),
+                    value: String::new(),
+                };
+                if let Some((_, file)) = declared.settings.iter().find(|(n, _)| *n == line.name()) {
+                    found.skipped.push(Skipped {
+                        reason: format!("you already declare it, in {}", file),
+                        package: Package::new(line.name(), "setting"),
+                    });
+                    continue;
+                }
+                if let Some(word) = adapter.withheld_by(&schema, &key) {
+                    found.skipped.push(Skipped {
+                        reason: format!(
+                            "its name carries `{}`, which is a path or an account rather than a \
+                             preference — a value like that does not survive the next machine",
+                            word
+                        ),
+                        package: Package::new(line.name(), "setting"),
+                    });
+                    continue;
+                }
+
+                // The value is read back rather than lifted out of the dump: the store's own read
+                // command is what `setting:` writes through, so the spelling offered here is the
+                // spelling a sync would compare against.
+                let (prog, read_args) =
+                    adapter.read_command(crate::model::scope::Scope::User, &schema, &key);
+                let refs: Vec<&str> = read_args.iter().map(String::as_str).collect();
+                let value = match self.executor.run_output(&prog, &refs, false).await {
+                    Ok(v) => v.trim().to_string(),
+                    Err(e) => {
+                        found.skipped.push(Skipped {
+                            reason: format!("`{}` could not read it ({})", prog, e),
+                            package: Package::new(line.name(), "setting"),
+                        });
+                        continue;
+                    }
+                };
+                if value.is_empty() {
+                    continue;
+                }
+                // The grammar decides, not this loop: a value that does not come back out of
+                // `declared_as` exactly as it went in has no line, and one is never invented for
+                // it — a `setting:` line that sets something else is worse than a missing line.
+                if crate::config::grammar::declared_as(
+                    Some("setting"),
+                    &line.name(),
+                    &[("value", value.as_str())],
+                )
+                .line()
+                .is_none()
+                {
+                    found.skipped.push(Skipped {
+                        reason: format!(
+                            "no `setting:` line can carry its value — it holds {}, so writing it \
+                             as a line would set something else",
+                            what_the_value_holds(&value)
+                        ),
+                        package: Package::new(line.name(), "setting"),
+                    });
+                    continue;
+                }
+                if offered >= MAX_SETTINGS {
+                    found.settings_truncated = true;
+                    break;
+                }
+                offered += 1;
+                found.settings.push(SettingLine { value, ..line });
+            }
+        }
+
+        found.settings.sort_by_key(|s| s.name());
+    }
+
+    /// The repositories this machine's managers list, offered as `repo:` lines (C40).
+    ///
+    /// **A repository is offered only when its name and its source are the same string**, because
+    /// that is what a `repo:` line carries: the applying half hands its spec to the manager as
+    /// both the name and the source (`repositories.rs`), so a line for a repository whose two
+    /// differ would register one with the other's address. That half is a real gap — the `repo:`
+    /// grammar has no `@url=` — and it is reported here by name rather than papered over with a
+    /// line that says something the person did not.
+    ///
+    /// **`--user-added` cannot be computed yet, and says so.** It needs the base sources this
+    /// distribution ships, which no table carries; a distribution without one refuses by name
+    /// rather than answering "none of them", because a filter that cannot be computed must not
+    /// answer.
+    async fn discover_repositories(
+        &self,
+        found: &mut Discovery,
+        declared: &DeclaredOutside,
+        scope: &AdoptScope,
+    ) {
+        let Ok(backends) = self.backends.usable() else {
+            return;
+        };
+        let sweeping = |name: &str| scope.backends.is_empty() || scope.asked_for(name);
+
+        if scope.user_added {
+            found.skipped_backends.push((
+                "repo".to_string(),
+                format!(
+                    "`--user-added` compares against the base repositories this distribution \
+                     ships, and no table for `{}` is kept yet — so it refuses rather than \
+                     answering \"none of them\". Every repository the managers list is offered \
+                     without the flag",
+                    std::env::consts::OS
+                ),
+            ));
+            return;
+        }
+
+        for backend in backends.iter() {
+            if !sweeping(backend.name()) {
+                continue;
+            }
+            let Some(repos) = backend.as_repo_manager() else {
+                continue;
+            };
+            match repos.list_repos().await {
+                Ok(rows) => {
+                    found.repositories_source.push(backend.name().to_string());
+                    for (name, source) in rows {
+                        let spec = name.clone();
+                        let key = format!("{}:{}", backend.name(), spec);
+                        if let Some((_, file)) =
+                            declared.repositories.iter().find(|(d, _)| *d == key)
+                        {
+                            found.skipped.push(Skipped {
+                                reason: format!("you already declare it, in {}", file),
+                                package: Package::new(spec, "repo"),
+                            });
+                            continue;
+                        }
+                        if name != source {
+                            found.skipped.push(Skipped {
+                                reason: format!(
+                                    "`repo:{}:{}` would also write `{}` as its source — a \
+                                     `repo:` line carries one string for both, so it is \
+                                     reported rather than written with the wrong address",
+                                    backend.name(),
+                                    name,
+                                    name
+                                ),
+                                package: Package::new(spec, "repo"),
+                            });
+                            continue;
+                        }
+                        // The line is round-tripped through the parser: a spec carrying a `:`
+                        // or a space that does not come back out is not a line, and offering it
+                        // would produce a manifest that fails to parse.
+                        let line = format!("repo:{}:{}", backend.name(), spec);
+                        let parses_back = matches!(
+                            crate::config::grammar::statement::parse(
+                                &crate::config::grammar::Origin::argument(),
+                                &line,
+                                &|n: &str| n == backend.name()
+                            ),
+                            Ok(crate::config::grammar::Statement::Repo { ref backend, ref spec })
+                                if spec == &name
+                        );
+                        if !parses_back {
+                            found.skipped.push(Skipped {
+                                reason: "no `repo:` line can spell it".to_string(),
+                                package: Package::new(spec, "repo"),
+                            });
+                            continue;
+                        }
+                        found.repositories.push(RepoFound {
+                            backend: backend.name().to_string(),
+                            spec,
+                            source,
+                        });
+                    }
+                }
+                // A manager that cannot list its repositories has not told us it has none.
+                Err(e) => found.skipped_backends.push((
+                    backend.name().to_string(),
+                    format!(
+                        "cannot list its repositories ({}), so none is offered — a manager that \
+                         could not answer is not one with no repositories",
+                        e
+                    ),
+                )),
+            }
+        }
+
+        found
+            .repositories
+            .sort_by(|a, b| (&a.backend, &a.spec).cmp(&(&b.backend, &b.spec)));
     }
 
     /// A read-only preview of what `adopt` would adopt. Runs the same crawl.

@@ -17,6 +17,48 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// A shell framework or version manager found in `$HOME` (C42).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Deserialize)]
+pub struct ShellManager {
+    pub name: String,
+    /// `framework` or `version-manager` — which question the absence of it answers.
+    pub kind: String,
+    /// The directory the manager keeps itself in, home-relative.
+    pub path: String,
+}
+
+#[derive(serde::Deserialize)]
+struct ShellManagerFile {
+    #[serde(default)]
+    manager: Vec<ShellManager>,
+}
+
+/// The managers Shall looks for. Rows, so a user's own row is the same kind of thing.
+const SHELL_MANAGERS: &str = include_str!("shell_managers.toml");
+
+/// Every manager whose directory is on this machine, with the path it was found at.
+///
+/// **Found by its directory, and never entered.** The directory's *presence* is the decision; the
+/// tens of thousands of files inside it are what a `git clone` produced, and every one of them
+/// would arrive as a declaration to delete. `C42` draws the line here: a manifest is a list of
+/// things a person would recognise, and a checkout has no line that could describe it that a
+/// re-clone would not replace.
+pub fn shell_managers(home: &Path) -> Vec<(ShellManager, PathBuf)> {
+    let table: ShellManagerFile =
+        toml::from_str(SHELL_MANAGERS).expect("the shipped shell_managers.toml must parse");
+    let mut out: Vec<(ShellManager, PathBuf)> = table
+        .manager
+        .into_iter()
+        .map(|m| {
+            let path = home.join(&m.path);
+            (m, path)
+        })
+        .filter(|(_, path)| path.is_dir())
+        .collect();
+    out.sort_by(|a, b| a.0.name.cmp(&b.0.name));
+    out
+}
+
 /// A `$HOME` path that is a symlink into version control.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ManagedLink {

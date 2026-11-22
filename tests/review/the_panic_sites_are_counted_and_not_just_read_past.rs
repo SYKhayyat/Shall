@@ -59,7 +59,10 @@ fn walk_rs(dir: &PathBuf) -> Vec<PathBuf> {
 /// 82 → 83 when `C38` gave `adopt` the `plumbing` list: `backends::service::plumbing` parses the
 /// same compiled-in `init_providers.toml` a second time, from the `adopt` side rather than the
 /// registration side. Two readers of one table looked worse than one `expect` in each.
-const PRODUCTION_CEILING: usize = 83;
+/// 83 → 84 when `C42` added `shell_managers.toml`: `app::dotfiles::shell_managers` parses a table
+/// compiled into the binary, and the row it builds a path from is a constant (`home.join(&m.path)`)
+/// rather than anything a user wrote. A test pins the shipped rows parse.
+const PRODUCTION_CEILING: usize = 84;
 
 /// **The inventory runs and counts.** A script that silently matched nothing would report "0 sites,
 /// the tree is clean", which is the most reassuring possible failure.

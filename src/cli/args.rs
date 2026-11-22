@@ -670,6 +670,24 @@ pub enum Commands {
         /// how many it left out; this is the flag that takes them.
         #[arg(long)]
         all_services: bool,
+
+        /// Only settings under this schema, or a dotted prefix of one (`--schema
+        /// org.gnome.desktop.interface`, or `--schema org.gnome.desktop`). Repeatable. A bare
+        /// `adopt` takes every changed setting the store reports, because a desktop profile
+        /// holds hundreds and the person knows which ones they mean.
+        #[arg(long, value_name = "SCHEMA")]
+        schema: Vec<String>,
+
+        /// Leave the shell frameworks and version managers out of the report, the rc files
+        /// alone.
+        #[arg(long)]
+        no_managers: bool,
+
+        /// Only the repositories this distribution did not ship. It compares against the base
+        /// sources the distribution provides, and a distribution Shall has no table for refuses
+        /// by name rather than answering "none of them".
+        #[arg(long)]
+        user_added: bool,
     },
 
     /// Vendor someone else's modules into your repo (XIII.14).

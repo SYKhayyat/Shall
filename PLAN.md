@@ -388,11 +388,11 @@ The way to get to the new laptop is `adopt` and `export --from-scan` on the old 
 gaps are laptop blockers rather than features. #59 (dotfiles) is closed. Ordered by how much of a
 laptop each one covers:
 
-- [ ] #62 adopt discovers shell configuration
-- [ ] #61 adopt discovers repositories and PPAs
+- [x] #62 adopt discovers shell configuration (C42, partial: #215)
+- [x] #61 adopt discovers repositories and PPAs (C40, partial: #214)
 - [x] #64 adopt surfaces services by default (C38)
-- [ ] #60 adopt discovers schedules
-- [ ] #63 adopt enumerates desktop and OS settings
+- [ ] #60 adopt discovers schedules — C41 ruled, NOT built (four dialect readers, see decisions.md C41)
+- [x] #63 adopt enumerates desktop and OS settings (C43; macOS/Windows remainder #213)
 - [x] #65 adopt surfaces firewall rules by default (C39)
 
 ### Make sure no input touches the machine (safety, from #166)

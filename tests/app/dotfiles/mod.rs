@@ -276,3 +276,9 @@ fn a_repository_genuinely_outside_a_symlinked_home_is_still_adopted() {
          rule this whole module is for"
     );
 }
+
+/// C42: the shell frameworks and version managers are found by their **directory**, and the
+/// directory is never entered. A checkout is a thing a person would recognise; the tens of
+/// thousands of files inside one are not decisions, and a manifest naming them would arrive as a
+/// declaration to delete every one.
+mod a_manager_is_found_by_its_directory_and_never_entered;

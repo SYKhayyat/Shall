@@ -43,6 +43,8 @@ fn row(name: &str, detect: &str) -> SettingAdapter {
         system_read: vec![],
         system_write: vec![],
         system_reset: vec![],
+        changed: vec![],
+        withhold: vec![],
     }
 }
 fn registry_like() -> SettingAdapter {
@@ -71,6 +73,7 @@ fn registry() -> SettingAdapter {
         .find(|a| a.name == "windows-registry")
         .expect("the registry row must ship")
 }
+mod a_changed_key_is_a_schema_path_and_the_key_appended;
 mod a_command_driven_store_is_addressed_by_where_it_runs_and_a_registry_one_by_its_argv;
 mod a_different_value_is_not_already_set;
 mod a_key_the_store_already_holds_reads_back_as_in_effect;
