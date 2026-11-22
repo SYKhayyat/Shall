@@ -11663,6 +11663,36 @@ the ruling is fresh:
   schedule that fires at the wrong times and reports success is worse than one that says it
   cannot be written down (`#195`).
 
+**What was built (2026-11-21), and the model limits it found.**
+
+- **Two of the four readers are in, and they are the two a line can state exactly.** `cron` reads
+  `/etc/crontab`, `/etc/anacrontab` and every file in `/etc/cron.d` (each with its **user column**)
+  and the invoking account's own crontab (without one — the same bytes mean a different job in the
+  two formats, so the caller says which it is reading rather than the reader guessing). `systemd`
+  reads `list-timers --all` for the units and `show -p OnCalendar` for each calendar. Both arrive as
+  `schedule:<name>@cron=…,run=…` plus `user=` where the dialect names an account, and both
+  round-trip through the option grammar before they are offered — a command carrying a comma or an
+  `@key=` shape does not come back out as the same line, and it is reported instead of written.
+- **`@reboot` is refused, not widened.** It is a calendar-shaped hole in cron's own syntax: a
+  `schedule:` line carries `cron=`, and `@reboot` is not a time. Writing it as `@daily` would fire a
+  cache warmer once a day instead of at boot and report success.
+- **The `OnCalendar` mapping is closed, not a translation.** Named intervals (`hourly`, `daily`,
+  `weekly`, `monthly`, `yearly`) and `[-*-*] HH:MM[:SS]` with an optional weekday list map exactly;
+  a `/step`, a seconds field that is not `00`, two times of day in one spec, `~` (last day of the
+  month) and any spec naming a month or day of month are refused. Each of those would otherwise
+  become a cron expression that fires at times the unit does not.
+- **A timer with no `OnCalendar` is a refusal, not an empty schedule** — `OnBootSec`,
+  `OnUnitActiveSec` and `OnActiveSec` are intervals, and an interval is not a calendar.
+- **A name comes from where the job was found, not from its command.** Two jobs may run the same
+  program, and a name derived from the command would let one declaration overwrite the other.
+- **`--user` stops before it asks, not after.** With it, `/etc` is never opened and the system
+  instance of systemd is never queried — filtering afterwards would mean a root job had already
+  been read, and "we asked and then dropped it" is the shape `II.99` forbids.
+- **Two readers remain owed: launchd and Task Scheduler (`#217`).** They are not stubbed to report
+  "nothing found", because a dialect that was never opened is not a dialect with no schedules; the
+  manifest names the dialects it read, and those two are absent from that sentence until they are
+  built.
+
 ---
 
 ## C42

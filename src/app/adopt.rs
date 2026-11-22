@@ -141,6 +141,10 @@ pub struct Discovery {
     /// The shell frameworks and version managers this machine has (C42), with the directory each
     /// keeps itself in. Reported, not offered: a checkout has no line that reproduces it yet.
     pub shell_managers: Vec<(crate::app::dotfiles::ShellManager, std::path::PathBuf)>,
+    /// Schedules this machine already runs (C41), as `schedule:` lines it can carry.
+    pub schedules: Vec<crate::app::schedulers::Found>,
+    /// The dialects that were read, for the manifest header.
+    pub schedules_source: Vec<String>,
 }
 
 /// One repository a manager lists, as a `repo:` line could name it.
@@ -214,6 +218,10 @@ pub struct AdoptScope {
     /// name** rather than answering "none of them": a filter that cannot be computed must not
     /// answer.
     pub user_added: bool,
+    /// `--user`: the schedules registered for the invoking account alone — the user crontab,
+    /// user timers, and nothing from `/etc`. Root-owned jobs are expressible (`schedule:` carries
+    /// `user=`), so leaving them in by default is the ruling; this is the narrowing.
+    pub user_only: bool,
     /// `--no-managers`: the rc files alone, leaving out the shell frameworks and version
     /// managers a config references. They are reported rather than declared today (#215), so
     /// this narrows the report — the flag exists so the question has the same shape here as
@@ -249,6 +257,8 @@ pub struct DeclaredOutside {
     settings: Vec<(String, String)>,
     /// `backend:spec` of every repository the config declares, and the file declaring it.
     repositories: Vec<(String, String)>,
+    /// Names of every schedule the config declares, and the file declaring it.
+    schedules: Vec<(String, String)>,
 }
 
 impl DeclaredOutside {
@@ -263,6 +273,7 @@ impl DeclaredOutside {
         let mut firewall = Vec::new();
         let mut settings = Vec::new();
         let mut repositories = Vec::new();
+        let mut schedules = Vec::new();
         // `modules/adopted.txt` is this command's own output and it is overwritten every run
         // (II.9). Counting its lines as "already declared" would make the second `adopt` drop
         // every link the first one found — the manifest would shrink each time it ran.
@@ -292,6 +303,9 @@ impl DeclaredOutside {
                 Statement::Setting(name, _) => {
                     settings.push((name.clone(), origin.file.display().to_string()));
                 }
+                Statement::Schedule(name, _) => {
+                    schedules.push((name.clone(), origin.file.display().to_string()));
+                }
                 Statement::Repo { backend, spec } => {
                     repositories.push((
                         format!("{}:{}", backend, spec),
@@ -308,6 +322,7 @@ impl DeclaredOutside {
             firewall,
             settings,
             repositories,
+            schedules,
         }
     }
 
@@ -348,6 +363,22 @@ fn what_the_value_holds(value: &str) -> String {
     } else {
         "characters the option grammar cannot carry".to_string()
     }
+}
+
+/// The `schedule:` line that declares one found job.
+///
+/// Built by hand rather than through `declared_as`, because a schedule is not a package and
+/// carries options the package writer does not know: `cron=` and `run=` are required, and
+/// `user=` is how a root job stays root (`C41`).
+fn schedule_line(job: &crate::app::schedulers::Found) -> String {
+    let mut line = format!(
+        "schedule:{}@cron={},run={}",
+        job.name, job.cron, job.command
+    );
+    if let Some(user) = &job.user {
+        line.push_str(&format!(",user={}", user));
+    }
+    line
 }
 
 /// Whether two paths name the same place, without requiring either to exist.
@@ -735,6 +766,11 @@ impl Adopter {
         self.discover_repositories(&mut found, &declared, scope)
             .await;
 
+        // The schedules this machine already runs (C41). Read from each dialect's own store, so
+        // a job somebody added by hand arrives as a line — and one whose shape no line can state
+        // arrives as a named refusal instead (`@reboot`, `OnUnitActiveSec`).
+        self.discover_schedules(&mut found, &declared, scope).await;
+
         Ok(found)
     }
 
@@ -849,7 +885,17 @@ impl Adopter {
         let options = self.adoption_options();
         Self::hold_back_what_cannot_be_written(&mut found, &options);
 
-        if found.adopt.is_empty() && found.links.is_empty() {
+        // **Every channel, not only the two oldest.** This used to ask about packages and links
+        // alone, so a machine whose only finding was a schedule, a firewall rule, a changed
+        // setting or a repository was told "Nothing to adopt" and had it not written — and the
+        // more sources `adopt` learned to read, the larger that silence grew.
+        let nothing_to_write = found.adopt.is_empty()
+            && found.links.is_empty()
+            && found.firewall.is_empty()
+            && found.settings.is_empty()
+            && found.repositories.is_empty()
+            && found.schedules.is_empty();
+        if nothing_to_write {
             info!("nothing new to adopt");
             println!("Nothing to adopt: every package your managers report as user-chosen is");
             println!("already managed, or is protected and deliberately left alone, and no config");
@@ -890,6 +936,10 @@ impl Adopter {
                 "Wrote"
             })
         );
+
+        if !found.schedules.is_empty() {
+            self.write_schedules(&found).await?;
+        }
 
         let snapshot;
         {
@@ -951,7 +1001,12 @@ impl Adopter {
 
         println!(
             "\nAdopted {} declaration(s).",
-            found.adopt.len() + found.links.len()
+            found.adopt.len()
+                + found.links.len()
+                + found.firewall.len()
+                + found.settings.len()
+                + found.repositories.len()
+                + found.schedules.len()
         );
         if !found.links.is_empty() {
             println!(
@@ -1262,6 +1317,29 @@ impl Adopter {
                 }
                 out.push('\n');
             }
+        }
+
+        if !found.schedules.is_empty() {
+            // **Not a line in this module.** A `schedule:` is machine-wide, so the grammar puts
+            // it in the `schedules` file and refuses it in a module — which is exactly what the
+            // first version of this section did, and the manifest then did not resolve. The
+            // lines go where the model says they go; the module says where to look.
+            out.push_str(&format!(
+                "\n\
+# === The jobs this machine already runs on a schedule ===\n\
+#\n\
+#   {} schedule(s) were written to the `schedules` file, not here: a schedule runs for\n\
+#   the whole machine, so the grammar keeps it out of modules. Read them with\n\
+#   `shall schedule list`. They were read from {}.\n\
+#\n\
+#   A job whose shape no `schedule:` line can hold — `@reboot`, a launchd `StartInterval`,\n\
+#   an `OnCalendar` step — is in the run's report with the field that stopped it, never\n\
+#   widened to the nearest thing a line can say. Deleting a line STOPS the job on the next\n\
+#   sync.\n\
+#\n",
+                found.schedules.len(),
+                found.schedules_source.join(", ")
+            ));
         }
 
         if !found.shell_managers.is_empty() {
@@ -1722,6 +1800,276 @@ impl Adopter {
         found
             .repositories
             .sort_by(|a, b| (&a.backend, &a.spec).cmp(&(&b.backend, &b.spec)));
+    }
+
+    /// The schedules this machine already runs, offered as `schedule:` lines (C41).
+    ///
+    /// Three dialects are read here — the five-field crontab (`/etc/crontab`, `/etc/cron.d`, the
+    /// invoking account's own crontab) and systemd timers (system and user) — and each job either
+    /// arrives as a line or is **refused by name with the field that stopped it**. launchd and
+    /// Task Scheduler are not read: their shapes are `StartInterval` and trigger graphs, neither
+    /// of which a `cron=` line can state, and reporting "nothing found" for a dialect that was
+    /// never opened is the failure II.99 exists to prevent (`#217`).
+    async fn discover_schedules(
+        &self,
+        found: &mut Discovery,
+        declared: &DeclaredOutside,
+        scope: &AdoptScope,
+    ) {
+        use crate::app::schedulers as dialect;
+
+        let mut readings: Vec<(String, dialect::Reading)> = Vec::new();
+
+        // The system crontab and the drop-in directory. `/etc/crontab` has a user column and so
+        // does every file in `/etc/cron.d` — reading either as a user crontab would take the
+        // account for the first word of the command.
+        if !scope.user_only {
+            for (path, prefix) in [
+                ("/etc/crontab", "cron-etc-crontab"),
+                ("/etc/anacrontab", "cron-etc-anacrontab"),
+            ] {
+                match tokio::fs::read_to_string(path).await {
+                    Ok(text) => readings.push((
+                        path.to_string(),
+                        dialect::crontab(&text, path, true, prefix),
+                    )),
+                    // Absent is not a failure: a machine without `/etc/crontab` runs no cron job
+                    // from it, and saying so per file would be noise on every other distro.
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => found.skipped_backends.push((
+                        path.to_string(),
+                        format!(
+                            "could not be read ({}), so the jobs it holds are not offered — a \
+                             crontab that could not be read is not an empty one",
+                            e
+                        ),
+                    )),
+                }
+            }
+            let dir = "/etc/cron.d";
+            let mut entries: Vec<std::path::PathBuf> = Vec::new();
+            if let Ok(mut dir) = tokio::fs::read_dir(dir).await {
+                while let Ok(Some(entry)) = dir.next_entry().await {
+                    entries.push(entry.path());
+                }
+            }
+            entries.sort();
+            for path in entries {
+                let Ok(text) = tokio::fs::read_to_string(&path).await else {
+                    continue;
+                };
+                let prefix = dialect::name_from(
+                    "cron",
+                    &format!(
+                        "etc-cron-d-{}",
+                        path.file_name().and_then(|n| n.to_str()).unwrap_or("job")
+                    ),
+                );
+                let shown = path.display().to_string();
+                readings.push((
+                    shown.clone(),
+                    dialect::crontab(&text, &shown, true, &prefix),
+                ));
+            }
+        }
+
+        // The invoking account's own crontab. `crontab -l` answers with an error when there is
+        // none, and that error is not a finding — it is the ordinary case.
+        let refs: Vec<&str> = vec!["-l"];
+        if let Ok(text) = self.executor.run_output("crontab", &refs, false).await {
+            if !text.trim().is_empty() && !text.contains("no crontab for") {
+                readings.push((
+                    "crontab -l (this account)".to_string(),
+                    dialect::crontab(&text, "this account's crontab", false, "cron-user"),
+                ));
+            }
+        }
+        // The dialects this run actually opened, for the manifest's "Read from" sentence — it is
+        // what tells the person which schedulers were looked at and which were not.
+        for (path, _) in &readings {
+            if !found.schedules_source.iter().any(|source| source == path) {
+                found.schedules_source.push(path.clone());
+            }
+        }
+
+        // systemd timers, system and user. `list-timers` names the units and a `show` per unit
+        // says what its calendar is; a timer with no `OnCalendar` is refused by name rather than
+        // offered empty.
+        let mut systemctl: Vec<(Vec<&str>, &str)> = Vec::new();
+        if scope.user_only {
+            systemctl.push((vec!["--user"], "user"));
+        } else {
+            systemctl.push((vec![], "system"));
+            systemctl.push((vec!["--user"], "user"));
+        }
+        for (scope_args, label) in systemctl {
+            let mut list: Vec<&str> = scope_args.clone();
+            list.extend(["--all", "--no-pager", "list-timers"]);
+            let listing = match self.executor.run_output("systemctl", &list, false).await {
+                Ok(out) => out,
+                // A machine with no systemd, or a user instance that is not running, has no
+                // timers to report and says nothing: this is the ordinary case on a Mac.
+                Err(_) => continue,
+            };
+            let mut reading = dialect::Reading::default();
+            for unit in dialect::timers_in_listing(&listing) {
+                // All three properties in one call: a current systemd answers `-p OnCalendar`
+                // with nothing and puts the recurrence in `TimersCalendar` instead, so asking
+                // only for the first made every timer on this host look like an interval.
+                let mut show: Vec<&str> = scope_args.clone();
+                show.extend([
+                    "--no-pager",
+                    "show",
+                    "-p",
+                    "OnCalendar",
+                    "-p",
+                    "TimersCalendar",
+                    "-p",
+                    "TimersMonotonic",
+                    &unit,
+                ]);
+                let property = self
+                    .executor
+                    .run_output("systemctl", &show, false)
+                    .await
+                    .unwrap_or_default();
+                let name = dialect::name_from(&format!("timer-{}", label), &unit);
+                match dialect::calendar_of(&property) {
+                    dialect::Calendar::Spec(spec) => match dialect::on_calendar_to_cron(&spec) {
+                        Some(cron) => {
+                            // The command is the unit that fires. A `schedule:` line runs a
+                            // command, so the unit's own activation is what it states.
+                            let activates =
+                                format!("systemctl start {}", unit.replace(".timer", ""));
+                            reading.found.push(dialect::Found {
+                                name,
+                                cron,
+                                command: activates,
+                                user: None,
+                                origin: format!("systemctl {} list-timers: {}", label, unit),
+                            });
+                        }
+                        None => reading.refused.push((
+                            name,
+                            format!(
+                                "`OnCalendar={}` ({}) is not a calendar a `cron=` line can \
+                                 state exactly — a step, a second-granularity time or a \
+                                 month/day selector has no cron spelling, so it is refused \
+                                 rather than rounded to the nearest expression",
+                                spec, unit
+                            ),
+                        )),
+                    },
+                    dialect::Calendar::Interval(field) => reading.refused.push((
+                        name,
+                        format!(
+                            "`{}` has no `OnCalendar` — it is driven by `{}`, and a `schedule:` \
+                             line carries a calendar (`cron=`), not an interval",
+                            unit, field
+                        ),
+                    )),
+                    // Not the same finding as an interval, and saying so would be a confident
+                    // wrong answer about a timer whose calendar this systemd did not print.
+                    dialect::Calendar::Unreadable => reading.refused.push((
+                        name,
+                        format!(
+                            "`{}`'s calendar could not be read: `systemctl show` printed neither \
+                             `OnCalendar` nor `TimersCalendar` for it, so it is reported rather \
+                             than declared with a schedule invented for it",
+                            unit
+                        ),
+                    )),
+                }
+            }
+            if !reading.found.is_empty() || !reading.refused.is_empty() {
+                found
+                    .schedules_source
+                    .push(format!("systemctl --{} list-timers", label));
+                readings.push((format!("systemd {} timers", label), reading));
+            }
+        }
+
+        for (origin, reading) in readings {
+            let _ = origin;
+            for job in reading.found {
+                if let Some((_, file)) = declared.schedules.iter().find(|(n, _)| *n == job.name) {
+                    found.skipped.push(Skipped {
+                        reason: format!("you already declare it, in {}", file),
+                        package: Package::new(job.name.clone(), "schedule"),
+                    });
+                    continue;
+                }
+                // Round-tripped through the parser: a command carrying a comma or an `@key=`
+                // shape does not come back out as the same line, and a manifest line that
+                // declares something else is worse than a missing one.
+                let line = schedule_line(&job);
+                let parses_back = matches!(
+                    crate::config::grammar::statement::parse(
+                        &crate::config::grammar::Origin::argument(),
+                        &line,
+                        &|_: &str| false
+                    ),
+                    Ok(crate::config::grammar::Statement::Schedule(ref name, _)) if name == &job.name
+                );
+                if !parses_back {
+                    found.skipped.push(Skipped {
+                        reason: format!(
+                            "`{}` cannot be stated as a `schedule:` line — its command carries \
+                             characters the option grammar reads as something else",
+                            job.command
+                        ),
+                        package: Package::new(job.name.clone(), "schedule"),
+                    });
+                    continue;
+                }
+                found.schedules.push(job);
+            }
+            for (name, reason) in reading.refused {
+                found.skipped.push(Skipped {
+                    reason,
+                    package: Package::new(name, "schedule"),
+                });
+            }
+        }
+
+        found.schedules.sort_by(|a, b| a.name.cmp(&b.name));
+    }
+
+    /// Write the found schedules into the `schedules` file, in the block form that file uses.
+    ///
+    /// Parsed before it is written, the same way `schedule add` does it: a bad cron or a command
+    /// carrying something the option grammar reads differently must be refused at the door, not
+    /// discovered on the next `plan` — a schedules file that does not parse makes the model
+    /// unreadable, and that is the whole configuration, not one timer.
+    async fn write_schedules(&self, found: &Discovery) -> Result<()> {
+        let file = self.config.layout().schedules_file();
+        let mut body = tokio::fs::read_to_string(&file).await.unwrap_or_default();
+        let mut written = 0;
+        for job in &found.schedules {
+            // Already in the file under that name: the discovery step reports it as "you
+            // already declare it", so there is nothing to do here.
+            if let Ok(updated) =
+                crate::model::schedule::add_line(&body, &job.name, &job.cron, &job.command, None)
+            {
+                body = updated;
+                written += 1;
+            }
+        }
+        if written == 0 {
+            return Ok(());
+        }
+        let registry = self.backends.registry().clone();
+        let known = move |b: &str| registry.get(b).is_some();
+        crate::config::grammar::parse_document(&file, &body, &known)?;
+        if self.config.dry_run {
+            println!("would write {} schedule(s) to {}", written, file.display());
+            println!("{:-<64}", "");
+            println!("Schedules that would be written:\n{}", body);
+            return Ok(());
+        }
+        crate::utils::file::persist_off_the_runtime(&file, &body).await?;
+        println!("Wrote {} schedule(s) to {}.", written, file.display());
+        Ok(())
     }
 
     /// A read-only preview of what `adopt` would adopt. Runs the same crawl.

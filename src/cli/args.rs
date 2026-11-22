@@ -678,6 +678,12 @@ pub enum Commands {
         #[arg(long, value_name = "SCHEMA")]
         schema: Vec<String>,
 
+        /// Only the schedules registered for this account: the user crontab and user timers, and
+        /// nothing from `/etc`. A root-owned job is expressible (`schedule:` carries `user=`), so
+        /// the default takes everything.
+        #[arg(long)]
+        user: bool,
+
         /// Leave the shell frameworks and version managers out of the report, the rc files
         /// alone.
         #[arg(long)]

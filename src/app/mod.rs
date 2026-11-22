@@ -46,6 +46,7 @@ pub mod vcs;
 pub mod vocab;
 
 pub mod scheduler;
+pub mod schedulers;
 pub mod shell;
 
 pub use self::adopt::Adopter;

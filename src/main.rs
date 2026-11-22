@@ -793,6 +793,7 @@ async fn dispatch_declare(app: &App, cli: &Cli) -> Result<()> {
             schema,
             user_added,
             no_managers,
+            user,
         } => {
             handle_adopt(
                 app,
@@ -805,6 +806,7 @@ async fn dispatch_declare(app: &App, cli: &Cli) -> Result<()> {
                     schemas: schema.clone(),
                     user_added: *user_added,
                     no_managers: *no_managers,
+                    user_only: *user,
                 },
             )
             .await

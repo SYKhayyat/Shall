@@ -29,6 +29,7 @@ mod rebuild;
 mod run;
 mod sandbox;
 mod scheduler;
+mod schedulers;
 mod session_liveness;
 mod shim_manager;
 mod snapshot_restore;

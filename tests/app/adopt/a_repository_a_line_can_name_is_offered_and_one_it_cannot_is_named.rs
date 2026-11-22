@@ -183,6 +183,7 @@ async fn user_added_refuses_by_name_when_no_base_table_exists() {
     let m = adopter(Arc::new(BackendRegistry::default()));
     let scope = AdoptScope {
         user_added: true,
+        user_only: true,
         ..AdoptScope::default()
     };
     let found = m.discover_scoped(&scope).await.unwrap();

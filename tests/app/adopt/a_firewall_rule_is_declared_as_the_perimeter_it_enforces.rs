@@ -53,6 +53,7 @@ fn scope(backends: &[&str], added_only: bool, inbound: bool) -> AdoptScope {
         schemas: Vec::new(),
         user_added: false,
         no_managers: true,
+        user_only: true,
     }
 }
 

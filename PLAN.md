@@ -391,7 +391,7 @@ laptop each one covers:
 - [x] #62 adopt discovers shell configuration (C42, partial: #215)
 - [x] #61 adopt discovers repositories and PPAs (C40, partial: #214)
 - [x] #64 adopt surfaces services by default (C38)
-- [ ] #60 adopt discovers schedules — C41 ruled, NOT built (four dialect readers, see decisions.md C41)
+- [ ] #60 adopt discovers schedules — C41 partial: cron and systemd timers built, launchd and Task Scheduler owed (#217) (see decisions.md C41)
 - [x] #63 adopt enumerates desktop and OS settings (C43; macOS/Windows remainder #213)
 - [x] #65 adopt surfaces firewall rules by default (C39)
 

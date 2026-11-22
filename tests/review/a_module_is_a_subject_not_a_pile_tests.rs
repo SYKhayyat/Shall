@@ -36,7 +36,15 @@ const LINES: usize = 2_000;
 /// one subject and is now the shared vocabulary plus one file per scheduler Shall can drive. A
 /// table with no rows still gates in both directions: a file that grows past the line has to argue
 /// for itself here, and there is no longer a row to inherit a reason from.
-const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[];
+const TOO_BIG_FOR_NOW: &[(&str, usize, &str)] = &[(
+    "src/app/adopt.rs",
+    2120,
+    "one `discover_*` per source, each taking (&Executor, &Backends, &mut Discovery) and moving \
+     beside the reader it drives: firewall → `backends/firewall.rs`, services → \
+     `backends/service.rs`, repositories → `backends/generic/search.rs`, settings → \
+     `backends/setting.rs`, schedules → `app/schedulers.rs`. What stays is what is genuinely \
+     `adopt`'s own: the crawl, the scope, the manifest, and the preview.",
+)];
 
 fn rust_files(root: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(root) else {
