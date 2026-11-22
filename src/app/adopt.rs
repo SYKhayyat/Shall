@@ -1828,22 +1828,30 @@ impl Adopter {
                 ("/etc/crontab", "cron-etc-crontab"),
                 ("/etc/anacrontab", "cron-etc-anacrontab"),
             ] {
-                match tokio::fs::read_to_string(path).await {
+                // Through the executor, so a preview and a test see the same bytes the run
+                // would: the VFS answers first in a dry run, and a mocked executor is not
+                // silently reading this host's real crontab.
+                match self.executor.read_file(std::path::Path::new(path)).await {
                     Ok(text) => readings.push((
                         path.to_string(),
                         dialect::crontab(&text, path, true, prefix),
                     )),
                     // Absent is not a failure: a machine without `/etc/crontab` runs no cron job
-                    // from it, and saying so per file would be noise on every other distro.
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                    Err(e) => found.skipped_backends.push((
-                        path.to_string(),
-                        format!(
-                            "could not be read ({}), so the jobs it holds are not offered — a \
+                    // from it, and saying so per file would be noise on every other distro. A
+                    // file that is *there* and unreadable is a different finding.
+                    Err(e) => {
+                        if tokio::fs::metadata(path).await.is_err() {
+                            continue;
+                        }
+                        found.skipped_backends.push((
+                            path.to_string(),
+                            format!(
+                                "could not be read ({}), so the jobs it holds are not offered — a \
                              crontab that could not be read is not an empty one",
-                            e
-                        ),
-                    )),
+                                e
+                            ),
+                        ));
+                    }
                 }
             }
             let dir = "/etc/cron.d";

@@ -88,7 +88,9 @@ fn the_calendars_a_cron_line_states_exactly_are_mapped_and_the_rest_are_not() {
     );
     assert_eq!(
         on_calendar_to_cron("Sat,Sun 08:15:00").as_deref(),
-        Some("15 8 * * 6,0")
+        Some("15 8 * * 6,7"),
+        "Sunday is 7 here: this tree's cron parser refuses 0 in that field, so a `0` produced a \
+         schedules file that did not parse"
     );
     // Two shapes this host's own timers are written in, both of which the first version of this
     // mapping refused: `*` is a value in both dialects, and a weekday may precede the date part.

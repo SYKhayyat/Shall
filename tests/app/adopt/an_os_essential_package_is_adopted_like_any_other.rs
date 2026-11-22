@@ -50,9 +50,17 @@ async fn an_os_essential_package_is_adopted_like_any_other() {
         vec!["bash", "jq"],
         "the OS calling `bash` essential is a reason to declare it, not to skip it"
     );
+    // The package channel, not global emptiness: `discover` also reads this host's schedules and
+    // settings, and a runner with a cron file would fail a test about package essentials.
+    let packages_left_alone: Vec<&str> = found
+        .skipped
+        .iter()
+        .filter(|s| s.package.backend == "apt")
+        .map(|s| s.package.name.as_str())
+        .collect();
     assert!(
-        found.skipped.is_empty(),
+        packages_left_alone.is_empty(),
         "nothing is left alone for being essential: {:?}",
-        found.skipped
+        packages_left_alone
     );
 }

@@ -288,7 +288,11 @@ fn days_to_cron(days: &str) -> Option<String> {
             "thu" => 4,
             "fri" => 5,
             "sat" => 6,
-            "sun" => 0,
+            // 7, not 0: the cron parser this tree uses refuses `0` in the day-of-week field
+            // ("Days of Week must be greater than or equal to 1"), so a Sunday mapped to `0`
+            // produced a schedules file that did not parse — found by CI on a machine whose
+            // `e2scrub_all` timer runs on Sunday.
+            "sun" => 7,
             _ => return None,
         })
     }

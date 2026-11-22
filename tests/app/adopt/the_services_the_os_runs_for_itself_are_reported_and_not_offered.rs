@@ -125,5 +125,18 @@ async fn the_services_the_os_runs_for_itself_are_reported_and_not_offered() {
         vec!["dbus", "docker", "nginx", "systemd-journald.service"],
         "`--all-services` takes them all, still spelled as the init spelled them"
     );
-    assert!(found.skipped.is_empty(), "{:?}", found.skipped);
+    // Only the service channel: `discover` also reads this host's schedules, cron files and
+    // settings, and a test that asserts global emptiness fails on whichever runner happens to
+    // have a cron job.
+    let service_left_alone: Vec<&str> = found
+        .skipped
+        .iter()
+        .filter(|s| s.package.backend == "service")
+        .map(|s| s.package.name.as_str())
+        .collect();
+    assert!(
+        service_left_alone.is_empty(),
+        "`--all-services` leaves no service out: {:?}",
+        service_left_alone
+    );
 }
