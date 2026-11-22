@@ -59,6 +59,18 @@ ignore = [
     # enumerated and `jiff` named as the target. `cargo tree -i chrono` coming back empty is the
     # check, and then this row is deleted in the same change that removes the dependency.
     "RUSTSEC-2026-0543",
+
+    # RUSTSEC-2026-0592 — `url` 2.5.8 has a stack overflow in `Url::origin()` on nested `blob:`
+    # URLs. **There is no version to move to**: 2.5.8 is the newest release, and
+    # `cargo update -p url --dry-run` locks nothing new. `url` arrives through the HTTP stack
+    # (`serde_urlencoded` and its neighbours) rather than through a path Shall calls itself, so
+    # the exposure is "a URL parsed from something a repository served us", and the advisory's
+    # own reproduction is a `blob:` URL nested in itself many times.
+    #
+    # **What would end this entry:** a `url` release carrying the fix, or the dependency that
+    # pulls it in moving off it. Filed as #218 so the ignore cannot outlive the problem quietly —
+    # the row goes in the same change that makes `cargo update -p url` lock a newer version.
+    "RUSTSEC-2026-0592",
 ]
 
 [licenses]

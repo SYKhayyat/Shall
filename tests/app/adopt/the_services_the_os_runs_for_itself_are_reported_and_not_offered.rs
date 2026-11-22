@@ -94,8 +94,14 @@ async fn the_services_the_os_runs_for_itself_are_reported_and_not_offered() {
     let adopted: Vec<&str> = found.adopt.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(adopted, vec!["docker", "nginx"], "what somebody chose");
 
-    let left_out: Vec<&str> = found
+    // The service channel only. `skipped` is shared by every source `adopt` reads now, and a
+    // runner with a cron file or a changed setting has entries this test is not about.
+    let services_skipped: Vec<&Skipped> = found
         .skipped
+        .iter()
+        .filter(|s| s.package.backend == "service")
+        .collect();
+    let left_out: Vec<&str> = services_skipped
         .iter()
         .map(|s| s.package.name.as_str())
         .collect();
@@ -104,7 +110,7 @@ async fn the_services_the_os_runs_for_itself_are_reported_and_not_offered() {
         vec!["dbus", "systemd-journald.service"],
         "the OS's own services, reported so the offer is complete minus a named set"
     );
-    for s in &found.skipped {
+    for s in services_skipped {
         assert!(
             s.reason.contains("--all-services"),
             "the reason names the flag that takes it: {}",
