@@ -81,6 +81,7 @@ fn an_adopted_service_is_a_live_line_carrying_the_state_it_was_found_in() {
     let root = fixture("grade5-adopt-services");
     let (out, code) = run(&root, &["adopt", "-y"]);
     assert_eq!(code, 0, "{out}");
+    drop_adopted_schedules(&root);
 
     let lines = declared_in(&root.join("config").join("modules").join("adopted.txt"));
     let services: Vec<&String> = lines.iter().filter(|l| l.starts_with("service:")).collect();
@@ -162,6 +163,22 @@ fn an_adopted_service_is_a_live_line_carrying_the_state_it_was_found_in() {
     );
 }
 
+/// The schedules a bare `adopt` writes are dropped before the plan assertions below.
+///
+/// **The two halves are different claims.** `adopt` now also reads the jobs this machine runs
+/// (C41) and writes them to the `schedules` file — on a CI runner that is `/etc/cron.d`, and
+/// those lines are genuinely not yet provisioned, so a plan that places them is *correct*. What
+/// these tests assert is about **services**: an adopted service is in the state it was adopted
+/// in and must not queue up. Deleting the file keeps the schedule channel out of a service
+/// test's measurement instead of letting host state decide whether the test passes.
+///
+/// `#220` holds the two things the container cannot check: that a non-empty `schedules` file
+/// converges at all, and whether a job read from cron should be placed by cron rather than by
+/// systemd.
+fn drop_adopted_schedules(root: &std::path::Path) {
+    let _ = std::fs::remove_file(root.join("config").join("schedules"));
+}
+
 /// The half of `Y7a` that made every later `install` fail, and the reason it took a real
 /// machine to see: `adopt` writes `service:X@status=running` for every running service, and
 /// until `in_effect` could answer for a `service:` those lines were placed on the *first* sync
@@ -175,6 +192,7 @@ fn adopting_a_running_service_leaves_nothing_to_place() {
     let root = fixture("grade5-adopt-nothing-to-place");
     let (out, code) = run(&root, &["adopt", "-y"]);
     assert_eq!(code, 0, "{out}");
+    drop_adopted_schedules(&root);
 
     let lines = declared_in(&root.join("config").join("modules").join("adopted.txt"));
     let services = lines.iter().filter(|l| l.starts_with("service:")).count();
