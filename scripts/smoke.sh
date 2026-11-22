@@ -134,6 +134,31 @@ else
     bash scripts/harness-logic-test.sh 2>&1 | tail -15
 fi
 
+# --------------------------------- 3b. the task list agrees with the tracker
+#
+# Two lists, two tools, and until 2026-11-22 nothing read both: eight items sat open on issues
+# that had shipped and thirteen open issues had no item. The check maps exit 2 to a **named
+# skip**, because a machine without `gh` or `comtai` has verified nothing.
+if [ ! -f scripts/tracker-agrees.sh ]; then
+    skip "tracker-agrees" "the script is not in this tree"
+else
+    tracker_out="$(bash scripts/tracker-agrees.sh 2>&1)"; tracker_code=$?
+    case "$tracker_code" in
+        0) pass "tracker-agrees — $(printf '%s' "$tracker_out" | tail -1)" ;;
+        2) skip "tracker-agrees" "$(printf '%s' "$tracker_out" | tail -1 | sed 's/^SKIP: //')" ;;
+        *) fail "tracker-agrees"; printf '%s\n' "$tracker_out" | grep -E "^FAIL" | head -10 ;;
+    esac
+fi
+
+if [ ! -f scripts/tracker-agrees-test.sh ]; then
+    skip "tracker-agrees-test" "the test is not in this tree"
+elif bash scripts/tracker-agrees-test.sh >/dev/null 2>&1; then
+    pass "tracker-agrees-test"
+else
+    fail "tracker-agrees-test"
+    bash scripts/tracker-agrees-test.sh 2>&1 | grep -E "^FAIL" | head -10
+fi
+
 # -------------------------------- 4. the release/install surface agrees with itself
 step "4. THE RELEASE/INSTALL SURFACE AGREES WITH ITSELF"
 #
