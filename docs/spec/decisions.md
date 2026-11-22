@@ -11688,6 +11688,16 @@ the ruling is fresh:
 - **`--user` stops before it asks, not after.** With it, `/etc` is never opened and the system
   instance of systemd is never queried — filtering afterwards would mean a root job had already
   been read, and "we asked and then dropped it" is the shape `II.99` forbids.
+- **A container is the first machine that refused it, and the refusal is the right one.** The
+  ubuntu integration image has readable `/etc/crontab` and `/etc/cron.d` and no systemd bus, so
+  `adopt` wrote jobs that `sync` then could not place — `systemctl: Failed to connect to bus`. The
+  product half is correct (a config may describe what the local box cannot run; the file is the
+  portable part), so the harness adopts with `--user` in that image and says why. What no CI leg
+  covers now is a *non-empty* `schedules` file being converged (`#220`).
+- **A schedule read from cron is placed as a systemd timer.** That is a dialect change — the same
+  job, run by a different scheduler — and on a machine with cron and no systemd it is
+  unplaceable. Whether Shall should write `/etc/cron.d` when the job came from there is a model
+  question with no entry in this register yet; `#220` holds it.
 - **Two readers remain owed: launchd and Task Scheduler (`#217`).** They are not stubbed to report
   "nothing found", because a dialect that was never opened is not a dialect with no schedules; the
   manifest names the dialects it read, and those two are absent from that sentence until they are
