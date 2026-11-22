@@ -90,8 +90,13 @@ fn the_ignore_list_does_not_grow_quietly() {
     // (`chrono` unmaintained, `deny.toml` names the 39 call sites and what ends it) is a second
     // entry, so the bound moved with it in the same change rather than being found by the next
     // person at 1. The mechanism is unchanged: growth is a decision somebody makes with a diff.
+    // **3, raised deliberately on 2026-11-22.** RUSTSEC-2026-0592 (`url` 2.5.8, no release
+    // carries the fix yet) is a third entry, so the bound moved with it in the same change —
+    // `#218` is the issue that ends it, and it goes out of this list the day `cargo update -p
+    // url` locks something newer. The mechanism is unchanged: growth is a decision somebody
+    // makes with a diff.
     assert!(
-        ids.len() <= 2,
+        ids.len() <= 3,
         "{} advisories are silenced. Each one is a build made green by a decision rather than \
          a fix: {ids:?}",
         ids.len()
