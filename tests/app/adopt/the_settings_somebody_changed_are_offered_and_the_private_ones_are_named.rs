@@ -1,3 +1,9 @@
+// The `gsettings` row is Linux-only and the store's own `os` column is what decides which rows
+// apply, so this drives on Linux only. The parsing half it rests on is not gated:
+// `backends::setting::a_changed_key_is_a_schema_path_and_the_key_appended` runs everywhere, and on
+// a machine with no store at all `adopt` reports "no settings store Shall knows is on this machine".
+#![cfg(target_os = "linux")]
+
 // C43: `adopt` offers the settings somebody changed, never every key a store holds, and the ones
 // it will not offer are named with the reason — a path or an account is not a preference, and a
 // value `@value=` cannot hold is not written as one that means something else.
