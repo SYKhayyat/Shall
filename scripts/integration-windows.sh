@@ -523,6 +523,77 @@ stays_ok() { # stays_ok "desc" <tag> cmd... — cmd must SUCCEED now, having bee
     echo "  FAIL  $_s_desc (it is gone)"; return 1
 }
 
+# A manager whose own uninstall deletes the package and keeps its launcher.
+#
+# **The entry is not an excuse any more; it is the expected leftover, and the assertion is that
+# Shall NAMED it** (`#136`, C11). `assert_binary_gone` used to soften these to a `soft`, which
+# recorded the leftover and left the promise broken — the file still answered, and the user was
+# never told. Shall deletes no files a manager wrote, so what it owes is the sentence; the
+# strict check still runs first, so a manager that starts cleaning up passes as gone.
+removal_leaves_binary() {
+    case "$1" in
+        bun) echo "bun's own \`remove -g\` drops the package and keeps its .exe/.bunx launchers (reproduced against bun directly, with no Shall involved)" ;;
+        # nimble's own uninstall removes the package from its listing and leaves the `.cmd`
+        # launcher its install wrote into `~\.nimble\bin`. Shall runs exactly `nimble uninstall
+        # -y <pkg>`; on run 42361477256 it returned 0 and nimble's listing dropped the package,
+        # so the file survives **nimble's** uninstall, not Shall's removal. The Linux control
+        # (same nimble version, no Shall) has its symlink removed by the same command, so this
+        # is the Windows wrapper path rather than a cleanup nimble never does. Not reproduced by
+        # hand on Windows: the evidence is the run.
+        nimble) echo "nimble's own Windows uninstall drops the package and leaves the .cmd launcher its install wrote in ~/.nimble/bin (run 42361477256)" ;;
+        *)   echo "" ;;
+    esac
+}
+
+# assert_binary_gone <backend> <binary> <what-the-name-resolved-to-before-the-install>
+#
+# The question is "did this backend's install get undone", NOT "does this name resolve".
+# Two managers can ship a binary of the same name, and one of them may hold it on
+# purpose: cabal's canary is `hello`, cabal has no uninstall verb, so its `hello` stays
+# for the rest of the run — and go's canary is also `hello`. Asking PATH handed cabal's
+# leftover to go as a failure, on a removal that had worked.
+#
+# So the assertion is against the state before the install: whatever the install added
+# must be gone, and whatever was already there is not this backend's to answer for.
+assert_binary_gone() {
+    _be="$1"; _bin="$2"; _was="$3"
+    _now="$(path_of "$_bin")"
+    # A binary that was never on PATH is "gone" by PATH from the moment it was installed, so
+    # this check answered yes before the removal ran. Where the install SAID the file went is
+    # the only place that can tell, and it is the fourth argument.
+    [ -n "$_now" ] || _now="$(off_path_copy "$_be" "$_bin" "${4:-}")"
+    if [ "$_now" = "$_was" ]; then
+        if [ -n "$_now" ]; then
+            PASS=$((PASS + 1))
+            echo "  PASS  $_be: $_bin is back to the pre-install $_now (not this backend's copy)"
+        else
+            PASS=$((PASS + 1)); echo "  PASS  $_be: $_bin is gone"
+        fi
+        return 0
+    fi
+    _known="$(removal_leaves_binary "$_be")"
+    if [ -n "$_known" ]; then
+        # The leftover is expected from this manager, so the question is whether the removal
+        # said so. Asked of the removal's OWN output (`/tmp/itw-remove.out`, written by the
+        # call site), not of the lifecycle log: the install log names where the binary went, so
+        # grepping that would pass before the removal ran.
+        _base="$(basename "$_now")"
+        if [ -s /tmp/itw-remove.out ] && grep -qF -- "$_base" /tmp/itw-remove.out; then
+            PASS=$((PASS + 1))
+            echo "  PASS  $_be: $_bin is still there after removal, and Shall named it — $_known"
+            return 0
+        fi
+        FAILC=$((FAILC + 1))
+        FAILED_NAMES="$FAILED_NAMES\n    - $_be: $_bin is still there after removal and the removal said nothing about it (at $_now)"
+        echo "  FAIL  $_be: $_bin is still there after removal and the removal said nothing about it — $_known"
+        return 1
+    fi
+    FAILC=$((FAILC + 1))
+    FAILED_NAMES="$FAILED_NAMES\n    - $_be: $_bin is still on PATH after removal (at $_now)"
+    echo "  FAIL  $_be: $_bin is still on PATH after removal (at $_now)"
+    return 1
+}
+
 # Why an install failed — a question, not an assumption (E5).
 #
 # Both harnesses used to soften ANY install failure into a claim about the network, and skip
@@ -1636,76 +1707,6 @@ no_lifecycle_reason() {
     esac
 }
 
-# A manager whose own uninstall deletes the package and keeps its launcher.
-#
-# **The entry is not an excuse any more; it is the expected leftover, and the assertion is that
-# Shall NAMED it** (`#136`, C11). `assert_binary_gone` used to soften these to a `soft`, which
-# recorded the leftover and left the promise broken — the file still answered, and the user was
-# never told. Shall deletes no files a manager wrote, so what it owes is the sentence; the
-# strict check still runs first, so a manager that starts cleaning up passes as gone.
-removal_leaves_binary() {
-    case "$1" in
-        bun) echo "bun's own \`remove -g\` drops the package and keeps its .exe/.bunx launchers (reproduced against bun directly, with no Shall involved)" ;;
-        # nimble's own uninstall removes the package from its listing and leaves the `.cmd`
-        # launcher its install wrote into `~\.nimble\bin`. Shall runs exactly `nimble uninstall
-        # -y <pkg>`; on run 42361477256 it returned 0 and nimble's listing dropped the package,
-        # so the file survives **nimble's** uninstall, not Shall's removal. The Linux control
-        # (same nimble version, no Shall) has its symlink removed by the same command, so this
-        # is the Windows wrapper path rather than a cleanup nimble never does. Not reproduced by
-        # hand on Windows: the evidence is the run.
-        nimble) echo "nimble's own Windows uninstall drops the package and leaves the .cmd launcher its install wrote in ~/.nimble/bin (run 42361477256)" ;;
-        *)   echo "" ;;
-    esac
-}
-
-# assert_binary_gone <backend> <binary> <what-the-name-resolved-to-before-the-install>
-#
-# The question is "did this backend's install get undone", NOT "does this name resolve".
-# Two managers can ship a binary of the same name, and one of them may hold it on
-# purpose: cabal's canary is `hello`, cabal has no uninstall verb, so its `hello` stays
-# for the rest of the run — and go's canary is also `hello`. Asking PATH handed cabal's
-# leftover to go as a failure, on a removal that had worked.
-#
-# So the assertion is against the state before the install: whatever the install added
-# must be gone, and whatever was already there is not this backend's to answer for.
-assert_binary_gone() {
-    _be="$1"; _bin="$2"; _was="$3"
-    _now="$(path_of "$_bin")"
-    # A binary that was never on PATH is "gone" by PATH from the moment it was installed, so
-    # this check answered yes before the removal ran. Where the install SAID the file went is
-    # the only place that can tell, and it is the fourth argument.
-    [ -n "$_now" ] || _now="$(off_path_copy "$_be" "$_bin" "${4:-}")"
-    if [ "$_now" = "$_was" ]; then
-        if [ -n "$_now" ]; then
-            PASS=$((PASS + 1))
-            echo "  PASS  $_be: $_bin is back to the pre-install $_now (not this backend's copy)"
-        else
-            PASS=$((PASS + 1)); echo "  PASS  $_be: $_bin is gone"
-        fi
-        return 0
-    fi
-    _known="$(removal_leaves_binary "$_be")"
-    if [ -n "$_known" ]; then
-        # The leftover is expected from this manager, so the question is whether the removal
-        # said so. Asked of the removal's OWN output (`/tmp/itw-remove.out`, written by the
-        # call site), not of the lifecycle log: the install log names where the binary went, so
-        # grepping that would pass before the removal ran.
-        _base="$(basename "$_now")"
-        if [ -s /tmp/itw-remove.out ] && grep -qF -- "$_base" /tmp/itw-remove.out; then
-            PASS=$((PASS + 1))
-            echo "  PASS  $_be: $_bin is still there after removal, and Shall named it — $_known"
-            return 0
-        fi
-        FAILC=$((FAILC + 1))
-        FAILED_NAMES="$FAILED_NAMES\n    - $_be: $_bin is still there after removal and the removal said nothing about it (at $_now)"
-        echo "  FAIL  $_be: $_bin is still there after removal and the removal said nothing about it — $_known"
-        return 1
-    fi
-    FAILC=$((FAILC + 1))
-    FAILED_NAMES="$FAILED_NAMES\n    - $_be: $_bin is still on PATH after removal (at $_now)"
-    echo "  FAIL  $_be: $_bin is still on PATH after removal (at $_now)"
-    return 1
-}
 
 # Remove the file this section's own install left behind, and say so.
 #
@@ -2281,7 +2282,20 @@ fi
 ok "update refreshes repository metadata" lx update
 ok "watch --once runs a single unattended reconcile" lx -y watch --once
 ok "search finds something" lx search "$PKG"
-ok "info reads a package's metadata" lx info "$PKG"
+# `info` describes what is INSTALLED, so it needs a subject and a manager to ask. Both were
+# missing: the canary section before this one removes every package it installs, and the name
+# was unpinned — so an absent `$PKG` went through bare-name resolution, which asks the machine
+# rather than the verb. Measured on the 2026-11-24 nightly (`45171335650`): `info nimjson`
+# exited 1 with "no manager reported `nimjson`, but 2 of them could not be asked" after nimble
+# had dropped it, while the same line passed an hour earlier in section 5 when it was installed.
+# Pinned and installed, the assertion is about `info` and not about what the run before left.
+if lx -y apply "$BACKEND:$PKG" >/dev/null 2>&1; then
+    ok "info reads a package's metadata" lx info "$BACKEND:$PKG"
+    lx -y apply "$BACKEND:$PKG" --delete >/dev/null 2>&1 \
+        || soft "$PKG could not be taken back off after the info check — this sweep leaves it installed"
+else
+    soft "$BACKEND:$PKG did not install for the info check, so `info` had nothing to describe"
+fi
 ok "why explains a package's provenance" lx why "$PKG"
 ok "lock records installed versions" lx lock
 ok "upgrade --dry-run previews" lx --dry-run upgrade

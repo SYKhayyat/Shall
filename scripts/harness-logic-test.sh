@@ -24,6 +24,60 @@ if [ -z "$SOURCES" ]; then
 fi
 
 TOTAL=0; BAD=0
+HERE="$(cd "$(dirname "$0")/.." && pwd)"
+
+# ---- a harness may not call a function before the line that defines it ----------------------
+#
+# Bash resolves a name when the call executes, so a helper defined below the section that calls
+# it is `command not found` at runtime — and the harness's own error handling turns that into a
+# verdict about Shall. On the 2026-11-24 Windows nightly (`45171335650`) it read:
+#
+#     scripts/integration-windows.sh: line 1121: removal_leaves_binary: command not found
+#       FAIL  nimjson binary gone after uninstall (it is still there)
+#
+# `removal_leaves_binary` was defined at line 1646. Its whole purpose was to score that nimble
+# leftover as *named, therefore fine* (`#136`, C11), so the fix was in the tree and had never
+# run once. This is the same shape as the predicate bugs this file already tests — a wrong
+# verdict in a live harness — and it is the one class lift-and-`eval` cannot see, because
+# lifting a single function throws away the file order the bug lives in.
+for _src in $SOURCES; do
+    TOTAL=$((TOTAL + 1))
+    if _order_out="$(python3 "$HERE/scripts/harness-order-check.py" "$_src" 2>&1)"; then
+        echo "  ok    $(basename "$_src") defines every function before the line that can call it"
+    else
+        echo "  BAD   $(basename "$_src") calls a function before the line that defines it"
+        printf '%s\n' "$_order_out" | sed 's/^/        /'
+        BAD=$((BAD + 1))
+    fi
+done
+
+# The check has to be able to fail, and it has to stay quiet on the ordering that is sound: a
+# helper defined below a *caller* whose own first invocation is later than the definition is
+# fine, and `canary` in the Windows harness is exactly that shape. Three cases, because a gate
+# with only the failing case cannot tell a fix from a check that reports everything.
+_order_case() { # what want body
+    _oc_dir="$(mktemp -d)"
+    # The fixture is written with `%b`, so it stays one physical line here: this script is itself
+    # read by the check, and a fixture pasted across four lines is four definitions at column 0
+    # — the check then reports its own test data, which is a false positive it cannot tell from
+    # a real one.
+    printf '%b\n' "$3" > "$_oc_dir/case.sh"
+    if python3 "$HERE/scripts/harness-order-check.py" "$_oc_dir/case.sh" >/dev/null 2>&1; then
+        _oc_got=clean
+    else
+        _oc_got=caught
+    fi
+    rm -rf "$_oc_dir"
+    TOTAL=$((TOTAL + 1))
+    if [ "$_oc_got" = "$2" ]; then
+        echo "  ok    order check: $1 -> $_oc_got"
+    else
+        echo "  BAD   order check: $1 -> $_oc_got, wanted $2"; BAD=$((BAD + 1))
+    fi
+}
+_order_case "a helper called above the line that defines it" caught 'runner() { helper2; }\nrunner\nhelper2() { echo hi; }'
+_order_case "a helper defined below the caller, invoked after both" clean 'runner() { helper3; }\nlater() { runner; }\nhelper3() { echo hi; }\nlater'
+_order_case "a function that calls itself" clean 'f() { f; }\nf'
 
 # Pull one function's definition out of a harness, so this file tests what CI runs rather
 # than a copy of it. Handles both the one-line `f() { …; }` form and the braces-on-their-
