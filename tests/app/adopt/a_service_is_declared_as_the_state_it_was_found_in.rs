@@ -36,3 +36,39 @@ fn a_service_is_declared_as_the_state_it_was_found_in() {
     // A package carries no options, because its name already said everything the listing did.
     assert!(text.contains("\napt:jq\n"), "{text}");
 }
+
+/// A unit found in the invoking account's own domain is written into that domain (`#211`).
+///
+/// The discovery marks the candidate; without the mark reaching the line, `adopt` would write
+/// `service:gpg-agent@status=running` and the first `sync` would enable and start that unit for
+/// the whole machine — a different service from the one that was adopted, under the same name.
+#[test]
+fn a_unit_found_in_an_accounts_domain_is_declared_in_it() {
+    let options = HashMap::from([(
+        "service".to_string(),
+        vec![("status".to_string(), "running".to_string())],
+    )]);
+    let mut mine = Package::new("gpg-agent", "service");
+    mine.properties
+        .insert("user".to_string(), "alice".to_string());
+    let found = Discovery {
+        adopt: vec![mine, Package::new("sshd", "service")],
+        ..Default::default()
+    };
+    let m = Adopter::new(
+        over(Arc::new(BackendRegistry::default())),
+        Arc::new(Mutex::new(StateRegistry::default())),
+        &Config::default(),
+        quiet_executor(),
+    );
+    let text = m.render_manifest(&found, &options);
+
+    assert!(
+        text.contains("\nservice:gpg-agent@status=running,user=alice\n"),
+        "the account's own unit says whose it is:\n{text}"
+    );
+    assert!(
+        text.contains("\nservice:sshd@status=running\n"),
+        "a system unit carries no account mark at all:\n{text}"
+    );
+}

@@ -1150,10 +1150,16 @@ impl Adopter {
         pkg: &Package,
     ) -> crate::config::grammar::Declared {
         let owned = options.get(&pkg.backend).map(Vec::as_slice).unwrap_or(&[]);
-        let refs: Vec<(&str, &str)> = owned
+        let mut refs: Vec<(&str, &str)> = owned
             .iter()
             .map(|(k, v)| (k.as_str(), v.as_str()))
             .collect();
+        // A candidate can carry a mark of its own, because one backend answers for more than one
+        // domain: a `service:` found in the invoking account's own domain writes `@user=<account>`
+        // or the line would enable the unit for the whole machine instead of that account.
+        if let Some(user) = pkg.properties.get("user") {
+            refs.push(("user", user.as_str()));
+        }
         crate::config::grammar::declared_as(Some(&pkg.backend), &pkg.name, &refs)
     }
 

@@ -688,6 +688,35 @@ impl Installable for ServiceInstallable {
     }
 }
 
+impl ServiceBackendCore {
+    /// The invoking account's own units, marked with the account they belong to, so a line
+    /// written from this listing places them in that account's domain and not the system's.
+    ///
+    /// **Two exclusions, both of them facts about the init.** An init whose `user_list` is the
+    /// same command as its `list` has no separate user domain — launchd answers `launchctl list`
+    /// for whoever is running it either way — so asking twice offers every agent twice. And a
+    /// name the system listing already carries is the system's unit: offering both writes two
+    /// lines for one name, which nothing downstream can tell apart.
+    pub async fn list_own_user_units(&self, system: &[Package]) -> Result<Vec<Package>> {
+        let Some(init) = self.detect_init() else {
+            return Ok(Vec::new());
+        };
+        if !init.has_user_scope() || init.user_list == init.list {
+            return Ok(Vec::new());
+        }
+        let account = crate::core::account::Account::current()?;
+        let Some(mut units) = self.list_user(&self.executor, account.name()).await? else {
+            return Ok(Vec::new());
+        };
+        units.retain(|unit| !system.iter().any(|s| s.name == unit.name));
+        for unit in &mut units {
+            unit.properties
+                .insert("user".to_string(), account.name().to_string());
+        }
+        Ok(units)
+    }
+}
+
 pub struct ServiceQueryable {
     pub core: Arc<ServiceBackendCore>,
 }
@@ -729,8 +758,22 @@ impl Queryable for ServiceQueryable {
     /// Every running service. Not "the ones you chose" — no init records that — but a service
     /// that is running is a state a person can read off the machine and decide about, which is
     /// what `adopt` offers. `adoption_options` is what keeps the offer to that claim.
+    ///
+    /// **Both domains, because a service is not more real for running as the system.** A unit
+    /// the invoking account runs for itself is the same kind of evidence as a system unit, and
+    /// leaving it out wrote a manifest that quietly lost it (`#211`). It carries `@user=<account>`
+    /// so the line places it where it was found; without that mark it would be enabled and
+    /// started for the whole machine, which is a different service than the one adopted.
     async fn list_manual(&self) -> Result<Vec<Package>> {
-        self.list_installed().await
+        let system = self.list_installed().await?;
+        // A user domain that cannot be read is not a finding — most hosts have none running —
+        // so the system listing stands rather than the whole adoption failing on it.
+        let user = self
+            .core
+            .list_own_user_units(&system)
+            .await
+            .unwrap_or_default();
+        Ok(system.into_iter().chain(user).collect())
     }
 
     /// **A bare `adopt` takes services** (owner ruling, 2026-11-20 — `C38`, amending `Q39`).

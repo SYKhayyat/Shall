@@ -80,10 +80,24 @@ pub fn declared_as(backend: Option<&str>, name: &str, options: &[(&str, &str)]) 
     // caught this, since expansion happens after the parse.
     let escaped = |s: &str| s.replace('$', "$$");
     let name_on_the_line = escaped(name);
-    let suffix: String = options
-        .iter()
-        .map(|(k, v)| format!("@{}={}", k, escaped(v)))
-        .collect();
+    // **One `@`, then the pairs comma-separated.** This used to concatenate a `@` per option,
+    // which the parser reads as a single option whose value swallowed the rest —
+    // `@status=running@user=alice` came back as `status = "running@user=alice"`. The round trip
+    // below then failed and the answer was `Nothing`: no line invented, so nothing was written
+    // wrongly, but every caller with a second option — a per-rule firewall option, a `dir:`
+    // carrying both an owner and a mode, a service in an account's own domain — was told its
+    // resource could not be declared at all.
+    let suffix: String = match options.split_first() {
+        None => String::new(),
+        Some(((first_key, first_value), rest)) => {
+            let mut suffix = format!("@{}={}", first_key, escaped(first_value));
+            for (k, v) in rest {
+                suffix.push(',');
+                suffix.push_str(&format!("{}={}", k, escaped(v)));
+            }
+            suffix
+        }
+    };
     let asked_for = |parsed: &Options| {
         parsed.keys().count() == options.len()
             && options
