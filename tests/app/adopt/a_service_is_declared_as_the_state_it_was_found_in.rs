@@ -72,3 +72,39 @@ fn a_unit_found_in_an_accounts_domain_is_declared_in_it() {
         "a system unit carries no account mark at all:\n{text}"
     );
 }
+
+/// A unit's owning package is written beside the line as a comment (`#211`).
+///
+/// The grammar has always read a `#` after whitespace as a comment, so the resource gains no new
+/// option and no new parse: the comment is appended after the round trip that decided the line,
+/// which is why a name that needed quoting still gets its line and its comment.
+#[test]
+fn a_unit_says_which_package_installed_it() {
+    let options = HashMap::from([(
+        "service".to_string(),
+        vec![("status".to_string(), "running".to_string())],
+    )]);
+    let mut unit = Package::new("sshd", "service");
+    unit.properties
+        .insert("owned_by".to_string(), "openssh-server".to_string());
+    let found = Discovery {
+        adopt: vec![unit, Package::new("cron", "service")],
+        ..Default::default()
+    };
+    let m = Adopter::new(
+        over(Arc::new(BackendRegistry::default())),
+        Arc::new(Mutex::new(StateRegistry::default())),
+        &Config::default(),
+        quiet_executor(),
+    );
+    let text = m.render_manifest(&found, &options);
+
+    assert!(
+        text.contains("\nservice:sshd@status=running  # installed by openssh-server\n"),
+        "the line, then the package that would put it back:\n{text}"
+    );
+    assert!(
+        text.contains("\nservice:cron@status=running\n"),
+        "a unit no manager claimed gets no comment — an unverifiable name is worse than none:\n{text}"
+    );
+}

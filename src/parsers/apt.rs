@@ -168,3 +168,40 @@ pub fn parse_apt_outdated(output: &str) -> Vec<Package> {
         })
         .collect()
 }
+
+/// Which package owns a file: `dpkg -S <path>` answers `openssh-server: /lib/systemd/system/ssh.service`.
+///
+/// **Two shapes reach this reader and neither is a package name.** A diverted file is reported as
+/// `diversion by <package> from: <path>` — the owner is in the middle — and a path no package owns
+/// exits non-zero with `dpkg-query: no path found matching pattern <path>` on stderr, so an empty
+/// stdout is the ordinary answer rather than a failure. A source package with several binaries
+/// lists each as `<pkg>, <pkg>`, and every one is a true owner.
+pub fn parse_dpkg_owner(output: &str) -> Vec<String> {
+    let mut owners = Vec::new();
+    for line in crate::utils::text::sanitize(output).lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("diversion by ") {
+            if let Some(package) = rest.split_whitespace().next() {
+                owners.push(package.to_string());
+            }
+            continue;
+        }
+        // `pkg: /path` — one line per owning package, the path repeated.
+        let Some((names, path)) = line.split_once(": ") else {
+            continue;
+        };
+        if !path.starts_with('/') {
+            continue;
+        }
+        for name in names.split(',') {
+            let name = name.trim();
+            if !name.is_empty() {
+                owners.push(name.to_string());
+            }
+        }
+    }
+    owners
+}

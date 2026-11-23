@@ -17,4 +17,7 @@ fn every_listed_reader_resolves() {
     for n in NAMES_NAMES {
         assert!(names(n).is_some(), "NAMES_NAMES lists `{n}`");
     }
+    for n in OWNING_NAMES {
+        assert!(owning(n).is_some(), "OWNING_NAMES lists `{n}`");
+    }
 }

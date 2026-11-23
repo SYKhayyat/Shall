@@ -28,6 +28,7 @@ mod setting;
 mod shared_database;
 mod snap;
 mod storage;
+mod unit_owner;
 mod vscode;
 mod web;
 

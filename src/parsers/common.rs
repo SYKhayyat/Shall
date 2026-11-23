@@ -139,3 +139,29 @@ pub fn parse_brew_outdated(output: &str) -> Vec<Package> {
     }
     out
 }
+
+/// Which package owns a file: `/usr/bin/ssh is owned by openssh-client-9.9_p1-r0`.
+///
+/// The name carries the version and a repository suffix is possible
+/// (`-r0`), so the version comes off before the answer is compared with anything else. apk
+/// answers `No package owns /path` when nothing does.
+pub fn parse_apk_owner(output: &str) -> Vec<String> {
+    crate::utils::text::sanitize(output)
+        .lines()
+        .filter_map(|line| {
+            let (_, rest) = line.trim().split_once(" is owned by ")?;
+            let qualified = rest.split_whitespace().next()?;
+            // The name ends where the version begins: the first `-` followed by a digit.
+            let bytes = qualified.as_bytes();
+            let mut cut = qualified.len();
+            for (i, c) in qualified.char_indices() {
+                if c == '-' && bytes.get(i + 1).is_some_and(|b| b.is_ascii_digit()) {
+                    cut = i;
+                    break;
+                }
+            }
+            let name = &qualified[..cut];
+            (!name.is_empty()).then(|| name.to_string())
+        })
+        .collect()
+}

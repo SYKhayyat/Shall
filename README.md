@@ -390,6 +390,7 @@ built-in package managers go through the same table your `[[backend]]` row goes 
 | `adapters/prereq.toml` | `[[prereq]]` | the setup a manager needs before it can install |
 | `adapters/bootstrap.toml` | `[[bootstrap]]` | how to obtain a manager this machine lacks |
 | `adapters/backup.toml` | `[[backup]]` | how a backup tool says when it last copied a path |
+| `adapters/unit-owners.toml` | `[[owner]]` | how a manager says which package owns a file |
 
 **`shall adapters` says what this machine has on each**, and the column that matters is the
 last one: `no rows` is the one worth having a command for. A file can be present, approved and

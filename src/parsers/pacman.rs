@@ -123,3 +123,21 @@ pub fn parse_pacman_outdated(output: &str) -> Vec<Package> {
         })
         .collect()
 }
+
+/// Which package owns a file: `/path is owned by openssh 9.9p1-2` — the name, then the version.
+///
+/// pacman answers `error: No package owns /path` when nothing does, on stderr with a non-zero
+/// exit, so an empty stdout is the ordinary answer.
+pub fn parse_pacman_owner(output: &str) -> Vec<String> {
+    crate::utils::text::sanitize(output)
+        .lines()
+        .filter_map(|line| {
+            let (_, rest) = line.trim().split_once(" is owned by ")?;
+            // The owner line is `name version`; a trailing note in parentheses belongs to neither.
+            rest.split_whitespace()
+                .next()
+                .filter(|name| !name.is_empty())
+                .map(str::to_string)
+        })
+        .collect()
+}

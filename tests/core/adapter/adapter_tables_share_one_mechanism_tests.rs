@@ -55,6 +55,11 @@ const TABLES: &[Table] = &[
         not_an_adapter: None,
     },
     Table {
+        wrapper: "UnitOwnerFile",
+        file: "src/backends/unit_owner.rs",
+        not_an_adapter: None,
+    },
+    Table {
         wrapper: "SnapshotProviderFile",
         file: "src/core/snapshot.rs",
         not_an_adapter: None,

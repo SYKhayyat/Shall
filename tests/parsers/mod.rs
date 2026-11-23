@@ -13,6 +13,7 @@ mod named;
 mod pacman;
 mod pkgsrc;
 mod root;
+mod unit_owner;
 mod utils;
 mod windows;
 

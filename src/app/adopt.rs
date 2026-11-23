@@ -728,6 +728,27 @@ impl Adopter {
             (&a.package.backend, &a.package.name).cmp(&(&b.package.backend, &b.package.name))
         });
 
+        // What would put an adopted service back (`#211`). Asked of the manager that owns the
+        // unit file, and written beside the line as a comment — the grammar has always read a
+        // `#` after whitespace as a comment, so nothing in the resource grammar changes. Only the
+        // services being adopted are asked about, and nothing is asked at all on a machine with
+        // no manager that can answer: this is a name a reader could not verify themselves, so it
+        // is written only when it came from a manager's own answer.
+        if scope.backends.is_empty() || scope.asked_for("service") {
+            let priority: Vec<String> = self
+                .backends
+                .usable()
+                .map(|b| b.iter().map(|b| b.name().to_string()).collect())
+                .unwrap_or_default();
+            crate::backends::unit_owner::attach_owners(
+                &self.executor,
+                &self.config,
+                &mut found.adopt,
+                &priority,
+            )
+            .await;
+        }
+
         // The dotfile half (#59). Its evidence is a symlink into version control, which is a
         // decision a person made in `$HOME` — so it is offered on the same terms as a package,
         // by a bare `adopt`, and naming backends on the command line means the run is about
@@ -1226,6 +1247,11 @@ impl Adopter {
             match Self::declared_for(options, pkg).line() {
                 Some(line) => out.push_str(line),
                 None => out.push_str(&format!("{}:{}", pkg.backend, pkg.name)),
+            }
+            // After the line, never inside it: the grammar reads a `#` after whitespace as a
+            // comment, and the round trip that decided the line has already happened.
+            if let Some(owner) = pkg.properties.get("owned_by") {
+                out.push_str(&format!("  # installed by {}", owner));
             }
             out.push('\n');
         }

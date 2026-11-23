@@ -179,6 +179,11 @@ impl Layout {
         self.adapter_file("init")
     }
 
+    /// `[[owner]]` — which package owns a file, answered by a manager (`#211`).
+    pub fn adapter_unit_owners_file(&self) -> PathBuf {
+        self.adapter_file("unit-owners")
+    }
+
     /// `[[snapshot]]` — how to drive a snapshot/rollback provider from data (U27). A row that
     /// does not declare it can restore a running system is create-only, never `Live` (V.60).
     pub fn adapter_snapshot_file(&self) -> PathBuf {

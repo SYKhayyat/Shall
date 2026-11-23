@@ -62,7 +62,10 @@ fn walk_rs(dir: &PathBuf) -> Vec<PathBuf> {
 /// 83 → 84 when `C42` added `shell_managers.toml`: `app::dotfiles::shell_managers` parses a table
 /// compiled into the binary, and the row it builds a path from is a constant (`home.join(&m.path)`)
 /// rather than anything a user wrote. A test pins the shipped rows parse.
-const PRODUCTION_CEILING: usize = 84;
+/// 84 → 85 when `#211` added `unit_owners.toml`: `backends::unit_owner::owners` parses a table
+/// compiled into the binary, and a test pins that the shipped rows parse. Same shape as the
+/// three table `expect`s above, and the same justification — nothing a user writes reaches it.
+const PRODUCTION_CEILING: usize = 85;
 
 /// **The inventory runs and counts.** A script that silently matched nothing would report "0 sites,
 /// the tree is clean", which is the most reassuring possible failure.

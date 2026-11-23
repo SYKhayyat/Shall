@@ -1,0 +1,54 @@
+# Which package owns a file, per manager (`#211`).
+#
+# A service line adopted from a machine says what state it was found in, but not what would put
+# that unit back on the next machine — the package. `adopt` asks the manager that owns the unit
+# file, and writes the answer as a trailing comment on the line, where the grammar already reads a
+# `#` after whitespace as a comment and never as part of the resource.
+#
+# `detect` is the command whose presence means this manager can answer. `owns` is argv with
+# `{path}` substituted; `reads` names a reader in `src/parsers/named.rs` (the `owning` direction),
+# and every row's reader has a fixture in the suite. A row answers with the packages that own the
+# path, and an answer of none is the ordinary case rather than a failure: `dpkg -S` exits non-zero
+# and says so on stderr, and this table's rows are only ever asked about files that belong to a
+# unit somebody is running.
+#
+# **The reader strips the version, and that is the whole reason it exists.** `rpm -qf`,
+# `pacman -Qo` and `apk info --who-owns` all answer with a fully qualified name —
+# `openssh-server-9.9p1-8.fc41.x86_64` — which no declaration on this tree can carry. A row that
+# asked `rpm -qf --qf '%{NAME}'` would answer bare, and does; this reader takes either, because
+# two spellings arriving from two directions is how the last several bugs in this repo happened.
+
+[[owner]]
+name = "apt"
+os = "linux"
+detect = "dpkg-query"
+owns = ["dpkg-query", "-S", "--", "{path}"]
+reads = "dpkg_s"
+
+[[owner]]
+name = "dnf"
+os = "linux"
+detect = "rpm"
+owns = ["rpm", "-qf", "--qf", "%{NAME}\n", "--", "{path}"]
+reads = "rpm_qf"
+
+[[owner]]
+name = "zypper"
+os = "linux"
+detect = "rpm"
+owns = ["rpm", "-qf", "--qf", "%{NAME}\n", "--", "{path}"]
+reads = "rpm_qf"
+
+[[owner]]
+name = "pacman"
+os = "linux"
+detect = "pacman"
+owns = ["pacman", "-Qo", "--", "{path}"]
+reads = "pacman_qo"
+
+[[owner]]
+name = "apk"
+os = "linux"
+detect = "apk"
+owns = ["apk", "info", "--who-owns", "{path}"]
+reads = "apk_owns"

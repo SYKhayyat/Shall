@@ -25,6 +25,7 @@ pub mod setting;
 pub mod shared_database;
 pub mod snap;
 pub mod storage;
+pub mod unit_owner;
 pub mod vscode;
 pub mod web;
 

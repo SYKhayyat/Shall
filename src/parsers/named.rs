@@ -150,6 +150,22 @@ pub fn names(name: &str) -> Option<Names> {
     Some(f)
 }
 
+/// The reader named `name`, for "which package owns this file".
+///
+/// Its own direction rather than a share of `names`, because the answer is a *package* and the
+/// question is about a *path*: the two callers that would otherwise meet here read different
+/// things on purpose, and the day one of them grows a second shape it must not change the other.
+pub fn owning(name: &str) -> Option<Names> {
+    let f: Names = match name {
+        "dpkg_s" => |o, _| apt::parse_dpkg_owner(o),
+        "rpm_qf" => |o, _| dnf::parse_rpm_owner(o),
+        "pacman_qo" => |o, _| pacman::parse_pacman_owner(o),
+        "apk_owns" => |o, _| common::parse_apk_owner(o),
+        _ => return None,
+    };
+    Some(f)
+}
+
 /// Every name this module answers to, by table.
 ///
 /// Written out rather than derived, because a `match` cannot be enumerated — and checked
@@ -213,6 +229,9 @@ pub const SEARCH_NAMES: &[&str] = &[
     "xbps",
     "zypper",
 ];
+
+/// The `owning` direction's own list, checked against its `match` arms the same way the others are.
+pub const OWNING_NAMES: &[&str] = &["apk_owns", "dpkg_s", "pacman_qo", "rpm_qf"];
 
 pub const PROBE_NAMES: &[&str] = &[
     "apk_outdated",

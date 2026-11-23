@@ -40,7 +40,7 @@ impl Surface {
 /// **Every surface, and there are no others.** A ninth reader that opens a file under
 /// `adapters/` without a row here is invisible to `shall adapters`, which is the whole defect
 /// this table exists to close — `every_adapter_surface_is_in_the_table` fails on it.
-pub const SURFACES: [Surface; 9] = [
+pub const SURFACES: [Surface; 10] = [
     Surface {
         name: "backends",
         key: "backend",
@@ -85,6 +85,11 @@ pub const SURFACES: [Surface; 9] = [
         name: "backup",
         key: "backup",
         teaches: "how a backup tool says when it last copied a path",
+    },
+    Surface {
+        name: "unit-owners",
+        key: "owner",
+        teaches: "how a manager says which package owns a file",
     },
 ];
 

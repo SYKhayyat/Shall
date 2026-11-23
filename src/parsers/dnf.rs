@@ -211,3 +211,33 @@ pub fn parse_bare_dependency_names(output: &str) -> Vec<String> {
         .map(str::to_string)
         .collect()
 }
+
+/// Which package owns a file: `rpm -qf <path>` answers with one **fully qualified** name —
+/// `openssh-server-9.9p1-8.fc41.x86_64` — so the version has to come off before it can be
+/// compared with anything else on this machine. `rpm -qf --qf '%{NAME}'` would answer the bare
+/// name and is what a caller should ask for; this reader takes what it is given rather than
+/// trusting the row that built the argv, because the two disagreeing is exactly the sort of thing
+/// that has bitten this tree before.
+pub fn parse_rpm_owner(output: &str) -> Vec<String> {
+    crate::utils::text::sanitize(output)
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            // `file /path is not owned by any package` is rpm's own sentence, on stdout.
+            if line.is_empty() || line.contains("is not owned by any package") {
+                return None;
+            }
+            // The name ends where the version begins: the first `-` followed by a digit.
+            let mut cut = line.len();
+            let bytes = line.as_bytes();
+            for (i, c) in line.char_indices() {
+                if c == '-' && bytes.get(i + 1).is_some_and(|b| b.is_ascii_digit()) {
+                    cut = i;
+                    break;
+                }
+            }
+            let name = &line[..cut];
+            (!name.is_empty()).then(|| name.to_string())
+        })
+        .collect()
+}
