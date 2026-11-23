@@ -106,6 +106,10 @@ fn shall_under_pty(root: &Path, args: &str) -> String {
         )
         .env("SHALL_CONFIG_DIR", root.join("cfg"))
         .env("SHALL_DATA_DIR", root.join("data"))
+        // `dirs::config_dir()` reads `$XDG_CONFIG_HOME` before `$HOME`, so a run isolated by
+        // the two `SHALL_*` roots alone still provisions and reads the operator's own home.
+        .env("HOME", root)
+        .env("XDG_CONFIG_HOME", root.join(".config"))
         .output()
         .expect("script(1) should run");
     String::from_utf8_lossy(&out.stdout).into_owned()
@@ -131,6 +135,7 @@ fn shall_typed_at(root: &Path, args: &str, typed: &str, bound: u32) -> (String, 
         .env("SHALL_CONFIG_DIR", root.join("cfg"))
         .env("SHALL_DATA_DIR", root.join("data"))
         .env("HOME", root)
+        .env("XDG_CONFIG_HOME", root.join(".config"))
         .env("SHALL_PTY_LOG", root.join("log"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

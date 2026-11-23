@@ -59,20 +59,6 @@ pub struct Layout {
 }
 
 impl Layout {
-    /// `$SHALL_CONFIG_DIR` / `$SHALL_DATA_DIR`, else the platform dirs.
-    pub fn discover() -> Self {
-        let config_root = std::env::var_os("SHALL_CONFIG_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(crate::utils::safe_config_dir);
-        let data_root = std::env::var_os("SHALL_DATA_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(crate::utils::safe_data_dir);
-        Self {
-            config_root,
-            data_root,
-        }
-    }
-
     pub fn new(config_root: impl Into<PathBuf>, data_root: impl Into<PathBuf>) -> Self {
         Self {
             config_root: config_root.into(),

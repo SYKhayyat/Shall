@@ -115,9 +115,9 @@ shall sync
 
 ## The files
 
-They live under `$SHALL_CONFIG_DIR` (default `~/.config/shall`). `shall init` creates the ones every machine needs; the rest appear when you first use the feature they belong to, and are marked below. **This directory is meant to be a git repo** — `shall git init` turns on version control, after which every sync commits, and `shall rollback <commit>` puts the machine back.
+They live under `$SHALL_CONFIG_DIR` (default: the platform config directory plus `shall` — `~/.config/shall` on Linux when `$XDG_CONFIG_HOME` is unset, and `%APPDATA%\shall` on Windows). `shall init` creates the ones every machine needs; the rest appear when you first use the feature they belong to, and are marked below. **This directory is meant to be a git repo** — `shall git init` turns on version control, after which every sync commits, and `shall rollback <commit>` puts the machine back.
 
-`shall path` prints where they are, so you never have to remember. To keep them somewhere else — a dotfiles repo, a shared drive — `shall path --set ~/dotfiles/shall` records it once and every later run finds it. For a single run, `--config-dir` wins over everything; the full order is `--config-dir`, then `$SHALL_CONFIG_DIR`, then the stored path, then the default, and `shall path --explain` tells you which one answered.
+`shall path` prints where they are, so you never have to remember. To keep them somewhere else — a dotfiles repo, a shared drive — `shall path --set ~/dotfiles/shall` records it once and every later run finds it. For a single run, `--config-dir` wins over everything; the full order is `--config-dir`, then `$SHALL_CONFIG_DIR`, then the stored path, then the default, and `shall path --explain` tells you which one answered **and names the variable the default was computed from**. On Linux that variable is `$XDG_CONFIG_HOME` when it is set, and `$HOME/.config` only when it is not — so `HOME=` alone does not move the repo, and `$SHALL_CONFIG_DIR` is the lever that always does.
 
 ```
 modules/       your lists of packages       lowercase names, *.txt

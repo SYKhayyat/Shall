@@ -103,7 +103,9 @@ impl Fixture {
             // so a `schedule:` test provisioned `shall-tidy.timer` into the *developer's*
             // `~/.config/systemd/user` while `HOME` pointed at the fixture (found 2026-11-02 while
             // landing #130, and the units had to be disabled by hand). The fifth entry in this
-            // list, for the fifth time the same way.
+            // list, for the fifth time the same way. `#219` re-asked the same question three
+            // weeks later from a user-facing run, and `shall path --explain` now answers it:
+            // the explanation names the variable the default was computed from.
             .env("XDG_CONFIG_HOME", self.root.join(".config"))
             // **Two managers keep their own configuration under `$HOME`, and one of them was
             // measuring the developer's machine through it.** `npm` resolves its global prefix

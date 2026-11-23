@@ -96,7 +96,10 @@ pub struct Cli {
     /// Use this directory as the config repo, for this run only.
     ///
     /// Outranks $SHALL_CONFIG_DIR and the stored path in Shall's settings file.
-    /// `shall path` says which of the four sources won.
+    /// `shall path` says which of the four sources won. Without a flag, a variable or a stored
+    /// path the default is the platform config directory plus `shall` — `$XDG_CONFIG_HOME` on
+    /// Linux, where `$HOME/.config` is only the fallback, so setting `HOME` alone does not move
+    /// it. `shall path --explain` names the variable that answered.
     #[arg(long, global = true, value_name = "DIR")]
     pub config_dir: Option<PathBuf>,
 
@@ -827,7 +830,8 @@ pub enum Commands {
     /// Print the config repo directory, so `cd $(shall path)` works
     Path {
         /// Also say which of --config-dir, $SHALL_CONFIG_DIR, the settings file or the
-        /// built-in default decided it, and where the settings file lives
+        /// built-in default decided it — naming the variable the default was computed from —
+        /// and where the settings file lives
         #[arg(long)]
         explain: bool,
 

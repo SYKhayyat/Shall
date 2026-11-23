@@ -4,7 +4,9 @@
 
 ## II.1 Files on disk
 
-**Your repo** — `$SHALL_CONFIG_DIR` or `~/.config/shall`. **This is a git repo.**
+**Your repo** — `$SHALL_CONFIG_DIR`, else the platform config directory (`$XDG_CONFIG_HOME/shall` on
+Linux, `~/Library/Application Support/shall` on macOS, `%APPDATA%\shall` on Windows). `HOME` alone
+does not move it, and `--explain` names whichever variable did. **This is a git repo.**
 
 ```
 modules/            your lists              lowercase names       *.txt

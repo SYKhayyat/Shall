@@ -34,12 +34,18 @@ pub enum RootSource {
 }
 
 impl RootSource {
-    pub fn describe(self) -> &'static str {
+    /// Never "the built-in default" on its own: when no variable answered, the reader is told
+    /// *which variable would have*, because `HOME=` moving nothing is the question that made
+    /// this necessary (`#219`).
+    pub fn describe(self) -> String {
         match self {
-            RootSource::Flag => "--config-dir",
-            RootSource::Environment => "$SHALL_CONFIG_DIR",
-            RootSource::SettingsFile => "your Shall settings file",
-            RootSource::Default => "the built-in default",
+            RootSource::Flag => "--config-dir".to_string(),
+            RootSource::Environment => "$SHALL_CONFIG_DIR".to_string(),
+            RootSource::SettingsFile => "your Shall settings file".to_string(),
+            RootSource::Default => format!(
+                "the built-in default ({} + `shall`)",
+                crate::utils::config_dir_source()
+            ),
         }
     }
 }

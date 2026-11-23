@@ -97,6 +97,10 @@ fn the_binary_refuses_rather_than_scaffolding_somewhere_else() {
         .current_dir(dir.path())
         .env("SHALL_DATA_DIR", dir.path().join("data"))
         .env_remove("SHALL_CONFIG_DIR")
+        // `HOME` and `$XDG_CONFIG_HOME` are the two variables the refusal must not be relying
+        // on: with either one left alone this test measures where the operator's real repo is.
+        .env("HOME", dir.path())
+        .env("XDG_CONFIG_HOME", dir.path().join(".config"))
         .stdin(std::process::Stdio::null())
         .output()
         .expect("the binary should run");

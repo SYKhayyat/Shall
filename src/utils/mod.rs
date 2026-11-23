@@ -32,8 +32,11 @@ pub fn safe_data_dir() -> PathBuf {
 }
 
 pub fn safe_config_dir() -> PathBuf {
-    // `SHALL_CONFIG_DIR` overrides the OS config dir outright (see `safe_data_dir`).
-    if let Some(dir) = std::env::var_os("SHALL_CONFIG_DIR") {
+    // `SHALL_CONFIG_DIR` overrides the OS config dir outright (see `safe_data_dir`), and
+    // **present-but-empty is not "set"** — the rule `safe_data_dir` states and this function
+    // did not apply. `SHALL_CONFIG_DIR=` resolved the repo to the empty path, so `shall path`
+    // printed a blank line and every write landed relative to the working directory.
+    if let Some(dir) = std::env::var_os("SHALL_CONFIG_DIR").filter(|v| !v.is_empty()) {
         return PathBuf::from(dir);
     }
     dirs::config_dir()
@@ -43,6 +46,47 @@ pub fn safe_config_dir() -> PathBuf {
                 .join(".config")
         })
         .join("shall")
+}
+
+/// Which variable decided the platform config directory, for `shall path --explain`.
+///
+/// `dirs::config_dir()` is the authority on the *path*; this names the input behind it,
+/// because "the built-in default" withholds the one fact a reader needs when the directory is
+/// not where they expected — which variable to change. `$XDG_CONFIG_HOME` outranks
+/// `$HOME/.config` on Linux, so `HOME=` alone moves nothing (`#219`), and the answer sat in a
+/// test comment before it was anywhere a user would look.
+///
+/// A relative or empty `$XDG_CONFIG_HOME` is ignored, which is the XDG rule and what `dirs`
+/// implements — so this function follows the same precedence rather than inventing a second.
+/// `the_explanation_names_the_variable_that_decided_it` ties the two together against the real
+/// binary, so a change in `dirs` cannot leave this reporting a variable that decided nothing.
+pub fn config_dir_source() -> &'static str {
+    config_dir_source_from(&|name| std::env::var_os(name))
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+pub fn config_dir_source_from(get: &dyn Fn(&str) -> Option<std::ffi::OsString>) -> &'static str {
+    if get("XDG_CONFIG_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .is_some_and(|p| p.is_absolute())
+    {
+        return "$XDG_CONFIG_HOME";
+    }
+    if get("HOME").filter(|v| !v.is_empty()).is_some() {
+        return "$HOME/.config";
+    }
+    "the platform config directory"
+}
+
+#[cfg(target_os = "macos")]
+pub fn config_dir_source_from(_get: &dyn Fn(&str) -> Option<std::ffi::OsString>) -> &'static str {
+    "$HOME/Library/Application Support"
+}
+
+#[cfg(windows)]
+pub fn config_dir_source_from(_get: &dyn Fn(&str) -> Option<std::ffi::OsString>) -> &'static str {
+    "%APPDATA%"
 }
 
 // `refresh_path` was here, with a doc comment asserting that "backends that install a toolchain

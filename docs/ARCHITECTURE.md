@@ -25,12 +25,19 @@ so much of the test suite is about not believing your own state file.
 
 | | what it holds | in git? |
 |---|---|---|
-| `$SHALL_CONFIG_DIR` (default `~/.config/shall`) | what you declared — modules, profiles, priority, locks, `preferences.toml` | **yes**, it is meant to be a repo |
+| `$SHALL_CONFIG_DIR` (default: the platform config dir + `shall` — `$XDG_CONFIG_HOME/shall`, or `$HOME/.config/shall` when that is unset) | what you declared — modules, profiles, priority, locks, `preferences.toml` | **yes**, it is meant to be a repo |
 | `$SHALL_DATA_DIR` | what Shall knows — the state registry, the journal, snapshot metadata | **never** |
 
 The split is load-bearing. Config is portable between machines; data describes *this* machine and
 would be actively wrong on another one. A test that forgets to redirect both writes into your real
 user state, which is why `Config::sandboxed()` exists and why fixtures use it.
+
+**`HOME` is not one of the levers.** On Linux the config default is computed from
+`$XDG_CONFIG_HOME` first and `$HOME/.config` only as its fallback, so on a desktop that exports
+the XDG variables `HOME=` moves nothing and a scratch run rewrites your real repo (`#219`, and the
+same trap the test harness records for `$XDG_CONFIG_HOME` under `systemd`). Redirect with
+`SHALL_CONFIG_DIR`/`SHALL_DATA_DIR` or the two flags, never with `HOME`; `shall path --explain`
+names the variable that actually answered.
 
 ## Life of a `shall sync`
 
