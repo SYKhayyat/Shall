@@ -2289,12 +2289,20 @@ ok "search finds something" lx search "$PKG"
 # exited 1 with "no manager reported `nimjson`, but 2 of them could not be asked" after nimble
 # had dropped it, while the same line passed an hour earlier in section 5 when it was installed.
 # Pinned and installed, the assertion is about `info` and not about what the run before left.
-if lx -y apply "$BACKEND:$PKG" >/dev/null 2>&1; then
+#
+# **An install that fails here is `classify_install`'s to judge, not a `soft` of this line's own.**
+# The first version softened it, and the mutation gate answered in the direction that matters: the
+# check then reported `soft` against a `shall` that fails everything, so the store of checks that
+# CAN go red went from 108 to 107 and the floor refused the change. A conditional that turns a
+# broken product into a skip is the defect the mutation gate exists to find, and it found it in
+# this file before the fix shipped.
+if lx -y apply "$BACKEND:$PKG" >/tmp/itw-reinfo.out 2>&1; then
     ok "info reads a package's metadata" lx info "$BACKEND:$PKG"
     lx -y apply "$BACKEND:$PKG" --delete >/dev/null 2>&1 \
         || soft "$PKG could not be taken back off after the info check — this sweep leaves it installed"
 else
-    soft "$BACKEND:$PKG did not install for the info check, so `info` had nothing to describe"
+    _ri_rc=$?
+    classify_install "$BACKEND" "$BACKEND:$PKG" "$_ri_rc" /tmp/itw-reinfo.out
 fi
 ok "why explains a package's provenance" lx why "$PKG"
 ok "lock records installed versions" lx lock
