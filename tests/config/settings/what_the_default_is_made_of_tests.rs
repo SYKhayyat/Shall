@@ -183,34 +183,66 @@ fn env_of(pairs: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<OsS
     }
 }
 
+/// The precedence, asked of a caller-supplied environment rather than of the machine running the
+/// suite — and asserted on **every** platform, which is the point.
+///
+/// This test used to carry `#[cfg(all(unix, not(target_os = "macos")))]` on the function, which
+/// left `env_of` above it reaching nothing on macOS, and `-D warnings` turned that unused helper
+/// into a clippy failure on the `x86_64-apple-darwin` job — a red leg this machine cannot compile
+/// for, so the local chain was green. The platform split belongs *inside* the test: a cfg on the
+/// test is a cfg on everything it is the only user of.
 #[test]
-#[cfg(all(unix, not(target_os = "macos")))]
-fn xdg_wins_over_home_and_a_relative_xdg_is_ignored() {
-    let both = env_of(&[("XDG_CONFIG_HOME", "/tmp/xdg"), ("HOME", "/home/somebody")]);
-    assert_eq!(
-        shall::utils::config_dir_source_from(&both),
-        "$XDG_CONFIG_HOME"
-    );
+fn the_precedence_is_the_one_the_platform_documents() {
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let both = env_of(&[("XDG_CONFIG_HOME", "/tmp/xdg"), ("HOME", "/home/somebody")]);
+        assert_eq!(
+            shall::utils::config_dir_source_from(&both),
+            "$XDG_CONFIG_HOME"
+        );
 
-    let relative = env_of(&[("XDG_CONFIG_HOME", "./config"), ("HOME", "/home/somebody")]);
-    assert_eq!(
-        shall::utils::config_dir_source_from(&relative),
-        "$HOME/.config",
-        "the XDG spec ignores a relative `$XDG_CONFIG_HOME`, so `$HOME` is what answers"
-    );
+        let relative = env_of(&[("XDG_CONFIG_HOME", "./config"), ("HOME", "/home/somebody")]);
+        assert_eq!(
+            shall::utils::config_dir_source_from(&relative),
+            "$HOME/.config",
+            "the XDG spec ignores a relative `$XDG_CONFIG_HOME`, so `$HOME` is what answers"
+        );
 
-    let empty = env_of(&[("XDG_CONFIG_HOME", ""), ("HOME", "/home/somebody")]);
-    assert_eq!(
-        shall::utils::config_dir_source_from(&empty),
-        "$HOME/.config",
-        "present-but-empty is not set, here as everywhere else"
-    );
+        let empty = env_of(&[("XDG_CONFIG_HOME", ""), ("HOME", "/home/somebody")]);
+        assert_eq!(
+            shall::utils::config_dir_source_from(&empty),
+            "$HOME/.config",
+            "present-but-empty is not set, here as everywhere else"
+        );
 
-    let neither = env_of(&[]);
-    assert_eq!(
-        shall::utils::config_dir_source_from(&neither),
-        "the platform config directory"
-    );
+        let neither = env_of(&[]);
+        assert_eq!(
+            shall::utils::config_dir_source_from(&neither),
+            "the platform config directory"
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // `dirs::config_dir()` on macOS is `$HOME/Library/Application Support` and nothing
+        // overrides it, so that is the only answer there is — but it is still an answer, and the
+        // comparison keeps `env_of` used rather than leaving it to the platform to decide whether
+        // this file compiles clean.
+        let _ = env_of(&[("HOME", "/Users/somebody")]);
+        assert_eq!(
+            shall::utils::config_dir_source_from(&env_of(&[])),
+            "$HOME/Library/Application Support"
+        );
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = env_of(&[("APPDATA", "C:\\Users\\somebody\\AppData\\Roaming")]);
+        assert_eq!(
+            shall::utils::config_dir_source_from(&env_of(&[])),
+            "%APPDATA%"
+        );
+    }
 }
 
 /// The report is about a variable, never about "the built-in default": that phrase is how the

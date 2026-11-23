@@ -216,6 +216,31 @@ matters as much as the errors**: two of the fourteen were `unused_variables` fro
 only inside a `#[cfg(unix)]` block, which is a warning on Windows and fatal under CI's gate.
 First run is ~25 minutes (all 448 crates for a new target); after that ~40 seconds.
 
+**The macOS half of the same gap costs two commands and no linker, and it does not need the
+crate.** `cargo check --target aarch64-apple-darwin` over the tree dies in `mlua`'s vendored Lua
+for want of an Apple cross C compiler, but a `cfg`-shaped defect is in *one file*, and compiling
+that file is enough to see it:
+
+```bash
+nix-shell -p zlib --run '
+  export LD_LIBRARY_PATH=$(nix-build "<nixpkgs>" -A zlib --no-out-link)/lib
+  R=$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu
+  $R/bin/rustc --sysroot $R --edition 2021 --test --target aarch64-apple-darwin \
+      --emit=metadata -D warnings <file>.rs -o /tmp/x.rmeta'
+```
+
+**`--test` and `--emit=metadata` are both load-bearing.** Without `--test` the file's `#[test]`
+functions are not compiled at all, so every helper they are the only user of reports as dead and
+the answer is noise; with `--emit=metadata` nothing links, which is the only reason this works
+without a cross toolchain.
+
+**The rule it exists for, measured on `#222`:** a `#[cfg]` on a test is a `#[cfg]` on everything
+that test is the only user of, so a `#[cfg(all(unix, not(target_os = "macos")))]` test with a
+helper above it is `dead-code` on macOS — fatal under `-D warnings`, and invisible to every step
+of the local chain, because none of them compiles that half. Put the platform split *inside* the
+test and assert on every platform, rather than gating the test and hoping the other side has a
+reader.
+
 **What this changes about the rule above.** The honest form is now *"the local chain verifies one
 platform of two, and the other is one `nix build` and one `curl` away"* — not that the other
 cannot be checked. A gate that can be run should be run; the reason it was not is that nobody had
