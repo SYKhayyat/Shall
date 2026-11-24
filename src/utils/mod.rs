@@ -86,7 +86,16 @@ pub fn config_dir_source_from(_get: &dyn Fn(&str) -> Option<std::ffi::OsString>)
 
 #[cfg(windows)]
 pub fn config_dir_source_from(_get: &dyn Fn(&str) -> Option<std::ffi::OsString>) -> &'static str {
-    "%APPDATA%"
+    // `%APPDATA%` is the folder `dirs::config_dir()` asks for — **unless it could not be read at
+    // all**, and then `safe_config_dir` falls back to `$HOME/.config` and that is what decided.
+    // Measured on the `x86_64-pc-windows-msvc` runner, where the known-folder lookup came back
+    // empty and `--explain` said `%APPDATA%` over a path under `$HOME`. An explanation that names
+    // a variable which decided nothing is the defect `#219` is about, in a smaller place.
+    if dirs::config_dir().is_some() {
+        "%APPDATA%"
+    } else {
+        "$HOME/.config"
+    }
 }
 
 // `refresh_path` was here, with a doc comment asserting that "backends that install a toolchain

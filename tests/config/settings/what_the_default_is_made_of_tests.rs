@@ -101,10 +101,13 @@ fn an_empty_data_variable_is_not_a_directory_named_nothing() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// `$XDG_CONFIG_HOME` outranks `$HOME/.config`, and `--explain` now says so.
+/// Every platform's default names the input that decided it, and a real variable outranks the
+/// default on every platform.
 ///
-/// The issue was not that Shall read the wrong directory — it read the right one — but that a
-/// person who set `HOME` had no way to learn `$XDG_CONFIG_HOME` had answered instead.
+/// **Written once per platform rather than once.** `dirs::config_dir()` is `$XDG_CONFIG_HOME` or
+/// `$HOME/.config` on Linux, `$HOME/Library/Application Support` on macOS and `%APPDATA%` on
+/// Windows; the first version of this test asserted the Linux answer everywhere and went red on
+/// both other legs, which is the same blindness the fix it is testing was about.
 #[test]
 fn the_explanation_names_the_variable_that_decided_it() {
     let root = tempdir("xdg");
@@ -128,15 +131,43 @@ fn the_explanation_names_the_variable_that_decided_it() {
     );
     assert_eq!(code, 0, "`shall path --explain` failed: {err}");
     let first = explained.lines().next().unwrap_or_default().trim();
+    assert!(
+        explained.contains("the built-in default ("),
+        "--explain must name the input behind the default, not the phrase on its own — which is \
+         what `#219` was filed about: {explained}"
+    );
+
+    #[cfg(all(unix, not(target_os = "macos")))]
     assert_eq!(
         first,
         xdg.join("shall").display().to_string(),
         "`$XDG_CONFIG_HOME` decides the default: {explained}"
     );
+    #[cfg(all(unix, not(target_os = "macos")))]
     assert!(
         explained.contains("$XDG_CONFIG_HOME"),
-        "--explain must name the variable that decided it, not \"the built-in default\": \
-         {explained}"
+        "--explain must name the variable that decided it: {explained}"
+    );
+
+    #[cfg(target_os = "macos")]
+    assert_eq!(
+        first,
+        root.join("Library/Application Support")
+            .join("shall")
+            .display()
+            .to_string(),
+        "the platform folder under `$HOME` decides on macOS, and `$XDG_CONFIG_HOME` is not a \
+         lever there: {explained}"
+    );
+
+    // Windows is the one platform whose answer cannot be pinned here: `%APPDATA%` decides when
+    // the known folder can be read, and `$HOME/.config` is `safe_config_dir`'s fallback when it
+    // cannot — measured on the msvc runner, where it could not. What must hold either way is
+    // that the path is absolute and that the line names something.
+    #[cfg(windows)]
+    assert!(
+        std::path::Path::new(first).is_absolute() && first.ends_with("shall"),
+        "an absolute directory named `shall`: {explained}"
     );
 
     let _ = std::fs::remove_dir_all(&root);
@@ -150,13 +181,42 @@ fn with_no_xdg_the_home_directory_is_the_one_named() {
     let (explained, err, code) = shall(&root, &[], &["path", "--explain"]);
     assert_eq!(code, 0, "`shall path --explain` failed: {err}");
     let first = explained.lines().next().unwrap_or_default().trim();
+
+    #[cfg(all(unix, not(target_os = "macos")))]
     assert_eq!(
         first,
         root.join(".config").join("shall").display().to_string(),
         "`$HOME/.config` decides when `$XDG_CONFIG_HOME` is absent: {explained}"
     );
+
+    #[cfg(target_os = "macos")]
+    assert_eq!(
+        first,
+        root.join("Library/Application Support")
+            .join("shall")
+            .display()
+            .to_string(),
+        "the platform folder under `$HOME` is the macOS answer: {explained}"
+    );
+
+    #[cfg(windows)]
+    assert!(
+        std::path::Path::new(first).is_absolute() && first.ends_with("shall"),
+        "an absolute directory named `shall`: {explained}"
+    );
+
+    // The one input the fixture sets. Windows is asked for either name because `%APPDATA%` is
+    // what `dirs::config_dir()` asks for there when the known folder can be read, and
+    // `$HOME/.config` is the fallback when it cannot — both are the truth about that machine,
+    // and a test that insisted on one would go red on the other.
+    #[cfg(not(windows))]
     assert!(
         explained.contains("$HOME"),
+        "--explain must name the variable that decided it: {explained}"
+    );
+    #[cfg(windows)]
+    assert!(
+        explained.contains("$HOME") || explained.contains("%APPDATA%"),
         "--explain must name the variable that decided it: {explained}"
     );
 
