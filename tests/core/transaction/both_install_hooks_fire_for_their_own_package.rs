@@ -10,37 +10,50 @@
 //! member, and refusal must be local. A hook that fails for one package takes that package out of
 //! the batch and leaves the rest of the command alone — anything else turns one package's
 //! prerequisite into everybody's.
+//!
+//! **One marker file per package, never one file for the whole run.** Both hooks of a batch are
+//! invoked concurrently (`buffer_unordered`), and the first version of this test appended to a
+//! single file: on Windows `Add-Content` lost one of the two writes to the other's handle, so the
+//! test read one line and concluded the hook had not been called. A per-package file has no two
+//! writers, so "was this package asked?" is answered by the filesystem rather than by a race.
 
 use shall::app::hooks::LuaHooks;
 use shall::core::executor::DryRunOutput;
 use shall::core::{GraphAction, PackageSpec, Transaction, TransactionConfig};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::mock_providers::TestKernel;
 
-/// A script that appends the package the hook was told about to `marker`, and one that also
-/// exits non-zero for a named package.
-fn recording(marker: &std::path::Path, refuse: Option<&str>) -> String {
-    // The marker is written first and the refusal comes after, so the marker answers "was this
-    // package asked?" separately from "did the hook say yes?".
+/// A script that records the package it was told about as `dir/<name>.txt`, and optionally exits
+/// non-zero for one named package — **after** writing, so the file answers "was this package
+/// asked?" separately from "did the hook say yes?".
+fn recording(dir: &Path, refuse: Option<&str>) -> String {
     if cfg!(windows) {
         let refuse = refuse
             .map(|n| format!("if ($env:SHALL_PKG_NAME -eq '{n}') {{ exit 3 }};"))
             .unwrap_or_default();
         format!(
-            "#!/usr/bin/env powershell\nAdd-Content -Path '{}' -Value $env:SHALL_PKG_NAME\n{refuse}\n",
-            marker.display()
+            "#!/usr/bin/env powershell\nSet-Content -Path (Join-Path '{}' ($env:SHALL_PKG_NAME + '.txt')) -Value $env:SHALL_PKG_NAME\n{refuse}\n",
+            dir.display()
         )
     } else {
         let refuse = refuse
             .map(|n| format!("if [ \"$SHALL_PKG_NAME\" = '{n}' ]; then exit 3; fi\n"))
             .unwrap_or_default();
         format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$SHALL_PKG_NAME\" >> '{}'\n{refuse}",
-            marker.display()
+            "#!/bin/sh\nprintf '%s\\n' \"$SHALL_PKG_NAME\" > '{}/'\"$SHALL_PKG_NAME\"'.txt'\n{refuse}",
+            dir.display()
         )
     }
+}
+
+/// Which package a hook was told about, or `None` if it was never asked.
+fn asked(dir: &Path, package: &str) -> Option<String> {
+    std::fs::read_to_string(dir.join(format!("{package}.txt")))
+        .ok()
+        .map(|s| s.trim().to_string())
 }
 
 fn install(name: &str) -> GraphAction {
@@ -69,14 +82,20 @@ fn run(
     .with_hooks(Arc::new(hooks))
 }
 
+fn hook_dir(root: &Path, hook: &str) -> PathBuf {
+    let dir = root.join(hook);
+    std::fs::create_dir_all(&dir).expect("the marker directory");
+    dir
+}
+
 /// Both hooks run, each told which package it is about — the four facts reach a hook fired from a
 /// run the same way they reach one called by hand.
 #[tokio::test]
 async fn both_install_hooks_fire_and_are_told_which_package() {
     let kernel = TestKernel::new().await;
-    let dir = tempfile::tempdir().expect("a temp dir");
-    let before = dir.path().join("before.txt");
-    let after = dir.path().join("after.txt");
+    let temp = tempfile::tempdir().expect("a temp dir");
+    let before = hook_dir(temp.path(), "before");
+    let after = hook_dir(temp.path(), "after");
 
     let mut config = shall::config::Config::sandboxed(kernel.tmp.path());
     config.hooks.insert(
@@ -101,26 +120,23 @@ async fn both_install_hooks_fire_and_are_told_which_package() {
         .await
         .expect("the install failed");
 
-    for (what, path) in [("before_install", &before), ("after_install", &after)] {
-        let said = std::fs::read_to_string(path).unwrap_or_else(|e| {
-            panic!("the {what} hook never ran for a package the run installed: {e}")
-        });
+    for (what, dir) in [("before_install", &before), ("after_install", &after)] {
         assert_eq!(
-            said.trim(),
-            "hooked",
-            "the {what} hook was not told which package it was about: {said:?}"
+            asked(dir, "hooked").as_deref(),
+            Some("hooked"),
+            "the {what} hook never ran for a package the run installed, or was not told which one"
         );
     }
 }
 
 /// A `before_install` that refuses one package refuses it alone: the other member installs, and
-/// the refused one never reaches a manager command.
+/// the refused one never reaches an install command.
 #[tokio::test]
 async fn a_before_install_that_refuses_one_package_leaves_the_rest_of_the_batch() {
     let kernel = TestKernel::new().await;
-    let dir = tempfile::tempdir().expect("a temp dir");
-    let before = dir.path().join("before.txt");
-    let after = dir.path().join("after.txt");
+    let temp = tempfile::tempdir().expect("a temp dir");
+    let before = hook_dir(temp.path(), "before");
+    let after = hook_dir(temp.path(), "after");
 
     let mut config = shall::config::Config::sandboxed(kernel.tmp.path());
     config.hooks.insert(
@@ -164,9 +180,9 @@ async fn a_before_install_that_refuses_one_package_leaves_the_rest_of_the_batch(
     );
 
     let calls = kernel.mock_executor.get_calls().await;
-    let installed = |c: &String| c.starts_with("brew install") && c.contains("kg-bad");
+    let installed_bad = |c: &String| c.starts_with("brew install") && c.contains("kg-bad");
     assert!(
-        !calls.iter().any(installed),
+        !calls.iter().any(installed_bad),
         "the refused member reached an install command anyway: {calls:?}"
     );
     assert!(
@@ -174,14 +190,23 @@ async fn a_before_install_that_refuses_one_package_leaves_the_rest_of_the_batch(
         "the hook's refusal took the other member down with it: {calls:?}"
     );
 
-    let said = std::fs::read_to_string(&before).expect("the before_install hook never ran");
-    assert!(
-        said.contains("kg-bad") && said.contains("kg-good"),
-        "both members should have been asked: {said:?}"
+    assert_eq!(
+        asked(&before, "kg-good").as_deref(),
+        Some("kg-good"),
+        "the member that installed was never asked about before it was"
     );
-    let after = std::fs::read_to_string(&after).expect("the after_install hook never ran");
+    assert_eq!(
+        asked(&before, "kg-bad").as_deref(),
+        Some("kg-bad"),
+        "the refused member was never asked either, so nothing refused it"
+    );
+    assert_eq!(
+        asked(&after, "kg-good").as_deref(),
+        Some("kg-good"),
+        "after_install did not fire for the member that installed"
+    );
     assert!(
-        after.contains("kg-good") && !after.contains("kg-bad"),
-        "after_install fires for the members that were installed, and only those: {after:?}"
+        asked(&after, "kg-bad").is_none(),
+        "after_install fires for the members that were installed, and only those"
     );
 }

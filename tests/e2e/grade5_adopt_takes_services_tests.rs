@@ -229,6 +229,19 @@ fn adopting_a_running_service_leaves_nothing_to_place() {
         eprintln!("skipped: this host reported no running services");
         return;
     }
+    // **macOS is the same `#216` gap as the test above, and this one had no skip.** launchd
+    // reports agents this build cannot read back (`com.apple.mdworker.shared.*`), so a machine
+    // that was just adopted still has placements and the whole of what this test measures is
+    // that gap rather than a regression. It is flaky in the worst way — the count of those
+    // agents varies between runs on the same host — so on 2026-11-24 it passed and then failed
+    // within three hours, on two runs of the same commit.
+    if cfg!(target_os = "macos") {
+        eprintln!(
+            "skipped: launchd reports services this build cannot resolve, so a just-adopted \
+             machine still has placements — #216"
+        );
+        return;
+    }
 
     let (plan, code) = run(&root, &["plan"]);
     assert_eq!(code, 0, "{plan}");
