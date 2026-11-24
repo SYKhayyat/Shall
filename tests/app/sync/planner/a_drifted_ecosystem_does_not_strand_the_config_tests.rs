@@ -453,6 +453,43 @@ async fn narrow_a_removal(kernel: &TestKernel, recovery: BatchRecovery) -> Vec<S
     backend.calls()
 }
 
+/// And the name list narrows **with** the range. Deleting the `names:` field from the narrowed
+/// `BatchRun` lets `..run` supply the whole batch, so every half asks the manager to remove all
+/// four members while its spec list covers one half — reported as a survivor, because every
+/// assertion above is about the list being non-empty and `a b c d` is never empty.
+///
+/// The distinguishing fact is what the bottom of the bisection looks like: once the range holds
+/// only the member that fails, the command names **that member and nothing else**. A run that
+/// asks for everything every time never produces it.
+#[tokio::test]
+async fn a_narrowed_removal_names_only_the_members_in_its_range() {
+    let kernel = TestKernel::new().await;
+    let calls = narrow_a_removal(&kernel, BatchRecovery::Bisect).await;
+    let names_of = |call: &String| -> Vec<String> {
+        call.strip_prefix(&format!("{DRIFTED} remove "))
+            .unwrap_or_else(|| panic!("unexpected command shape: {call}"))
+            .split_whitespace()
+            .map(str::to_string)
+            .collect()
+    };
+
+    assert!(
+        calls.iter().any(|c| names_of(c) == vec!["c".to_string()]),
+        "bisection never narrowed down to the bad member on its own, so the name list it hands \
+         the manager is not the range's: {calls:?}"
+    );
+    for call in &calls {
+        let asked = names_of(call);
+        assert!(
+            asked.len() <= 4
+                && asked
+                    .iter()
+                    .all(|n| ["a", "b", "c", "d"].contains(&n.as_str())),
+            "a removal asked for a name that is not in this batch: {call}"
+        );
+    }
+}
+
 /// Every command a narrowed removal issues names the packages it is removing. The assertion that
 /// matters is not the shape of the bisection but that **no command is issued with an empty name
 /// list** — the one thing the surviving mutant produced.

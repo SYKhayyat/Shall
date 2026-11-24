@@ -337,4 +337,14 @@ fn the_plan_is_walked_in_reverse_so_the_machine_comes_back_the_way_it_went() {
         vec!["second", "first"],
         "the last thing done is the first thing undone"
     );
+    // The backend travels with the name, and nothing asserted it: `Undo::backend` returning
+    // `""` — or `"xyzzy"` — survived the whole suite, and a step with no backend is a rollback
+    // that cannot find the manager to undo through (`registry.get(backend)` answers nothing and
+    // the package is quietly left as it is).
+    let backends: Vec<&str> = plan.steps.iter().map(Undo::backend).collect();
+    assert_eq!(
+        backends,
+        vec!["apt", "apt"],
+        "a step does not carry the manager it has to be undone through"
+    );
 }

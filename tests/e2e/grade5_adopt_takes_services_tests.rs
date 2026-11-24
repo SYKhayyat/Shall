@@ -76,6 +76,32 @@ fn declared_in(module: &Path) -> Vec<String> {
         .collect()
 }
 
+/// The declaration on a line, without the trailing `  # installed by …` note `adopt` adds after
+/// it.
+///
+/// **The note is not part of the line.** `adopt` writes it after the declaration has been through
+/// the grammar, and only for a package a manager reported user intent for — so on a host where
+/// apt says who asked for `acpid`, the adopted service line reads
+/// `service:acpid@status=running  # installed by acpid`. Asserting against the whole line made
+/// this test pass or fail according to which managers the host has, which is the one thing a
+/// test of the adopted *form* must not depend on: the nightly failed on exactly that line while
+/// the container, whose image has no running services, skipped it.
+fn declaration(line: &str) -> &str {
+    line.split_once("  #").map_or(line, |(decl, _)| decl)
+}
+
+/// The runner's exact line, as a fixture: the nightly's failure was this shape and this helper
+/// is the fix, so the shape is pinned rather than described.
+#[test]
+fn the_trailing_note_adopt_adds_is_not_part_of_the_declaration() {
+    assert_eq!(
+        declaration("service:acpid@status=running  # installed by acpid"),
+        "service:acpid@status=running"
+    );
+    assert_eq!(declaration("apt:jq"), "apt:jq");
+    assert_eq!(declaration("service:sshd"), "service:sshd");
+}
+
 #[test]
 fn an_adopted_service_is_a_live_line_carrying_the_state_it_was_found_in() {
     let root = fixture("grade5-adopt-services");
@@ -96,13 +122,14 @@ fn an_adopted_service_is_a_live_line_carrying_the_state_it_was_found_in() {
     // Live, not commented — `declared_in` already dropped every `#` line, so reaching here at
     // all is the ruling. What each line says is the other half.
     for line in &services {
+        let decl = declaration(line);
         assert!(
-            line.ends_with("@status=running"),
+            decl.ends_with("@status=running"),
             "a service is declared as the state it was found in, and the init only reports \
              running ones: `{line}`"
         );
         assert!(
-            !line.contains("enabled="),
+            !decl.contains("enabled="),
             "the start type was never looked at, so no adopted line may claim it: `{line}`"
         );
     }
@@ -111,7 +138,9 @@ fn an_adopted_service_is_a_live_line_carrying_the_state_it_was_found_in() {
     // later command. This is the assertion `check config` below would fail on, stated here too
     // so the reason is named rather than inferred from an exit code.
     for line in &lines {
-        let name = line.split_once(':').map_or(line.as_str(), |(_, n)| n);
+        let name = declaration(line)
+            .split_once(':')
+            .map_or(declaration(line), |(_, n)| n);
         for (i, _) in name.match_indices('$') {
             assert!(
                 name[i + 1..].starts_with('$') || name[..i].ends_with('$'),

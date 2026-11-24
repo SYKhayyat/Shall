@@ -328,7 +328,29 @@ async fn a_dry_run_reports_the_recovery_and_performs_none_of_it() {
 
     // Nothing declared: this asserts the WAL replay, and an empty declared set keeps the
     // ownership repair out of the way of it.
+    let (logs, guard) = crate::harness::log_collector();
     engine.heal(&[]).await.expect("Healing cycle crashed.");
+    drop(guard);
+
+    // **What the preview SAID, not only what it abstained from.** Both assertions below were
+    // satisfiable by a `preview_heal` gutted to `()` — a preview that recovers nothing and
+    // reports nothing passes "recovered nothing" — which is how the mutation job reported the
+    // whole function as a survivor. The output is the only part of a preview a user can see,
+    // so it is the part that has to be pinned.
+    let logs = logs.lock().expect("the log mutex").clone();
+    let said = logs.join("\n");
+    assert!(
+        said.contains("would recover 2 interrupted operation(s)"),
+        "the preview did not say how much it would recover: {said}"
+    );
+    assert!(
+        said.contains("reinstall brew:stale-pkg"),
+        "the preview did not name the interrupted install: {said}"
+    );
+    assert!(
+        said.contains("remove brew:doomed-pkg (subject to the guard)"),
+        "the preview did not name the interrupted removal, or not as one the guard decides: {said}"
+    );
 
     assert!(
         kernel.mock_executor.get_calls().await.is_empty(),
