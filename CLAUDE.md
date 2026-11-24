@@ -246,6 +246,58 @@ platform of two, and the other is one `nix build` and one `curl` away"* — not 
 cannot be checked. A gate that can be run should be run; the reason it was not is that nobody had
 tried, and the cost of the not-trying was fourteen errors and a red job.
 
+**And the Windows half can be *run*, not only type-checked, because wine runs the test binary.**
+`cargo check` compiles the `cfg(windows)` code; it does not execute it, which is how a test that
+passes on Linux fails on the Windows leg for a reason no local command could see — twice on
+2026-11-24, most memorably two hooks appending to one file where `Add-Content` lost a write to
+the other's handle. Three things are needed beyond the cross toolchain above, and each one cost a
+way that looked like a code defect:
+
+```bash
+nix build --impure --expr 'let p = import <nixpkgs> {}; in p.pkgsCross.mingwW64.stdenv.cc' --out-link /tmp/mingw-cc
+nix build --impure --expr 'let p = import <nixpkgs> {}; in p.pkgsCross.mingwW64.windows.mingw_w64_pthreads' --out-link /tmp/mingw-pthreads
+nix build nixpkgs#zlib --out-link /tmp/zlib
+mkdir -p /tmp/mingw-shim
+# `cargo build --target` links with `-l:libpthread.a`, which `mingwW64.stdenv.cc` does not carry,
+# and nix's cc-wrapper ignores LIBRARY_PATH, so the search path has to ride on the linker itself.
+for n in x86_64-w64-mingw32-cc x86_64-w64-mingw32-gcc; do
+  printf '#!/bin/sh\nexec /tmp/mingw-cc/bin/%s "$@" -L/tmp/mingw-pthreads/lib\n' "$n" > /tmp/mingw-shim/$n
+  chmod +x /tmp/mingw-shim/$n
+done
+export PATH="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:/tmp/mingw-shim:/tmp/mingw-cc/bin:$PATH"
+export LD_LIBRARY_PATH=/tmp/zlib/lib              # the rustup rustc wants libz.so.1
+export CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-cc CXX_x86_64_pc_windows_gnu=x86_64-w64-mingw32-c++ \
+       AR_x86_64_pc_windows_gnu=x86_64-w64-mingw32-ar
+cargo test --no-run --target x86_64-pc-windows-gnu --test suite
+WINEPATH="/tmp/mingw-cc/bin;/tmp/mingw-pthreads/bin" WINEDEBUG=-all \
+  nix shell nixpkgs#wine64 --command wine \
+  target/x86_64-pc-windows-gnu/debug/deps/suite-*.exe --test-threads 1 <filter>
+```
+
+**The shim is on `PATH` and not in `RUSTFLAGS` on purpose.** `cargo` fingerprints `RUSTFLAGS`, so
+adding `-L` there rebuilds all 448 crates; a shim named what the linker is already called costs
+nothing, and `-L` on a compile of vendored C is harmless.
+
+**What wine cannot do is name itself as a limit in advance — so name it here.** There is no
+`powershell` under wine, so any test whose hook script is `#!...powershell` (the Windows branch of
+`both_install_hooks_fire_for_their_own_package`, and the hook tests beside it) fails there with an
+absent interpreter. That is the emulator, not the code: the same tests pass on the real Windows
+runner, which is what the leg is for.
+
+**And the whole suite under wine is not a gate — it was measured on 2026-11-24 and it is
+`3070 passed, 263 failed`.** The 263 are one thing, not 263 things: they build a path from
+`CARGO_TARGET_TMPDIR`, which is a POSIX path, and a Windows binary handed `/home/...` mixed with
+`\\` refuses it — `$SHALL_DATA_DIR` is `/home/shaul/shall/target/x86_64-pc-windows-gnu/tmp\grade2-info-bare\data`, which is not an absolute path. That is the emulator's split between
+two path models and it is not evidence about the product. **So wine is for a targeted claim** —
+"does this `cfg(windows)` branch behave", which is the only thing no Linux step can answer — and
+not for a full sweep. Use the script below rather than re-deriving the setup, which took three
+wrong turns to get right:
+
+```bash
+scripts/windows-check.sh                     # compiles the tree for x86_64-pc-windows-gnu, -D warnings
+scripts/windows-check.sh --run <filter>      # builds the suite for the target and runs it under wine
+```
+
 **Which behaviours only the container harness can verify — state this, do not re-run and hope.**
 The Rust suite is hermetic: it drives mock providers, so any behaviour that depends on a *real*
 manager's answer is outside what it can reach. A red harness is therefore not "a job to re-run
