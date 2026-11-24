@@ -100,6 +100,15 @@ if (Get-Command wsl -ErrorAction SilentlyContinue) {
     Info "no wsl on this host, so the cfg(unix) blocks are unverified; CI compiles them regardless"
 }
 
+# The third gap is behaviour rather than types, and on THIS host it is not a cross-check: the
+# Windows half is what the gates above compiled and ran natively, which is the thing
+# `scripts/windows-check.sh` imitates on a Linux host by cross-compiling it and running the suite
+# under wine. Naming it here keeps the pair honest - the predicate asks that a gate which runs on
+# one host is not silently absent on the other, and the two release scripts drifting is how
+# `unix-check` came to be the only step that read the other platform at all.
+Write-Host "-> scripts/windows-check.sh"
+Info "windows-check: this host IS the Windows half, so it is the gates above; the script cross-compiles it from Linux"
+
 # The `rust-mutation` CI job, over the smallest of the four files it covers. One file, not four:
 # the nightly mutates guard.rs, exit.rs, datalock.rs and transaction.rs against the whole suite,
 # which is hours - guard.rs alone is 125 mutants. A release script that takes an afternoon is one
