@@ -69,6 +69,24 @@ echo "-> scripts/unix-check.sh"
 if sh "$(dirname -- "$0")/unix-check.sh" --lib; then pass "unix-check: the tree compiles for Linux"
 else info "unix-check did not pass — the cfg(unix) blocks are unverified on this run"; fi
 
+# **And the third gap is behaviour, not types.** `unix-check` compiles the Unix half; until now
+# nothing here compiled the Windows half *or* ran it, so a test that passes on Linux and fails on
+# the Windows runner was invisible until the board. `windows-check.sh` type-checks the target
+# (`-gnu`, because `-msvc` wants `lib.exe` and dies in `cc-rs` before reaching a line of Shall's),
+# and its `--run` executes the suite as a Windows binary under wine, which is how the
+# `Add-Content` race was found. Soft and conditional: it needs nix, and a first build of ~25
+# minutes for a new target, and a release script that refuses to run without either stops being run.
+if command -v nix >/dev/null 2>&1; then
+  echo "-> scripts/windows-check.sh"
+  if bash "$(dirname -- "$0")/windows-check.sh"; then
+    pass "windows-check: the tree compiles for x86_64-pc-windows-gnu"
+  else
+    info "windows-check did not pass — the cfg(windows) blocks are unverified on this run"
+  fi
+else
+  info "windows-check skipped — no nix here, so the cfg(windows) blocks are unverified"
+fi
+
 # The `rust-mutation` CI job, run locally over the smallest of the four files it covers.
 #
 # **Why one file and not four.** The nightly job mutates `guard.rs`, `exit.rs`, `datalock.rs` and
