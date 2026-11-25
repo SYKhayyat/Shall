@@ -133,6 +133,15 @@ esac
 if [ "$mode" = run ]; then
   command -v nix >/dev/null 2>&1 || { echo "nixos-activation: no nix on PATH" >&2; exit 2; }
   mkdir -p "$(dirname -- "$LOG")"
+  # **`<nixpkgs>` is a host fact, not a given.** A developer machine has a channel; a CI runner has
+  # whatever `install-nix-action` installed, which is nix itself and nothing else — so the VM's
+  # nixpkgs is named here rather than through an inherited search path, and a failure to find one is
+  # the first line of the log instead of `file 'nixpkgs' was not found` 40 lines in.
+  if ! nix-instantiate --find-file nixpkgs >/dev/null 2>&1; then
+    export NIX_PATH="nixpkgs=${SHALL_NIXOS_NIXPKGS:-https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz}"
+    echo "-> no nixpkgs on NIX_PATH; using $NIX_PATH"
+  fi
+
   echo "-> nix build -f nix activation-test   (booting a NixOS VM; the log is $LOG)"
   # `-L` because a `nixosTest`'s output *is* the driver log, and the tallies are in it. The exit
   # code is read directly and never through a pipe, for the reason `unix-check.sh` gives: `rc=$?`
