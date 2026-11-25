@@ -1,4 +1,4 @@
-{ lib, rustPlatform, pkg-config }:
+{ lib, rustPlatform, pkg-config, zstd, xz }:
 
 # Shall, for the one thing the tree cannot do without it: putting a real `shall` binary inside a
 # NixOS VM so `nixos-rebuild switch` can be driven instead of argv-checked (see `nix/activation.nix`
@@ -50,10 +50,14 @@ rustPlatform.buildRustPackage {
 
   cargoLock.lockFile = ../Cargo.lock;
 
-  # `mlua`'s vendored Lua, `xz2`'s and `zstd`'s vendored C are compiled by `cc` against the
-  # sandbox's own compiler; nothing here looks for a system library (the TLS stack is rustls, so
-  # there is no `openssl` to find and no `openssl-src` to build).
+  # `mlua`'s vendored Lua and `xz2`'s vendored C are compiled by `cc` against the sandbox's own
+  # compiler. `zstd-sys` is the exception, and it is not a preference: with `pkg-config` on PATH it
+  # asks the system for `libzstd` and **fails rather than falling back** (`No package 'libzstd'
+  # found`, exit 101) when the answer is no — measured on a runner whose sandbox has neither the
+  # `.pc` file nor a `libzstd` in its search path. The TLS stack is rustls, so there is no `openssl`
+  # to find and no `openssl-src` to build.
   nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ zstd xz ];
 
   doCheck = false;
 
