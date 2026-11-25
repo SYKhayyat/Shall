@@ -1197,6 +1197,31 @@ jobs:
         if (-not (Test-Path $binary)) { throw "install.ps1 left no shall.exe in SHALL_BIN_DIR" }
         & $binary --version
         if ($LASTEXITCODE -ne 0) { throw "the installed binary does not run" }
+
+  # **The one leg that boots a real NixOS machine.** `nixos:` is the single backend whose failure
+  # mode is a machine that evaluates and then will not *activate*: `nix-validate.sh` can say the
+  # generated module parses and merges into a real module system, and cannot say the switch
+  # succeeds. It is also the only place a `schedule:` is ever provisioned against a reachable
+  # systemd bus — no container image has one, which is why the container harness adopts with
+  # `--user` and the timer's *placement* was never driven (issues #72 and #220).
+  #
+  # Nightly rather than per-push: it builds a NixOS system and boots a VM, which is minutes of a
+  # runner for a claim that moves when the NixOS module API moves, not when a line of ours does.
+  nixos-activation:
+    name: Activation (NixOS VM, nightly)
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+    - uses: actions/checkout@v7
+    - uses: cachix/install-nix-action@v31
+    - name: Boot a NixOS VM and drive `shall` through an activation
+      run: ./scripts/nixos-activation.sh
+    - uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: nixos-activation-log
+        path: target/nixos-activation.log
   harness-mutation:
     name: Harness mutation (can the checks fail?)
     runs-on: ubuntu-latest

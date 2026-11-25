@@ -87,6 +87,23 @@ else
   info "windows-check skipped — no nix here, so the cfg(windows) blocks are unverified"
 fi
 
+# **And the one path no other gate reaches: activation.** `unix-check` compiles the Unix half and
+# `windows-check` the Windows one, and both stop at "it builds". `nixos:` is the backend whose
+# failure mode is a machine that evaluates and then will not *activate*, and a `schedule:` is the
+# one provisioner that needs a real systemd bus — so `nixos-activation.sh` boots a NixOS VM and
+# drives install, removal and a timer through it (issues #72, #220). Soft, and it needs both nix and
+# the test's own floor: without either it says so rather than skipping in silence.
+if command -v nix >/dev/null 2>&1; then
+  echo "-> scripts/nixos-activation.sh"
+  if bash "$(dirname -- "$0")/nixos-activation.sh"; then
+    pass "nixos-activation: activation, removal and a real timer drove a NixOS VM"
+  else
+    info "nixos-activation did not pass — activation and timer placement are unverified on this run"
+  fi
+else
+  info "nixos-activation skipped — no nix here, so activation is unverified"
+fi
+
 # The `rust-mutation` CI job, run locally over the smallest of the four files it covers.
 #
 # **Why one file and not four.** The nightly job mutates `guard.rs`, `exit.rs`, `datalock.rs` and

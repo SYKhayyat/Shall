@@ -109,6 +109,13 @@ if (Get-Command wsl -ErrorAction SilentlyContinue) {
 Write-Host "-> scripts/windows-check.sh"
 Info "windows-check: this host IS the Windows half, so it is the gates above; the script cross-compiles it from Linux"
 
+# The activation leg is not a cross-check in either direction: it boots a NixOS VM, which needs nix
+# and a hypervisor, and a release script that refuses to run without either stops being run. Named
+# here so the pair does not drift - the shell side runs it, and the predicate asks that a gate on
+# one host is not silently absent on the other.
+Write-Host "-> scripts/nixos-activation.sh"
+Info "nixos-activation: needs nix and a NixOS VM, so this host says so instead of running it"
+
 # The `rust-mutation` CI job, over the smallest of the four files it covers. One file, not four:
 # the nightly mutates guard.rs, exit.rs, datalock.rs and transaction.rs against the whole suite,
 # which is hours - guard.rs alone is 125 mutants. A release script that takes an afternoon is one

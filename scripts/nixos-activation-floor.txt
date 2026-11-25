@@ -1,0 +1,20 @@
+# How many checks each section of the NixOS activation test ran. A ratchet: a section's number may
+# rise, and a run that falls below the recorded one fails.
+#
+#   <host-class>  <section name>  <n>
+#
+# Fields are separated by TWO spaces, a section name contains single spaces and hyphens, and a `#`
+# line is a comment. `scripts/nixos-activation.sh --self-test` proves the comparison can fail.
+#
+# WHY THIS EXISTS. A section that stops running cannot fail — a test that boots, checks nothing and
+# exits 0 looks exactly like one that checked everything, and the only thing a reader sees is the
+# word PASS. So the test prints `shall-nixos-section: <name> <n>` per section and this file says how
+# much each one is owed. The counts are what `nix/activation.nix` actually asserts; raising one is
+# the point, lowering one needs a reason in the commit message.
+
+nixos  binary  2
+nixos  the-machine-is-nixos  2
+nixos  the-root-and-its-device  3
+nixos  the-rebuild-has-a-configuration  3
+nixos  declare-without-a-machine  1
+nixos  the-import-is-managed  1
