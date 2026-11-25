@@ -234,6 +234,12 @@ fn every_ci_job_has_something_local_that_runs_it() {
         // `$ErrorActionPreference` that the Unix half has no equivalent of.
         ("install-script", "scripts/install.sh"),
         ("install-script-windows", "scripts/install.ps1"),
+        // Added with the job. Soft locally for the fifth time, and for a new reason that is worth
+        // naming separately: `nix` is not just an install a contributor may not have, it is one
+        // whose *presence* changes what the gate can say — a machine with nix boots a real VM and
+        // a machine without it says so. That is why the row drives the script rather than the
+        // build alone: the part worth having locally is the same part the nightly has.
+        ("nixos-activation", "nixos-activation.sh"),
     ];
     // `release` publishes artifacts on a tag. `newest-rust` is the compiler-drift detector:
     // it is `continue-on-error` by design, it needs a toolchain the developer deliberately
