@@ -121,6 +121,27 @@ pub fn node_deadline(node_timeout: Duration, packages: usize, total_timeout: Dur
         .min(total_timeout)
 }
 
+/// One node's budget, after the backend's own floor is taken into account.
+///
+/// **The floor is a property of the command, not of the config.** `node_deadline` is arithmetic
+/// over `manager_command_timeout_secs`, which is a budget for a package manager; a backend whose
+/// write rebuilds a whole system declares the least it can be given in
+/// [`BackendCore::command_budget`](crate::core::BackendCore::command_budget), and this is where
+/// the two meet. Still capped by `total_timeout`, because the outer bound is the one that wraps
+/// the whole run — a floor above it could never be observed.
+pub fn deadline_for(
+    node_timeout: Duration,
+    packages: usize,
+    total_timeout: Duration,
+    floor: Option<Duration>,
+) -> Duration {
+    let base = node_deadline(node_timeout, packages, total_timeout);
+    match floor {
+        Some(floor) => base.max(floor.min(total_timeout)),
+        None => base,
+    }
+}
+
 /// One batch command's fixed context: the packages, the manager, the run's settings and the
 /// proof its removals were authorised.
 ///
@@ -212,7 +233,12 @@ pub async fn run_one_command(run: BatchRun<'_>) -> CommandOutcome {
         // One node's timeout, scaled by how many packages the command carries: eight packages in
         // one `apt install` legitimately take longer than one, and a bound sized for one would
         // turn the batching win into a timeout.
-        let deadline = node_deadline(config.node_timeout, names.len(), config.total_timeout);
+        let deadline = deadline_for(
+            config.node_timeout,
+            names.len(),
+            config.total_timeout,
+            backend_cap.command_budget(),
+        );
         let result = tokio::time::timeout(deadline, async {
             let Some(handler) = backend_cap.as_installable() else {
                 return Err(Error::Transaction(format!(

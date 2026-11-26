@@ -309,7 +309,10 @@ impl SystemConfig<'_> {
             firewall: want.firewall,
             config_text: current.config_text,
         };
-        core.write_and_switch(&module).await?;
+        // A service or a port, so the file is re-projected rather than changed by this run: a
+        // rebuild is only owed when the projection actually moved.
+        core.write_and_switch(&module, crate::backends::nixos::Switch::UnlessConverged)
+            .await?;
         for r in &opening {
             info!("opened {} (NixOS system configuration)", r);
         }

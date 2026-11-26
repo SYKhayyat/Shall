@@ -84,6 +84,20 @@ pub trait BackendCore: Send + Sync {
     /// false.
     fn needs_root(&self) -> bool;
 
+    /// **The fewest seconds one of this backend's mutating commands may be given.**
+    ///
+    /// `manager_command_timeout_secs` is a budget for a *manager*: `apt install` resolves and
+    /// unpacks, and five minutes is generous. A backend whose write is not a package-manager
+    /// command at all — `nixos:` rebuilds the whole system, evaluating nixpkgs and building a
+    /// closure — cannot fit in that budget, and being cancelled at it looks exactly like a
+    /// finished command to everything downstream (#225). A backend that declares a floor gets the
+    /// larger of the two, still capped by the transaction's own total.
+    ///
+    /// `None` means "the manager default is right", which is every backend but one.
+    fn command_budget(&self) -> Option<std::time::Duration> {
+        None
+    }
+
     async fn check_health(&self) -> Result<HealthReport> {
         if self.is_available() {
             Ok(HealthReport {
@@ -600,6 +614,12 @@ impl BackendCapabilities {
     }
     pub fn needs_root(&self) -> bool {
         self.core.needs_root()
+    }
+
+    /// This backend's floor on its own command budget, if it declares one. See
+    /// [`BackendCore::command_budget`].
+    pub fn command_budget(&self) -> Option<std::time::Duration> {
+        self.core.command_budget()
     }
 
     /// Single source of truth for the privilege policy on **write** operations

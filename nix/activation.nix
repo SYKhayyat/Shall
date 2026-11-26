@@ -57,7 +57,7 @@ nixosTest {
       shall = "${nixPath} ${userEnv} /root/shall --config-dir /root/cfg --data-dir /root/data";
     in
     ''
-      import os
+      import shlex
 
       sections = {}
 
@@ -136,19 +136,39 @@ nixosTest {
 
       # --- the switch, and the timer it would carry -------------------------------------------
       #
-      # **Blocked, with the evidence, rather than claimed.** `shall apply nixos:hello` runs
-      # `nixos-rebuild switch -I nixos-config=/etc/nixos/configuration.nix` and returns 0; the
-      # generated module contains `environment.systemPackages = with pkgs; [ hello ];`; the system
-      # it builds is `nixos-system-machine-test` — and `hello` is not on PATH, `/nix/var/nix/profiles`
-      # holds no `system` link, and one run lost the console mid-command (`BrokenPipeError` in the
-      # driver). A switch that reports success and does none of what it was asked is a real finding
-      # about activation in this VM (`#225`), and it is not something a test can call green by
-      # asserting less. These sections are kept and runnable with `SHALL_NIXOS_SWITCH=1`, and stay
-      # out of the floor until they pass: the floor is a promise about what ran, and a promise
-      # about what did not is the shape this file exists to refuse.
-      if os.environ.get("SHALL_NIXOS_SWITCH") == "1":
+      # **What this leg cannot do here, and the two defects it found by trying.**
+      #
+      # `shall apply nixos:hello` now reaches `nixos-rebuild switch` and runs it to the end, which
+      # it did not before: the rebuild was being cancelled at the five-minute manager budget
+      # (`#225`, fixed — a backend declares the least its own command needs, and `nixos:` asks for
+      # thirty minutes), and the retry that followed read the untouched file as "converged" and
+      # reported `SUCCESS` over a machine that had not changed (`#225`, fixed — a package change
+      # always rebuilds; the file matching what Shall would write is evidence about the file).
+      # Both are pinned hermetically, by tests that fail against the old behaviour.
+      #
+      # What stops the section *here* is the instrument, not the product: a NixOS test VM shares
+      # the host's store and has no network, so a rebuild only finishes when every input is
+      # already in that store. Measured: `error: Cannot build '…-CVE-2026-55199.patch.drv'` — a
+      # fixed-output fetch for a package the running system does not carry. Closing this wants a
+      # machine with its own writable disk and a network (a `virtualisation` VM, not a
+      # `nixosTest`), which is the remaining half of `#72`.
+      def detached(name, command):
+          machine.succeed(
+              "cd /root && (setsid sh -c "
+              + shlex.quote(f"{command} > /tmp/apply.out 2>&1; echo RC=$? > /tmp/apply.rc")
+              + " </dev/null >/dev/null 2>&1 &) ; sleep 1"
+          )
+          machine.wait_until_succeeds("test -s /tmp/apply.rc", timeout=2400)
+          if machine.succeed("cat /tmp/apply.rc").strip() != "RC=0":
+              print("--- the run's own words ---\n" + machine.succeed("tail -40 /tmp/apply.out"), flush=True)
+          machine.succeed("test \"$(cat /tmp/apply.rc)\" = RC=0")
+          sections[name] += 1
+          print(f"shall-nixos-section: {name} {sections[name]}", flush=True)
+
+      SWITCH_SECTIONS = False  # flip once the machine can fetch what it needs
+      if SWITCH_SECTIONS:
           section("install-switches-a-generation")
-          check("install-switches-a-generation", "${shall} apply nixos:hello -y", timeout=900)
+          detached("install-switches-a-generation", "${shall} apply nixos:hello -y")
           check("install-switches-a-generation", "hello | grep -q 'Hello, world!'")
           check("install-switches-a-generation", "grep -q hello /etc/nixos/shall-packages.nix")
           check(
@@ -159,7 +179,7 @@ nixosTest {
           check("install-switches-a-generation", "test -e /nix/var/nix/profiles/system-*-link")
 
           section("removal-takes-the-binary-off-PATH")
-          check("removal-takes-the-binary-off-PATH", "${shall} apply nixos:hello --delete -y", timeout=900)
+          detached("removal-takes-the-binary-off-PATH", "${shall} apply nixos:hello --delete -y")
           check("removal-takes-the-binary-off-PATH", "! command -v hello")
           check("removal-takes-the-binary-off-PATH", "! grep -q hello /etc/nixos/shall-packages.nix")
 

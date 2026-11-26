@@ -27,6 +27,26 @@
 
   system.stateVersion = "26.05";
 
+  # **The hostname is what makes the rebuilt system the machine that is running.** The test
+  # framework gives its node a name of its own; without this, the configuration the rebuild reads
+  # describes a *different* machine, so every derivation whose text carries the hostname differs
+  # and the rebuild becomes a from-scratch build of a system the store has never held — which, in a
+  # VM with no network, cannot finish. Measured: the rebuild evaluated
+  # `nixos-system-nixos-26.05pre-git` against a running `nixos-system-machine-test`, and died
+  # fetching a patch for a package the running system does not contain.
+  networking.hostName = "machine";
+
+  # **Two cores and enough memory, because this machine really rebuilds itself.** A
+  # `nixos-rebuild switch` here evaluates nixpkgs and builds a system closure; on the default
+  # single core that is a quarter of an hour of wall clock, and under host memory pressure the VM
+  # has been lost mid-command (a `BrokenPipeError` on the driver's console, with the verdict of a
+  # command that did run). Neither number has an assertion attached — they only decide how long
+  # the leg takes.
+  virtualisation = {
+    memorySize = 3072;
+    cores = 2;
+  };
+
   # **The root filesystem, stated rather than generated.** `nix-build` refuses a system whose
   # `fileSystems` names no root, and this is the value the test VM actually runs on — measured
   # inside it (`findmnt -no SOURCE,FSTYPE /` prints `/dev/vda ext4`) rather than copied from a
